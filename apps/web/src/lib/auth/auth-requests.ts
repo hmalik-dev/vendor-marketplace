@@ -236,3 +236,76 @@ export async function changePassword(input: {
     ? outcome
     : 'rejected';
 }
+
+/** One device the account is signed in on, as the proxy shapes it (VEN-681): no token, ever. */
+export interface DeviceSession {
+  id: string;
+  userAgent: string | null;
+  lastActiveAt: string | null;
+  current: boolean;
+}
+
+export type SessionsOutcome = 'signedOut' | 'throttled' | 'unreachable';
+
+function isDeviceSession(value: unknown): value is DeviceSession {
+  const row = value as Partial<DeviceSession> | null;
+  return typeof row?.id === 'string' && typeof row.current === 'boolean';
+}
+
+/** The account's devices, this one first, or the reason they could not be read. */
+export async function listSessions(): Promise<DeviceSession[] | SessionsOutcome> {
+  let response: Response;
+
+  try {
+    response = await fetch('/api/auth/list-sessions', {
+      cache: 'no-store',
+      credentials: 'same-origin',
+    });
+  } catch {
+    return 'unreachable';
+  }
+
+  if (response.status === 401) {
+    return 'signedOut';
+  }
+
+  if (response.status === 429) {
+    return 'throttled';
+  }
+
+  const body = response.ok
+    ? ((await response.json().catch((error: unknown) => {
+        // The screen says the devices could not be loaded; the console says why.
+        reportSwallowedError('auth-requests: could not read the devices list', error);
+        return null;
+      })) as { sessions?: unknown } | null)
+    : null;
+
+  return Array.isArray(body?.sessions) ? body.sessions.filter(isDeviceSession) : 'unreachable';
+}
+
+/**
+ * Ends the sessions the proxy is asked to: one other device by its id, or
+ * every other device when no id is given. This device stays signed in, but the
+ * API's bound on older tokens applies to it too, so its cached token is
+ * dropped for the next read to mint anew.
+ */
+export async function endSessions(id?: string): Promise<'ok' | SessionsOutcome> {
+  const response =
+    id === undefined
+      ? await post('/revoke-other-sessions', null)
+      : await post('/revoke-session', { id });
+
+  if (response?.status === 401) {
+    return 'signedOut';
+  }
+
+  // A 404 is a device that ended in the meantime: nothing left to end.
+  const outcome = response?.status === 404 ? 'ok' : await outcomeOf(response);
+
+  if (outcome === 'ok') {
+    clearSessionToken();
+  }
+
+  return outcome === 'ok' || outcome === 'throttled' ? outcome : 'unreachable';
+}
