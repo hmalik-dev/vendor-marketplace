@@ -24,7 +24,7 @@ export function SettingsLayout({
           ← Account settings
         </Link>
       ) : null}
-      <h1 className="font-display text-[33px] leading-[1.1] text-stone-900">{title}</h1>
+      <h1 className="text-center font-display text-[33px] leading-[1.1] text-stone-900">{title}</h1>
       <div className="mt-8">{children}</div>
     </div>
   );

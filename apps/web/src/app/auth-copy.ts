@@ -39,6 +39,8 @@ export const AUTH_COPY = {
   changeSameAsCurrent: 'Choose a new password that is different from your current one.',
   changeTooShort: 'Your new password needs at least 10 characters.',
   changeTooLong: 'Your new password can be at most 128 characters.',
+  changeDone:
+    'Your password is changed. You are still signed in here, and signed out everywhere else.',
   changeMismatch: 'The two new passwords do not match.',
   sessionsTitle: "Where you're signed in",
   sessionsRowValue: 'See your devices and sign out the others',
