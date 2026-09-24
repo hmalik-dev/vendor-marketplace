@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { expectLinearTime } from '../test-support/linear-time.js';
 import { REDACTED, scrubErrorEvent } from './error-reporting.js';
 
 /*
@@ -207,6 +208,61 @@ describe('scrubErrorEvent: what the scrub fixture must never carry', () => {
     });
 
     expect(scrubbed.message).toBe('at 1726790000000 for 2026-09-20 booking 1234567');
+  });
+});
+
+describe('scrubErrorEvent: credential shapes and hostile input (VEN-674)', () => {
+  const scrubMessage = (message: string) => {
+    const event = { user: { id: 'user_1' }, message };
+
+    return scrubErrorEvent(event).message;
+  };
+
+  it.each([
+    ['a JWT', `session ${SESSION_JWT} ended`, 'session [redacted] ended'],
+    ['a Bearer token', 'sent Bearer abc123def456 today', 'sent [redacted] today'],
+    ['a server key', `bad key ${SERVER_KEY} used`, 'bad key [redacted] used'],
+    [
+      'a signing secret',
+      `bad ${['whsec', 'fixtureValueForScrub'].join('_')} used`,
+      'bad [redacted] used',
+    ],
+    ['a customer id', `for ${['cus', 'Fixture12345'].join('_')} now`, 'for [redacted] now'],
+    ['a connected account id', `on ${['acct', 'Fixture12345'].join('_')} now`, 'on [redacted] now'],
+  ])('still redacts %s', (_label, input, expected) => {
+    expect(scrubMessage(input)).toBe(expected);
+  });
+
+  it('redacts a JWT that follows a delimiter without eating the delimiter', () => {
+    expect(scrubMessage(`a=${SESSION_JWT},b=${SESSION_JWT}`)).toBe('a=[redacted],b=[redacted]');
+  });
+
+  it.each([
+    ['a percent-encoded space', `${EMAIL}%20${EMAIL}`],
+    ['a plus', `${EMAIL}+${EMAIL}`],
+    ['a comma', `${EMAIL},${EMAIL}`],
+    ['an underscore', `${EMAIL}_to_${EMAIL}`],
+  ])('redacts two addresses joined by %s', (_label, input) => {
+    expect(scrubMessage(input)).not.toContain('@');
+  });
+
+  it('redacts a JWT after a percent-encoded prefix', () => {
+    expect(scrubMessage(`Bearer%20${SESSION_JWT}`)).toBe('Bearer%20[redacted]');
+    expect(scrubMessage(`%22${SESSION_JWT}%22`)).toBe('%22[redacted]%22');
+    expect(scrubMessage(`__session%3D${SESSION_JWT} dropped`)).toBe(
+      '__session%3D[redacted] dropped',
+    );
+  });
+
+  it.each([
+    ['a run of a', (size: number) => 'a'.repeat(size)],
+    ['a run of ?', (size: number) => '?'.repeat(size)],
+    ['a run of ?a', (size: number) => '?a'.repeat(size / 2)],
+    ['a run of eyJ', (size: number) => 'eyJ'.repeat(Math.ceil(size / 3))],
+    ['a run of -eyJ', (size: number) => '-eyJ'.repeat(Math.ceil(size / 4))],
+    ['a run of eyJa.', (size: number) => 'eyJa.'.repeat(Math.ceil(size / 5))],
+  ])('scrubs %s in linear time', (_label, hostile) => {
+    expectLinearTime(hostile, scrubMessage);
   });
 });
 
