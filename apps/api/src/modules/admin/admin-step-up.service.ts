@@ -38,6 +38,12 @@ export async function startStepUp(
   deps: StepUpDeps,
   adminId: string,
   now: Date,
+  /**
+   * Whether the send may take the daily cap's reserved headroom. Only an admin's
+   * code may: a customer's closure code (VEN-680) must never use up the slots
+   * that keep admin bans, closures and exports reachable on a busy day.
+   */
+  essential = true,
 ): Promise<AdminStepUpResult> {
   const admin = await findUserById(deps.db, adminId);
 
@@ -62,7 +68,7 @@ export async function startStepUp(
         .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
         .join(''),
       idempotencyKey: randomUUID(),
-      essential: true,
+      essential,
     });
   } catch (error) {
     await deps.store.cancelChallenge(adminId);
