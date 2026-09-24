@@ -8,7 +8,9 @@ vi.mock('@/lib/customer-data', () => ({
   getOwnBookings: (options: unknown) => getOwnBookings(options),
 }));
 
-vi.mock('@/lib/messaging-data', () => ({ getOwnConversations: async () => [] }));
+vi.mock('@/lib/messaging-data', () => ({
+  getOwnConversationBand: async () => ({ conversations: [], hasUnread: false }),
+}));
 
 vi.mock('@/lib/current-user', () => ({
   requireRole: async () => ({ city: 'Austin' }),

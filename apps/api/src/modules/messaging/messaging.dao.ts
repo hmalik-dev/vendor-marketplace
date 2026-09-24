@@ -35,7 +35,50 @@ export interface ConversationListRow {
 }
 
 /**
- * Every conversation this user is in, newest activity first.
+ * The predicate for the conversations this user is in, with the vendor's
+ * profile ids resolved first for the reason `findConversationsFor` gives.
+ */
+async function ownedConversations(db: AppDatabase, userId: string): Promise<SQL | undefined> {
+  const owned = await db
+    .select({ id: vendorProfiles.id })
+    .from(vendorProfiles)
+    .where(eq(vendorProfiles.userId, userId));
+
+  const ownedIds = owned.map((row) => row.id);
+
+  return ownedIds.length === 0
+    ? eq(conversations.customerId, userId)
+    : or(eq(conversations.customerId, userId), inArray(conversations.vendorId, ownedIds));
+}
+
+/**
+ * Whether any message in any of this user's conversations is unread — the
+ * sidebar's dot, which the paged list cannot answer from its first page alone.
+ */
+export async function hasUnreadMessages(db: AppDatabase, userId: string): Promise<boolean> {
+  const own = await ownedConversations(db, userId);
+  const rows = await db
+    .select({ one: sql<number>`1` })
+    .from(messages)
+    .innerJoin(conversations, eq(messages.conversationId, conversations.id))
+    .where(and(own, ne(messages.senderId, userId), isNull(messages.readAt)))
+    .limit(1);
+
+  return rows.length > 0;
+}
+
+/**
+ * The list's sort key: when a thread last had a message. A thread nobody has
+ * written in yet takes its creation time a century back, which sorts it after
+ * every used thread (see `NULLS LAST` below), keeps the unused ones newest
+ * first among themselves, and still gives a keyset cursor a value to name.
+ */
+const conversationActivity = sql`coalesce(${conversations.lastMessageAt}, ${conversations.createdAt} - interval '100 years')`;
+
+/**
+ * One page of the conversations this user is in, newest activity first, by
+ * cursor (VEN-611): the list grows with every customer who ever messaged a
+ * vendor, so it is read `limit` rows at a time.
  *
  * The vendor side is reached through `vendor_profiles.user_id` rather than a
  * second column on the conversation: the thread belongs to the *business*, and
@@ -44,7 +87,9 @@ export interface ConversationListRow {
 export async function findConversationsFor(
   db: AppDatabase,
   userId: string,
-): Promise<ConversationListRow[]> {
+  limit: number,
+  before: KeysetCursor | undefined,
+): Promise<CursorPage<ConversationListRow>> {
   /*
    * Resolved first, and as literal values, deliberately (#402).
    *
@@ -64,16 +109,11 @@ export async function findConversationsFor(
    * indexes. The extra round trip is a sub-millisecond lookup on
    * `vendor_profiles_user_idx`.
    */
-  const owned = await db
-    .select({ id: vendorProfiles.id })
-    .from(vendorProfiles)
-    .where(eq(vendorProfiles.userId, userId));
+  const own = await ownedConversations(db, userId);
 
-  const ownedIds = owned.map((row) => row.id);
-
-  return (
-    db
-      .select({
+  const fetched = await db
+    .select({
+      row: {
         id: conversations.id,
         customerId: conversations.customerId,
         vendorUserId: vendorProfiles.userId,
@@ -86,30 +126,33 @@ export async function findConversationsFor(
         lastMessageAt: conversations.lastMessageAt,
         requestEventDate: bookingRequests.eventDate,
         requestEventType: bookingRequests.eventType,
-      })
-      .from(conversations)
-      .innerJoin(vendorProfiles, eq(conversations.vendorId, vendorProfiles.id))
-      .innerJoin(users, eq(conversations.customerId, users.id))
-      .leftJoin(bookingRequests, eq(conversations.bookingRequestId, bookingRequests.id))
-      // The join stays only to carry the columns the list renders.
-      .where(
-        ownedIds.length === 0
-          ? eq(conversations.customerId, userId)
-          : or(eq(conversations.customerId, userId), inArray(conversations.vendorId, ownedIds)),
-      )
-      /*
-       * `NULLS LAST` is load-bearing, not tidiness. `ensureConversation` opens a
-       * thread with **every** booking request and leaves `last_message_at` null
-       * until somebody writes, and Postgres sorts nulls *first* under `DESC` — so
-       * the default ordering led with every thread that had never been used.
-       *
-       * On `/messages` that was merely wrong-looking, because the whole list
-       * renders. Frame `07`'s bookings rail draws only the first three, so it
-       * turned into lost data: three rows reading "No messages yet." above a reply
-       * that arrived an hour ago (#302).
-       */
-      .orderBy(sql`${conversations.lastMessageAt} DESC NULLS LAST`, desc(conversations.createdAt))
-  );
+      },
+      cursor: cursorOf(conversationActivity, conversations.id),
+    })
+    .from(conversations)
+    .innerJoin(vendorProfiles, eq(conversations.vendorId, vendorProfiles.id))
+    .innerJoin(users, eq(conversations.customerId, users.id))
+    .leftJoin(bookingRequests, eq(conversations.bookingRequestId, bookingRequests.id))
+    // The join stays only to carry the columns the list renders.
+    .where(before ? and(own, olderThan(conversationActivity, conversations.id, before)) : own)
+    /*
+     * `NULLS LAST` is load-bearing, not tidiness. `ensureConversation` opens a
+     * thread with **every** booking request and leaves `last_message_at` null
+     * until somebody writes, and Postgres sorts nulls *first* under `DESC` — so
+     * the default ordering led with every thread that had never been used.
+     *
+     * The epoch stand-in for null gets that ordering under a cursor, where
+     * `NULLS LAST` cannot be compared against.
+     *
+     * On `/messages` that was merely wrong-looking, because the whole list
+     * renders. Frame `07`'s bookings rail draws only the first three, so it
+     * turned into lost data: three rows reading "No messages yet." above a reply
+     * that arrived an hour ago (#302).
+     */
+    .orderBy(desc(conversationActivity), desc(conversations.id))
+    .limit(limit + 1);
+
+  return pageOf(fetched, limit);
 }
 
 /**

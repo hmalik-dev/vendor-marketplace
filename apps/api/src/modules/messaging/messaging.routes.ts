@@ -1,5 +1,6 @@
 import {
-  conversationSummarySchema,
+  conversationPageSchema,
+  DEFAULT_PAGE_SIZE,
   MESSAGE_PAGE_SIZE,
   notificationItemSchema,
   openConversationSchema,
@@ -61,9 +62,25 @@ const NOTIFICATION_PAGE_SIZE = 20;
 /** Kept well under any proxy's idle timeout, which is what drops a stream. */
 const HEARTBEAT_MS = 30_000;
 
+/**
+ * How often an open stream re-reads its account (VEN-611). Every beat cost one
+ * query per open tab — 1,000 tabs is about 33 a second on a ten-connection pool,
+ * and it keeps a scale-to-zero database awake.
+ *
+ * So the bound on how long a stream outlives a ban, deletion or session
+ * revocation **made on another API instance** moves from 30 seconds to five
+ * minutes. One made on this instance is not on that clock: `EventHub.closeFor`
+ * ends the account's streams the moment it happens, which is how a suspension
+ * and a session bump (VEN-670) already reach an open tab. The re-read is the
+ * backstop for the other-instance case (VEN-462 is where that becomes real).
+ */
+const SUBJECT_RECHECK_MS = 5 * 60_000;
+
 export interface MessagingRoutesOptions {
-  /** How often an open stream is kept alive and its account re-read. Defaults to {@link HEARTBEAT_MS}. */
+  /** How often an open stream is kept alive. Defaults to {@link HEARTBEAT_MS}. */
   heartbeatMs?: number;
+  /** How often a stream's account is re-read, at most; checked on a beat. Defaults to {@link SUBJECT_RECHECK_MS}. */
+  subjectRecheckMs?: number;
   /** Conversations one account may open per hour. */
   conversationRateLimitMax: number;
   /** Messages one account may send per minute. */
@@ -86,8 +103,22 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
 ) => {
   app.get(
     '/conversations',
-    { preHandler: requireAuth, schema: { response: { 200: z.array(conversationSummarySchema) } } },
-    async (request) => listConversations(app.db, authenticated(request.auth)),
+    {
+      // `onRequest`, not `preHandler`: the query is validated before a handler
+      // hook runs, so a signed-out caller with a bad cursor would get a 400.
+      onRequest: requireAuthBeforeValidation,
+      schema: {
+        querystring: cursorQuerySchema,
+        response: { 200: conversationPageSchema },
+      },
+    },
+    async (request) =>
+      listConversations(
+        app.db,
+        authenticated(request.auth),
+        request.query.before,
+        DEFAULT_PAGE_SIZE,
+      ),
   );
 
   /*
@@ -339,6 +370,7 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
       throw error;
     }
 
+    let lastCheckedAt = Date.now();
     const heartbeat = setInterval(() => {
       try {
         reply.raw.write(': heartbeat\n\n');
@@ -349,11 +381,16 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
       }
 
       /*
-       * The account is re-read every beat, so a ban or deletion made through
-       * another API instance — which `closeFor` cannot reach — still ends this
-       * stream within one heartbeat. Only a refusal ends it: a database that
-       * blinks must not drop every open tab.
+       * The account is re-read once per `SUBJECT_RECHECK_MS`, not every beat, so
+       * a ban or deletion made through another API instance — which `closeFor`
+       * cannot reach — still ends this stream within that bound. Only a refusal
+       * ends it: a database that blinks must not drop every open tab.
        */
+      if (Date.now() - lastCheckedAt < (options.subjectRecheckMs ?? SUBJECT_RECHECK_MS)) {
+        return;
+      }
+
+      lastCheckedAt = Date.now();
       resolveStreamSubject(app.db, user.id, openedAt).catch((error: unknown) => {
         if (error instanceof AppError) {
           clearInterval(heartbeat);

@@ -38,11 +38,12 @@ export default async function MessagesPage({
   const user = await requireCurrentUser(
     conversation ? `/messages?${new URLSearchParams({ conversation }).toString()}` : '/messages',
   );
-  const { conversations, failed } = await loadOwnConversations();
+  const { conversations, nextBefore, failed } = await loadOwnConversations();
 
   return (
     <MessagesScreen
       initialConversations={conversations}
+      initialNextBefore={nextBefore}
       viewerId={user.id}
       initialConversationId={conversation ?? null}
       listFailed={failed}
