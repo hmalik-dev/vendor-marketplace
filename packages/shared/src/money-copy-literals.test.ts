@@ -139,7 +139,7 @@ function readableUnits(source: string): string[] {
   }
 
   /* An inline tag splits nothing: `<strong>50%</strong> back` is one sentence. */
-  flat = flat.replace(/<\/?(?:strong|em|b|i|span|a|code|Link)\b[^<>]*>/g, '');
+  flat = flat.split(/<\/?(?:strong|em|b|i|span|a|code|Link)\b[^<>]*>/).join('');
 
   for (const match of flat.matchAll(/>([^<>]+)</g)) {
     units.push((match[1] as string).replace(/[{}]/g, INTERPOLATION));
