@@ -191,14 +191,38 @@ describe('/for-vendors', () => {
     ).toBe(true);
   });
 
-  it('puts the right article before the brand in the payouts note', async () => {
+  it('says what is true about the money: step 2 and step 3 strings, and none of the retired claims', async () => {
     await renderPage();
 
-    const article = /^[aeiou]/i.test(BRAND_NAME) ? 'an' : 'a';
-    expect(document.getElementById('payouts')?.textContent).toContain(
-      `not ${article} ${BRAND_NAME} balance`,
-    );
-    expect(document.body.textContent).not.toMatch(/\ba [AEIOU]\w* balance/);
+    const steps = [...document.querySelectorAll('[data-slot="payout-step"]')];
+    const text = (index: number): string[] =>
+      [...(steps[index]?.querySelectorAll('h3, p') ?? [])]
+        .slice(1) // the numeral
+        .map((node) => node.textContent ?? '');
+
+    expect(text(1)).toEqual(['The customer pays in full', 'At the moment they book.']);
+    expect(text(2)).toEqual(['Held until the event', 'Your dashboard shows what you are owed.']);
+
+    const page = document.body.textContent ?? '';
+    for (const retired of [
+      'not on the day',
+      'sitting there',
+      'in your account',
+      `${BRAND_NAME} balance`,
+      `an ${BRAND_NAME}`,
+    ]) {
+      expect(page, retired).not.toContain(retired);
+    }
+    expect(page).toContain('Nothing is invoiced and nothing is chased.');
+    // The vendor agreement says a customer cancellation follows the checkout schedule, and a failed payout alerts the admin, not the vendor.
+    expect(page).not.toContain('our fee is refunded');
+    expect(page).not.toContain('Cancellations refund our fee');
+    expect(page).not.toContain('which detail Stripe rejected');
+    expect(page).not.toContain('as soon as it clears');
+    // A free date stores nothing and a live request holds nothing, so neither promise is true.
+    expect(page).not.toContain('a day you did not open');
+    expect(page).not.toContain('unanswered requests expire');
+    expect(page).toContain('That date closes to every other customer.');
   });
 
   it('links the vendor agreement from the closing band', async () => {
