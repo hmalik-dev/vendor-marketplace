@@ -1508,12 +1508,18 @@ describe('data rights', () => {
           })
           .from(adminActions)
           .where(eq(adminActions.subjectId, peerId));
-        expect(rows.find((row) => row.action === 'operator_account_closed')).toEqual({
+        expect(rows.find((row) => row.action === 'admin_account_closed')).toEqual({
           actorId,
-          action: 'operator_account_closed',
+          action: 'admin_account_closed',
           subjectId: peerId,
         });
         expect(rows.some((row) => row.action === 'user_closed')).toBe(false);
+
+        const [closed] = await harness.database.db
+          .select({ firstName: users.firstName })
+          .from(users)
+          .where(eq(users.id, peerId));
+        expect(closed).toEqual({ firstName: 'Former admin' });
       });
 
       it('refuses the last live admin with a 409, even when they are the actor', async () => {

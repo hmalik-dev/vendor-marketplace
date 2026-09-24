@@ -57,7 +57,7 @@ counts against the ceiling.
    branch, change the identity's email to a mailbox they control, or create a new
    identity and sign up with it; then grant `admin` to the new account with the
    transaction under _First admin grant_ in [pre-launch.md](pre-launch.md).
-   `app.operator_role_grant` is reserved for that transaction and for VEN-506.
+   `app.admin_role_grant` is reserved for that transaction and for VEN-506.
 3. **Session believed stolen:** reset the password (ends the other sessions once
    VEN-518 lands; until then sign out and revoke sessions in the Neon Auth
    console), and read `/admin/activity` filtered to the admin for bans and

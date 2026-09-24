@@ -27,7 +27,7 @@ async function setRoleUnderGrant(
   role: UserRole,
   now: Date,
 ): Promise<void> {
-  await tx.execute(sql`SET LOCAL app.operator_role_grant = 'on'`);
+  await tx.execute(sql`SET LOCAL app.admin_role_grant = 'on'`);
   await tx.update(users).set({ role, updatedAt: now }).where(eq(users.id, userId));
 }
 

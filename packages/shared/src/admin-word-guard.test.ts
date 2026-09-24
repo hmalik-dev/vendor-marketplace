@@ -8,8 +8,8 @@ import { describe, expect, it } from 'vitest';
  * the admin role may not appear in a tracked file outside the exceptions below.
  * The needle is built from fragments so this file does not match its own scan.
  *
- * An exception is a **token**, not a line: it is stripped before the scan, so
- * prose beside an allowed identifier is still checked.
+ * VEN-697 renamed the persisted identifiers and the environment names, so no
+ * token, path or file is excused any more.
  */
 const W = ['oper', 'ator'].join('');
 const NEEDLE = new RegExp(W, 'i');
@@ -21,48 +21,9 @@ const ALLOWED_PREFIXES: readonly (readonly [prefix: string, reason: string])[] =
   ['packages/db/drizzle/', 'applied migrations and snapshots; history is never edited'],
   ['design/', 'the design contract; a design pass edits it, not a ticket'],
   ['.claude/', 'agent notes, plans and memory: dated records'],
-  ['apps/web/content/legal/', 'binding copy; its wording is VEN-378 checklist, not a rename'],
   ['pnpm-lock.yaml', 'the resolved dependency graph'],
   ['packages/shared/src/admin-word-guard.test.ts', 'this guard names what it forbids'],
 ];
-
-/**
- * Persisted identifiers that VEN-697 renames together with a migration. Renaming
- * them in the release that ships the code would break the release still serving,
- * because migrate runs before the API moves.
- */
-const PERSISTED_TOKENS: readonly (readonly [pattern: string, reason: string])[] = [
-  [`${W.toUpperCase()}_ALERT_EMAIL`, 'environment variable set in the provider consoles'],
-  [`${W.toUpperCase()}_TIMEZONE`, 'environment variable set in the provider consoles'],
-  [`${W}_granted`, 'admin_action enum value stored in append-only audit rows'],
-  [`${W}_revoked`, 'admin_action enum value stored in append-only audit rows'],
-  [`${W}_account_closed`, 'admin_action enum value stored in append-only audit rows'],
-  [`${W}_alert[a-z_:]*`, 'enum types, table, index names and the advisory lock key'],
-  [`${W}_retirement`, 'advisory lock key shared with the release still serving'],
-  [`app_is_${W}`, 'row-level-security function created by migrations'],
-  [`messages_${W}_select`, 'row-level-security policy created by migrations'],
-  [`app\\.${W}(?:_role_grant)?\\b`, 'GUCs the database policies read'],
-  [`Former ${W}`, 'data value closure wrote into first_name'],
-  [
-    `through the ${W} grant path`,
-    'exception text raised by the role-change trigger (migration 0069)',
-  ],
-];
-
-/**
- * The retired console path, where a redirect or a test that pins it lives. It
- * is not a persisted identifier, so it is stripped only in these files.
- */
-const LEGACY_PATH = `/admin/${W}s`;
-const LEGACY_PATH_FILES: readonly string[] = [
-  'apps/web/src/config/legacy-redirects.ts',
-  'apps/web/src/config/legacy-redirects.test.ts',
-  'apps/web/src/app/route-parity-ledger.test.ts',
-];
-
-// Case-sensitive: the stored identifiers are lowercase and the env names uppercase,
-// so a renamed code name that merely starts like a stored identifier still fails.
-const TOKENS = new RegExp(PERSISTED_TOKENS.map(([pattern]) => pattern).join('|'), 'g');
 
 interface TrackedFile {
   path: string;
@@ -74,10 +35,7 @@ function isAllowed(path: string): boolean {
 }
 
 function names(file: TrackedFile): boolean {
-  const text = LEGACY_PATH_FILES.includes(file.path)
-    ? file.text.replaceAll(LEGACY_PATH, '')
-    : file.text;
-  return NEEDLE.test(file.path) || NEEDLE.test(text.replace(TOKENS, ''));
+  return NEEDLE.test(file.path) || NEEDLE.test(file.text);
 }
 
 /** Every tracked file outside the allow-list that still names the retired word. */
@@ -126,47 +84,16 @@ describe('the repo says Admin, never the retired word', () => {
     expect(violations([planted])).toEqual([planted.path]);
   });
 
-  it('still flags prose written beside an allowed identifier', () => {
-    const planted: TrackedFile = {
-      path: 'docs/notes.md',
-      text: `${W}_granted is written when an ${W} is added\n`,
-    };
-    expect(violations([planted])).toEqual([planted.path]);
-  });
-
-  it('flags a renamed code name that only starts like a persisted identifier', () => {
-    const decorator: TrackedFile = { path: 'apps/api/src/a.ts', text: `app.${W}Alerts\n` };
-    const constant: TrackedFile = {
-      path: 'apps/api/src/b.ts',
-      text: `export const ${W.toUpperCase()}_ALERT_KINDS = []\n`,
-    };
-    const path: TrackedFile = { path: 'apps/web/src/c.tsx', text: `href: '/admin/${W}s'\n` };
-    const name: TrackedFile = {
-      path: 'apps/api/src/d.ts',
-      text: `'Former ${W[0]!.toUpperCase()}${W.slice(1)}'\n`,
-    };
-    expect(violations([decorator, constant, path, name])).toEqual([
-      decorator.path,
-      constant.path,
-      path.path,
-      name.path,
-    ]);
-  });
-
-  it('lets the redirect files name the retired console path', () => {
-    const redirect: TrackedFile = {
-      path: 'apps/web/src/config/legacy-redirects.ts',
-      text: `source: '/admin/${W}s'\n`,
-    };
-    expect(violations([redirect])).toEqual([]);
-  });
-
-  it('lets a persisted identifier stand on its own', () => {
-    const kept: TrackedFile = {
-      path: 'apps/api/src/example.ts',
-      text: `action: '${W}_granted'; ${W.toUpperCase()}_TIMEZONE; SET LOCAL app.${W}_role_grant = 'on'\n`,
-    };
-    expect(violations([kept])).toEqual([]);
+  it('flags what VEN-697 renamed: env names, stored values, GUCs, paths and legal copy', () => {
+    const planted: TrackedFile[] = [
+      { path: 'apps/api/src/a.ts', text: `${W.toUpperCase()}_ALERT_EMAIL\n` },
+      { path: 'apps/api/src/b.ts', text: `action: '${W}_granted'\n` },
+      { path: 'apps/api/src/c.ts', text: `SET LOCAL app.${W}_role_grant = 'on'\n` },
+      { path: 'apps/web/src/d.tsx', text: `href: '/admin/${W}s'\n` },
+      { path: 'apps/web/content/legal/e.md', text: `an ${W} reads\n` },
+      { path: 'apps/api/src/f.ts', text: `'Former ${W[0]!.toUpperCase()}${W.slice(1)}'\n` },
+    ];
+    expect(violations(planted)).toEqual(planted.map((f) => f.path));
   });
 
   it('lets the exempt trees keep the word', () => {

@@ -648,7 +648,7 @@ export async function hasAnotherLiveAdmin(db: AppDatabase, userId: string): Prom
 }
 
 /** The one lock every admin retirement takes; exported for its contention test. */
-export const ADMIN_RETIREMENT_LOCK = sql`select pg_advisory_xact_lock(hashtextextended('operator_retirement', 0))`;
+export const ADMIN_RETIREMENT_LOCK = sql`select pg_advisory_xact_lock(hashtextextended('admin_retirement', 0))`;
 
 /**
  * Retires an **admin** — refused when nobody else would hold the console

@@ -34,7 +34,7 @@ describe('the admin digest (VEN-405)', () => {
       log: harness.app.log,
       background: harness.app.background,
       clock: () => NOW,
-      to: TEST_ENV.OPERATOR_ALERT_EMAIL,
+      to: TEST_ENV.ADMIN_ALERT_EMAIL,
       webOrigin: TEST_ENV.WEB_URL,
       wait: async () => undefined,
       timeZone: 'America/New_York',
@@ -320,7 +320,7 @@ describe('the admin digest (VEN-405)', () => {
 
     expect(harness.email.sent).toHaveLength(1);
     const [digest] = harness.email.sent;
-    expect(digest!.to).toBe(TEST_ENV.OPERATOR_ALERT_EMAIL);
+    expect(digest!.to).toBe(TEST_ENV.ADMIN_ALERT_EMAIL);
     expect(digest!.subject).toBe('[Orla ops] Daily digest for 2026-09-14');
     expect(digest!.text.split('\n')).toEqual([
       'Daily digest for 2026-09-14',
@@ -379,8 +379,8 @@ describe('the admin digest (VEN-405)', () => {
     ).toBe('logged');
 
     expect(harness.email.sent).toEqual([]);
-    expect(logLines.join('')).toContain('Admin digest (OPERATOR_ALERT_EMAIL is not set');
-    expect(logLines.join('')).toContain('Admin alert (OPERATOR_ALERT_EMAIL is not set');
+    expect(logLines.join('')).toContain('Admin digest (ADMIN_ALERT_EMAIL is not set');
+    expect(logLines.join('')).toContain('Admin alert (ADMIN_ALERT_EMAIL is not set');
     expect(logLines.join('')).not.toContain(CUSTOMER_EMAIL);
   });
 });

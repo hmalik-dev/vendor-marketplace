@@ -47,7 +47,7 @@ describe('admin alerts', () => {
   let photographyId: string;
 
   function adminMail(): EmailMessage[] {
-    return harness.email.sent.filter((message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL);
+    return harness.email.sent.filter((message) => message.to === TEST_ENV.ADMIN_ALERT_EMAIL);
   }
 
   /** Every rendered part of a message, for the PII scan. */

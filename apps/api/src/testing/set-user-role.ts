@@ -18,7 +18,7 @@ export async function setUserRole(
   where: SQL | undefined,
 ): Promise<void> {
   await db.transaction(async (tx) => {
-    await tx.execute(sql`SET LOCAL app.operator_role_grant = 'on'`);
+    await tx.execute(sql`SET LOCAL app.admin_role_grant = 'on'`);
     await tx.update(users).set({ role }).where(where);
   });
 }
