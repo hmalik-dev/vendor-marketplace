@@ -42,9 +42,23 @@ export const PAYMENT_ERROR_TAGS = { area: 'payments', severity: 'critical' } as 
 const CREDENTIAL_HEADER =
   /^(authorization|proxy-authorization|cookie|set-cookie|x-api-key|x-forwarded-for|x-real-ip|forwarded|x-web-tier-key|x-visitor-ip|x-vercel-forwarded-for|cf-connecting-ip|true-client-ip)$|^(?:x-vercel-ip-|cf-)|token|secret|signature|session|svix/i;
 
-const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
-/** A JWT — the auth provider's session token is one, and so is its `__session` cookie. */
-const JWT = /eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g;
+/**
+ * An address. The local part is capped at 64 characters, the RFC 5321 limit, so
+ * a long run with no `@` costs a bounded scan per character instead of one to
+ * the end of the run. A boundary would bound it too, but two addresses joined
+ * by `%20` or `+` share no boundary character.
+ */
+const EMAIL = /[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+
+/**
+ * A JWT — the auth provider's session token is one, and so is its `__session`
+ * cookie. Only a run's first `eyJ` may start a match, so a failed attempt is
+ * never retried from inside the same run of token characters (that retry was
+ * quadratic on `eyJeyJeyJ…`); a percent-encoded byte such as `%20` also counts
+ * as a boundary, since its last digit is a token character. The boundary is
+ * captured, not asserted, for the same Safari reason as `PHONE`.
+ */
+const JWT = /(^|%[0-9A-Fa-f]{2}|[^A-Za-z0-9_-])eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g;
 /** A bearer credential in free text, whatever its shape. */
 const BEARER = /\bBearer\s+[^\s"',]+/gi;
 /** Stripe, the auth provider and Resend server keys and signing secrets. */
@@ -75,7 +89,7 @@ const PHONE =
  * transaction name — fields `request.url`'s path cut never reaches. Redacting
  * the value and keeping the name leaves the breadcrumb readable.
  */
-const QUERY_VALUE = /([?&][^\s=&#"']+=)[^\s&#"']*/g;
+const QUERY_VALUE = /([?&][^\s=&#"'?]+=)[^\s&#"']*/g;
 /** The same secrets when a query string travels bare, as `searchParams.toString()` builds it. */
 const BARE_SECRET_PARAM = /\b((?:ticket|token|secret|signature)=)[^\s&#"']+/gi;
 
@@ -104,7 +118,7 @@ const MAX_DEPTH = 12;
 
 function redactString(value: string): string {
   return value
-    .replace(JWT, REDACTED)
+    .replace(JWT, `$1${REDACTED}`)
     .replace(BEARER, REDACTED)
     .replace(PROVIDER_CREDENTIAL, REDACTED)
     .replace(STRIPE_OBJECT_ID, REDACTED)

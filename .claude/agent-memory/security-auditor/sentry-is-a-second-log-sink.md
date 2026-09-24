@@ -38,9 +38,14 @@ ticket was probed through `request.url`, breadcrumb and span `url.full`,
 - `sdkProcessingMetadata.normalizedRequest.headers` holds the raw cookie and
   `authorization` (`WITHHELD_KEY`'s `auth(?!or)` excludes the word). Harmless
   only because `@sentry/core@10.74.0` `envelope.js:44` deletes the field.
-- **The only hang in `beforeSend` is `EMAIL`**, quadratic: 5.8 s on a 120 KB
-  dotted-digit string, 0.94 s on 50 KB of letters, and `extra`/span strings are
-  not capped by `maxValueLength`. The IP and path regexes cost <20 ms there.
+- **ReDoS in `redactString` (VEN-674, 2026-09-23).** `EMAIL`/`JWT` were
+  quadratic; VEN-674 made them start only at a captured run boundary. That
+  boundary costs `EMAIL` a regression the JWT form does not have: `TLD` stops
+  at a local-class char, so a chained address (`a@b.com%20c@d.com`, `+`, `.2`)
+  now leaks — the fix is a bounded local part `{1,64}` with no boundary (fuzz-
+  equal to the old regex, linear). `QUERY_VALUE`'s name class admits `?`, so a
+  run of `?` is quadratic (2 s at 64 KB); exclude `?` from it. `PHONE`, `IPV4`,
+  `IPV6` probed linear. `extra`/span strings are not capped by `maxValueLength`.
 
 Settled, do not re-report: `beforeSendTransaction` is registered beside
 `beforeSend` in both apps; `sendDefaultPii: false` everywhere; `user` is reduced

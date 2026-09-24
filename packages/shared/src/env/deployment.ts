@@ -13,6 +13,8 @@
  * injects, not values an operator writes into `.env`.
  */
 
+import { trimTrailingSlashes } from '../utils/trim-slashes.js';
+
 /** A host that has put this process on the public internet. */
 export interface Deployment {
   /** Platform name, for error messages. */
@@ -84,7 +86,7 @@ export function pointsAtLoopback(value: string): boolean {
 
 /** `host` as an https origin, with any trailing slash removed. */
 function httpsOrigin(host: string | undefined): string | null {
-  const trimmed = host?.trim().replace(/\/+$/, '');
+  const trimmed = host ? trimTrailingSlashes(host.trim()) : undefined;
 
   if (!trimmed) {
     return null;
