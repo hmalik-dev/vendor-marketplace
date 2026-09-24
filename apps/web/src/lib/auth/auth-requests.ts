@@ -274,7 +274,11 @@ export async function listSessions(): Promise<DeviceSession[] | SessionsOutcome>
   }
 
   const body = response.ok
-    ? ((await response.json().catch(() => null)) as { sessions?: unknown } | null)
+    ? ((await response.json().catch((error: unknown) => {
+        // The screen says the devices could not be loaded; the console says why.
+        reportSwallowedError('auth-requests: could not read the devices list', error);
+        return null;
+      })) as { sessions?: unknown } | null)
     : null;
 
   return Array.isArray(body?.sessions) ? body.sessions.filter(isDeviceSession) : 'unreachable';
