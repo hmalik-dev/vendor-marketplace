@@ -4355,7 +4355,8 @@ export type AdminStepUpResult = z.infer<typeof adminStepUpResultSchema>;
  * alone cannot end an account.
  */
 export const closeOwnAccountSchema = z.object({
-  email: z.string().trim().min(1, 'Enter the email address on this account').max(320),
+  // Free text, not `emailSchema`: the provider accepts addresses `z.email()` refuses, and this is only compared with the one on file.
+  email: trimmedString(MAX_EMAIL_LENGTH),
   code: adminStepUpVerifySchema.shape.code,
 });
 export type CloseOwnAccount = z.infer<typeof closeOwnAccountSchema>;
