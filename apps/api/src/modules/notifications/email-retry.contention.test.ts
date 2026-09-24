@@ -140,7 +140,7 @@ describe('the email retry sweep, under real contention', () => {
     expect(totals.reduce((sum, total) => sum + total.invites, 0)).toBe(1);
   });
 
-  it('makes an operator resend that overlaps a sweep wait, then refuse: one send', async () => {
+  it('makes an admin resend that overlaps a sweep wait, then refuse: one send', async () => {
     sent = [];
     const [row] = await database.db
       .insert(vendorInvites)
@@ -153,7 +153,7 @@ describe('the email retry sweep, under real contention', () => {
       .returning({ id: vendorInvites.id });
 
     const sweep = retryFailedEmails(deps(), () => new Date());
-    // Let the sweep take its row lock before the operator's request arrives.
+    // Let the sweep take its row lock before the admin's request arrives.
     await new Promise((resolve) => setTimeout(resolve, SEND_DELAY_MS / 3));
     // Settled at once, so its refusal is never an unhandled rejection while the sweep finishes.
     const refusal = resendVendorInvite(deps().invites, row!.id).then(

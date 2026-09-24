@@ -1183,7 +1183,7 @@ async function prepareTransition({
 
   /*
    * Create refuses an invisible vendor; accept has to as well, or a storefront
-   * an operator pulled after the quote still takes the booking (VEN-556). The
+   * an admin pulled after the quote still takes the booking (VEN-556). The
    * request stays as it was: unpublishing is reversible, so nothing is declined.
    */
   const availability = await findVendorAvailability(db, row.vendorId);

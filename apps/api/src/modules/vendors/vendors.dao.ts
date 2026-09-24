@@ -131,10 +131,10 @@ export async function updateVendorProfileById(
    * is a compare-and-set rather than a write behind an earlier read (#457).
    *
    * The vendor's editor reads their row, decides, then writes several round
-   * trips later, and it takes no lock — so an operator's takedown committing in
+   * trips later, and it takes no lock — so an admin's takedown committing in
    * that window was overwritten by a publish that had already passed the check.
    * The row then carried `is_published = true` with `moderation_hold = true`:
-   * back on search, labelled `Held` in the console, and the operator's own
+   * back on search, labelled `Held` in the console, and the admin's own
    * republish answering 409. Checking the column in the statement that writes
    * it is what makes that unrepresentable rather than unlikely.
    *

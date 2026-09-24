@@ -75,7 +75,7 @@ export const VENDOR_VISIBLE: SQL = sql`${eq(vendorProfiles.isPublished, true)}
 
 /**
  * A storefront a customer may still be sold to (VEN-556): visible, and not on an
- * operator's moderation hold.
+ * admin's moderation hold.
  *
  * Read at accept and checkout, where a vendor pulled after the request was made
  * must not take the booking or the money. Not folded into `VENDOR_VISIBLE`,

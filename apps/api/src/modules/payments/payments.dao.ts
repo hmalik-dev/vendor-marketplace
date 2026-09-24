@@ -555,7 +555,7 @@ export async function applyBookingTransition(
  */
 export interface CancellationRecord {
   cancelledAt: Date;
-  /** The customer's own words, the operator's sentence, or nothing. */
+  /** The customer's own words, the admin's sentence, or nothing. */
   cancellationReason: string | null;
   cancelledBy: BookingCancelledBy;
   /** What Stripe actually moved. `null` when there was no payment to return. */

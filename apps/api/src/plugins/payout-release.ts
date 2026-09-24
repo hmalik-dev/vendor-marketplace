@@ -79,7 +79,7 @@ export const payoutReleasePlugin = fp<PayoutReleasePluginOptions>(
                 db: app.db,
                 stripe: app.stripe,
                 log: app.log,
-                alerts: app.operatorAlerts,
+                alerts: app.adminAlerts,
                 notify: {
                   hub: app.events,
                   mail: {
@@ -128,5 +128,5 @@ export const payoutReleasePlugin = fp<PayoutReleasePluginOptions>(
       clearTimeout(bootTimer);
     });
   },
-  { name: 'payout-release', dependencies: ['clock', 'operator-alerts'] },
+  { name: 'payout-release', dependencies: ['clock', 'admin-alerts'] },
 );

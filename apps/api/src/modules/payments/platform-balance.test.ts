@@ -1,7 +1,7 @@
 import {
   bookingRequests,
   bookings,
-  operatorAlerts,
+  adminAlerts,
   supportCases,
   users,
   vendorProfiles,
@@ -43,7 +43,7 @@ describe('the platform balance reconciliation (VEN-644)', () => {
       {
         db: harness.database.db,
         stripe: harness.stripe,
-        alerts: harness.app.operatorAlerts,
+        alerts: harness.app.adminAlerts,
         log: harness.app.log,
       },
       now,
@@ -160,7 +160,7 @@ describe('the platform balance reconciliation (VEN-644)', () => {
 
   afterEach(async () => {
     const db = harness.database.db;
-    await db.delete(operatorAlerts);
+    await db.delete(adminAlerts);
     await db.delete(supportCases);
     await db.delete(bookings);
     await db.delete(bookingRequests);
@@ -187,10 +187,10 @@ describe('the platform balance reconciliation (VEN-644)', () => {
       alert: null,
     });
     expect(harness.email.sent).toEqual([]);
-    expect(await harness.database.db.select().from(operatorAlerts)).toEqual([]);
+    expect(await harness.database.db.select().from(adminAlerts)).toEqual([]);
   });
 
-  it('alerts the operator once a day when the balance is a cent short', async () => {
+  it('alerts the admin once a day when the balance is a cent short', async () => {
     harness.stripe.platformBalance = {
       availableCents: 100_000,
       pendingCents: REQUIRED_CENTS - 100_001,
@@ -214,8 +214,8 @@ describe('the platform balance reconciliation (VEN-644)', () => {
     );
     expect(
       await harness.database.db
-        .select({ kind: operatorAlerts.kind, subjectId: operatorAlerts.subjectId })
-        .from(operatorAlerts),
+        .select({ kind: adminAlerts.kind, subjectId: adminAlerts.subjectId })
+        .from(adminAlerts),
     ).toEqual([{ kind: 'platform_balance_short', subjectId: '2026-09-23' }]);
 
     clockNow = LATER_THAT_DAY;

@@ -54,7 +54,7 @@ const SUPERSEDABLE: Readonly<Record<EmailDeliveryOutcome, EmailDeliveryOutcome[]
  * verbatim — so its length is somebody else's decision. Truncating rather than
  * letting Postgres refuse the row is deliberate: the whole point of this table
  * is that the record survives, and a `value too long` on a bounce would lose
- * exactly the row an operator came looking for.
+ * exactly the row an admin came looking for.
  *
  * Applied here, in the DAO, on both write paths — so no caller has to remember
  * it and the two cannot disagree.

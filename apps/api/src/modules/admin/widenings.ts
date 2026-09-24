@@ -6,7 +6,7 @@ import type { FilterWidening } from '@vendor-marketplace/shared';
  * active filter, in **one** round trip (#454).
  *
  * Drawn by Pattern A of the admin delta: a filtered-empty console list offers
- * one way out per filter and each carries its own number, so an operator picks
+ * one way out per filter and each carries its own number, so an admin picks
  * the widening that pays rather than clearing everything and rebuilding the
  * query. **A route that would reveal zero is never offered**, which is why the
  * count has to exist before the button is drawn — a shape that discovered the
@@ -67,7 +67,7 @@ function countWhere(condition: SQL | undefined): SQL<number> {
  *
  * Returns `[]` when nothing is filtered — there is no way out to offer from a
  * list that is empty because the platform has no rows, and the delta is
- * explicit that a true empty carries **no button**: nothing an operator does
+ * explicit that a true empty carries **no button**: nothing an admin does
  * creates a case or an activity row, so a control there would offer an action
  * that cannot help.
  *

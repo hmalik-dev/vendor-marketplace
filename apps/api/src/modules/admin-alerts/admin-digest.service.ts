@@ -1,6 +1,6 @@
 import {
   formatPrice,
-  OPERATOR_DIGEST_LOCAL_HOUR,
+  ADMIN_DIGEST_LOCAL_HOUR,
   PAYOUT_SWEEP_INTERVAL_MS,
   payoutDueThroughDate,
 } from '@vendor-marketplace/shared';
@@ -11,11 +11,11 @@ import {
   releaseAlert,
   type DigestFigures,
   type MoneyTally,
-} from './operator-alerts.dao.js';
-import { renderOperatorEmail, type OperatorAlertDeps } from './operator-alerts.service.js';
+} from './admin-alerts.dao.js';
+import { renderAdminEmail, type AdminAlertDeps } from './admin-alerts.service.js';
 
-export interface OperatorDigestDeps extends OperatorAlertDeps {
-  /** `OPERATOR_TIMEZONE`, validated at boot by `operatorLocalTime`. */
+export interface AdminDigestDeps extends AdminAlertDeps {
+  /** `OPERATOR_TIMEZONE`, validated at boot by `adminLocalTime`. */
   timeZone: string;
 }
 
@@ -29,13 +29,13 @@ const LOOKAHEAD_DAYS = 2;
 const MAX_LISTED_UNPAID = 10;
 
 /**
- * The operator's calendar date and hour at `now`.
+ * The admin's calendar date and hour at `now`.
  *
  * `Intl` rather than arithmetic on an offset, because the offset changes twice
  * a year. An unknown zone throws `RangeError`, which is what makes the plugin
  * refuse to boot on a mistyped `OPERATOR_TIMEZONE`.
  */
-export function operatorLocalTime(now: Date, zone: string): { date: string; hour: number } {
+export function adminLocalTime(now: Date, zone: string): { date: string; hour: number } {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: zone,
     year: 'numeric',
@@ -117,19 +117,16 @@ export function composeDigestLines(figures: DigestFigures): string[] {
  * Sends the morning digest if it is due and no instance has sent it yet.
  *
  * **Safe on every instance at once.** Each one ticks; the claim row's partial
- * unique index lets exactly one insert win for the operator-local date, and
+ * unique index lets exactly one insert win for the admin-local date, and
  * only the winner sends. A failed send gives the claim back so a later tick
  * retries. An empty day is sent too (VEN-671): a digest that only arrives when
  * something happened makes "the timer stopped" indistinguishable from "nothing
  * happened", so its arrival is the daily proof that the process is running.
  */
-export async function runOperatorDigest(
-  deps: OperatorDigestDeps,
-  now: Date,
-): Promise<DigestResult> {
-  const local = operatorLocalTime(now, deps.timeZone);
+export async function runAdminDigest(deps: AdminDigestDeps, now: Date): Promise<DigestResult> {
+  const local = adminLocalTime(now, deps.timeZone);
 
-  if (local.hour < OPERATOR_DIGEST_LOCAL_HOUR) {
+  if (local.hour < ADMIN_DIGEST_LOCAL_HOUR) {
     return 'not-due';
   }
 
@@ -160,7 +157,7 @@ export async function runOperatorDigest(
   if (deps.to === undefined) {
     deps.log.warn(
       { summary, details },
-      'Operator digest (OPERATOR_ALERT_EMAIL is not set, so it was logged rather than sent)',
+      'Admin digest (OPERATOR_ALERT_EMAIL is not set, so it was logged rather than sent)',
     );
     return 'logged';
   }
@@ -168,13 +165,13 @@ export async function runOperatorDigest(
   try {
     await deps.email.send({
       to: deps.to,
-      ...renderOperatorEmail({ summary, details, link: `${deps.webOrigin}/admin` }),
+      ...renderAdminEmail({ summary, details, link: `${deps.webOrigin}/admin` }),
       idempotencyKey: claim,
       essential: true,
     });
     return 'sent';
   } catch (error) {
-    deps.log.error({ date: local.date, err: error }, 'The operator digest could not be sent');
+    deps.log.error({ date: local.date, err: error }, 'The admin digest could not be sent');
     await releaseAlert(deps.db, claim);
     return 'failed';
   }

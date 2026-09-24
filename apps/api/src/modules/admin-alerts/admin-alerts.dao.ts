@@ -2,15 +2,15 @@ import {
   bookingRequests,
   bookings,
   emailDeliveries,
-  operatorAlerts,
+  adminAlerts,
   stripeWebhookFailures,
   supportCases,
   users,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
 import type {
-  ImmediateOperatorAlertKind,
-  OperatorAlertOutcome,
+  ImmediateAdminAlertKind,
+  AdminAlertOutcome,
   UserRole,
 } from '@vendor-marketplace/shared';
 import {
@@ -43,9 +43,9 @@ import { countDuePayoutBookings } from '../payments/payouts.dao.js';
 export async function recordAlertUnlessRecent(
   db: AppDatabase,
   input: {
-    kind: ImmediateOperatorAlertKind;
+    kind: ImmediateAdminAlertKind;
     subjectId: string;
-    outcome: OperatorAlertOutcome;
+    outcome: AdminAlertOutcome;
     /** The app clock's now, never the database's: the dedupe window is measured on it. */
     sentAt: Date;
   },
@@ -57,13 +57,13 @@ export async function recordAlertUnlessRecent(
     );
 
     const recent = await tx
-      .select({ id: operatorAlerts.id })
-      .from(operatorAlerts)
+      .select({ id: adminAlerts.id })
+      .from(adminAlerts)
       .where(
         and(
-          eq(operatorAlerts.kind, input.kind),
-          eq(operatorAlerts.subjectId, input.subjectId),
-          gt(operatorAlerts.sentAt, since),
+          eq(adminAlerts.kind, input.kind),
+          eq(adminAlerts.subjectId, input.subjectId),
+          gt(adminAlerts.sentAt, since),
         ),
       )
       .limit(1);
@@ -72,7 +72,7 @@ export async function recordAlertUnlessRecent(
       return null;
     }
 
-    const rows = await tx.insert(operatorAlerts).values(input).returning({ id: operatorAlerts.id });
+    const rows = await tx.insert(adminAlerts).values(input).returning({ id: adminAlerts.id });
 
     return rows[0]?.id ?? null;
   });
@@ -126,13 +126,13 @@ export async function clearStripeWebhookFailures(db: AppDatabase, failure: strin
  */
 export async function hasAlertFor(
   db: AppDatabase,
-  kind: ImmediateOperatorAlertKind,
+  kind: ImmediateAdminAlertKind,
   subjectId: string,
 ): Promise<boolean> {
   const rows = await db
-    .select({ id: operatorAlerts.id })
-    .from(operatorAlerts)
-    .where(and(eq(operatorAlerts.kind, kind), eq(operatorAlerts.subjectId, subjectId)))
+    .select({ id: adminAlerts.id })
+    .from(adminAlerts)
+    .where(and(eq(adminAlerts.kind, kind), eq(adminAlerts.subjectId, subjectId)))
     .limit(1);
 
   return rows.length > 0;
@@ -141,16 +141,16 @@ export async function hasAlertFor(
 /** Whether today's digest has already been claimed by any instance. */
 export async function isDigestClaimed(db: AppDatabase, localDate: string): Promise<boolean> {
   const rows = await db
-    .select({ id: operatorAlerts.id })
-    .from(operatorAlerts)
-    .where(and(eq(operatorAlerts.kind, 'daily_digest'), eq(operatorAlerts.subjectId, localDate)))
+    .select({ id: adminAlerts.id })
+    .from(adminAlerts)
+    .where(and(eq(adminAlerts.kind, 'daily_digest'), eq(adminAlerts.subjectId, localDate)))
     .limit(1);
 
   return rows.length > 0;
 }
 
 /**
- * Claims the digest for one operator-local date, answering the row id to the
+ * Claims the digest for one admin-local date, answering the row id to the
  * one instance whose insert won and null to every other.
  *
  * The partial unique index `operator_alerts_digest_date_key` is the arbiter; an
@@ -160,21 +160,21 @@ export async function isDigestClaimed(db: AppDatabase, localDate: string): Promi
 export async function claimDigest(
   db: AppDatabase,
   localDate: string,
-  outcome: OperatorAlertOutcome,
+  outcome: AdminAlertOutcome,
   sentAt: Date,
 ): Promise<string | null> {
   const rows = await db
-    .insert(operatorAlerts)
+    .insert(adminAlerts)
     .values({ kind: 'daily_digest', subjectId: localDate, outcome, sentAt })
     .onConflictDoNothing()
-    .returning({ id: operatorAlerts.id });
+    .returning({ id: adminAlerts.id });
 
   return rows[0]?.id ?? null;
 }
 
 /** Gives a claim back after its send failed, so the next tick or event can retry. */
 export async function releaseAlert(db: AppDatabase, id: string): Promise<void> {
-  await db.delete(operatorAlerts).where(eq(operatorAlerts.id, id));
+  await db.delete(adminAlerts).where(eq(adminAlerts.id, id));
 }
 
 export interface DisputeAlertSubject {
@@ -253,7 +253,7 @@ export interface DigestWindow {
   /** The last 24 hours: `[since, until)`. */
   since: Date;
   until: Date;
-  /** Event dates `[fromDate, throughDate]`, operator-local. */
+  /** Event dates `[fromDate, throughDate]`, admin-local. */
   fromDate: string;
   throughDate: string;
   /** `payoutDueThroughDate` one sweep interval before `until`. */

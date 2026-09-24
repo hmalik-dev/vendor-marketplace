@@ -69,7 +69,7 @@ export async function setCategoryActive(
  * Persists a complete order: position `n` is written as `display_order = n + 1`.
  *
  * Refused with a 409 when the screen it came from is out of date: when
- * `basedOnCategoryIds` is no longer the current order (another operator moved
+ * `basedOnCategoryIds` is no longer the current order (another admin moved
  * something since), or when the new list does not name every category exactly
  * once. Applying either would silently undo a move or push a missing category
  * to wherever its stale number happens to sort.

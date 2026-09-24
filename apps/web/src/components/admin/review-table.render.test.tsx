@@ -26,7 +26,7 @@ function reviewRow(overrides: Partial<WireAdminReviewRow> = {}): WireAdminReview
 }
 
 /**
- * #435 — hiding a review is reversible, and an operator can only reverse a state
+ * #435 — hiding a review is reversible, and an admin can only reverse a state
  * they can see.
  *
  * Every public read now filters `is_public`, which makes the console the one
@@ -43,7 +43,7 @@ describe('ReviewTable', () => {
           reviewRow(),
           reviewRow({
             id: '22222222-2222-4222-8222-222222222222',
-            title: 'A review an operator took down',
+            title: 'A review an admin took down',
             isPublic: false,
           }),
         ]}
@@ -56,7 +56,7 @@ describe('ReviewTable', () => {
      * The assertion is the pairing, not the presence of a pill.
      */
     expect(screen.getAllByText('Hidden')).toHaveLength(1);
-    expect(screen.getAllByText('A review an operator took down')).toHaveLength(1);
+    expect(screen.getAllByText('A review an admin took down')).toHaveLength(1);
     expect(screen.getAllByText('Late and unapologetic')).toHaveLength(1);
   });
 
@@ -89,7 +89,7 @@ describe('ReviewTable', () => {
   }
 
   /*
-   * The label is the operator's only cue for which direction they are about to
+   * The label is the admin's only cue for which direction they are about to
    * move a review, and it is one ternary. Swapping it passed every other test
    * in this file, because none of them opened the menu.
    */
@@ -134,7 +134,7 @@ describe('ReviewTable', () => {
    *
    * Browser verification found the unhide direction drifting — the menu item
    * read "Unhide review" and its confirm button "Show review". Cosmetic on its
-   * own, but this ticket's whole risk is an operator misreading which action
+   * own, but this ticket's whole risk is an admin misreading which action
    * they are about to take, so the two halves of one action agree.
    */
   it('uses one word per action across the menu item and its confirm button', async () => {

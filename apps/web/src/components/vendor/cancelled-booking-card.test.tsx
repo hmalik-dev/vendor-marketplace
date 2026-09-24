@@ -106,7 +106,7 @@ describe('CancelledBookingCard', () => {
     ).toBeDefined();
   });
 
-  it('attributes an unwound booking to the operator, not to the customer', () => {
+  it('attributes an unwound booking to the admin, not to the customer', () => {
     render(<CancelledBookingCard request={cancelled({ cancelledBy: 'admin' })} />);
 
     expect(

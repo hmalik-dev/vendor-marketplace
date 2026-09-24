@@ -95,13 +95,13 @@ export function ReviewTable({
           /*
             The console is the only surface that still shows a hidden review, so
             it is the only surface that can say a review *is* hidden — without
-            the marker, "Unhide review" names a state the operator cannot see.
+            the marker, "Unhide review" names a state the admin cannot see.
 
             **"Hidden" and "Private" are different facts and the pill must not
             conflate them.** `is_public = false` on a review *of a vendor* means
-            an operator hid it; on a vendor's note *about a customer* it means
+            an admin hid it; on a vendor's note *about a customer* it means
             the author chose not to let other vendors read it. Labelling the
-            second "Hidden" invited an operator to unhide something nobody had
+            second "Hidden" invited an admin to unhide something nobody had
             hidden.
           */
           cell: (row) => (
@@ -136,7 +136,7 @@ export function ReviewTable({
 /**
  * Hide, then — only if it must not persist at all — delete.
  *
- * The order in the menu is the order the ticket asks an operator to reach for
+ * The order in the menu is the order the ticket asks an admin to reach for
  * them (#435): hiding is the default response and deletion the escalation, so
  * the reversible action is first and the permanent one last and red.
  *
@@ -145,7 +145,7 @@ export function ReviewTable({
  * the storefront rating outright; the delete dialog still branches, because
  * deletion works on both directions and resolves a `vendor_to_customer` row
  * back to the *customer's* rating — naming the vendor there would tell an
- * operator they were correcting a storefront when they were not.
+ * admin they were correcting a storefront when they were not.
  */
 function ReviewRowActions({
   row,
@@ -162,7 +162,7 @@ function ReviewRowActions({
     it — offering "Unhide review" there would publish a private note to every
     other vendor, and `seed-demo` writes every one of those notes private, so it
     was one click away on any demo database. The API refuses it too; this is the
-    half that stops an operator being invited to try.
+    half that stops an admin being invited to try.
   */
   const moderable = row.type === 'customer_to_vendor';
 
@@ -202,8 +202,8 @@ function ReviewRowActions({
               /*
             Title and confirm label say the **same word** as the menu item that
             opened them. A menu offering "Unhide review" whose button then reads
-            "Show review" makes an operator check they clicked the right thing —
-            small, but this ticket's whole risk is an operator misreading which
+            "Show review" makes an admin check they clicked the right thing —
+            small, but this ticket's whole risk is an admin misreading which
             action they are about to take.
           */
               title={row.isPublic ? 'Hide this review?' : 'Unhide this review?'}
@@ -245,7 +245,7 @@ function ReviewRowActions({
             Whose rating moves depends on the direction, and the dialog has to
             say which. `deleteReviewAndRecalculate` resolves a
             `vendor_to_customer` review back to the *customer* through its
-            booking — so naming the vendor there told the operator they were
+            booking — so naming the vendor there told the admin they were
             correcting a public storefront rating when they were changing a
             customer's private one.
           */

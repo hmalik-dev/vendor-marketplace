@@ -14,7 +14,7 @@ import { createTestDatabase, MIGRATIONS_FOLDER, type TestDatabase } from './test
 const THIS_MIGRATION = '0089_closed_accounts_forget_the_person';
 
 const CLOSED_CUSTOMER = '7a1c2b0a-1111-4222-8333-944445555666';
-const CLOSED_OPERATOR = '7a1c2b0a-2222-4222-8333-944445555666';
+const CLOSED_ADMIN = '7a1c2b0a-2222-4222-8333-944445555666';
 const LIVE = '7a1c2b0a-3333-4222-8333-944445555666';
 
 let testDb: TestDatabase;
@@ -63,8 +63,8 @@ describe('0089 against accounts closed before the scrub', () => {
         ...person,
       },
       {
-        id: CLOSED_OPERATOR,
-        authUserId: 'legacy_closed_operator',
+        id: CLOSED_ADMIN,
+        authUserId: 'legacy_closed_admin',
         email: 'ops@example.com',
         role: 'admin',
         firstName: 'Ola',
@@ -100,12 +100,12 @@ describe('0089 against accounts closed before the scrub', () => {
       deletedAt: closedAt,
     });
 
-    const [operator] = await testDb.db
+    const [admin] = await testDb.db
       .select({ email: users.email, firstName: users.firstName })
       .from(users)
-      .where(eq(users.id, CLOSED_OPERATOR));
-    expect(operator).toEqual({
-      email: `closed+${CLOSED_OPERATOR}@invalid`,
+      .where(eq(users.id, CLOSED_ADMIN));
+    expect(admin).toEqual({
+      email: `closed+${CLOSED_ADMIN}@invalid`,
       firstName: 'Former operator',
     });
 

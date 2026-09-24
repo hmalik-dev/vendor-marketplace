@@ -8,7 +8,7 @@ import { elements, type SourceFile } from './source-scan';
  * bitten four times:
  *
  * - `stone-400` as text on ink — the closing band's pitch (#430) and the admin
- *   header's operator line (#441).
+ *   header's admin line (#441).
  * - `stone-0` as a border on ink — the footer's legal hairline (#441).
  * - A 78% alpha of `stone-50` standing in for a value the frames name outright,
  *   which `theme.css` records as the defect that minted the ink-ground ramp.

@@ -319,10 +319,10 @@ describe('QuoteReview', () => {
 
     /**
      * The third origin, and the one the old sentence was flatly untrue about:
-     * an operator unwinding a suspended account is not something the customer
+     * an admin unwinding a suspended account is not something the customer
      * did.
      */
-    it('says an operator unwound it, and does not blame the customer', () => {
+    it('says an admin unwound it, and does not blame the customer', () => {
       render(<QuoteReview request={cancelledBooking({ cancelledBy: 'admin' })} />);
 
       expect(

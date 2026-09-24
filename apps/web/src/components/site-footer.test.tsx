@@ -176,7 +176,7 @@ describe('SiteFooter', () => {
     expect(screen.queryByRole('link', { name: 'Florals' })).toBeNull();
   });
 
-  /* VEN-401: an operator can hide a category, and a link to it would search on nothing. */
+  /* VEN-401: an admin can hide a category, and a link to it would search on nothing. */
   it('drops a ruled category the live taxonomy no longer offers', async () => {
     liveCategories = CATEGORY_SEEDS.filter((seed) => seed.slug !== 'entertainment').map(
       (seed, index) => ({
@@ -263,7 +263,7 @@ describe('SiteFooter', () => {
         ['Edit profile', '/vendor/profile/edit'],
       ],
     ],
-    /* An operator has neither messages nor a profile; a short column beats rows
+    /* An admin has neither messages nor a profile; a short column beats rows
      * that bounce. */
     ['admin' as const, [['Admin', '/dashboard']]],
   ])('gives a %s account their own surfaces', async (role, expected) => {
@@ -287,7 +287,7 @@ describe('SiteFooter', () => {
    * is only a link for a reader whose `/` has the section to land on.
    *
    * A signed-in customer's does not, since #428 took it off their landing, and
-   * a vendor never reaches `/` at all. A signed-out visitor and an operator
+   * a vendor never reaches `/` at all. A signed-out visitor and an admin
    * both render it. Both directions are asserted: the presence half alone
    * passes on the broken version.
    */

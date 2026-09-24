@@ -7,7 +7,7 @@ type ActorDatabase = PgDatabase<PgQueryResultHKT, typeof schema>;
 /**
  * The transaction-local setting `booking_events`' triggers read the actor from
  * (VEN-647). Unset means the system moved the row: a sweep, a webhook, an
- * operator path that does not carry the operator's id.
+ * admin path that does not carry the admin's id.
  */
 export const BOOKING_ACTOR_SETTING = 'app.booking_actor';
 

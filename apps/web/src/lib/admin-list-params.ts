@@ -10,7 +10,7 @@ import { boundedText, oneOf, uuidParam, type RawParam } from '@/lib/admin-params
 /**
  * The filters of the two lists whose page and `Export CSV` handler must narrow
  * the URL identically (VEN-388). One function per list, so the file an
- * operator downloads cannot be filtered differently from the table they were
+ * admin downloads cannot be filtered differently from the table they were
  * looking at. `page` is not here: an export walks every page.
  */
 

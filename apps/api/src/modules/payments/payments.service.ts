@@ -64,8 +64,8 @@ import {
   paymentRefusedAlert,
   type RefusedPaymentCause,
   refundFailedAlert,
-  type OperatorAlerts,
-} from '../operator-alerts/operator-alerts.service.js';
+  type AdminAlerts,
+} from '../admin-alerts/admin-alerts.service.js';
 import { notificationHref } from '../messaging/messaging.service.js';
 import { assertCheckoutOpen } from '../platform-settings/platform-settings.service.js';
 import {
@@ -92,7 +92,7 @@ import {
  * What a booking action needs, whoever is taking it.
  *
  * Split from `PaymentContext` for `resolveDispute`, which is reached from the
- * admin plugin: an operator settling a complaint moves the same money through
+ * admin plugin: an admin settling a complaint moves the same money through
  * the same code, but `AdminContext` has no `platformFeeRate` and should not
  * grow one for it. Only the paths that *price* a charge need the rate.
  */
@@ -110,10 +110,10 @@ export interface BookingContext {
    */
   mail: NotificationEmailDeps;
   /**
-   * The operator's pager, for a refund that did not go through (VEN-405).
+   * The admin's pager, for a refund that did not go through (VEN-405).
    * Optional so a suite that builds a context by hand is not made to fake one.
    */
-  alerts?: Pick<OperatorAlerts, 'dispatch'>;
+  alerts?: Pick<AdminAlerts, 'dispatch'>;
 }
 
 /**
@@ -135,7 +135,7 @@ export function bookingContextFor(
     hub: app.events,
     log,
     mail: { db: app.db, email: app.email, log, webOrigin, background: app.background },
-    alerts: app.operatorAlerts,
+    alerts: app.adminAlerts,
   };
 }
 
@@ -146,7 +146,7 @@ export interface BookingContextSource {
   events: EventHub;
   email: NotificationEmailDeps['email'];
   background: NotificationEmailDeps['background'];
-  operatorAlerts?: Pick<OperatorAlerts, 'dispatch'>;
+  adminAlerts?: Pick<AdminAlerts, 'dispatch'>;
 }
 
 /** A booking action that also has to price a charge. */
@@ -524,7 +524,7 @@ export type RecordedPayment =
  * Stripe's three-day retry schedule requires of it.
  *
  * A request that is no longer `accepted` is **not booked**: the charge is
- * refunded in full and the operator is told (see `refuseDeclinedPayment`).
+ * refunded in full and the admin is told (see `refuseDeclinedPayment`).
  */
 export async function recordSuccessfulPayment(
   context: PaymentContext,
@@ -678,7 +678,7 @@ export function expiryGuardFor(context: PaymentContext): ExpiryPaymentGuard {
 
 /**
  * Holds the expiry, unless it has been held `EXPIRY_HOLD_MAX_ATTEMPTS` times
- * already (VEN-551): then the request is released and the operator told, the
+ * already (VEN-551): then the request is released and the admin told, the
  * intent left exactly as it is. A date held forever costs the vendor bookings;
  * a payment that lands after the release takes the refund path it always did.
  */
@@ -761,7 +761,7 @@ async function settleBeforeExpiry(
  * A booking is held, so this charge is a *second* one unless it is the intent
  * that made the booking: after Stripe's 24-hour idempotency window a reopened
  * checkout used to mint another intent, and both could be paid. Nothing pointed
- * at the extra money, so it is refunded and the operator told. The answer stays
+ * at the extra money, so it is refunded and the admin told. The answer stays
  * 200 `already-booked` — the booking is fine, and a 5xx would only make Stripe
  * redeliver a decided event. A failed refund is rethrown by
  * `refuseDeclinedPayment` and does redeliver.
@@ -1272,7 +1272,7 @@ async function refundAndUnwind(
    */
   /*
    * A refund Stripe would not give is money a customer was promised, so the
-   * operator hears of it (VEN-405) before the error goes on to the caller.
+   * admin hears of it (VEN-405) before the error goes on to the caller.
    */
   const reportRefundFailure = (error: unknown): never => {
     context.alerts?.dispatch(
@@ -1519,7 +1519,7 @@ export async function cancelBooking(
   /*
    * A cancel that finds the customer's own cancellation already written — the
    * second tab, or a retry after a dropped response — is told it worked
-   * (VEN-472). Cancelled by an operator or the ban path it stays a refusal.
+   * (VEN-472). Cancelled by an admin or the ban path it stays a refusal.
    */
   if (booking.status === 'cancelled' && booking.cancelledBy === 'customer') {
     const refundCents = booking.refundAmountCents ?? 0;
@@ -1541,7 +1541,7 @@ export async function cancelBooking(
    * hours at zero, which puts every past date in the late tier: without this a
    * delivered event refunded half and clawed it back out of a payout that had
    * already been released. A customer with a complaint about a delivered event
-   * takes the report path, where an operator decides.
+   * takes the report path, where an admin decides.
    */
   if (booking.payoutReleasedAt) {
     throw conflict(PAID_OUT_CANCEL_MESSAGE);
@@ -1583,7 +1583,7 @@ export async function cancelBooking(
 
   /*
    * The refund is already out, so the money moved and the row did not: the
-   * one state that needs a human, and the operator is told rather than left
+   * one state that needs a human, and the admin is told rather than left
    * to find a log line.
    */
   const alertRefundUnrecorded = (): void => {
@@ -1731,7 +1731,7 @@ export async function findOwnBookingForReport(
  *   nothing left to hold. #423 acceptance 11 offered a choice here and this
  *   takes the refusal: routing it into the post-release refund path would let a
  *   self-serve button claw a third party's balance negative on one party's
- *   say-so, which is an operator's judgement rather than a customer's. They are
+ *   say-so, which is an admin's judgement rather than a customer's. They are
  *   sent to support, where a human can still unwind it.
  * - **On a booking that is not theirs**, `participantIn` answers 404 — the same
  *   rule every read here applies, so a stranger walking ids learns nothing.
@@ -1741,7 +1741,7 @@ export async function findOwnBookingForReport(
  * routed the report through `/support/messages` instead, because the hold and
  * the complaint have to be one act. Leaving that route standing left a second
  * way to freeze a vendor's payout that filed no complaint at all — a hold an
- * operator finds with nothing to act on, and the exact half of acceptance 4
+ * admin finds with nothing to act on, and the exact half of acceptance 4
  * that must not be able to land alone. So the hold is a primitive now, with one
  * orchestrator: `sendSupportMessage`, which places it, sends the report, and
  * takes the hold back if it cannot.
@@ -1757,7 +1757,7 @@ export async function findOwnBookingForReport(
  *
  * A **type** rather than a message a caller matches on, because the caller
  * that needs to tell them apart is the chargeback webhook: it records the
- * permanent refusals on the operator's case and answers 200, and doing that
+ * permanent refusals on the admin's case and answers 200, and doing that
  * to a lost optimistic lock would file a retryable failure as a settled fact
  * and stop Stripe ever retrying it. Matching on the prose would have worked
  * until somebody edited the prose. The wire shape is unchanged: it is still a
@@ -1796,7 +1796,7 @@ export class StaleBookingError extends AppError {}
  *   regression to fix.** They have already claimed the money back through their
  *   bank; letting them cancel on D3's tiers as well would refund one charge
  *   twice from a platform that has been debited once. The vendor's date stays
- *   blocked until an operator rules, which is the cost of a live chargeback
+ *   blocked until an admin rules, which is the cost of a live chargeback
  *   rather than a defect in handling one.
  * - A second report from the customer on that booking is **not** refused.
  *   `AlreadyHeldError` below exists for exactly that case, because the
@@ -1928,9 +1928,9 @@ export async function liftDisputeHold(
    * `updated_at` as the caller last saw it, for a caller lifting **its own**
    * hold rather than whichever one is current.
    *
-   * `resolveDispute` passes nothing, and should: an operator's ruling settles
+   * `resolveDispute` passes nothing, and should: an admin's ruling settles
    * the complaint that is open now. #425's unwind passes the row it wrote,
-   * because between its hold and its failure an operator could have resolved
+   * because between its hold and its failure an admin could have resolved
    * that complaint and the customer filed a second one — and lifting *that*
    * would release a payout against a report already in the inbox.
    */
@@ -2015,7 +2015,7 @@ export async function announceDisputeHold(
 }
 
 /**
- * An operator settles the complaint, and the money follows.
+ * An admin settles the complaint, and the money follows.
  *
  * In the **vendor's** favour the hold is simply lifted: the booking goes back
  * to whichever status it was in — `completed` if the vendor had marked it so,
@@ -2026,7 +2026,7 @@ export async function announceDisputeHold(
  *
  * In the **customer's** favour the booking is cancelled and refunded **in
  * full**. Not on D3's tiers: those price a customer changing their mind against
- * how much notice they gave, and this is an operator's ruling that the service
+ * how much notice they gave, and this is an admin's ruling that the service
  * was not delivered — a 50% refund because the complaint happened to be about
  * an event two days ago would price the vendor's failure as the customer's
  * lateness. Nothing has been transferred, so the refund is plain and no
@@ -2118,7 +2118,7 @@ export async function resolveDispute(
 
   /*
    * **The row is locked before Stripe is asked anything** (VEN-545). Two
-   * operators ruling at once, or a ruling racing the sweep, used to both pass the
+   * admins ruling at once, or a ruling racing the sweep, used to both pass the
    * `disputed` check above; the vendor ruling then lifted the hold while this one
    * was mid-refund, and the row write here matched nothing — a customer refunded
    * in full on a booking whose vendor the sweep then paid in full.
@@ -2135,7 +2135,7 @@ export async function resolveDispute(
 
   /*
    * The customer is repaid and the row may still say payable: the one state that
-   * needs a human, so the operator is told which refund it was.
+   * needs a human, so the admin is told which refund it was.
    */
   const alertUnreconciled = (): void => {
     if (!refunded) {
@@ -2182,7 +2182,7 @@ export async function resolveDispute(
       refunded = refund;
 
       /*
-       * `admin`, because an operator ended it and not the customer. The distinction
+       * `admin`, because an admin ended it and not the customer. The distinction
        * is what the customer's own screen reads to choose its words (#415), and a
        * booking somebody asked to have reviewed is not one they cancelled.
        */

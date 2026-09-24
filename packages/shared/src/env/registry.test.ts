@@ -315,7 +315,7 @@ describe('registrySchemaShape', () => {
   });
 
   it('keeps tooling-only rows out of the API contract', () => {
-    // NEON_BRANCH and the unpooled URL are operator concerns; requiring them at
+    // NEON_BRANCH and the unpooled URL are admin concerns; requiring them at
     // API boot would refuse to start the server over a value it never reads.
     const shape = registrySchemaShape({ consumer: 'api', capabilities: ['core'] });
 

@@ -37,7 +37,7 @@ const SEEDED = CATEGORY_SEEDS.slice(0, LANDING_CATEGORY_COUNT).map(
 );
 
 /**
- * Frame `15`'s recovery pills (VEN-416). An operator can hide a category from
+ * Frame `15`'s recovery pills (VEN-416). An admin can hide a category from
  * the console (VEN-401), and a pill to a hidden one opens a search filtered on
  * nothing — so the pills follow the live taxonomy like every other public
  * surface, and fall back to the full list when that read degrades.
@@ -55,7 +55,7 @@ describe('NotFoundScreen — the category pills', () => {
     expect(await pillHrefs()).toEqual(SEEDED);
   });
 
-  it('omits a category an operator deactivated', async () => {
+  it('omits a category an admin deactivated', async () => {
     const hidden = CATEGORY_SEEDS[1]!.slug;
     getCategories.mockResolvedValue(taxonomy().filter((category) => category.slug !== hidden));
 

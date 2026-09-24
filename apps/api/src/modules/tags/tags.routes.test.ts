@@ -285,7 +285,7 @@ describe('tag routes', () => {
      * write one. The admin queue then shows N identical suggestions, and
      * approving the second falls into the merge branch — no corruption, but
      * the `already_suggested` contract the service promises is not kept, and
-     * every duplicate is an operator action.
+     * every duplicate is an admin action.
      *
      * **PGlite serialises transactions, so no test in this repository can
      * produce that race.** Firing two requests with `Promise.all` here passes
@@ -440,7 +440,7 @@ describe('tag routes', () => {
     });
   });
 
-  describe('a vendor holding a tag an operator has since deactivated', () => {
+  describe('a vendor holding a tag an admin has since deactivated', () => {
     async function holdDeactivated(): Promise<{ heldId: string; otherId: string }> {
       const heldId = await tagIdByName('Spanish');
       const otherId = await tagIdByName('French');

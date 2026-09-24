@@ -1,19 +1,19 @@
 import { adminActions, users } from '@vendor-marketplace/db/schema';
-import type { UserRole } from '@vendor-marketplace/shared';
+import { ADMIN_ACCESS_ACTIONS, type UserRole } from '@vendor-marketplace/shared';
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { AppDatabase } from '../../lib/database.js';
-import { hasAnotherLiveOperator, OPERATOR_RETIREMENT_LOCK } from '../users/users.dao.js';
+import { hasAnotherLiveAdmin, ADMIN_RETIREMENT_LOCK } from '../users/users.dao.js';
 import { insertAdminAction } from './admin.dao.js';
 
 /** What a grant or a revoke did, for the service to turn into a response or a refusal. */
-export type OperatorChange =
+export type AdminChange =
   | 'changed'
   | 'unchanged'
   | 'not-found'
   | 'ambiguous'
   | 'banned'
   | 'unverified'
-  | 'last-operator'
+  | 'last-admin'
   | 'no-prior-role';
 
 /**
@@ -32,29 +32,29 @@ async function setRoleUnderGrant(
 }
 
 /**
- * Makes the live account holding `email` an operator, and records it.
+ * Makes the live account holding `email` an admin, and records it.
  *
- * Under the retirement lock every other operator change takes, so a grant and a
+ * Under the retirement lock every other admin change takes, so a grant and a
  * revoke or ban cannot each read a live set the other is about to change. The
  * role and its audit row commit together or not at all.
  *
  * Refused for a banned account, and for one whose address the auth provider
  * disagrees with (`pending_email`): the address this row holds is then not one
- * the holder has confirmed, and an operator is chosen by that address.
+ * the holder has confirmed, and an admin is chosen by that address.
  */
-export async function grantOperatorByEmail(
+export async function grantAdminByEmail(
   db: AppDatabase,
   actorId: string,
   email: string,
   now: Date,
-): Promise<{ result: OperatorChange; userId?: string }> {
+): Promise<{ result: AdminChange; userId?: string }> {
   return db.transaction(async (tx) => {
-    await tx.execute(OPERATOR_RETIREMENT_LOCK);
+    await tx.execute(ADMIN_RETIREMENT_LOCK);
 
     /*
      * Two live rows can differ only by case (`users_email_key` is case
      * sensitive), so a case-insensitive match may name more than one account.
-     * Picking one would hand operator access to whichever came first; refuse.
+     * Picking one would hand admin access to whichever came first; refuse.
      */
     const targets = await tx
       .select({
@@ -92,7 +92,7 @@ export async function grantOperatorByEmail(
     await setRoleUnderGrant(tx, target.id, 'admin', now);
     await insertAdminAction(tx, {
       actorId,
-      action: 'operator_granted',
+      action: ADMIN_ACCESS_ACTIONS.granted,
       subjectType: 'user',
       subjectId: target.id,
       detail: { previousRole: target.role },
@@ -102,17 +102,22 @@ export async function grantOperatorByEmail(
   });
 }
 
-/** A recorded prior role an operator can be returned to, or `null`. */
+/** A recorded prior role an admin can be returned to, or `null`. */
 function restorableRole(role: unknown): UserRole | null {
   return role === 'customer' || role === 'vendor' ? role : null;
 }
 
-/** The role an operator held before their latest grant, or `null` if none was recorded. */
+/** The role an admin held before their latest grant, or `null` if none was recorded. */
 async function priorRoleOf(tx: AppDatabase, userId: string): Promise<UserRole | null> {
   const [grant] = await tx
     .select({ detail: adminActions.detail })
     .from(adminActions)
-    .where(and(eq(adminActions.subjectId, userId), eq(adminActions.action, 'operator_granted')))
+    .where(
+      and(
+        eq(adminActions.subjectId, userId),
+        eq(adminActions.action, ADMIN_ACCESS_ACTIONS.granted),
+      ),
+    )
     .orderBy(desc(adminActions.createdAt), desc(adminActions.id))
     .limit(1);
 
@@ -120,21 +125,21 @@ async function priorRoleOf(tx: AppDatabase, userId: string): Promise<UserRole | 
 }
 
 /**
- * Takes operator access away, restoring the role the grant recorded.
+ * Takes admin access away, restoring the role the grant recorded.
  *
  * Refused when it would leave nobody who can sign in to the console — checked
  * under the same lock as a ban or closure (VEN-417), so the caller revoking the
- * other operator while that one revokes them cannot both commit. An account
+ * other admin while that one revokes them cannot both commit. An account
  * that is not live (banned) is not counted, so revoking one never trips it.
  */
-export async function revokeOperatorById(
+export async function revokeAdminById(
   db: AppDatabase,
   actorId: string,
   userId: string,
   now: Date,
-): Promise<OperatorChange> {
+): Promise<AdminChange> {
   return db.transaction(async (tx) => {
-    await tx.execute(OPERATOR_RETIREMENT_LOCK);
+    await tx.execute(ADMIN_RETIREMENT_LOCK);
 
     const [target] = await tx
       .select({ role: users.role, isBanned: users.isBanned, deletedAt: users.deletedAt })
@@ -152,8 +157,8 @@ export async function revokeOperatorById(
 
     const live = !target.isBanned && target.deletedAt === null;
 
-    if (live && !(await hasAnotherLiveOperator(tx, userId))) {
-      return 'last-operator';
+    if (live && !(await hasAnotherLiveAdmin(tx, userId))) {
+      return 'last-admin';
     }
 
     const previousRole = await priorRoleOf(tx, userId);
@@ -165,7 +170,7 @@ export async function revokeOperatorById(
     await setRoleUnderGrant(tx, userId, previousRole, now);
     await insertAdminAction(tx, {
       actorId,
-      action: 'operator_revoked',
+      action: ADMIN_ACCESS_ACTIONS.revoked,
       subjectType: 'user',
       subjectId: userId,
       detail: { restoredRole: previousRole },
@@ -175,7 +180,7 @@ export async function revokeOperatorById(
   });
 }
 
-export interface OperatorProjection {
+export interface AdminProjection {
   userId: string;
   firstName: string;
   lastName: string;
@@ -187,9 +192,9 @@ export interface OperatorProjection {
   revocable: boolean;
 }
 
-/** Every operator who has not been retired, oldest first, with who granted them and when. */
-export async function findOperators(db: AppDatabase): Promise<OperatorProjection[]> {
-  const operators = await db
+/** Every admin who has not been retired, oldest first, with who granted them and when. */
+export async function findAdmins(db: AppDatabase): Promise<AdminProjection[]> {
+  const admins = await db
     .select({
       userId: users.id,
       firstName: users.firstName,
@@ -202,7 +207,7 @@ export async function findOperators(db: AppDatabase): Promise<OperatorProjection
     .where(and(eq(users.role, 'admin'), isNull(users.deletedAt)))
     .orderBy(users.createdAt, users.id);
 
-  if (operators.length === 0) {
+  if (admins.length === 0) {
     return [];
   }
 
@@ -216,10 +221,10 @@ export async function findOperators(db: AppDatabase): Promise<OperatorProjection
     .from(adminActions)
     .where(
       and(
-        eq(adminActions.action, 'operator_granted'),
+        eq(adminActions.action, ADMIN_ACCESS_ACTIONS.granted),
         inArray(
           adminActions.subjectId,
-          operators.map((operator) => operator.userId),
+          admins.map((admin) => admin.userId),
         ),
       ),
     )
@@ -241,11 +246,11 @@ export async function findOperators(db: AppDatabase): Promise<OperatorProjection
     : [];
   const granterName = new Map(granters.map((g) => [g.id, `${g.firstName} ${g.lastName}`.trim()]));
 
-  return operators.map((operator) => {
-    const grant = latest.get(operator.userId);
+  return admins.map((admin) => {
+    const grant = latest.get(admin.userId);
 
     return {
-      ...operator,
+      ...admin,
       grantedAt: grant?.createdAt ?? null,
       grantedByName: grant ? (granterName.get(grant.actorId) ?? null) : null,
       revocable: restorableRole(grant?.detail.previousRole) !== null,

@@ -16,7 +16,7 @@ import { placeDisputeHold, resolveDispute, type BookingContext } from './payment
 import { releaseDuePayouts } from './payouts.service.js';
 
 /**
- * VEN-545, on a real Postgres: two operators ruling on one dispute at once.
+ * VEN-545, on a real Postgres: two admins ruling on one dispute at once.
  *
  * The customer ruling refunds through Stripe and only then writes the row. A
  * vendor ruling that lifted the hold in between left a booking refunded in full

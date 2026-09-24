@@ -67,10 +67,10 @@ export interface EmailMessage {
    */
   idempotencyKey: string;
   /**
-   * Mail the operator needs to run the platform — a step-up code, an operator
+   * Mail the admin needs to run the platform — a step-up code, an admin
    * alert or digest (VEN-661). It may spend `ESSENTIAL_SEND_HEADROOM` slots past
    * the daily cap, so the cap an anonymous flood of support messages can reach
-   * never locks the operator out of the console that would stop it. A spent
+   * never locks the admin out of the console that would stop it. A spent
    * Resend quota still refuses it; nothing can send past that.
    */
   essential?: boolean;

@@ -41,7 +41,7 @@ export const servicePackages = pgTable(
     /** Soft-deactivate; packages are never hard-deleted once quoted against. */
     isActive: boolean('is_active').notNull().default(true),
     /**
-     * An operator switched this package off and only an operator may switch it
+     * An admin switched this package off and only an admin may switch it
      * back on (#457) — `vendor_profiles.moderation_hold`'s twin, for the same
      * reason and with the same rule.
      *
@@ -49,7 +49,7 @@ export const servicePackages = pgTable(
      * no delete for a package, so the held **row** cannot be dropped and
      * recreated — but the offering can: `POST /vendor/packages` writes a fresh
      * row with no hold, so a vendor may re-list the same content and the
-     * operator deactivates that one too. That is the reach of a per-package
+     * admin deactivates that one too. That is the reach of a per-package
      * lever, and the answer to a vendor who keeps doing it is the storefront
      * hold above, not a rule here.
      */

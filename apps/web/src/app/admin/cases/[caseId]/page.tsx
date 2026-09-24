@@ -61,7 +61,7 @@ const EVENT_DATE = new Intl.DateTimeFormat('en-US', {
 /**
  * One case, composed to Pattern C (#431, #393).
  *
- * **Three numbered regions, in the order an operator must read them to be
+ * **Three numbered regions, in the order an admin must read them to be
  * allowed to act**: the complaint, the booking it froze, then the resolve
  * control. At 1440 they sit in two columns — 1 and 3 on the left, 2 on the
  * right — but the DOM, and so the reading and tab order, stays 1 → 2 → 3, so
@@ -105,7 +105,7 @@ export default async function AdminCasePage({
 
   /*
    * Stated rather than left to be inferred. Stripe's outcome and this
-   * platform's disposition are different facts, and an operator who read
+   * platform's disposition are different facts, and an admin who read
    * "lost" as "settled" would leave a payout frozen for ever.
    */
   const chargebackRows = supportCase.stripeDisputeId ? (
@@ -189,7 +189,7 @@ export default async function AdminCasePage({
             {/*
               `whitespace-pre-wrap`: this is what somebody typed into a textarea,
               and collapsing their paragraphs would make a four-paragraph account
-              of what went wrong into one block an operator has to re-read.
+              of what went wrong into one block an admin has to re-read.
             */}
             <p
               data-message-inset
@@ -329,7 +329,7 @@ export default async function AdminCasePage({
               {/*
                 The other three subjects are already public — a storefront, a
                 review, a published photograph — so the case names the id and
-                links nothing an operator cannot already open.
+                links nothing an admin cannot already open.
               */}
               <KeyValueList>
                 <KeyValue label={REPORT_SUBJECT_LABELS[supportCase.subjectType]} kind="mono">

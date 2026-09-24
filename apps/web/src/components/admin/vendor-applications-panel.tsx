@@ -40,7 +40,7 @@ const STATUS: Record<VendorApplicationStatus, { label: string; tone: StatusTone 
   declined: { label: 'Declined', tone: 'inert' },
 };
 
-/** One selected id's outcome, in the operator's words for the result summary (VEN-513). */
+/** One selected id's outcome, in the admin's words for the result summary (VEN-513). */
 const BULK_RESULT_LABEL: Record<BulkInviteResultStatus, string> = {
   invited: 'invited',
   already_invited: 'already invited',

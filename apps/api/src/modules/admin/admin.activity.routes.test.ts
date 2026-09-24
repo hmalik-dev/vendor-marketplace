@@ -25,7 +25,7 @@ import { bearer, createTestHarness, type TestHarness } from '../../testing/test-
  * Its own file rather than another block in `admin.routes.test.ts`, which is
  * already 1,500 lines and is being edited by two other lanes. The subject here
  * is orthogonal to what that file asserts: not "does the route do the right
- * thing" but "did the console record that an operator did it".
+ * thing" but "did the console record that an admin did it".
  *
  * Every assertion reads `admin_actions` through the real database. There is no
  * fake to mock — the whole claim is that a row lands in Postgres.
@@ -178,7 +178,7 @@ describe('the admin action log', () => {
     await harness.database.db.delete(vendorCategories);
     await harness.database.db.delete(vendorProfiles);
     /*
-     * The action rows go **with the operator**, never on their own.
+     * The action rows go **with the admin**, never on their own.
      *
      * `admin_actions` refuses a direct DELETE while the actor still exists —
      * that is the whole point of the table — and lets the cascade through when
@@ -408,7 +408,7 @@ describe('the admin action log', () => {
   });
 
   describe('a refused call writes nothing', () => {
-    it('writes no row when an operator is refused their own ban (403)', async () => {
+    it('writes no row when an admin is refused their own ban (403)', async () => {
       const actorId = await signIn(ADMIN, true);
 
       const response = await harness.app.inject({
@@ -670,7 +670,7 @@ describe('the admin action log', () => {
       expect(body.items[1].detail.profileUnpublished).toBe(false);
     });
 
-    it('filters by actor, so one operator can be read on their own', async () => {
+    it('filters by actor, so one admin can be read on their own', async () => {
       const firstActor = await signIn(ADMIN, true);
       const secondActor = await signIn(OTHER_ADMIN, true);
       await signIn(VENDOR);
@@ -876,8 +876,8 @@ describe('the admin action log', () => {
       expect(refused.statusCode).toBe(400);
     });
 
-    /** Pattern A's `Actor ▾` (VEN-388): only the operators the log names. */
-    it('lists the operators the log names, and refuses anyone else', async () => {
+    /** Pattern A's `Actor ▾` (VEN-388): only the admins the log names. */
+    it('lists the admins the log names, and refuses anyone else', async () => {
       const actorId = await signIn(ADMIN, true);
       await signIn(OTHER_ADMIN, true);
       await signIn(VENDOR);
@@ -1052,7 +1052,7 @@ describe('a failed action write', () => {
    * its transaction — and the operation is refused rather than completing
    * unrecorded. That is the outcome worth having: a review deleted with no
    * record of who deleted it is unrecoverable in both directions, while a
-   * refusal leaves the operator a button that still works.
+   * refusal leaves the admin a button that still works.
    */
   it('rolls the review deletion back rather than deleting it unrecorded', async () => {
     captured.length = 0;

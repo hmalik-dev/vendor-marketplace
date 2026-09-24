@@ -22,7 +22,7 @@ export interface AboutPaneProps {
    *
    * They were being offered a control to report their own record, and filing
    * one worked — it put a case in the operations queue naming a vendor as
-   * their own reporter, which an operator opens only to dismiss. The refusal
+   * their own reporter, which an admin opens only to dismiss. The refusal
    * is here rather than at `POST /reports`, which still accepts any signed-in
    * caller for a public subject: refusing the owner alone would answer 403 to
    * the caller least likely to be malicious, and would let anybody probe for

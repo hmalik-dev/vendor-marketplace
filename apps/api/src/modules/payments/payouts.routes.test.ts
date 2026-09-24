@@ -7,7 +7,7 @@ import {
   categories,
   conversations,
   notifications,
-  operatorAlerts,
+  adminAlerts,
   supportCases,
   users,
   vendorProfiles,
@@ -109,7 +109,7 @@ describe('payouts', () => {
    *
    * Every case that needs a held booking goes through this, including #423's
    * own, because the hold has exactly one entry point now: a `PUT` that froze a
-   * payout without filing a complaint would leave an operator a hold with
+   * payout without filing a complaint would leave an admin a hold with
    * nothing to act on, which is the half of acceptance 4 a second route made
    * reachable.
    */
@@ -303,7 +303,7 @@ describe('payouts', () => {
    * users table is wiped after every test, so this runs per test rather than
    * once.
    */
-  /** Returns the operator's own id, which #434's action rows are keyed by. */
+  /** Returns the admin's own id, which #434's action rows are keyed by. */
   async function signInAsAdmin(): Promise<string> {
     expect((await inject('GET', '/v1/users/me', ADMIN)).statusCode).toBe(200);
     await setUserRole(harness.database.db, 'admin', eq(users.authUserId, ADMIN));
@@ -327,7 +327,7 @@ describe('payouts', () => {
     harness.stripe.transfersToRefuse.clear();
     harness.stripe.failedTransferKeys.clear();
     harness.email.sent.length = 0;
-    await harness.database.db.delete(operatorAlerts);
+    await harness.database.db.delete(adminAlerts);
     await harness.database.db.delete(supportCases);
     await harness.database.db.delete(bookings);
     await harness.database.db.delete(conversations);
@@ -336,7 +336,7 @@ describe('payouts', () => {
     await harness.database.db.delete(availability);
     await harness.database.db.delete(vendorProfiles);
     /*
-     * `admin_actions` refuses a direct DELETE while the operator it names still
+     * `admin_actions` refuses a direct DELETE while the admin it names still
      * exists (#434), and lets the cascade through when the account itself is
      * erased — so this line is what clears the log between tests.
      */
@@ -374,8 +374,8 @@ describe('payouts', () => {
     });
   });
 
-  /* #432 acceptance 3 — the operator retry and everything it refuses. */
-  describe('the operator retry', () => {
+  /* #432 acceptance 3 — the admin retry and everything it refuses. */
+  describe('the admin retry', () => {
     /** The retry, driven the way the admin route drives it. */
     async function retry(bookingId: string, now: Date = clockNow) {
       return retryPayoutRelease(
@@ -391,7 +391,7 @@ describe('payouts', () => {
      * The first attempt is refused and the double caches that refusal under its
      * key exactly as Stripe does. A retry that reused `payout_<bookingId>_0`
      * would be answered from that cache — the same error, forever, with the
-     * original request's log URL — and the operator would press the button and
+     * original request's log URL — and the admin would press the button and
      * learn nothing. A test that only asserts the happy retry cannot tell the
      * two apart, which is how this shipped in the first place.
      */
@@ -428,12 +428,12 @@ describe('payouts', () => {
     });
 
     /**
-     * `PayoutContext.alerts` is documented as the sweep's alone — the operator
+     * `PayoutContext.alerts` is documented as the sweep's alone — the admin
      * pressing Retry is already looking at the result. The admin route built its
      * context from `bookingContextFor`, which always carries the pager, so the
      * third failure paged the person who had just caused it.
      */
-    it('does not page the operator for their own failed retry, and still pages for the sweep', async () => {
+    it('does not page the admin for their own failed retry, and still pages for the sweep', async () => {
       await signInAsAdmin();
       const paid = await paidBooking();
       clockNow = AFTER_RELEASE;
@@ -444,17 +444,17 @@ describe('payouts', () => {
             db: harness.database.db,
             stripe: harness.stripe,
             log: harness.app.log,
-            alerts: harness.app.operatorAlerts,
+            alerts: harness.app.adminAlerts,
           },
           clockNow,
         );
-      const operatorMail = (): EmailMessage[] =>
+      const adminMail = (): EmailMessage[] =>
         harness.email.sent.filter((message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL);
 
       await sweepWithPager();
       await sweepWithPager();
       await harness.flushEmail();
-      expect(operatorMail()).toEqual([]);
+      expect(adminMail()).toEqual([]);
 
       const retried = await inject('PUT', `/v1/admin/bookings/${paid.id}/payout/retry`, ADMIN);
       await harness.flushEmail();
@@ -462,13 +462,13 @@ describe('payouts', () => {
       expect(retried.statusCode).toBe(200);
       expect(retried.json().outcome).toBe('failed');
       expect(retried.json().payoutAttempts).toBe(3);
-      expect(operatorMail()).toEqual([]);
-      expect(await harness.database.db.select().from(operatorAlerts)).toEqual([]);
+      expect(adminMail()).toEqual([]);
+      expect(await harness.database.db.select().from(adminAlerts)).toEqual([]);
 
       await sweepWithPager();
       await harness.flushEmail();
 
-      expect(operatorMail().map((message) => message.subject)).toEqual([
+      expect(adminMail().map((message) => message.subject)).toEqual([
         `[Orla ops] Payout failed 4 times on booking ${paid.id}`,
       ]);
     });
@@ -1035,7 +1035,7 @@ describe('payouts', () => {
       expect((await currentBooking()).payoutReleasedAt).toBeNull();
     });
 
-    it('no longer answers "busy" when the operator retries a banned vendor’s due payout', async () => {
+    it('no longer answers "busy" when the admin retries a banned vendor’s due payout', async () => {
       const paid = await paidBooking();
       clockNow = JUST_AFTER_EVENT;
       await changeVendorOwner(paid.vendorId, { isBanned: true, at: clockNow });
@@ -1053,11 +1053,11 @@ describe('payouts', () => {
 
     /**
      * The one case a ban still leaves stuck: nowhere left to send the money.
-     * The sweep keeps trying and recording why, and alerts the operator
+     * The sweep keeps trying and recording why, and alerts the admin
      * through the same threshold every other stuck payout does (VEN-405) —
      * no new alert type, because this is not a new kind of failure.
      */
-    it('holds the payout and alerts the operator for a closed vendor with no connected account', async () => {
+    it('holds the payout and alerts the admin for a closed vendor with no connected account', async () => {
       const paid = await paidBooking();
       clockNow = JUST_AFTER_EVENT;
       await changeVendorOwner(paid.vendorId, { deletedAt: clockNow });
@@ -1118,7 +1118,7 @@ describe('payouts', () => {
       expect(untouched.payoutReleasedAt).toBeNull();
       expect(untouched.payoutAttempts).toBe(0);
 
-      /* The operator retry refuses it too, rather than paying it by hand. */
+      /* The admin retry refuses it too, rather than paying it by hand. */
       const result = await retryPayoutRelease(
         { db: harness.database.db, stripe: harness.stripe, log: harness.app.log },
         paid.id,
@@ -1242,7 +1242,7 @@ describe('payouts', () => {
       expect(resolved.json().status).toBe('cancelled');
       /*
        * In full, not on D3's tiers. Those price a customer changing their mind
-       * against how much notice they gave; this is an operator's ruling that
+       * against how much notice they gave; this is an admin's ruling that
        * the service was not delivered, and the event being two days ago is not
        * the customer's lateness.
        */
@@ -1286,9 +1286,9 @@ describe('payouts', () => {
      * two hundred lines.
      *
      * The ruling is the thing worth recording: it decides who keeps the money,
-     * and until now `resolveDispute` was never told which operator made it.
+     * and until now `resolveDispute` was never told which admin made it.
      */
-    it('records which operator ruled, and the money the ruling moved', async () => {
+    it('records which admin ruled, and the money the ruling moved', async () => {
       const paid = await paidBooking();
       clockNow = JUST_AFTER_EVENT;
       await report(paid.id, CUSTOMER);
@@ -1310,7 +1310,7 @@ describe('payouts', () => {
       });
       /*
        * The full refund, as a figure rather than as prose. "Was this one
-       * refunded, and how much" is the question an operator brings back to the
+       * refunded, and how much" is the question an admin brings back to the
        * log months later, and the booking row it would otherwise be read from
        * is the one a later closure may take away.
        */
@@ -1347,7 +1347,7 @@ describe('payouts', () => {
      *
      * Routing it into the post-release refund path would let a self-serve
      * button claw a third party's balance negative on one party's say-so, which
-     * is an operator's judgement rather than a customer's. Support can still
+     * is an admin's judgement rather than a customer's. Support can still
      * unwind it, and the message says so.
      */
     it('refuses a report on a booking that has already been paid out', async () => {
@@ -1491,7 +1491,7 @@ describe('payouts', () => {
      * The unwind lifts **its own** hold, and not whichever one is current.
      *
      * The interleaving a status-only guard loses: a report's mail send stalls,
-     * an operator resolves that complaint, the customer files a second report
+     * an admin resolves that complaint, the customer files a second report
      * that lands — and only then does the first send fail. Compensating on
      * `status = 'disputed'` alone would lift the *second* hold, releasing a
      * payout against a complaint already in the support inbox and clearing the
@@ -1511,7 +1511,7 @@ describe('payouts', () => {
       const first = await currentBooking();
       expect(first.status).toBe('disputed');
 
-      /* The operator settles it, and the customer reports again. */
+      /* The admin settles it, and the customer reports again. */
       expect(
         (await inject('PUT', `/v1/admin/bookings/${paid.id}/dispute`, ADMIN, { outcome: 'vendor' }))
           .statusCode,

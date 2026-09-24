@@ -37,15 +37,15 @@ export interface DataRightsActionsProps {
   closeBlockers: readonly WireAdminCloseBlocker[];
   /**
    * Upcoming confirmed bookings held **as the vendor**, which the closure
-   * cancels and refunds in full. The operator is told before they confirm.
+   * cancels and refunds in full. The admin is told before they confirm.
    */
   bookingsRefundedOnClose: number;
-  /** `true` where this record is the signed-in operator's own account. */
+  /** `true` where this record is the signed-in admin's own account. */
   isSelf: boolean;
-  /** The account's address — what an operator closure is confirmed by typing. */
+  /** The account's address — what an admin closure is confirmed by typing. */
   email: string;
-  /** `true` where the account is another operator's (VEN-391). */
-  isOperator: boolean;
+  /** `true` where the account is another admin's (VEN-391). */
+  isAdmin: boolean;
   /** `true` while the account is suspended. */
   isBanned: boolean;
   /**
@@ -64,7 +64,7 @@ const CONSEQUENCE = 'text-helper leading-[1.5] text-stone-600';
  * A list rather than a message, because there are now two of these and they are
  * **orthogonal**: a stranded refund and an undeleted sign-in can happen in the
  * same closure, and the branch that reported only the first would leave an
- * operator believing the person had been signed out. Both are the same kind of
+ * admin believing the person had been signed out. Both are the same kind of
  * fact — the account is closed either way, and only a human can finish the
  * rest — so a silent refresh would show a success that is only partly one.
  *
@@ -95,7 +95,7 @@ function closureLeftOwed(result: WireAdminCloseAccountResult): string[] {
  * The two things the privacy policy promises, as controls (#438).
  *
  * The refusal is **stated before it is attempted**. `POST /admin/users/:id/close`
- * answers 409 while an upcoming confirmed booking stands, and an operator on a
+ * answers 409 while an upcoming confirmed booking stands, and an admin on a
  * support call needs to know that before they click and read an error — so the
  * button is disabled and the bookings are named, and the API's refusal is the
  * guarantee rather than the explanation.
@@ -108,7 +108,7 @@ export function DataRightsActions({
   bookingsRefundedOnClose,
   isSelf,
   email,
-  isOperator,
+  isAdmin,
   isBanned,
   unwindPending,
 }: DataRightsActionsProps): React.ReactElement {
@@ -138,7 +138,7 @@ export function DataRightsActions({
       });
 
       /*
-       * Handed to the operator as a file rather than rendered on the page.
+       * Handed to the admin as a file rather than rendered on the page.
        *
        * What they have to do with it is send it to the person who asked, and a
        * screen of JSON is not something anybody can forward. The object URL is
@@ -324,7 +324,7 @@ export function DataRightsActions({
 
         #438 built the prevention and this changes only where it is drawn and
         what colour it is, which is not cosmetic: the explanation sat *below*
-        the button, so an operator read a disabled control first and the reason
+        the button, so an admin read a disabled control first and the reason
         second, and a disabled button with no visible cause is indistinguishable
         from a broken one. Gold because `40-states.md` reserves it for waiting on
         someone — this account is waiting on a booking, and nothing has failed.
@@ -339,8 +339,8 @@ export function DataRightsActions({
                 <strong className="font-semibold">
                   Can&apos;t close: this is your own account.
                 </strong>{' '}
-                Every action on this console is recorded against the operator who took it, and an
-                audit trail its own actor can end is not one.
+                Every action on this console is recorded against the admin who took it, and an audit
+                trail its own actor can end is not one.
               </>
             ) : (
               <>
@@ -397,10 +397,10 @@ export function DataRightsActions({
                 Close account
               </Button>
             }
-            title={isOperator ? `Close ${name}'s operator account?` : `Close ${name}'s account?`}
+            title={isAdmin ? `Close ${name}'s admin account?` : `Close ${name}'s account?`}
             destructive
             typedConfirmation={
-              isOperator ? { phrase: email, label: `Type ${email} to confirm` } : undefined
+              isAdmin ? { phrase: email, label: `Type ${email} to confirm` } : undefined
             }
             caution={
               /*
@@ -408,14 +408,14 @@ export function DataRightsActions({
                * `role = 'admin'` is unreachable from inside the product, so the
                * consequence is named in terms of who can fix it.
                */
-              isOperator ? (
+              isAdmin ? (
                 <>
                   <strong className="font-semibold">
                     This deletes their sign-in, and it can&apos;t be restored from here.
                   </strong>{' '}
                   They lose the console immediately. Only someone with access to the Neon Auth
                   console can give them a sign-in again, and they would still need to be made an
-                  operator by hand.
+                  admin by hand.
                 </>
               ) : undefined
             }

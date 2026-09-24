@@ -1,6 +1,6 @@
 /*
  * The vendor gate (VEN-406): while `platform_settings.vendorInviteOnly` is on,
- * a vendor account is created only for an address the operator has invited.
+ * a vendor account is created only for an address the admin has invited.
  * Customers are never gated.
  */
 
@@ -13,12 +13,12 @@ export const VENDOR_APPLY_PATH = '/vendors/apply';
 
 /**
  * Where a verified vendor session with no invite lands, gate on: the details
- * the operator needs to invite them (VEN-512). Their waitlist row is written
+ * the admin needs to invite them (VEN-512). Their waitlist row is written
  * the moment they arrive.
  */
 export const VENDOR_DETAILS_PATH = '/sign-up/vendor-details';
 
-/** The waitlist's terminal screen: nothing to do until the operator invites them. */
+/** The waitlist's terminal screen: nothing to do until the admin invites them. */
 export const WAITLIST_PATH = '/waitlist';
 
 /** Where an invite email sends an invitee with no application yet: sign-up, vendor card pre-selected. */
@@ -37,7 +37,7 @@ export const RESERVED_VENDOR_SLUGS = ['apply'] as const;
 export const VENDOR_APPLICATION_STATUSES = ['new', 'invited', 'declined'] as const;
 export type VendorApplicationStatus = (typeof VENDOR_APPLICATION_STATUSES)[number];
 
-/** What an operator can decide about an application. */
+/** What an admin can decide about an application. */
 export const VENDOR_APPLICATION_DECISIONS = ['invite', 'decline'] as const;
 export type VendorApplicationDecision = (typeof VENDOR_APPLICATION_DECISIONS)[number];
 

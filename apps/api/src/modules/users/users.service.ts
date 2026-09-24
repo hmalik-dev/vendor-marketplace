@@ -45,7 +45,7 @@ export function toUser(row: UserRow): User {
  * decision reads the local column.
  *
  * **Anything else is refused, never narrowed.** `admin` is granted by an
- * operator and nothing else, and a missing or unrecognised value used to become
+ * admin and nothing else, and a missing or unrecognised value used to become
  * `customer` here, which fixed a vendor on the wrong side for good (VEN-507).
  */
 export function normalizeRole(value: unknown): SignUpRole {

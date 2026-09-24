@@ -39,7 +39,7 @@ export interface TagQueueProps {
 }
 
 /**
- * What the operator is told when the tag was approved but the vendor was not
+ * What the admin is told when the tag was approved but the vendor was not
  * given it. Read from the answer because the card is gone from the pending list
  * by the time the page refreshes; `null` when the vendor holds the tag.
  */
@@ -273,7 +273,7 @@ function SuggestionCard({
           </div>
 
           {/* The Reject button is disabled without a note; say so rather than
-              leaving a dead control the operator has to guess at. */}
+              leaving a dead control the admin has to guess at. */}
           {note.trim() ? null : (
             <p className="mt-2 text-helper text-stone-600">
               A note is required to reject. Approve and Merge do not need one.

@@ -190,7 +190,7 @@ export default async function AdminVendorDetailPage({
               </KeyValue>
               <KeyValue label="Payouts">
                 {vendor.payoutHold ? (
-                  <span className="text-gold-600">Held by an operator</span>
+                  <span className="text-gold-600">Held by an admin</span>
                 ) : (
                   'Released by the sweep'
                 )}

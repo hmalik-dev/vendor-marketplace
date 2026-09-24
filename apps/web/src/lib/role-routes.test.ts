@@ -119,7 +119,7 @@ describe('POST_SIGN_IN_PATH_BY_ROLE', () => {
   });
 
   /*
-   * An operator signs in to operate. Like a vendor, and unlike a customer, they
+   * An admin signs in to operate. Like a vendor, and unlike a customer, they
    * have no use for a catalogue of vendors as a starting place.
    */
   it('starts an admin on the console rather than the marketplace home', () => {

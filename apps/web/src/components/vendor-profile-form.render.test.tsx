@@ -91,7 +91,7 @@ function savedProfile(overrides: Partial<WireVendorProfile> = {}): WireVendorPro
   };
 }
 
-describe('a tag an operator deactivated after the vendor chose it', () => {
+describe('a tag an admin deactivated after the vendor chose it', () => {
   it('still draws a removable pill, though the active list no longer offers it', () => {
     const hidden = {
       id: 'language-24',

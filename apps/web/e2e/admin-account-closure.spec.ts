@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { promisify } from 'node:util';
@@ -8,13 +9,13 @@ import { waitForHydration } from './hydration';
 import { completeStepUp } from './step-up';
 
 /**
- * VEN-391: an operator closes **another operator's** account, past a typed
+ * VEN-391: an admin closes **another admin's** account, past a typed
  * confirmation on the target's address.
  *
- * The target is a disposable operator row minted by this spec through
- * `e2e:operator` — never the persistent E2E admin, whose identity the seed
+ * The target is a disposable admin row minted by this spec through
+ * `e2e:admin` — never the persistent E2E admin, whose identity the seed
  * resolves and cannot rebuild. The persistent admin is the **actor**; the two of
- * them are the two live operators that let the closure through.
+ * them are the two live admins that let the closure through.
  *
  * The row carries a `seed_e2e_…` id rather than a Neon Auth identity, on
  * purpose: a Neon Auth identity cannot be minted without an inbox (sign-in
@@ -27,17 +28,17 @@ import { completeStepUp } from './step-up';
 const ADMIN_STATE = storageStatePath('admin');
 const run = promisify(execFile);
 
-async function e2eOperator(command: 'mint' | 'remove', authUserId: string, email: string) {
+async function e2eAdmin(command: 'mint' | 'remove', authUserId: string, email: string) {
   const { stdout } = await run(
     'pnpm',
-    ['--silent', '--filter', '@vendor-marketplace/db', 'e2e:operator', command, authUserId, email],
+    ['--silent', '--filter', '@vendor-marketplace/db', 'e2e:admin', command, authUserId, email],
     { cwd: dirname(AUTH_DIR) },
   );
 
   return JSON.parse(stdout.trim().split('\n').at(-1) ?? '') as { userId?: string };
 }
 
-test('an operator closes another operator only after typing their address exactly', async ({
+test('an admin closes another admin only after typing their address exactly', async ({
   browser,
 }) => {
   if (!existsSync(ADMIN_STATE)) {
@@ -47,14 +48,14 @@ test('an operator closes another operator only after typing their address exactl
     );
   }
 
-  const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-  // The `+auth_test` suffix is what `DISPOSABLE_OPERATOR_EMAIL` fences the helper to.
-  const email = `e2e-operator-${stamp}+auth_test@example.com`;
-  const authUserId = `seed_e2e_operator_${stamp}`;
+  const stamp = `${Date.now()}-${randomUUID().slice(0, 8)}`;
+  // The `+auth_test` suffix is what `DISPOSABLE_ADMIN_EMAIL` fences the helper to.
+  const email = `e2e-admin-${stamp}+auth_test@example.com`;
+  const authUserId = `seed_e2e_admin_${stamp}`;
   const context = await browser.newContext({ storageState: ADMIN_STATE });
 
   try {
-    const { userId } = await e2eOperator('mint', authUserId, email);
+    const { userId } = await e2eAdmin('mint', authUserId, email);
     const page = await context.newPage();
 
     await page.goto(`/admin/users/${userId}`);
@@ -66,9 +67,7 @@ test('an operator closes another operator only after typing their address exactl
     const confirm = dialog.getByRole('button', { name: 'Close account' });
     const typed = dialog.getByLabel(`Type ${email} to confirm`);
 
-    await expect(dialog.getByRole('heading')).toHaveText(
-      "Close Disposable Operator's operator account?",
-    );
+    await expect(dialog.getByRole('heading')).toHaveText("Close Disposable Admin's admin account?");
     await expect(dialog).toContainText(
       'Only someone with access to the Neon Auth console can give them a sign-in again',
     );
@@ -87,6 +86,6 @@ test('an operator closes another operator only after typing their address exactl
     await expect(page.getByText(/^Closed \d{4}-\d{2}-\d{2}$/)).toBeVisible();
   } finally {
     await context.close();
-    await e2eOperator('remove', authUserId, email);
+    await e2eAdmin('remove', authUserId, email);
   }
 });

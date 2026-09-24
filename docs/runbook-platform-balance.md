@@ -34,7 +34,7 @@ null`, `payout_model = 'separate'`, `vendor_payout_cents > 0`), plus what each
   never debits) counts again.
 
 The result is logged each run (`Platform balance covers what it owes`, with
-`balanceCents` and `requiredCents`). When the balance is short, the operator gets
+`balanceCents` and `requiredCents`). When the balance is short, the admin gets
 one `platform_balance_short` email that day.
 
 ### When the alert fires

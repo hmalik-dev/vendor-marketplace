@@ -43,7 +43,7 @@ import {
  * reasoning was right about the shape and wrong about the destination. A report
  * carrying a `bookingId` freezes a vendor's payout, and the complaint that
  * justifies the freeze lived only in an inbox while the hold lived in a column
- * no admin surface exposed — so an operator could see that money was frozen and
+ * no admin surface exposed — so an admin could see that money was frozen and
  * not why. The somewhere-to-read-it is `/admin/cases`, and the status is two
  * members rather than a helpdesk's workflow.
  *
@@ -253,7 +253,7 @@ async function readAudience(
  * would tell the customer their message was fine and something else broke. What
  * the log records is the pair — the booking still on hold, and the reference of
  * the report that did not reach us — because that is a hold with no complaint
- * behind it and an operator has to be able to find it.
+ * behind it and an admin has to be able to find it.
  */
 async function unwindReportHold(
   deps: SupportDeps,
@@ -263,7 +263,7 @@ async function unwindReportHold(
   /*
    * `held.updatedAt` is the row this request wrote, and the lift is conditional
    * on it still being that row. Without it the compensation matches on
-   * `status = 'disputed'` alone, and an operator resolving this complaint while
+   * `status = 'disputed'` alone, and an admin resolving this complaint while
    * a second one was filed behind it would leave this unwind releasing *that*
    * hold — a delivered report in the inbox and the payout it was meant to
    * freeze back in the sweep.
@@ -343,7 +343,7 @@ export async function sendSupportMessage(
    * session reporting a booking, a hold the booking's own state refuses — and
    * the queue would fill with rows describing nothing. Later, after the send,
    * would leave the failure path with nothing to record the failure *on*, which
-   * is the one state an operator has to chase rather than work.
+   * is the one state an admin has to chase rather than work.
    *
    * `openSupportCase` swallows its own failure by design. That is the ticket's
    * rule in one line: a row that could not be written must not lose the email or
@@ -396,7 +396,7 @@ export async function sendSupportMessage(
     /*
      * After the unwind, not before: the hold coming back off is what the
      * customer's next attempt depends on, and the case row is a note for an
-     * operator. Both are best-effort and neither may displace the 502 below,
+     * admin. Both are best-effort and neither may displace the 502 below,
      * which is the failure the sender is actually owed.
      */
     if (supportCase) {

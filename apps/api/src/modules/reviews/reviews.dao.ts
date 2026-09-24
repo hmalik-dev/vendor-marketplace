@@ -490,7 +490,7 @@ export async function insertReviewAndRecalculate(
 /**
  * What hiding or unhiding a review did, for the response and for the 409.
  *
- * `unchanged` rather than a silent success: an operator who is told "hidden"
+ * `unchanged` rather than a silent success: an admin who is told "hidden"
  * about a review a colleague hid an hour ago learns nothing about the state of
  * the queue, and the same reasoning already makes a repeated ban a conflict.
  */
@@ -534,7 +534,7 @@ export async function setReviewVisibilityAndRecalculate(
 
   return db.transaction(async (tx): Promise<ReviewVisibilityOutcome> => {
     /*
-     * Locked, not merely read. Two operators reaching the same review — one
+     * Locked, not merely read. Two admins reaching the same review — one
      * hiding, one unhiding — would otherwise both see the old value, both
      * recompute from their own snapshot, and leave the stored rating agreeing
      * with neither. Same failure the recompute lock above was written for.
@@ -565,12 +565,12 @@ export async function setReviewVisibilityAndRecalculate(
      * other vendors may read their note about a customer — see
      * `customers.dao.ts`. They share a column and nothing distinguishes them
      * but `type`, so a console that offered one lever over both would let an
-     * operator "unhide" a note its author deliberately kept private and publish
+     * admin "unhide" a note its author deliberately kept private and publish
      * it to every other vendor. `seed-demo` writes every note that way, so that
      * was reachable on any demo database.
      *
      * This ticket's lever is the moderation one. The other direction is not a
-     * lever an operator should have at all, and refusing it here — rather than
+     * lever an admin should have at all, and refusing it here — rather than
      * only in the console — is what makes that true of the API as well.
      */
     if (row.type !== 'customer_to_vendor') {

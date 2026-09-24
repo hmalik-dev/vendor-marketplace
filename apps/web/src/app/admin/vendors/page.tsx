@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils';
 
 const PATH = '/admin/vendors';
 
-/** The frame's `Payouts ▾` options, worded the way an operator asks the question. */
+/** The frame's `Payouts ▾` options, worded the way an admin asks the question. */
 const PAYOUT_LABELS: Record<(typeof ADMIN_PAYOUT_FILTERS)[number], string> = {
   connected: 'Payouts connected',
   'not-connected': 'No payouts yet',
@@ -84,7 +84,7 @@ export default async function AdminVendorsPage({
    * the button says, and they are deliberately different sentences: "No
    * **published Austin** vendors matching 'kessler'" reads one way and "Any
    * city" reads another. Built from the same label maps the filter bar uses, so
-   * the state names each filter the way the operator set it.
+   * the state names each filter the way the admin set it.
    */
   const active: ActiveFilter[] = [
     { key: 'q', widening: 'Any search term' },
@@ -105,7 +105,7 @@ export default async function AdminVendorsPage({
    * clauses, as on `/admin/cases`, is not.
    *
    * **The words are the labels, never the parameters.** `category` is a slug
-   * and `payouts` is `not-connected`; reciting a filter in the operator's own
+   * and `payouts` is `not-connected`; reciting a filter in the admin's own
    * words means the words the filter bar showed them, which is what these three
    * maps hold.
    */
@@ -153,7 +153,7 @@ export default async function AdminVendorsPage({
             }
             /* `aria-current`, not `aria-pressed`: this is a link, and a link
                has no pressed state to report. `page` is the right value —
-               following it is what puts the operator on this filtered view. */
+               following it is what puts the admin on this filtered view. */
             aria-current={awaitingActive ? 'page' : undefined}
             className={cn(
               'rounded-md px-3.5 py-2 text-sm font-semibold whitespace-nowrap',
@@ -189,7 +189,7 @@ export default async function AdminVendorsPage({
             parameter, so the other states were reachable only by typing a query
             string. That was liveable while every state a vendor could be in was
             visible from the pill; it stopped being liveable when `retired`
-            arrived, because a deleted account is exactly the row an operator
+            arrived, because a deleted account is exactly the row an admin
             goes looking for and cannot find by scrolling. Both controls write
             `status`, so they agree: choosing `Review` here and clicking the chip
             land on the same filtered view.

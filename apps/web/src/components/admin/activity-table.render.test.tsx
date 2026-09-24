@@ -96,7 +96,7 @@ describe('the action log table', () => {
   });
 
   /** Both id cells filter by themselves — that is how `?subject=` is reachable. */
-  it('links each row to the operator and the subject it names', () => {
+  it('links each row to the admin and the subject it names', () => {
     render(<ActivityTable path="/admin/activity" filtered={false} rows={[row({})]} />);
 
     const actor = screen.getAllByRole('link', { name: 'Dana Okafor' })[0];

@@ -23,7 +23,7 @@ const BOOT_JITTER_MS = 5_000;
  * API redeployed more often than the interval still checks every day.
  *
  * Read-only against Stripe and the database, so every instance running it is
- * harmless; the alert's per-day subject and dedupe keep the operator to one
+ * harmless; the alert's per-day subject and dedupe keep the admin to one
  * email a day however many ran.
  */
 export const platformBalancePlugin = fp<PlatformBalancePluginOptions>(
@@ -46,7 +46,7 @@ export const platformBalancePlugin = fp<PlatformBalancePluginOptions>(
           'platform-balance',
           async () => {
             await reconcilePlatformBalance(
-              { db: app.db, stripe: app.stripe, alerts: app.operatorAlerts, log: app.log },
+              { db: app.db, stripe: app.stripe, alerts: app.adminAlerts, log: app.log },
               app.clock(),
             );
           },
@@ -77,5 +77,5 @@ export const platformBalancePlugin = fp<PlatformBalancePluginOptions>(
       clearTimeout(bootTimer);
     });
   },
-  { name: 'platform-balance', dependencies: ['clock', 'operator-alerts'] },
+  { name: 'platform-balance', dependencies: ['clock', 'admin-alerts'] },
 );

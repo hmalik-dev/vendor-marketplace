@@ -68,7 +68,7 @@ function widenNames(): string[] {
 }
 
 describe('the counted filtered-empty state', () => {
-  /** 1 — the heading recites the active filters in the operator's own words. */
+  /** 1 — the heading recites the active filters in the admin's own words. */
   it('recites the filters in the heading', () => {
     draw();
 
@@ -99,7 +99,7 @@ describe('the counted filtered-empty state', () => {
    *
    * `since` was counted at zero and `origin` was not counted at all. Neither
    * may be offered: a button promising rows down a route that has none is
-   * worse than no button, because the operator spends a click to learn the
+   * worse than no button, because the admin spends a click to learn the
    * screen was wrong.
    */
   it('never offers a route that would reveal zero', () => {
@@ -125,7 +125,7 @@ describe('the counted filtered-empty state', () => {
    * Highest count is the primary, and it is exactly one.
    *
    * The delta's reasoning is that this is the widening most likely to be worth
-   * taking, so it is the one an operator's eye should land on. Asserted on the
+   * taking, so it is the one an admin's eye should land on. Asserted on the
    * fill rather than on order alone, because a sorted list with three filled
    * buttons recommends nothing.
    */
@@ -170,7 +170,7 @@ describe('the counted filtered-empty state', () => {
   /**
    * The sentence stays honest when no widening pays.
    *
-   * An operator staring at a state that promises rows and offers none has been
+   * An admin staring at a state that promises rows and offers none has been
    * told something false on exactly the run where they most need the truth.
    * The escape is still there — it is the only way out left.
    */

@@ -17,7 +17,7 @@ import { completeStepUp } from './step-up';
 const ADMIN_STATE = storageStatePath('admin');
 const SEED_CUSTOMER_DOMAIN = '@orla-demo.example';
 
-test('an operator closes an account, then reaches its data-rights page from the customers screen', async ({
+test('an admin closes an account, then reaches its data-rights page from the customers screen', async ({
   browser,
 }) => {
   if (!existsSync(ADMIN_STATE)) {
@@ -89,7 +89,7 @@ test('an operator closes an account, then reaches its data-rights page from the 
   await expect(targetLink).toHaveCount(0);
 
   /*
-   * Closure erased the name and address (VEN-614), so the operator finds the
+   * Closure erased the name and address (VEN-614), so the admin finds the
    * closed account by its id, which its `closed+<id>@invalid` address carries.
    */
   const accountId = href.split('/').at(-1)!;

@@ -78,14 +78,6 @@ export const expirySweepPlugin = fp<ExpirySweepPluginOptions>(
   },
   {
     name: 'expiry-sweep',
-    dependencies: [
-      'clock',
-      'database',
-      'email',
-      'background',
-      'stripe',
-      'events',
-      'operator-alerts',
-    ],
+    dependencies: ['clock', 'database', 'email', 'background', 'stripe', 'events', 'admin-alerts'],
   },
 );

@@ -17,10 +17,10 @@ const VENDOR = 'user_ops_vendor';
 const OUTSIDER = 'user_ops_outsider';
 
 /**
- * VEN-506: an operator adds and removes operators in the app, with a step-up,
- * an audit row in the same transaction, and never the last live operator.
+ * VEN-506: an admin adds and removes admins in the app, with a step-up,
+ * an audit row in the same transaction, and never the last live admin.
  */
-describe('operator grant and revoke', () => {
+describe('admin grant and revoke', () => {
   let harness: TestHarness;
 
   const emailOf = (authUserId: string): string => `${authUserId}@example.com`;
@@ -45,7 +45,7 @@ describe('operator grant and revoke', () => {
   const grant = (actor: string, email: string) =>
     harness.app.inject({
       method: 'POST',
-      url: '/v1/admin/operators',
+      url: '/v1/admin/admins',
       headers: bearer(actor),
       payload: { email },
     });
@@ -53,7 +53,7 @@ describe('operator grant and revoke', () => {
   const revoke = (actor: string, userId: string) =>
     harness.app.inject({
       method: 'DELETE',
-      url: `/v1/admin/operators/${userId}`,
+      url: `/v1/admin/admins/${userId}`,
       headers: bearer(actor),
     });
 
@@ -80,7 +80,7 @@ describe('operator grant and revoke', () => {
       .where(eq(adminActions.subjectId, subjectId));
   }
 
-  /** Two operators, both stepped up, plus a customer and a vendor to promote. */
+  /** Two admins, both stepped up, plus a customer and a vendor to promote. */
   async function fixtures(): Promise<void> {
     await signInAs(harness, ADMIN, true);
     await signInAs(harness, OTHER_ADMIN, true);
@@ -120,7 +120,7 @@ describe('operator grant and revoke', () => {
     await harness.close();
   });
 
-  it('grants a customer operator access on their next request, with exactly one audit row', async () => {
+  it('grants a customer admin access on their next request, with exactly one audit row', async () => {
     await fixtures();
     const customerId = await idOf(CUSTOMER);
     const adminId = await idOf(ADMIN);
@@ -133,7 +133,7 @@ describe('operator grant and revoke', () => {
 
     const console = await harness.app.inject({
       method: 'GET',
-      url: '/v1/admin/operators',
+      url: '/v1/admin/admins',
       headers: bearer(CUSTOMER),
     });
     expect(console.statusCode).toBe(200);
@@ -154,13 +154,13 @@ describe('operator grant and revoke', () => {
     expect(JSON.stringify(rows[0]!.detail)).not.toContain('@');
   });
 
-  it('lists operators with who granted them, and a bootstrap operator as not revocable', async () => {
+  it('lists admins with who granted them, and a bootstrap admin as not revocable', async () => {
     await fixtures();
     await grant(ADMIN, emailOf(VENDOR));
 
     const response = await harness.app.inject({
       method: 'GET',
-      url: '/v1/admin/operators',
+      url: '/v1/admin/admins',
       headers: bearer(ADMIN),
     });
     const items = response.json().items as Array<Record<string, unknown>>;
@@ -178,7 +178,7 @@ describe('operator grant and revoke', () => {
     });
   });
 
-  it('revokes one of two operators back to the role the grant recorded', async () => {
+  it('revokes one of two admins back to the role the grant recorded', async () => {
     await fixtures();
     const vendorId = await idOf(VENDOR);
     await grant(ADMIN, emailOf(VENDOR));
@@ -198,7 +198,7 @@ describe('operator grant and revoke', () => {
     expect(await auditRows(vendorId)).toHaveLength(2);
   });
 
-  it('refuses to revoke the last live operator and changes nothing', async () => {
+  it('refuses to revoke the last live admin and changes nothing', async () => {
     await signInAs(harness, ADMIN, true);
     await stepUp(ADMIN);
     const adminId = await idOf(ADMIN);
@@ -210,7 +210,7 @@ describe('operator grant and revoke', () => {
     expect(await auditRows(adminId)).toHaveLength(0);
   });
 
-  it('refuses an operator nobody granted in the app rather than guess their role', async () => {
+  it('refuses an admin nobody granted in the app rather than guess their role', async () => {
     await fixtures();
     const otherId = await idOf(OTHER_ADMIN);
 
@@ -220,12 +220,12 @@ describe('operator grant and revoke', () => {
     expect(await roleOf(OTHER_ADMIN)).toBe('admin');
   });
 
-  // The lock itself is proved on real Postgres in `operator-access.contention.test.ts`.
-  it('lets only one of two operators revoke the other when they ask together', async () => {
+  // The lock itself is proved on real Postgres in `admin-access.contention.test.ts`.
+  it('lets only one of two admins revoke the other when they ask together', async () => {
     await fixtures();
     await grant(ADMIN, emailOf(CUSTOMER));
     await grant(ADMIN, emailOf(VENDOR));
-    // Leave the two granted operators as the only ones, so each is the other's last.
+    // Leave the two granted admins as the only ones, so each is the other's last.
     await setUserRole(harness.database.db, 'customer', eq(users.authUserId, ADMIN));
     await setUserRole(harness.database.db, 'customer', eq(users.authUserId, OTHER_ADMIN));
     await stepUp(CUSTOMER);
@@ -241,22 +241,22 @@ describe('operator grant and revoke', () => {
     expect(roles.filter((role) => role === 'admin')).toHaveLength(1);
   });
 
-  it('answers 403 to a non-operator, 401 to nobody, and the step-up error without a fresh one', async () => {
+  it('answers 403 to a non-admin, 401 to nobody, and the step-up error without a fresh one', async () => {
     await fixtures();
     await signInAs(harness, OUTSIDER);
     const customerId = await idOf(CUSTOMER);
 
-    const nonOperator = await grant(OUTSIDER, emailOf(CUSTOMER));
+    const nonAdmin = await grant(OUTSIDER, emailOf(CUSTOMER));
     const signedOut = await harness.app.inject({
       method: 'POST',
-      url: '/v1/admin/operators',
+      url: '/v1/admin/admins',
       payload: { email: emailOf(CUSTOMER) },
     });
     await harness.app.stepUp.revoke(await idOf(ADMIN));
     const stale = await grant(ADMIN, emailOf(CUSTOMER));
     const staleRevoke = await revoke(ADMIN, customerId);
 
-    expect(nonOperator.statusCode).toBe(403);
+    expect(nonAdmin.statusCode).toBe(403);
     expect(signedOut.statusCode).toBe(401);
     expect(stale.statusCode).toBe(403);
     expect(stale.json().error).toBe(ERROR_CODES.STEP_UP_REQUIRED);
@@ -268,7 +268,7 @@ describe('operator grant and revoke', () => {
   /*
    * Two live accounts in different case used to be a state the grant had to
    * refuse. VEN-649 made it one the database refuses, so the grant finds one
-   * account whatever case the operator types.
+   * account whatever case the admin types.
    */
   it('grants the one live account an address names, whatever case it is typed in', async () => {
     await fixtures();

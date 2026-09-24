@@ -90,7 +90,7 @@ function groupByDate<T extends { eventDate: string }>(rows: readonly T[]): Map<s
  * A held date lists what stands on it — bookings for `booked`, live requests
  * for a stored `pending` (`lockHeldDate` writes one) — and **an empty list is
  * the finding**: the calendar refuses the date while nothing holds it, which is
- * the stale lock an operator arrives asking about.
+ * the stale lock an admin arrives asking about.
  */
 export function composeLocks(
   stored: readonly StoredLockRow[],
@@ -321,7 +321,7 @@ function resolvedAt(row: AdminRequestListRow, status: BookingRequestStatus): Dat
  *
  * **A read, and only a read.** The participant's read ages a lapsed row as it
  * returns it; this one reports the same answer from the same predicate and
- * writes nothing, so an operator browsing the funnel never sends a customer
+ * writes nothing, so an admin browsing the funnel never sends a customer
  * a `request_expired` notification.
  */
 export async function listRequests(

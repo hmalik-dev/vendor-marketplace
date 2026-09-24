@@ -242,7 +242,7 @@ export function VendorDetailActions({ vendor }: { vendor: Vendor }): React.React
  * Switches one package off the storefront, or back on, through
  * `PUT /admin/packages/:packageId/active`. Says so when the last bookable
  * package took the storefront with it, because that is a second, larger thing
- * the operator did.
+ * the admin did.
  */
 export function PackageActiveControl({
   pkg,

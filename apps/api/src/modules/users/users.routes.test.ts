@@ -372,7 +372,7 @@ describe('/users/me', () => {
       async (role) => {
         const authId = role === 'customer' ? CUSTOMER_AUTH_ID : VENDOR_AUTH_ID;
         await signIn(authId);
-        // Only the operator grant path may change a role; the test opens it for its own transaction.
+        // Only the admin grant path may change a role; the test opens it for its own transaction.
         await harness.database.db.transaction(async (tx) => {
           await tx.execute(sql`select set_config('app.operator_role_grant', 'on', true)`);
           await tx.update(users).set({ role }).where(eq(users.authUserId, authId));

@@ -85,7 +85,7 @@ export function PlatformSettingsPanel({
    * client-side (VEN-576): `settings` stayed stale for the whole test timeout
    * even though the switch had genuinely flipped. `router.refresh()` still
    * runs, best-effort, to pick up anything server-rendered elsewhere on the
-   * page (the surface's paused/held counts) — but nothing the operator looks
+   * page (the surface's paused/held counts) — but nothing the admin looks
    * at on this panel waits on it landing.
    */
   const [confirmed, setConfirmed] = useState(settings);
@@ -157,7 +157,7 @@ export function PlatformSettingsPanel({
           {confirmed.updatedAt && confirmed.updatedByName
             ? `Last changed by ${confirmed.updatedByName}, ${WHEN.format(confirmed.updatedAt)}.`
             : 'Never changed. Every switch is off and there is no cap.'}{' '}
-          Every change is recorded in Activity and emailed to the operator.
+          Every change is recorded in Activity and emailed to the admin.
         </p>
 
         {failure ? (

@@ -11,7 +11,7 @@
  * The platforms' own commit variables follow as a fallback, so a deployment
  * the workflow did not start (a manual redeploy, a preview) still names its
  * commit rather than nothing. Like the markers in `deployment.ts`, none of these
- * is a registry row: the pipeline and the platform set them, not an operator.
+ * is a registry row: the pipeline and the platform set them, not an admin.
  */
 export const RELEASE_ENV_KEYS = [
   'SENTRY_RELEASE',

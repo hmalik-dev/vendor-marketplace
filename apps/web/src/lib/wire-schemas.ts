@@ -566,7 +566,7 @@ export type WireAdminPaymentPage = z.infer<typeof wireAdminPaymentPageSchema>;
  * `payoutReleasedAt` is null on the `failed` and `busy` outcomes and a string
  * on `released`, so passing the shared schema straight to `useApi` parses fine
  * for every retry that did not work and throws for the one that did: the
- * operator is told a completed transfer failed, in the API client's own words,
+ * admin is told a completed transfer failed, in the API client's own words,
  * while the money has already left the platform balance. Found by review, not
  * by the suite — the route tests read the response object rather than its JSON.
  */
@@ -645,7 +645,7 @@ export type WireAdminVendorInviteList = z.infer<typeof wireAdminVendorInviteList
  *
  * Five coercions rather than one, because the case detail is the console's only
  * read with dates on **two** levels — the case's own, and the booking's money
- * timestamps. A missing coercion on either 500s the screen an operator opens to
+ * timestamps. A missing coercion on either 500s the screen an admin opens to
  * decide who keeps the money, which is the worst place in the product for a
  * `.getTime is not a function`.
  */
@@ -715,7 +715,7 @@ export type WireAdminTagSuggestionResult = z.infer<typeof wireAdminTagSuggestion
  *
  * No `.extend` with a coerced date on any of the three: every date in these
  * schemas is already `z.coerce.date()` at the source, because they are read by
- * an operator's browser as well as by the API's own response validator and a
+ * an admin's browser as well as by the API's own response validator and a
  * `z.date()` would reject the ISO string the wire actually carries.
  */
 export const wireAdminUserDataRightsSchema = adminUserDataRightsSchema;

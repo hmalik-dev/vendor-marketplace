@@ -76,7 +76,7 @@ const BLOCKER: WireAdminCloseBlocker = {
   counterpartyName: 'Sunlit Studio',
 };
 
-const OPERATOR_EMAIL = 'dana.okafor@example.com';
+const ADMIN_EMAIL = 'dana.okafor@example.com';
 
 function renderActions(
   overrides: Partial<{
@@ -84,7 +84,7 @@ function renderActions(
     closeBlockers: readonly WireAdminCloseBlocker[];
     bookingsRefundedOnClose: number;
     isSelf: boolean;
-    isOperator: boolean;
+    isAdmin: boolean;
     isBanned: boolean;
     unwindPending: number;
   }>,
@@ -97,8 +97,8 @@ function renderActions(
       closeBlockers={overrides.closeBlockers ?? []}
       bookingsRefundedOnClose={overrides.bookingsRefundedOnClose ?? 0}
       isSelf={overrides.isSelf ?? false}
-      email={OPERATOR_EMAIL}
-      isOperator={overrides.isOperator ?? false}
+      email={ADMIN_EMAIL}
+      isAdmin={overrides.isAdmin ?? false}
       isBanned={overrides.isBanned ?? false}
       unwindPending={overrides.unwindPending ?? 0}
     />,
@@ -121,7 +121,7 @@ function closeButton(): HTMLButtonElement {
  * The three states of the closure control, which is the part of this component
  * that decides something (#438).
  *
- * The refusal is stated **before** it is attempted: an operator on a support
+ * The refusal is stated **before** it is attempted: an admin on a support
  * call needs to know a closure will be refused without clicking to find out, so
  * the disabled branch and the sentence naming the bookings are the behaviour,
  * not decoration. The API's 409 remains the guarantee — these assertions are
@@ -150,7 +150,7 @@ describe('the data-rights closure control', () => {
 
     /*
      * Pattern B's copy (#454): the refusal opens by *naming itself*, so the
-     * first four words tell an operator this is a rule rather than a fault.
+     * first four words tell an admin this is a rule rather than a fault.
      */
     const warning = panel();
     expect(warning.textContent).toContain("Can't close: 1 confirmed booking on June 1, 2099.");
@@ -188,7 +188,7 @@ describe('the data-rights closure control', () => {
    * The panel is gold and sits **above** the control it refuses.
    *
    * Both halves matter and neither is decoration. The explanation used to sit
-   * below the button, so an operator met a disabled control first and its
+   * below the button, so an admin met a disabled control first and its
    * cause second — and a disabled button with no visible reason is
    * indistinguishable from a broken one. Gold because `40-states.md` reserves
    * it for waiting on someone: this account is waiting on a booking, and
@@ -240,7 +240,7 @@ describe('the data-rights closure control', () => {
    *
    * A closure never prices the account holder's own bookings — those refuse it
    * outright. A **vendor's** closure refunds their customers in full and pays
-   * the vendor nothing, through #433's shared unwind. Telling an operator
+   * the vendor nothing, through #433's shared unwind. Telling an admin
    * "it refunds nothing" while five refunds are about to issue is the failure
    * this asserts against.
    */
@@ -273,19 +273,19 @@ describe('the data-rights closure control', () => {
   });
 
   /**
-   * The API answers 403 to an operator closing their own account — it would
+   * The API answers 403 to an admin closing their own account — it would
    * take the `admin_actions` log that names them with it — and the page has to
    * refuse it too. A control that offers what the server will refuse is a
    * control that lies, and the browser pass found this one enabled.
    */
-  it('refuses the operator their own account, and says why', () => {
+  it('refuses the admin their own account, and says why', () => {
     renderActions({ isSelf: true });
 
     expect(closeButton().disabled).toBe(true);
 
     const reason = panel();
     expect(reason.textContent).toContain("Can't close: this is your own account.");
-    expect(reason.textContent).toContain('recorded against the operator who took it');
+    expect(reason.textContent).toContain('recorded against the admin who took it');
     expect(reason.textContent).not.toContain('confirmed booking');
   });
 
@@ -293,7 +293,7 @@ describe('the data-rights closure control', () => {
    * The dialog has to describe what the closure now actually does (#451).
    *
    * Deleting the sign-in and releasing the address are the two consequences an
-   * operator on a support call has to be able to state before they press it —
+   * admin on a support call has to be able to state before they press it —
    * the second one especially, because "you can sign up again with that email"
    * is the answer the person on the phone is waiting for.
    */
@@ -310,7 +310,7 @@ describe('the data-rights closure control', () => {
    * The two owed items are **orthogonal**, so both are reported (#400, #451).
    *
    * An earlier shape let the money warning shadow the identity one, which told
-   * an operator about the refund and left them believing the person had been
+   * an admin about the refund and left them believing the person had been
    * signed out. Asserted together, because together is the case that regressed.
    */
   it('reports a stranded refund and an undeleted sign-in together', async () => {
@@ -332,7 +332,7 @@ describe('the data-rights closure control', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('still offers the export on the operator own record', () => {
+  it('still offers the export on the admin own record', () => {
     renderActions({ isSelf: true });
 
     expect(
@@ -358,7 +358,7 @@ describe('the data-rights closure control', () => {
 });
 
 /**
- * Closing another operator's account, past a typed hurdle (VEN-391).
+ * Closing another admin's account, past a typed hurdle (VEN-391).
  *
  * The near miss is the case under test: a guard proven only by the exact match
  * would pass with the comparison deleted.
@@ -501,9 +501,9 @@ describe('Export data needs the step-up (VEN-684)', () => {
   });
 });
 
-describe('an operator closure', () => {
+describe('an admin closure', () => {
   function typedField(dialog: HTMLElement): HTMLInputElement {
-    return within(dialog).getByLabelText(`Type ${OPERATOR_EMAIL} to confirm`) as HTMLInputElement;
+    return within(dialog).getByLabelText(`Type ${ADMIN_EMAIL} to confirm`) as HTMLInputElement;
   }
 
   function confirmButton(dialog: HTMLElement): HTMLButtonElement {
@@ -511,7 +511,7 @@ describe('an operator closure', () => {
   }
 
   it('keeps the confirm disabled until the address is typed, and says so', () => {
-    renderActions({ isOperator: true });
+    renderActions({ isAdmin: true });
     const dialog = openConfirmation();
 
     expect(confirmButton(dialog).disabled).toBe(true);
@@ -519,21 +519,21 @@ describe('an operator closure', () => {
   });
 
   it('leaves a near miss disabled and names the mismatch', () => {
-    renderActions({ isOperator: true });
+    renderActions({ isAdmin: true });
     const dialog = openConfirmation();
 
     fireEvent.change(typedField(dialog), { target: { value: 'Dana.Okafor@example.com' } });
 
     expect(confirmButton(dialog).disabled).toBe(true);
     expect(typedField(dialog).getAttribute('aria-invalid')).toBe('true');
-    expect(dialog.textContent).toContain(`Doesn't match ${OPERATOR_EMAIL} exactly.`);
+    expect(dialog.textContent).toContain(`Doesn't match ${ADMIN_EMAIL} exactly.`);
   });
 
   it('enables the confirm on the exact address, and closes', async () => {
-    renderActions({ isOperator: true });
+    renderActions({ isAdmin: true });
     const dialog = openConfirmation();
 
-    fireEvent.change(typedField(dialog), { target: { value: OPERATOR_EMAIL } });
+    fireEvent.change(typedField(dialog), { target: { value: ADMIN_EMAIL } });
 
     expect(confirmButton(dialog).disabled).toBe(false);
     expect(dialog.textContent).toContain('Matches.');
@@ -547,9 +547,9 @@ describe('an operator closure', () => {
   });
 
   it('starts empty again when the dialog is reopened', () => {
-    renderActions({ isOperator: true });
+    renderActions({ isAdmin: true });
     let dialog = openConfirmation();
-    fireEvent.change(typedField(dialog), { target: { value: OPERATOR_EMAIL } });
+    fireEvent.change(typedField(dialog), { target: { value: ADMIN_EMAIL } });
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     dialog = openConfirmation();
@@ -559,11 +559,11 @@ describe('an operator closure', () => {
   });
 
   it('says the sign-in is deleted and only the Neon Auth console restores it', () => {
-    renderActions({ isOperator: true });
+    renderActions({ isAdmin: true });
     const dialog = openConfirmation();
 
     expect(within(dialog).getByRole('heading').textContent).toBe(
-      "Close Dana Okafor's operator account?",
+      "Close Dana Okafor's admin account?",
     );
     expect(dialog.textContent).toContain(
       "This deletes their sign-in, and it can't be restored from here.",

@@ -19,7 +19,7 @@ const PATH = '/admin/cases';
  *
  * **Open and oldest first, by default and on the server.** `adminCaseQuerySchema`
  * defaults `status` to `open` and the DAO orders ascending, so the screen an
- * operator lands on is the one showing the row that has been waiting longest.
+ * admin lands on is the one showing the row that has been waiting longest.
  * Every other console list is newest-first; this one is not, and the difference
  * is the feature rather than an inconsistency.
  */
@@ -105,7 +105,7 @@ export default async function AdminCasesPage({
   ];
 
   /*
-   * The heading recites the filters as the operator set them, which is why it
+   * The heading recites the filters as the admin set them, which is why it
    * is written here rather than assembled from fragments inside the component:
    * a generic join reads "No resolved and about a booking cases", and this
    * sentence is the part of the state that has to sound like a person wrote it.
@@ -118,7 +118,7 @@ export default async function AdminCasesPage({
 
   /*
    * **True empty carries no button** — the delta is explicit, and this is the
-   * screen it says it about. Nothing an operator does creates a case, so a
+   * screen it says it about. Nothing an admin does creates a case, so a
    * control here would offer an action that cannot help; the copy's whole job
    * is to say where cases come from, so the silence reads as calm rather than
    * broken.
@@ -208,13 +208,13 @@ export default async function AdminCasesPage({
            * the platform simply has no cases. `widenings.length > 0` decides it
            * on its own for the ordinary case — the API only counts routes that
            * exist — and the two explicit parameters cover the one it cannot:
-           * an operator who set both filters, where widening either *alone*
+           * an admin who set both filters, where widening either *alone*
            * still finds nothing. That state has a heading and an escape to
            * offer even with no counted route.
            *
            * `status`, not `raw.status`: the parsed value, like every other read
            * on this page. `?status=nonsense` is a parameter the screen has
-           * already told the operator it ignored (`dropped`), so treating it as
+           * already told the admin it ignored (`dropped`), so treating it as
            * a filter would put the *filtered*-empty copy on a view nothing is
            * filtering.
            */
@@ -288,7 +288,7 @@ export default async function AdminCasesPage({
             header: 'Booking',
             /*
              * Text, not a link. It said `Linked` and pointed at the unfiltered
-             * booking list, which drops an operator into every booking the
+             * booking list, which drops an admin into every booking the
              * platform has ever taken with no way back to the one under dispute.
              * `/admin/bookings` has no by-id filter to point at, and the case
              * detail — one click away on the reference — carries the booking in

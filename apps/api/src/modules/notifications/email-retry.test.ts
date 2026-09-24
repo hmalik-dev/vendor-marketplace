@@ -24,7 +24,7 @@ import { sendNotificationEmail } from './notification-email.js';
 import { retryFailedEmails } from './email-retry.service.js';
 
 /**
- * VEN-465: a Resend blip no longer drops an email, and the operator can see an
+ * VEN-465: a Resend blip no longer drops an email, and the admin can see an
  * invite whose email did not go out.
  *
  * The clock is the real one: the retry's own attempt rows take their `sent_at`
@@ -452,7 +452,7 @@ describe('the email retry sweep', () => {
       expect(harness.email.sent).toHaveLength(1);
     });
 
-    it('answers 502, not 200, when the operator resend fails again, and records the attempt', async () => {
+    it('answers 502, not 200, when the admin resend fails again, and records the attempt', async () => {
       const id = await invite(failedAgo(HOUR_MS));
       harness.email.failNext = true;
 
@@ -486,7 +486,7 @@ describe('the email retry sweep', () => {
       expect(customer.statusCode).toBe(403);
     });
 
-    it('records a failed first send, so the operator sees it', async () => {
+    it('records a failed first send, so the admin sees it', async () => {
       const headers = bearer(adminAuthId);
       harness.email.failNext = true;
 

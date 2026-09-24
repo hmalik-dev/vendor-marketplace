@@ -33,7 +33,7 @@ function href(
  *
  * Renders nothing when everything fits on one page — a pager under six rows is
  * furniture. Both controls carry the current filters, because a pager that
- * drops them takes the operator from "page 2 of the flagged vendors" to "page 2
+ * drops them takes the admin from "page 2 of the flagged vendors" to "page 2
  * of everything" without saying so.
  */
 export function Pager({
