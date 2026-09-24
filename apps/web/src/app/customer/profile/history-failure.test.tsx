@@ -4,8 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiClientError } from '@/lib/api-client';
 
 const requireRole = vi.fn();
-const getOwnBookingRequests = vi.fn();
-const getOwnBookings = vi.fn();
 const getOwnCustomerReviews = vi.fn();
 const refresh = vi.fn();
 
@@ -14,19 +12,9 @@ vi.mock('@/lib/current-user', () => ({
   requireRole: (role: string) => requireRole(role),
 }));
 vi.mock('@/lib/customer-data', () => ({
-  getOwnBookingRequests: (options?: unknown) => getOwnBookingRequests(options),
-  getOwnBookings: (options?: unknown) => getOwnBookings(options),
   getOwnCustomerReviews: (options?: unknown) => getOwnCustomerReviews(options),
 }));
-vi.mock('@/lib/messaging-data', () => ({
-  getOwnConversationBand: async () => ({ conversations: [], hasUnread: false }),
-}));
 vi.mock('@/lib/report-error', () => ({ reportSwallowedError: vi.fn() }));
-vi.mock('@/components/bookings/bookings-sidebar', () => ({
-  BookingsSidebar: (props: { bookingCount: number | null }): ReactNode => (
-    <span data-testid="sidebar-count">{String(props.bookingCount)}</span>
-  ),
-}));
 vi.mock('@/components/customer/customer-profile-form', () => ({
   CustomerProfileForm: (): ReactNode => <form aria-label="Profile form" />,
 }));
@@ -53,85 +41,69 @@ async function renderTab(tab: string): Promise<void> {
 
 const FAILURES: [string, () => Error][] = [
   ['a 500', () => new ApiClientError(500, 'INTERNAL_ERROR', 'boom')],
+  ['a 429', () => new ApiClientError(429, 'RATE_LIMITED', 'slow down')],
   ['a network error', () => new TypeError('fetch failed')],
 ];
 
 /*
- * VEN-711: the three history reads used to degrade to `[]`, so a failed read
- * said "Nothing in flight" to a customer with a paid booking. A failed read is
- * an error state with a retry, and the profile form stays usable.
+ * VEN-711: the reviews read used to degrade to `[]`, so a failed read said "No
+ * reviews yet". A failed read is an error state with a retry, and the profile
+ * form stays usable. (VEN-706 removed the Active and Past tabs; the bookings
+ * hub reads in required mode since VEN-668.)
  */
-describe('CustomerProfilePage when the history reads fail', () => {
+describe('CustomerProfilePage when the reviews read fails', () => {
   beforeEach(() => {
     requireRole.mockReset().mockResolvedValue(customer);
-    getOwnBookingRequests.mockReset().mockResolvedValue([]);
-    getOwnBookings.mockReset().mockResolvedValue([]);
     getOwnCustomerReviews.mockReset().mockResolvedValue([]);
     refresh.mockReset();
   });
 
   afterEach(cleanup);
 
-  it('reads the three lists in required mode', async () => {
-    await renderTab('active');
+  it('reads the reviews in required mode', async () => {
+    await renderTab('reviews');
 
-    expect(getOwnBookingRequests).toHaveBeenCalledWith({ required: true });
-    expect(getOwnBookings).toHaveBeenCalledWith({ required: true });
     expect(getOwnCustomerReviews).toHaveBeenCalledWith({ required: true });
+    expect(screen.getByText('No reviews yet')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   describe.each(FAILURES)('with %s', (_label, makeError) => {
     beforeEach(() => {
-      getOwnBookingRequests.mockRejectedValue(makeError());
-      getOwnBookings.mockRejectedValue(makeError());
       getOwnCustomerReviews.mockRejectedValue(makeError());
     });
 
-    it.each(['active', 'past', 'reviews'])(
-      'the %s tab shows an error, not an empty state',
-      async (tab) => {
-        await renderTab(tab);
+    it('the reviews tab shows an error, not the empty state', async () => {
+      await renderTab('reviews');
 
-        expect(screen.getByRole('alert').textContent).toContain("couldn't load");
-        expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
-        expect(screen.queryByText('Nothing in flight')).toBeNull();
-        expect(screen.queryByText('Nothing here yet')).toBeNull();
-        expect(screen.queryByText('No reviews yet')).toBeNull();
-      },
-    );
+      expect(screen.getByRole('alert').textContent).toContain("We couldn't load your reviews");
+      expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
+      expect(screen.queryByText('No reviews yet')).toBeNull();
+    });
 
-    it('leaves the profile form and an unknown booking count', async () => {
+    it('leaves the profile form usable', async () => {
       await renderTab('profile');
 
       expect(screen.getByRole('form', { name: 'Profile form' })).toBeTruthy();
-      expect(screen.getByTestId('sidebar-count').textContent).toBe('null');
+      expect(screen.queryByRole('alert')).toBeNull();
     });
   });
 
   it('Try again re-runs the route once', async () => {
-    getOwnBookings.mockRejectedValue(new ApiClientError(500, 'INTERNAL_ERROR', 'boom'));
-    await renderTab('active');
+    getOwnCustomerReviews.mockRejectedValue(new ApiClientError(500, 'INTERNAL_ERROR', 'boom'));
+    await renderTab('reviews');
 
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
 
     await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
   });
 
-  it('a failed reviews read does not take down the bookings tabs', async () => {
-    getOwnCustomerReviews.mockRejectedValue(new ApiClientError(500, 'INTERNAL_ERROR', 'boom'));
-
-    await renderTab('active');
-
-    expect(screen.getByText('Nothing in flight')).toBeTruthy();
-    expect(screen.queryByRole('alert')).toBeNull();
-  });
-
   it('lets a redirect out rather than drawing an error', async () => {
     const redirect = Object.assign(new Error('NEXT_REDIRECT'), {
       digest: 'NEXT_REDIRECT;/sign-in',
     });
-    getOwnBookings.mockRejectedValue(redirect);
+    getOwnCustomerReviews.mockRejectedValue(redirect);
 
-    await expect(renderTab('active')).rejects.toBe(redirect);
+    await expect(renderTab('reviews')).rejects.toBe(redirect);
   });
 });
