@@ -48,6 +48,16 @@ support cases (`sender_user_id` null, found only by address), and an in-flight
 notification send whose `recordDelivery` inserts the pre-closure address after the
 scrub commits (one Resend round trip).
 
+**VEN-687 (audited 2026-09-24, PASS):** retirement also nulls `bio`/`tagline`,
+puts a placeholder in `booking_requests.event_location/custom_details` and
+`bookings.event_location` for **either** party (so a vendor closure rewrites a live
+customer's own record and DSAR export: this is by design, don't re-raise), nulls
+`vendor_applications` name/city/message by address, and replaces `support_cases.message`
+(open complaints included). 0097 backfills everything except applications. Still left, low:
+`quote_note`, `cancellation_reason`, `dispute_reason`, message bodies; a
+`confirmBooking` waiting on the users `FOR UPDATE` inserts the request's pre-scrub
+location once closure commits (input built before the tx).
+
 Related: [[email-uniqueness-is-partial-nothing-joins-by-email]],
 [[closure-refuses-only-the-customer-side]],
 [[legal-acceptance-record-is-undeletable-pii]].

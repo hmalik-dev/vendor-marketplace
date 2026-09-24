@@ -1,16 +1,23 @@
-import { and, eq, exists, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
+import { and, eq, exists, inArray, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import { alias, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import {
+  bookingRequests,
+  bookings,
   emailDeliveries,
   legalAcceptances,
   supportCases,
   USERS_EMAIL_UNIQUE_INDEX,
   users,
+  vendorApplications,
   vendorProfiles,
   type NewUserRow,
   type UserRow,
 } from '@vendor-marketplace/db/schema';
-import type { AuthProvider, LegalAcceptanceDocument } from '@vendor-marketplace/shared';
+import {
+  CLOSED_ACCOUNT_PLACEHOLDER,
+  type AuthProvider,
+  type LegalAcceptanceDocument,
+} from '@vendor-marketplace/shared';
 import { violatesUniqueConstraint } from '../../lib/constraint-violation.js';
 import type { AppDatabase } from '../../lib/database.js';
 import { closedAccountFields } from './closed-account.js';
@@ -855,12 +862,48 @@ async function retireUserInTransaction<B>(
         address: null,
         latitude: null,
         longitude: null,
+        // What they wrote about themselves (VEN-687).
+        bio: null,
+        tagline: null,
         updatedAt: sql`now()`,
       })
       .where(eq(vendorProfiles.userId, row.id))
       .returning({ id: vendorProfiles.id });
 
     const profileRetired = profiles.length > 0;
+    const profileIds = profiles.map((profile) => profile.id);
+
+    /*
+     * Where the event was, and what the customer wrote about it (VEN-687), on
+     * every request and booking the closed person is a party to: as the
+     * customer, or as the vendor whose profile was just retired. The rows stay
+     * for the financial record. A placeholder rather than null, so a surface
+     * that prints the column prints it and none renders a blank.
+     */
+    const partyOf = (customerId: AnyPgColumn, vendorId: AnyPgColumn): SQL | undefined =>
+      profileIds.length > 0
+        ? or(eq(customerId, row.id), inArray(vendorId, profileIds))
+        : eq(customerId, row.id);
+
+    await tx
+      .update(bookingRequests)
+      .set({
+        eventLocation: CLOSED_ACCOUNT_PLACEHOLDER,
+        customDetails: CLOSED_ACCOUNT_PLACEHOLDER,
+      })
+      .where(partyOf(bookingRequests.customerId, bookingRequests.vendorId));
+    await tx
+      .update(bookings)
+      .set({ eventLocation: CLOSED_ACCOUNT_PLACEHOLDER })
+      .where(partyOf(bookings.customerId, bookings.vendorId));
+    /*
+     * An application is keyed by the address it was made with, which is what
+     * `target.email` still is here.
+     */
+    await tx
+      .update(vendorApplications)
+      .set({ businessName: null, city: null, message: null })
+      .where(eq(vendorApplications.email, target.email));
 
     /*
      * The rows stay, the address does not (VEN-672): the same tombstone the
@@ -877,7 +920,7 @@ async function retireUserInTransaction<B>(
      */
     await tx
       .update(supportCases)
-      .set({ senderEmail: row.email })
+      .set({ senderEmail: row.email, message: CLOSED_ACCOUNT_PLACEHOLDER })
       .where(
         and(
           isNotNull(supportCases.senderEmail),

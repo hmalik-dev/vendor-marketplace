@@ -687,6 +687,13 @@
       "when": 1790239824600,
       "tag": "0097_dusty_warhawk",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1790245793814,
+      "tag": "0098_scrub_closed_account_locations_and_free_text",
+      "breakpoints": true
     }
   ]
 }
