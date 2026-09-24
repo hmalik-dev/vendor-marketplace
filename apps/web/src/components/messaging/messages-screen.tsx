@@ -15,7 +15,7 @@ import { useApi } from '@/lib/use-api';
 import { userFacingError } from '@/lib/user-facing-error';
 import { useEventStream } from '@/lib/use-event-stream';
 import {
-  wireConversationListSchema,
+  wireConversationPageSchema,
   wireMessagePageSchema,
   wireMessageSchema,
   type WireConversation,
@@ -41,6 +41,8 @@ const CLOCK = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-dig
 const MESSAGE_COUNTER_THRESHOLD = 200;
 export interface MessagesScreenProps {
   initialConversations: readonly WireConversation[];
+  /** The cursor for the conversations after the first page; `null` when the first page is all of them. */
+  initialNextBefore: string | null;
   /** The signed-in user, so a bubble knows which side it belongs on. */
   viewerId: string;
   /** `?conversation=` — a thread is linkable. */
@@ -64,6 +66,7 @@ export interface MessagesScreenProps {
  */
 export function MessagesScreen({
   initialConversations,
+  initialNextBefore,
   viewerId,
   initialConversationId,
   listFailed,
@@ -74,6 +77,12 @@ export function MessagesScreen({
   const [conversations, setConversations] = useState<WireConversation[]>([...initialConversations]);
   const conversationsRef = useRef(conversations);
   conversationsRef.current = conversations;
+  /** The cursor for the next page of the list (VEN-611), and whether one is in flight or failed. */
+  const [nextBefore, setNextBefore] = useState<string | null>(initialNextBefore);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreFailed, setMoreFailed] = useState(false);
+  /** Whether the reader has loaded past the first page, which is what a refresh must not throw away. */
+  const loadedMore = useRef(false);
   /*
    * `router.refresh()` (Try again) hands this component fresh props without
    * remounting it, so state seeded from them once would stay `[]` and read
@@ -87,6 +96,8 @@ export function MessagesScreen({
 
     if (!listFailed) {
       setConversations([...initialConversations]);
+      setNextBefore(initialNextBefore);
+      loadedMore.current = false;
     }
   }
   const [activeId, setActiveId] = useState<string | null>(
@@ -171,7 +182,7 @@ export function MessagesScreen({
   );
 
   /** A `?conversation=` that names no thread of this reader's. */
-  const notFound = activeId !== null && active === null;
+  const notFound = activeId !== null && active === null && nextBefore === null;
 
   /*
    * A message that arrives while the reader is on the thread, spoken.
@@ -277,9 +288,69 @@ export function MessagesScreen({
   );
 
   const refreshConversations = useCallback(async () => {
-    const rows = await call('/conversations', { schema: wireConversationListSchema });
-    setConversations(rows);
+    const page = await call('/conversations', { schema: wireConversationPageSchema });
+
+    if (!loadedMore.current) {
+      /*
+       * The thread the reader has open stays even when newer activity pushed it
+       * off the first page: dropping it would close the thread under them.
+       */
+      const fresh = new Set(page.items.map((row) => row.id));
+      const open = conversationsRef.current.filter(
+        (row) => row.id === openThreadRef.current && !fresh.has(row.id),
+      );
+      setConversations([...page.items, ...open]);
+      setNextBefore(page.nextBefore);
+      return;
+    }
+
+    // Older pages the reader has loaded stay; the newest page is what changed.
+    const fresh = new Set(page.items.map((row) => row.id));
+    setConversations((current) => [...page.items, ...current.filter((row) => !fresh.has(row.id))]);
   }, [call]);
+
+  /**
+   * The next page of older conversations, appended (VEN-611).
+   *
+   * A row the stream already prepended may come back on the page, so it is
+   * matched by id rather than added twice.
+   */
+  const loadMoreConversations = useCallback(async () => {
+    if (nextBefore === null || loadingMore) {
+      return;
+    }
+
+    setLoadingMore(true);
+    setMoreFailed(false);
+
+    try {
+      const query = new URLSearchParams({ before: nextBefore }).toString();
+      const page = await call(`/conversations?${query}`, { schema: wireConversationPageSchema });
+
+      loadedMore.current = true;
+      setConversations((current) => {
+        const known = new Set(current.map((row) => row.id));
+        return [...current, ...page.items.filter((row) => !known.has(row.id))];
+      });
+      setNextBefore(page.nextBefore);
+    } catch (error: unknown) {
+      reportSwallowedError('messages: loading older conversations failed', error);
+      setMoreFailed(true);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [call, nextBefore, loadingMore]);
+
+  /*
+   * A link at a thread older than the first page (a notification, a bookmark)
+   * names a row that is not loaded yet, and reading that as "not found" would
+   * be wrong: keep loading pages until it turns up or the list runs out.
+   */
+  useEffect(() => {
+    if (activeId !== null && active === null && nextBefore !== null && !moreFailed) {
+      void loadMoreConversations();
+    }
+  }, [activeId, active, nextBefore, moreFailed, loadMoreConversations]);
 
   /*
    * Opening the thread is what marks it read; the count clears optimistically
@@ -817,6 +888,24 @@ export function MessagesScreen({
               </button>
             </li>
           ))}
+          {nextBefore !== null ? (
+            <li className="flex flex-col items-center gap-2 px-4.5 py-3.5">
+              {moreFailed ? (
+                <p role="alert" className="text-sm text-stone-700">
+                  We could not load older conversations.
+                </p>
+              ) : null}
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => void loadMoreConversations()}
+                loading={loadingMore}
+              >
+                {loadingMore ? 'Loading…' : 'Load older conversations'}
+              </Button>
+            </li>
+          ) : null}
         </ul>
       </aside>
 
