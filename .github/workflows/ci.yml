@@ -41,8 +41,105 @@ env:
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_ci000000000000000000
 
 jobs:
-  verify:
-    name: Typecheck, lint, build, test
+  # The static half of the required check: everything that reads the tree and
+  # nothing that runs a suite. The suites are sharded across `test` and
+  # `contention` below so the required check's wall time is the slowest shard,
+  # not their sum (VEN-716).
+  static:
+    name: Static checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: ./.github/actions/setup
+
+      # Next's own compiler cache, so an unchanged page is not compiled again.
+      # Turbo restores the build outputs; this is the cache it deliberately
+      # leaves out (`!.next/cache/**`).
+      - name: Cache the Next build
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: apps/web/.next/cache
+          key: next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+
+      # First, and on its own: a pre-commit hook can be skipped with
+      # `--no-verify`, so the same scan runs here over every tracked file. This
+      # is the copy that cannot be bypassed.
+      - name: Scan for committed credentials
+        run: pnpm secrets:scan:all
+
+      # A destructive statement in a migration added after launch (VEN-463).
+      - name: Check migrations for destructive statements
+        run: pnpm migrations:check
+
+      # Production dependencies only, and only what is high or worse (VEN-397).
+      # A finding with no upstream fix is pinned past in `pnpm.overrides`, never
+      # ignored, so this step cannot go quiet about a new advisory.
+      - name: Audit production dependencies
+        run: pnpm audit --audit-level high --prod
+
+      - run: pnpm format:check
+
+      - run: pnpm typecheck
+
+      - run: pnpm lint
+
+      - run: pnpm build
+
+      # The orchestration machinery under .claude/ (the hunt-bugs workflow, the
+      # schema-migration guard, the workflow pin guard) has its own tests. They
+      # are plain node scripts, so `turbo run test` — which only fans out across
+      # packages — never saw them. Without this step a regression in a hook or a
+      # workflow ships green.
+      - name: Test agent workflows and hooks
+        run: pnpm test:agents
+
+  # `pnpm test`, split. Most suites boot an in-process Postgres (PGlite) and need
+  # no server, so a shard is only a runner, an install and a slice of files.
+  # Vitest deals the test files across `--shard=i/n` by a stable hash of the path,
+  # so every file runs in exactly one shard and the union is the whole suite.
+  # Tests import the workspace packages' built output — the preflight suite reads
+  # the API's sources, which import `db`'s — so every package is built first, and
+  # no app is (the apps' own builds are `static`'s).
+  test:
+    name: Test ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: web 1/4, pkg: '@vendor-marketplace/web', shard: 1/4 }
+          - { name: web 2/4, pkg: '@vendor-marketplace/web', shard: 2/4 }
+          - { name: web 3/4, pkg: '@vendor-marketplace/web', shard: 3/4 }
+          - { name: web 4/4, pkg: '@vendor-marketplace/web', shard: 4/4 }
+          - { name: api 1/4, pkg: '@vendor-marketplace/api', shard: 1/4 }
+          - { name: api 2/4, pkg: '@vendor-marketplace/api', shard: 2/4 }
+          - { name: api 3/4, pkg: '@vendor-marketplace/api', shard: 3/4 }
+          - { name: api 4/4, pkg: '@vendor-marketplace/api', shard: 4/4 }
+          - { name: db 1/2, pkg: '@vendor-marketplace/db', shard: 1/2 }
+          - { name: db 2/2, pkg: '@vendor-marketplace/db', shard: 2/2 }
+          - { name: preflight, pkg: '@vendor-marketplace/preflight', shard: 1/1 }
+          - { name: shared, pkg: '@vendor-marketplace/shared', shard: 1/1 }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: ./.github/actions/setup
+
+      - name: Build the workspace packages
+        run: pnpm turbo run build --filter='./packages/*'
+
+      - name: Run the suite shard
+        run: pnpm --filter '${{ matrix.pkg }}' exec vitest run --shard=${{ matrix.shard }}
+
+  # Two connections to one database, which PGlite cannot be. Kept out of the
+  # sharded suites so those stay runnable with nothing but Node; here a server is
+  # guaranteed, so failing to reach one is a real failure (#399).
+  contention:
+    name: Test contention
     runs-on: ubuntu-latest
     # Green runs take 15-17 minutes and one hit the old 20 with `pnpm test` alone
     # at 15 of them; this is headroom until the suite is sharded.
@@ -74,59 +171,30 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: ./.github/actions/setup
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-
-      - name: Cache turbo build outputs
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: .turbo
-          key: turbo-${{ runner.os }}-${{ github.sha }}
-          restore-keys: turbo-${{ runner.os }}-
-
-      - run: pnpm install --frozen-lockfile
-
-      # First, and on its own: a pre-commit hook can be skipped with
-      # `--no-verify`, so the same scan runs here over every tracked file. This
-      # is the copy that cannot be bypassed.
-      - name: Scan for committed credentials
-        run: pnpm secrets:scan:all
-
-      # A destructive statement in a migration added after launch (VEN-463).
-      - name: Check migrations for destructive statements
-        run: pnpm migrations:check
-
-      # Production dependencies only, and only what is high or worse (VEN-397).
-      # A finding with no upstream fix is pinned past in `pnpm.overrides`, never
-      # ignored, so this step cannot go quiet about a new advisory.
-      - name: Audit production dependencies
-        run: pnpm audit --audit-level high --prod
-
-      - run: pnpm format:check
-
-      - run: pnpm typecheck
-
-      - run: pnpm lint
-
-      - run: pnpm build
-
-      - run: pnpm test
-
-      # Two connections to one database, which PGlite cannot be. Kept out of
-      # `pnpm test` so that task stays runnable with nothing but Node; here a
-      # server is guaranteed, so failing to reach one is a real failure (#399).
       - run: pnpm test:contention
 
-      # The orchestration machinery under .claude/ (the hunt-bugs workflow, the
-      # schema-migration guard) has its own tests. They are plain node scripts,
-      # so `turbo run test` — which only fans out across packages — never saw
-      # them. Without this step a regression in a hook or a workflow ships green.
-      - name: Test agent workflows and hooks
-        run: pnpm test:agents
+  # The required check. Its name is what branch protection names, so it stays
+  # exactly what it was when this was one serial job; it is now the verdict of the
+  # jobs above, and fails when any of them did not succeed (skipped and cancelled
+  # included: a skipped required check reads as passing). `if: always()` is what
+  # makes it run to say so.
+  verify:
+    name: Typecheck, lint, build, test
+    needs: [static, test, contention]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every job succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for result in $RESULTS; do
+            [ "$result" = success ] || { echo "::error::a required job finished as '$result'"; exit 1; }
+          done
 
   # gitleaks over every commit in the history, on every push and pull request
   # this workflow sees (VEN-397). `pnpm secrets:scan:all` above reads the tree
