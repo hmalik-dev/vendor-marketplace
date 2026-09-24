@@ -24,7 +24,7 @@ describe('the Stripe client construction', () => {
     createStripeClient('sk_test_unused');
 
     expect(constructed).toEqual([
-      ['sk_test_unused', { apiVersion: STRIPE_API_VERSION, timeout: 10_000 }],
+      ['sk_test_unused', { apiVersion: STRIPE_API_VERSION, timeout: 10_000, maxNetworkRetries: 1 }],
     ]);
   });
 
@@ -36,8 +36,12 @@ describe('the Stripe client construction', () => {
     };
     createStripeConnectGateway(credentials);
 
+    /*
+     * The one client behind the payout claim, the dispute unwind and checkout,
+     * so one retry at most holds for all three (VEN-607).
+     */
     expect(constructed).toEqual([
-      ['sk_test_unused', { apiVersion: STRIPE_API_VERSION, timeout: 10_000 }],
+      ['sk_test_unused', { apiVersion: STRIPE_API_VERSION, timeout: 10_000, maxNetworkRetries: 1 }],
     ]);
   });
 });

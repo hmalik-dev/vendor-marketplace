@@ -1,5 +1,6 @@
 import type { FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
+import { isDatabaseTimeout } from '@vendor-marketplace/db';
 import { ERROR_CODES, type ApiError } from '@vendor-marketplace/shared';
 import {
   hasZodFastifySchemaValidationErrors,
@@ -138,6 +139,24 @@ export const errorHandlerPlugin = fp<ErrorHandlerOptions>(
           report(error, request);
         }
         return reply.status(error.statusCode).send(body);
+      }
+
+      /*
+       * The database gave up on a statement or a lock wait (VEN-607). Retryable,
+       * so a 503, and the message is ours: the SQL and the table stay in the log.
+       */
+      if (isDatabaseTimeout(error)) {
+        request.log.error(
+          { err: error, method: request.method, route: request.routeOptions.url },
+          'Database timed out',
+        );
+        report(error, request);
+        const body: ApiError = {
+          statusCode: 503,
+          error: ERROR_CODES.SERVICE_BUSY,
+          message: 'This is taking longer than expected. Please try again in a moment.',
+        };
+        return reply.status(503).send(body);
       }
 
       // @fastify/rate-limit and other plugins throw plain Fastify errors.
