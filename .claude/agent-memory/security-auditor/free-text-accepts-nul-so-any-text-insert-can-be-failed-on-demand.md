@@ -21,6 +21,11 @@ one statement while the rest commits) is then attacker-triggerable.
 `varchar(n)` lets the caller pick a length that fails the insert. Check the
 column width, not a neighbouring constant, whenever a length constant moves.
 
+**VEN-616 (2026-09-24) repeated it:** the site-wide notice's
+`platformNoticeMessageSchema` was hand-written `z.string().trim()…regex(/^[^<>]*$/)`,
+so bidi overrides / ZWSP-only text reached every visitor's banner. A `<>` regex is
+not a free-text boundary; build on `freeText()` and chain the regex after it.
+
 **How to apply:** for a new text column or query param, confirm it goes through
 `freeText()`/`trimmedString`; if not, ask what happens when that one statement
 fails while everything around it succeeds. Do not assume the ordering that saves

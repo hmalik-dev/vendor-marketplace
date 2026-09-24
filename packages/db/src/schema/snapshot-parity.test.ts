@@ -15,6 +15,7 @@ import {
   LEGAL_ACCEPTANCE_DOCUMENTS,
   LEGAL_ACCEPTANCE_METHODS,
   PAYOUT_MODELS,
+  PLATFORM_NOTICE_TONES,
   PRICE_TYPES,
   REVIEW_TYPES,
   OPERATOR_ALERT_KINDS,
@@ -100,6 +101,7 @@ describe('drizzle snapshot parity', () => {
     { enumName: 'operator_alert_outcome', values: OPERATOR_ALERT_OUTCOMES },
     { enumName: 'vendor_application_status', values: VENDOR_APPLICATION_STATUSES },
     { enumName: 'booking_event_subject', values: BOOKING_EVENT_SUBJECTS },
+    { enumName: 'platform_notice_tone', values: PLATFORM_NOTICE_TONES },
   ];
 
   it.each(cases)(
