@@ -25,6 +25,12 @@ describe('GENERIC_TRUST_COPY', () => {
     ]);
   });
 
+  it('says the payment is held, without naming who holds it', () => {
+    expect(
+      GENERIC_TRUST_COPY.find((signal) => signal.title === 'Payment held until the event')?.body,
+    ).toBe('Your payment is held until your event is complete, then released to the vendor.');
+  });
+
   it('uses only declared titles, so every signal can be keyed to a glyph', () => {
     for (const signal of GENERIC_TRUST_COPY) {
       expect(TRUST_TITLES, signal.title).toContain(signal.title);
