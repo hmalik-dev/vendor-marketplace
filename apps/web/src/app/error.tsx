@@ -4,6 +4,7 @@ import * as Sentry from '@sentry/nextjs';
 import { useEffect } from 'react';
 import { ErrorScreen } from '@/components/errors/error-screen';
 import { boundaryCaptureContext } from '@/config/error-reporting';
+import { reloadOnceOnChunkError } from '@/lib/chunk-load-recovery';
 
 /**
  * Catches a throw anywhere below the root layout — which is what makes the
@@ -30,6 +31,11 @@ export default function Error({
   reset: () => void;
 }): React.ReactElement {
   useEffect(() => {
+    // A deploy since this tab loaded: the reload is the recovery, not a report.
+    if (reloadOnceOnChunkError(error)) {
+      return;
+    }
+
     // The digest is on the server log already; this ties the client half of
     // the story to it for anyone reading a browser console or session replay.
     console.error(`Unhandled render error${error.digest ? ` [${error.digest}]` : ''}`, error);

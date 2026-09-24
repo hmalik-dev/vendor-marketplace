@@ -4,6 +4,7 @@ import * as Sentry from '@sentry/nextjs';
 import { useEffect } from 'react';
 import { ErrorScreen } from '@/components/errors/error-screen';
 import { boundaryCaptureContext } from '@/config/error-reporting';
+import { reloadOnceOnChunkError } from '@/lib/chunk-load-recovery';
 import './globals.css';
 
 /**
@@ -25,6 +26,11 @@ export default function GlobalError({
   reset: () => void;
 }): React.ReactElement {
   useEffect(() => {
+    // A deploy since this tab loaded: the reload is the recovery, not a report.
+    if (reloadOnceOnChunkError(error)) {
+      return;
+    }
+
     console.error(`Root layout error${error.digest ? ` [${error.digest}]` : ''}`, error);
     Sentry.captureException(
       error,

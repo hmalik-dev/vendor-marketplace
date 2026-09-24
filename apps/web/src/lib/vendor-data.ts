@@ -14,6 +14,7 @@ import {
 import { ApiClientError, ApiTimeoutError, apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
 import { signInPathReturningHere } from './requested-path';
+import { readShared } from './storefront-cache';
 import { redirectIfTermsRequired } from './terms-gate';
 import {
   wireAvailabilityListSchema,
@@ -377,9 +378,11 @@ export const FEATURED_VENDOR_COUNT = 4;
  */
 export async function getFeaturedVendors(): Promise<WireVendorCard[]> {
   return degradeToEmpty(async () => {
-    const result = await apiRequest(`/vendors?sort=rating&pageSize=${FEATURED_VENDOR_COUNT}`, {
-      schema: wireVendorSearchResultSchema,
-    });
+    const result = await readShared('featured', () =>
+      apiRequest(`/vendors?sort=rating&pageSize=${FEATURED_VENDOR_COUNT}`, {
+        schema: wireVendorSearchResultSchema,
+      }),
+    );
 
     return result.items;
   });
@@ -419,6 +422,13 @@ export async function getFeaturedVendors(): Promise<WireVendorCard[]> {
  * `cache()` is per-request and never shared between visitors, so this is not
  * the response caching `revalidate` does and carries none of its
  * cross-visitor risk.
+ *
+ * **The reads themselves are shared for a minute** (VEN-610) through
+ * `readShared`, which does span `generateMetadata` and the page: the profile,
+ * the calendar, a signed-out reader's first reviews page and the featured row
+ * depend on nobody in particular, so a wave of visits to one link costs the API
+ * about one read each per minute. See `storefront-cache.ts` for why that is an
+ * in-process cache and not `fetch`'s `revalidate`.
  */
 export const getPublicVendorProfile = cache(
   async (slug: string): Promise<WirePublicVendorProfile | null> => {
@@ -426,21 +436,25 @@ export const getPublicVendorProfile = cache(
       return null;
     }
 
-    try {
-      return await apiRequest(`/vendors/${encodeURIComponent(slug)}`, {
-        schema: wirePublicVendorProfileSchema,
-      });
-    } catch (error) {
-      // A well-formed slug the API still refuses: it names nothing either.
-      if (
-        error instanceof ApiClientError &&
-        (error.statusCode === 404 || error.statusCode === 400)
-      ) {
-        return null;
-      }
+    return readShared(`profile:${slug}`, async () => {
+      try {
+        return await apiRequest(`/vendors/${encodeURIComponent(slug)}`, {
+          schema: wirePublicVendorProfileSchema,
+        });
+      } catch (error) {
+        // A well-formed slug the API still refuses: it names nothing either.
+        // That answer is shared like any other, so a takedown shows within the
+        // window rather than never.
+        if (
+          error instanceof ApiClientError &&
+          (error.statusCode === 404 || error.statusCode === 400)
+        ) {
+          return null;
+        }
 
-      throw error;
-    }
+        throw error;
+      }
+    });
   },
 );
 
@@ -495,9 +509,11 @@ export const getPublicVendorAvailability = cache(
     }
 
     try {
-      return await apiRequest(`/vendors/${encodeURIComponent(slug)}/availability`, {
-        schema: wirePublicAvailabilityListSchema,
-      });
+      return await readShared(`availability:${slug}`, () =>
+        apiRequest(`/vendors/${encodeURIComponent(slug)}/availability`, {
+          schema: wirePublicAvailabilityListSchema,
+        }),
+      );
     } catch (error) {
       // An upstream that never answered is the same to this tab as one that
       // answered badly: a calendar nobody can draw, beside four tabs that render.
@@ -540,11 +556,16 @@ export const getPublicVendorReviews = cache(
 
     const token = (await getServerSession())?.token ?? null;
 
-    const read = async (bearer: string | null): Promise<WireVendorReviewsPage> =>
+    const readPage = (bearer: string | null): Promise<WireVendorReviewsPage> =>
       apiRequest(`/vendors/${encodeURIComponent(slug)}/reviews`, {
         schema: wireVendorReviewsPageSchema,
         token: bearer,
       });
+
+    // Only the tokenless read is shared: a signed-in reader's response carries
+    // their own `viewer` block, so it goes to the API every time.
+    const read = (bearer: string | null): Promise<WireVendorReviewsPage> =>
+      bearer === null ? readShared(`reviews:${slug}`, () => readPage(null)) : readPage(bearer);
 
     try {
       return await read(token);
