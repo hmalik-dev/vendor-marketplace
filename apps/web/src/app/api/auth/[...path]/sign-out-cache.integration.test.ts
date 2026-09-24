@@ -85,7 +85,7 @@ describe('sign-out actually clears the cache it reads (VEN-628)', () => {
     withCookie(cookie);
     getSession.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null });
     token.mockResolvedValue({ data: { token: jwt(Date.now() / 1000 + 900) }, error: null });
-    const before = await tokenGet();
+    const before = await tokenGet(new Request('http://localhost/api/session/token'));
     expect(before.status).toBe(200);
     // The cache satisfied this read without asking Neon Auth again.
     expect(getSession).toHaveBeenCalledTimes(1);
@@ -99,7 +99,7 @@ describe('sign-out actually clears the cache it reads (VEN-628)', () => {
     // Neon Auth now disowns the cookie too — the same answer a real revoke gives.
     getSession.mockResolvedValue({ data: null, error: null });
 
-    const after = await tokenGet();
+    const after = await tokenGet(new Request('http://localhost/api/session/token'));
 
     expect(after.status).toBe(401);
     // A live cache entry would have answered 200 from memory, regardless of
@@ -116,9 +116,9 @@ describe('sign-out actually clears the cache it reads (VEN-628)', () => {
     token.mockResolvedValue({ data: { token: jwt(Date.now() / 1000 + 900) }, error: null });
 
     withCookie('cookie-a');
-    await tokenGet();
+    await tokenGet(new Request('http://localhost/api/session/token'));
     withCookie('cookie-b');
-    await tokenGet();
+    await tokenGet(new Request('http://localhost/api/session/token'));
     expect(getSession).toHaveBeenCalledTimes(2);
 
     // `mintedUserIdForCaller` reads the caller's cookie off the (mocked)
@@ -129,7 +129,7 @@ describe('sign-out actually clears the cache it reads (VEN-628)', () => {
     });
 
     withCookie('cookie-b');
-    const stillIn = await tokenGet();
+    const stillIn = await tokenGet(new Request('http://localhost/api/session/token'));
 
     expect(stillIn.status).toBe(200);
     // Answered from the cache user-b was minted into — no extra Neon Auth call.
