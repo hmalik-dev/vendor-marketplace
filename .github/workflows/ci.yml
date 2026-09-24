@@ -312,10 +312,46 @@ jobs:
       E2E_NEWCOMER_PASSWORD: ${{ secrets.E2E_NEWCOMER_PASSWORD }}
 
     steps:
+      # Two commits deep: the change under test and its parent. On a pull request
+      # that is the merge commit and the base tip; on a push, the commit and what
+      # it landed on.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 2
 
+      # Which journeys this diff can affect (VEN-593; the decision is
+      # `selectSpecs` in `scripts/e2e-ci.mjs`). Every way of not knowing the diff
+      # writes a path no table entry matches, which that function answers with the
+      # full suite: a pull request into `production` is a release, and a push whose
+      # previous commit cannot be fetched (a force-push, a first push) has no diff.
+      # The job and its name never change, so a scoped or empty selection is still a
+      # green `End-to-end journeys`, never a skipped required check.
+      - name: Select the journeys this change can affect
+        id: select
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          changed="$RUNNER_TEMP/changed-files.txt"
+          if [ "$EVENT_NAME" = pull_request ] && [ "$BASE_REF" = production ]; then
+            echo '<pull request into production>' > "$changed"
+          elif [ "$EVENT_NAME" = pull_request ]; then
+            git diff --name-only --no-renames HEAD^1 HEAD > "$changed" \
+              || echo '<diff unavailable>' > "$changed"
+          else
+            git fetch --no-tags --depth=1 origin "$BEFORE_SHA" \
+              && git diff --name-only --no-renames "$BEFORE_SHA" HEAD > "$changed" \
+              || echo '<diff unavailable>' > "$changed"
+          fi
+          node scripts/e2e-ci.mjs select "$changed"
+
+      # Skipped when nothing is affected, and with it every step below that reads
+      # `steps.secrets.outputs.run`: the job ends green on the summary line
+      # `select` wrote.
       - name: Check the E2E secrets are configured
         id: secrets
+        if: steps.select.outputs.suite != 'none'
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         run: node scripts/e2e-ci.mjs secrets
@@ -459,9 +495,21 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+      # Only an explicit `scoped` narrows the run; anything else is the full suite.
       - name: Run the journeys
         if: steps.secrets.outputs.run == 'true'
-        run: pnpm --filter @vendor-marketplace/web test:e2e
+        env:
+          SUITE: ${{ steps.select.outputs.suite }}
+          SPECS: ${{ steps.select.outputs.specs }}
+        run: |
+          if [ "$SUITE" = scoped ] && [ -n "$SPECS" ]; then
+            files=()
+            IFS=, read -ra names <<< "$SPECS"
+            for name in "${names[@]}"; do files+=("e2e/$name"); done
+            pnpm --filter @vendor-marketplace/web exec playwright test "${files[@]}"
+          else
+            pnpm --filter @vendor-marketplace/web test:e2e
+          fi
 
       - name: Report retries and timing
         if: always() && steps.secrets.outputs.run == 'true' && hashFiles('apps/web/playwright-results.json') != ''
