@@ -76,6 +76,7 @@ import {
   findBookingIdByTransferId,
   lockBookingById,
   lowerReleasedVendorPayout,
+  raiseVendorOwed,
   recordVendorOwed,
   zeroUnreleasedVendorPayout,
   findAnyBookingByRequest,
@@ -1436,12 +1437,29 @@ async function reverseOutstanding(
       );
     }
 
+    await owePayoutRecoveredByNetting(context, booking, reversal.target);
+
     return false;
   }
 
   const outstanding = reversal.target - transfer.reversedCents;
 
   if (outstanding <= 0) {
+    return true;
+  }
+
+  /*
+   * A transfer carries the payout less what the sweep kept back to repay a lost
+   * chargeback (VEN-658), so it cannot be reversed for more than it holds; Stripe
+   * refuses an over-reversal and the booking could then never be cancelled. What
+   * it cannot give back was already spent on that other debt, so it is owed again.
+   */
+  const reversibleCents = transfer.amountCents - transfer.reversedCents;
+  const reverseCents = Math.min(outstanding, reversibleCents);
+
+  await owePayoutRecoveredByNetting(context, booking, outstanding - reverseCents);
+
+  if (reverseCents <= 0) {
     return true;
   }
 
@@ -1453,12 +1471,30 @@ async function reverseOutstanding(
   await underAttemptKey(context, reversal.paymentIntentId, reversal.scope, (attempt) =>
     context.stripe.reverseTransfer({
       transferId: transfer.transferId,
-      amountCents: outstanding,
+      amountCents: reverseCents,
       idempotencyKey: attempt === 0 ? reversal.scope : `${reversal.scope}_${attempt}`,
     }),
   );
 
   return true;
+}
+
+/**
+ * Records, as owed by the vendor, the part of a refund's clawback that the
+ * payout's transfer no longer holds because the sweep netted it off against a
+ * chargeback debt (VEN-658). Capped at what was netted, and set rather than
+ * added, so the retry of a reversal that half-landed records it once.
+ */
+async function owePayoutRecoveredByNetting(
+  context: BookingContext,
+  booking: BookingRow,
+  shortfallCents: number,
+): Promise<void> {
+  const owedCents = Math.min(shortfallCents, booking.debtNettedCents);
+
+  if (owedCents > 0) {
+    await raiseVendorOwed(context.db, booking.id, owedCents);
+  }
 }
 
 /**

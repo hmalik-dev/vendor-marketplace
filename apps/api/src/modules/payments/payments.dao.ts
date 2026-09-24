@@ -743,3 +743,18 @@ export async function recordVendorOwed(
     .set({ vendorOwedCents: cents, updatedAt: sql`now()` })
     .where(eq(bookings.id, bookingId));
 }
+
+/** Raises what a vendor owes on a booking to at least `cents`; never lowers it, so a retry records it once. */
+export async function raiseVendorOwed(
+  db: AppDatabase,
+  bookingId: string,
+  cents: number,
+): Promise<void> {
+  await db
+    .update(bookings)
+    .set({
+      vendorOwedCents: sql`greatest(${bookings.vendorOwedCents}, ${cents})`,
+      updatedAt: sql`now()`,
+    })
+    .where(eq(bookings.id, bookingId));
+}

@@ -417,15 +417,25 @@ async function releaseOnePayout(
        * catches the retry of a transfer that landed, and a request Stripe
        * refuses for a changed amount is a failure that increments the attempt.
        */
-      const heldByStripeCents = existing ? existing.amountCents - existing.reversedCents : 0;
+      /* What a found transfer already withheld is a fact to record, not a plan to redo against today's debts. */
+      const withheldCents = existing
+        ? Math.max(booking.vendorPayoutCents - (existing.amountCents - existing.reversedCents), 0)
+        : 0;
       const recovery = await planDebtRecovery(
         tx,
         booking.vendorId,
-        existing
-          ? Math.max(booking.vendorPayoutCents - heldByStripeCents, 0)
-          : booking.vendorPayoutCents,
+        existing ? withheldCents : booking.vendorPayoutCents,
       );
-      const nettedCents = recovery.reduce((sum, item) => sum + item.cents, 0);
+      const plannedCents = recovery.reduce((sum, item) => sum + item.cents, 0);
+
+      if (existing && plannedCents < withheldCents) {
+        context.log.warn(
+          { bookingId, withheldCents, plannedCents },
+          'A transfer withheld more than the vendor now owes; the difference is recorded as netted',
+        );
+      }
+
+      const nettedCents = existing ? withheldCents : plannedCents;
       const sendCents = booking.vendorPayoutCents - nettedCents;
 
       const transfer =

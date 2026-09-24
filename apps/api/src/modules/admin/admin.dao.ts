@@ -539,6 +539,7 @@ export interface BanAffectedBooking {
   status: BookingStatus;
   payoutReleasedAt: Date | null;
   stripeTransferId: string | null;
+  debtNettedCents: number;
 }
 
 export async function findConfirmedBookingsToUnwind(
@@ -582,6 +583,7 @@ export async function findConfirmedBookingsToUnwind(
       status: bookings.status,
       payoutReleasedAt: bookings.payoutReleasedAt,
       stripeTransferId: bookings.stripeTransferId,
+      debtNettedCents: bookings.debtNettedCents,
     })
     .from(bookings)
     .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookings.vendorId))

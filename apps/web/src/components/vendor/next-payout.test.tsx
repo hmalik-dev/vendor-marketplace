@@ -205,6 +205,23 @@ describe('NextPayout', () => {
     );
   });
 
+  it('shows the next payout net of what is kept back, with the amount kept back beside its date (VEN-658)', () => {
+    render(
+      <NextPayout
+        payouts={payouts({
+          pendingCents: 175_000,
+          pendingCount: 1,
+          next: next(),
+          debtOutstandingCents: 61_500,
+        })}
+        serverToday={TODAY}
+      />,
+    );
+
+    expect(screen.getByText('$1,135')).toBeDefined();
+    expect(screen.getByText('Anjali · after $615 kept back · pays out Jun 18')).toBeDefined();
+  });
+
   it('says nothing about debt when none is owed', () => {
     const { container } = render(<NextPayout payouts={payouts()} serverToday={TODAY} />);
 

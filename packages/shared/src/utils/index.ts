@@ -684,6 +684,11 @@ export interface PayoutSubject {
   status: BookingStatus;
   payoutReleasedAt: Date | null;
   stripeTransferId: string | null;
+  /**
+   * What the sweep kept back to repay a lost chargeback (VEN-658). A payout it
+   * consumed whole was released with no transfer, and that is not a legacy row.
+   */
+  debtNettedCents?: number;
 }
 
 /**
@@ -846,7 +851,11 @@ export function isPayoutStranded(booking: PayoutStrandedSubject): boolean {
  * means, on the money path.
  */
 export function isLegacyDestinationPayout(booking: PayoutSubject): boolean {
-  return booking.payoutReleasedAt !== null && booking.stripeTransferId === null;
+  return (
+    booking.payoutReleasedAt !== null &&
+    booking.stripeTransferId === null &&
+    (booking.debtNettedCents ?? 0) === 0
+  );
 }
 
 /**

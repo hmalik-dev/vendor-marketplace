@@ -2185,6 +2185,137 @@ describe('payouts', () => {
       expect(await moneyOf(lost.id)).toMatchObject({ vendorOwedRecoveredCents: 30_000 });
     });
 
+    it('reverses only what a partly netted transfer holds on a refund, and owes the netted part again', async () => {
+      const paid = await paidBooking();
+      const netted = 30_000;
+      const transfer = await harness.stripe.createTransfer({
+        bookingId: paid.id,
+        attempt: 0,
+        amountCents: EXPECTED_PAYOUT_CENTS - netted,
+        destinationAccountId: VENDOR_ACCOUNT,
+        transferGroup: `booking_${paid.requestId}`,
+      });
+      /* A state the product reaches only through a hold on a released payout, so it is written directly. */
+      await harness.database.db
+        .update(bookings)
+        .set({
+          status: 'disputed',
+          disputeReason: REPORT,
+          payoutReleasedAt: AFTER_RELEASE,
+          stripeTransferId: transfer.transferId,
+          debtNettedCents: netted,
+        })
+        .where(eq(bookings.id, paid.id));
+      clockNow = AFTER_RELEASE;
+      await signInAsAdmin();
+
+      const resolved = await inject('PUT', `/v1/admin/bookings/${paid.id}/dispute`, ADMIN, {
+        outcome: 'customer',
+      });
+
+      expect(resolved.statusCode).toBe(200);
+      expect(harness.stripe.reversals).toHaveLength(1);
+      expect(harness.stripe.reversals[0]).toMatchObject({
+        transferId: transfer.transferId,
+        amountCents: EXPECTED_PAYOUT_CENTS - netted,
+      });
+      expect((await currentBooking()).vendorOwedCents).toBe(netted);
+    });
+
+    it('owes the netted part again when a fully netted payout, which has no transfer, is refunded', async () => {
+      const paid = await paidBooking();
+      await harness.database.db
+        .update(bookings)
+        .set({
+          status: 'disputed',
+          disputeReason: REPORT,
+          payoutReleasedAt: AFTER_RELEASE,
+          stripeTransferId: null,
+          debtNettedCents: EXPECTED_PAYOUT_CENTS,
+        })
+        .where(eq(bookings.id, paid.id));
+      clockNow = AFTER_RELEASE;
+      await signInAsAdmin();
+
+      const resolved = await inject('PUT', `/v1/admin/bookings/${paid.id}/dispute`, ADMIN, {
+        outcome: 'customer',
+      });
+
+      expect(resolved.statusCode).toBe(200);
+      expect(harness.stripe.reversals).toEqual([]);
+      expect((await currentBooking()).vendorOwedCents).toBe(EXPECTED_PAYOUT_CENTS);
+    });
+
+    it('recovers a chargeback the network ruled lost after the payout, from a webhook to the next transfer', async () => {
+      const { vendorId, packageId } = await createVendor();
+      const lost = await paidBookingFor(vendorId, packageId, EVENT_DATE);
+      const next = await paidBookingFor(vendorId, packageId, LATER_EVENT_DATE);
+      clockNow = AFTER_RELEASE;
+      expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+
+      const dispute = {
+        id: 'dp_lost_after_payout',
+        reason: 'fraudulent',
+        amountCents: PRICE_CENTS,
+        paymentIntentId: lost.stripePaymentIntentId!,
+      };
+      for (const [type, status] of [
+        ['charge.dispute.created', 'needs_response'],
+        ['charge.dispute.closed', 'lost'],
+      ] as const) {
+        harness.stripe.disputes.set(dispute.id, {
+          ...dispute,
+          status,
+        });
+        harness.stripe.nextEvent = { type, accountId: dispute.id, objectId: dispute.id };
+        const delivered = await harness.app.inject({
+          method: 'POST',
+          url: '/webhooks/stripe',
+          headers: { 'stripe-signature': 'valid-signature', 'content-type': 'application/json' },
+          payload: JSON.stringify({ id: 'evt_dispute', object: 'event' }),
+        });
+        expect(delivered.statusCode).toBe(200);
+      }
+
+      /* The vendor's share plus Stripe's $15 dispute fee. */
+      const owed = EXPECTED_PAYOUT_CENTS + 1_500;
+      const [row] = await harness.database.db
+        .select({ owed: bookings.vendorOwedCents })
+        .from(bookings)
+        .where(eq(bookings.id, lost.id));
+      expect(row?.owed).toBe(owed);
+
+      clockNow = AFTER_LATER_RELEASE;
+      expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+
+      expect(harness.stripe.transfers).toHaveLength(1);
+      expect(await moneyOf(next.id)).toMatchObject({ debtNettedCents: EXPECTED_PAYOUT_CENTS });
+      const { payouts } = (await inject('GET', '/v1/vendor/dashboard', VENDOR)).json();
+      expect(payouts).toMatchObject({ debtOutstandingCents: 1_500, debtRecoveredCents: 127_600 });
+    });
+
+    it('records what a found transfer already withheld instead of planning it again', async () => {
+      const { lost, next } = await vendorOwing(30_000);
+      await harness.stripe.createTransfer({
+        bookingId: next.id,
+        attempt: 0,
+        amountCents: EXPECTED_PAYOUT_CENTS - 30_000,
+        destinationAccountId: VENDOR_ACCOUNT,
+        transferGroup: `booking_${next.requestId}`,
+      });
+      /* The debt was settled elsewhere between the lost commit and this run. */
+      await harness.database.db
+        .update(bookings)
+        .set({ vendorOwedCents: 0 })
+        .where(eq(bookings.id, lost.id));
+      clockNow = AFTER_LATER_RELEASE;
+
+      expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+
+      expect(harness.stripe.transfers).toHaveLength(2);
+      expect(await moneyOf(next.id)).toMatchObject({ debtNettedCents: 30_000 });
+    });
+
     it('shows the admin what the vendor still owes', async () => {
       const { lost } = await vendorOwing(30_000);
       await signInAsAdmin();
