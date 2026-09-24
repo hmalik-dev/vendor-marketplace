@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { ACCOUNT_SETTINGS_PATH } from '@/components/account/settings-paths';
 import { SignOutButton } from '@/components/auth/sign-out-button';
 import { DropdownMenu } from 'radix-ui';
 import { useRef, useState } from 'react';
@@ -37,7 +38,7 @@ export interface AccountLink {
   href: string;
 }
 
-export const ACCOUNT_SETTINGS_PATH = '/account/settings';
+export { ACCOUNT_SETTINGS_PATH };
 
 /**
  * The menu's three links, shared with the drawer that carries the same rows at
