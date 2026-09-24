@@ -121,6 +121,11 @@ export const ROLE_ROUTE_RULES: ReadonlyArray<{
   // `app/messages/layout.tsx` — `requireNonAdmin()`: an admin has no inbox (VEN-702).
   { pattern: /^\/messages(?:\/|$)/, roles: ['customer', 'vendor'] },
   /*
+   * `app/account/settings/close/page.tsx` — `requireNonAdmin()`: an admin account
+   * is closed from the console, so the row and its page are not theirs.
+   */
+  { pattern: /^\/account\/settings\/close(?:\/|$)/, roles: ['customer', 'vendor'] },
+  /*
    * The vendor application screens (VEN-512) serve a session with no account
    * yet. Each page redirects an account holder of any role to their own home,
    * so no role renders them and sign-in must not forward there (VEN-629).

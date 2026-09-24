@@ -33,7 +33,7 @@ const REQUIRE_ROLE = /\brequireRole\(\s*['"](customer|vendor|admin)['"]/g;
 /** `/`'s own gate. It turns a vendor away without naming a role to admit. */
 const VENDOR_BOUNCE = /\bredirectVendorToDashboard\(/;
 
-/** `/messages`' own gate: it turns an admin away without naming a role to admit. */
+/** `/messages`' and `/account/settings/close`'s gate: it turns an admin away without naming a role to admit. */
 const ADMIN_BOUNCE = /\brequireNonAdmin\(/;
 
 /**
@@ -146,8 +146,8 @@ describe('the role-route table against the gates in app/', () => {
     expect(gates.filter((gate) => gate.admits === 'admin').length).toBeGreaterThan(0);
     // `/` and `/for-vendors`, the two `redirectVendorToDashboard` pages.
     expect(gates.filter((gate) => gate.denies === 'vendor').length).toBe(2);
-    // `/messages`, the `requireNonAdmin` page.
-    expect(gates.filter((gate) => gate.denies === 'admin').length).toBe(1);
+    // `/messages` and `/account/settings/close`, the `requireNonAdmin` pages.
+    expect(gates.filter((gate) => gate.denies === 'admin').length).toBe(2);
   });
 
   /*

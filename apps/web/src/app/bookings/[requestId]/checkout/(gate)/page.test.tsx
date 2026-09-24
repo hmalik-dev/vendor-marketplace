@@ -13,6 +13,9 @@ vi.mock('next/navigation', () => ({
   redirect: (path: string) => {
     throw new Error(`REDIRECT:${path}`);
   },
+  // The retry link on the unavailable screens (`RetryLink`).
+  useRouter: () => ({ refresh: vi.fn() }),
+  usePathname: () => `/bookings/${REQUEST_ID}/checkout`,
 }));
 const requireRole = vi.fn(async () => undefined);
 vi.mock('@/lib/current-user', () => ({ requireRole: () => requireRole() }));
