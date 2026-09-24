@@ -160,7 +160,7 @@ export async function runSmokeCheck(options: SmokeOptions): Promise<SmokeResult>
     }
 
     if (!options.expectCommit) {
-      return { ok: true, detail: 'database and storage up' };
+      return { ok: true, detail: 'database up' };
     }
 
     // A short SHA on either side still has to match, so compare on the prefix.
@@ -174,7 +174,7 @@ export async function runSmokeCheck(options: SmokeOptions): Promise<SmokeResult>
     return {
       ok: matches,
       detail: matches
-        ? `database and storage up, serving ${options.expectCommit.slice(0, 7)}`
+        ? `database up, serving ${options.expectCommit.slice(0, 7)}`
         : `ready, but serving ${serving ? serving.slice(0, 7) : 'an unknown commit'} rather than ${options.expectCommit.slice(0, 7)}`,
     };
   });

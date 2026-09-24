@@ -201,9 +201,12 @@ unreleased.
 
 `/ready` reports `rowLevelSecurity` and, on staging and production, answers 503
 with a `reason` while the API's `DATABASE_URL` is a role that owns the tables or
-has `BYPASSRLS` (see [app-api-role.md](app-api-role.md)); the release's smoke
-check prints that reason. Object storage is reported in the body but does not
-gate readiness.
+has `BYPASSRLS` (see [app-api-role.md](app-api-role.md)). Railway's healthcheck is `/ready`, so
+the new container is never promoted and the previous release keeps serving; the
+API logs the reason at error level (read it in the Railway deploy log), and the
+release's smoke check prints it whenever it reads that 503 directly. Move both
+tiers to `app_api` before the first release that carries this check. Object
+storage is reported in the body but does not gate readiness.
 
 ## Deploy constraints
 

@@ -309,7 +309,7 @@ describe('runSmokeCheck', () => {
 
     expect(result.ok).toBe(true);
     expect(result.checks).toEqual([
-      { name: 'API /ready', ok: true, detail: 'database and storage up' },
+      { name: 'API /ready', ok: true, detail: 'database up' },
       {
         name: 'API has real data',
         ok: true,

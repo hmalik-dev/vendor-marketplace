@@ -87,8 +87,13 @@ export async function runTick(
   const work = tick();
   // The race can settle on the deadline while `work` is in flight; a late
   // rejection would otherwise be unhandled and end the process.
+  let abandoned = false;
   work.catch((error: unknown) => {
-    options.log.warn({ err: error, slug }, 'An abandoned sweep tick failed after its deadline');
+    // Before the deadline the caller sees this failure through the race below.
+    if (abandoned) {
+      options.log.warn({ err: error, slug }, 'An abandoned sweep tick failed after its deadline');
+      options.reporter.capture(error);
+    }
   });
 
   try {
@@ -109,6 +114,7 @@ export async function runTick(
     return 'completed';
   } catch (error) {
     if (error instanceof SweepOverrunError) {
+      abandoned = true;
       options.log.error({ slug, maxRuntimeMs }, 'A sweep tick overran and was abandoned');
       options.reporter.capture(error);
       return 'overrun';

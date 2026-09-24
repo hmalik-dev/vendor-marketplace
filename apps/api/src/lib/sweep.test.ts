@@ -112,7 +112,7 @@ describe('runTick (VEN-671)', () => {
   });
 
   it('rethrows a tick failure for the plugin to report with its own context', async () => {
-    const { reporter, captured, log } = harness();
+    const { reporter, captured, log, logged } = harness();
     const failure = new Error('stripe is down');
 
     await expect(
@@ -125,10 +125,12 @@ describe('runTick (VEN-671)', () => {
       ),
     ).rejects.toBe(failure);
     expect(captured).toEqual([]);
+    // Not abandoned, so nothing claims a late failure.
+    expect(logged).toEqual([]);
   });
 
   it('logs, rather than leaves unhandled, a tick that rejects after it was abandoned', async () => {
-    const { reporter, log, logged } = harness();
+    const { reporter, captured, log, logged } = harness();
     const outcome = runTick(
       'upload-sweep',
       () =>
@@ -143,6 +145,9 @@ describe('runTick (VEN-671)', () => {
     await vi.advanceTimersByTimeAsync(1_000);
 
     expect(logged.some((fields) => fields.slug === 'upload-sweep' && 'err' in fields)).toBe(true);
+    // The overrun, then the failure that followed it.
+    expect(captured).toHaveLength(2);
+    expect((captured[1] as Error).message).toBe('late');
   });
 
   it('checks in to a Cron Monitor named for the job, on its own schedule', async () => {

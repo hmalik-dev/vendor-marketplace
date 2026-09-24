@@ -294,14 +294,20 @@ describe('the operator digest (VEN-405)', () => {
       });
     };
 
-    // Two unreleased events whose payout window closed long before the last sweep interval.
-    await overdue('2026-08-01');
-    await overdue('2026-08-02');
-    // Not counted: already released, and an event too recent to be due.
-    await overdue('2026-08-03', { payoutReleasedAt: ago(30) });
-    await overdue('2026-09-13');
+    /*
+     * Seventy-two hours (the release window) before `atMidnight` is 00:05 UTC on
+     * the 11th, so the sweep at that moment first found the 11th due, and one
+     * sweep interval earlier only the 10th and before were.
+     */
+    const atMidnight = new Date('2026-09-14T00:05:00Z');
+    // Overdue: due before the previous sweep and still unreleased.
+    await overdue('2026-09-10');
+    await overdue('2026-09-09');
+    // Not counted: already released, and an event that became due only within the last interval.
+    await overdue('2026-09-08', { payoutReleasedAt: ago(30) });
+    await overdue('2026-09-11');
 
-    expect(await runOperatorDigest(deps(), NOW)).toBe('sent');
+    expect(await runOperatorDigest(deps({ clock: () => atMidnight }), atMidnight)).toBe('sent');
 
     const lines = harness.email.sent[0]!.text.split('\n');
     expect(lines).toContain(

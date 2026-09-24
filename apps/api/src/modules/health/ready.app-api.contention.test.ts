@@ -120,18 +120,42 @@ describe('what app_api may do in the drizzle schema', () => {
 describe('GET /ready under a role row-level security does not bind', () => {
   const OWNS_TABLES_ROLE = 'rls_owner_probe';
   const BYPASS_ROLE = 'rls_bypass_probe';
+  // A login role granted the owning role skips RLS on tables that are not FORCEd, without owning any itself.
+  const MEMBER_ROLE = 'rls_member_probe';
+
+  // Roles belong to the cluster, not the throwaway database, so they outlive it and are dropped by name.
+  const PROBE_ROLES = [MEMBER_ROLE, OWNS_TABLES_ROLE, BYPASS_ROLE];
+
+  afterAll(async () => {
+    for (const role of PROBE_ROLES) {
+      await owner.db.execute(sql.raw(`drop owned by ${role}`));
+      await owner.db.execute(sql.raw(`drop role ${role}`));
+    }
+  });
 
   beforeAll(async () => {
+    // A run that died before its cleanup left these behind.
+    for (const role of PROBE_ROLES) {
+      await owner.db.execute(sql.raw(`drop role if exists ${role}`));
+    }
     await owner.db.execute(sql.raw(`create role ${OWNS_TABLES_ROLE} nologin`));
     await owner.db.execute(sql.raw(`create table public.${OWNS_TABLES_ROLE}_table (id int)`));
     await owner.db.execute(
       sql.raw(`alter table public.${OWNS_TABLES_ROLE}_table owner to ${OWNS_TABLES_ROLE}`),
     );
     await owner.db.execute(sql.raw(`create role ${BYPASS_ROLE} nologin bypassrls`));
+    await owner.db.execute(
+      sql.raw(`create role ${MEMBER_ROLE} nologin inherit in role ${OWNS_TABLES_ROLE}`),
+    );
+    // What migration 0077 gives app_api, so the migration count reads and the role is the only variable.
+    for (const role of [OWNS_TABLES_ROLE, BYPASS_ROLE]) {
+      await owner.db.execute(sql.raw(`grant usage on schema drizzle to ${role}`));
+      await owner.db.execute(sql.raw(`grant select on drizzle.__drizzle_migrations to ${role}`));
+    }
   });
 
   async function readyAs(
-    role: 'owner' | typeof BYPASS_ROLE | typeof OWNS_TABLES_ROLE,
+    role: 'owner' | typeof BYPASS_ROLE | typeof OWNS_TABLES_ROLE | typeof MEMBER_ROLE,
     deployEnv: HealthRoutesOptions['deployEnv'],
   ): Promise<{ status: number; body: Record<string, unknown> }> {
     const db = role === 'owner' ? owner.db : owner.connectAs(role);
@@ -174,6 +198,13 @@ describe('GET /ready under a role row-level security does not bind', () => {
     expect(status).toBe(503);
     expect(body).toMatchObject({ status: 'not_ready', rowLevelSecurity: 'owner' });
     expect(body.reason).toContain('owner of the public tables');
+  });
+
+  it('answers 503 for a role that holds the owning role without owning a table itself', async () => {
+    const { status, body } = await readyAs(MEMBER_ROLE, 'production');
+
+    expect(status).toBe(503);
+    expect(body).toMatchObject({ status: 'not_ready', rowLevelSecurity: 'owner' });
   });
 
   it('does not check the role on a local API, where the owner is the intended connection', async () => {

@@ -95,7 +95,7 @@ async function connectedRolePosture(db: AppDatabase): Promise<'enforced' | 'bypa
     select (r.rolbypassrls or r.rolsuper) as bypass,
            exists (
              select 1 from pg_tables t
-              where t.schemaname = 'public' and t.tableowner = current_user
+              where t.schemaname = 'public' and pg_has_role(current_user, t.tableowner, 'USAGE')
            ) as owns
       from pg_roles r
      where r.rolname = current_user`);
