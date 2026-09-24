@@ -252,7 +252,7 @@ describe('every radius class names a step the theme defines', () => {
    * because the substitution is not mechanical — see the block comment above.
    */
   const KNOWN_UNDEFINED_RADII = [
-    'src/app/bookings/[requestId]/page.tsx — rounded-xs',
+    'src/app/bookings/[requestId]/(detail)/page.tsx — rounded-xs',
     'src/components/vendors/profile/about-pane.tsx — rounded-xs',
   ] as const;
 

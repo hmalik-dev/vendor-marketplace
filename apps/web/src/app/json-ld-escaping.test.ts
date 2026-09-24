@@ -69,7 +69,7 @@ describe('structured data written straight into the DOM', () => {
     // unenforced. Both known sites are JSON-LD blocks.
     expect(withRawHtml.map(([file]) => file).sort()).toEqual([
       'app/page.tsx',
-      'app/vendors/[slug]/page.tsx',
+      'app/vendors/[slug]/(profile)/page.tsx',
     ]);
   });
 
