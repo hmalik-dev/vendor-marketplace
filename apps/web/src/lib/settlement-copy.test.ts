@@ -54,6 +54,18 @@ describe('cancellationNarrative', () => {
       expect(cancellationNarrative(unwound, 'customer').what).not.toContain('the other account');
     });
 
+    it('tells each side that the vendor cancelled, and that the customer was refunded in full', () => {
+      const byVendor = settlement({ cancelledBy: 'vendor', paidOutAt: null });
+
+      expect(cancellationNarrative(byVendor, 'customer')).toEqual({
+        what: 'The vendor cancelled this booking on June 1, 2026, and you were refunded in full.',
+        money: 'You paid $1,450, and all of it was refunded to your original payment method.',
+      });
+      expect(cancellationNarrative(byVendor, 'vendor').what).toBe(
+        'You cancelled this booking on June 1, 2026.',
+      );
+    });
+
     /*
      * The fourth shape, and not a fourth case: a booking cancelled before the
      * column existed does not know who acted. Guessing one of the two is the

@@ -2434,3 +2434,13 @@ The account holder's rule: a vendor no-show loses money for neither Orla nor the
 4. **Not built here:** freezing payouts on a no-show report, a longer hold on a vendor's
    first payouts, pausing bookings until a debt clears and a 90-day write-off. Each is a
    separate mechanism from recovery and none is needed for the vendor to repay.
+
+### D48: A vendor cancels a confirmed booking and the customer is refunded in full — *2026-09-24*
+
+The self-serve route for what went through support (VEN-659). Its two open rulings belong to VEN-646, which the account holder owns; both are taken by best practice for a high-trust marketplace (the customer is always made whole) and are each one function or one absent line, so either reverses in one place.
+
+1. **The customer is refunded 100% whatever the timing, through the existing refund path.** The tier is what a customer pays for changing their mind; a vendor changing theirs is not that. `vendorCancellationRefundCents` (`packages/shared/src/utils`) is the one place the policy lives, and D3's tiers are untouched for customer cancellations. Same refund, idempotency keys (D36) and guarded write as the customer path; `cancelled_by` gains `vendor` (migration 0101).
+2. **Question: who pays Stripe's non-refunded processing fee on a full refund? Chose: Orla absorbs it, and nothing is recovered from the vendor.** Rejected: netting it off the vendor's next payouts the way D47 nets the dispute fee. A vendor who cancels already loses the booking's payout, and a debt against a vendor with no further payouts needs the recovery machinery D47 built for a much larger loss. Recovering it later is one call to `raiseVendorOwed` after the refund.
+3. **Question: does a vendor cancellation inside N days of the event count against the vendor? Chose: no strike and no visible cancellation rate in this ticket.** Rejected: an automatic strike. It needs a threshold and an appeal path nobody has ruled on, and a wrong automatic penalty on a vendor is harder to undo than a missing one. `cancelled_by = vendor` and `cancelled_at` are recorded on every cancellation, so the rate is computable for whoever rules.
+4. **Refused after the event and once a payout is released**, as for the customer: a vendor who cannot deliver a past date goes to support, where a person decides. A customer's report (`disputed`) blocks it.
+5. **No status-history row.** VEN-647 has not landed a history table; the cancellation is on the booking row (`cancelled_by`, `cancelled_at`, `cancellation_reason`) and both sides get an in-app and an email notice.

@@ -9,6 +9,7 @@ import {
   calculateFees,
   feeRateToBps,
   calculateRefund,
+  vendorCancellationRefundCents,
   formatPrice,
   isLegacyDestinationPayout,
   isUniversallyFutureDate,
@@ -1229,7 +1230,7 @@ async function refundAndUnwind(
    * drifted suffix is not a test failure, it is an `idempotency_error` from
    * Stripe on a retry — the path nobody is watching.
    */
-  keyPrefix: 'cancel' | 'dispute',
+  keyPrefix: 'cancel' | 'vendor_cancel' | 'dispute',
 ): Promise<UnwoundRefund> {
   if (!booking.stripePaymentIntentId) {
     throw new AppError(
@@ -1278,7 +1279,7 @@ async function refundAndUnwind(
     context.alerts?.dispatch(
       refundFailedAlert({
         bookingId: booking.id,
-        during: keyPrefix === 'cancel' ? 'a cancellation' : 'an upheld dispute',
+        during: keyPrefix === 'dispute' ? 'an upheld dispute' : 'a cancellation',
       }),
     );
     throw error;
@@ -1497,10 +1498,27 @@ async function owePayoutRecoveredByNetting(
   }
 }
 
+/** What the vendor is told when the customer's report has frozen the booking. */
+const VENDOR_NOT_CANCELLABLE: typeof NOT_CANCELLABLE = {
+  ...NOT_CANCELLABLE,
+  disputed: 'The customer has reported a problem with this booking, so it is being reviewed',
+};
+
+const VENDOR_EVENT_PASSED_CANCEL_MESSAGE =
+  'That event is too close to cancel online. Contact support and we will look into it.';
+
 /**
- * The customer cancels, and the refund follows D3's fixed tiers.
+ * A confirmed booking is cancelled by whichever side holds it.
  *
- * The tiers are untouched by #423 — only what a refund has to reverse changed.
+ * The customer's refund follows D3's fixed tiers, untouched by #423 — only what
+ * a refund has to reverse changed. A vendor's cancellation refunds the customer
+ * in full whatever the timing (VEN-659, D48): the tier is the customer's cost of
+ * changing their mind, and the vendor changing theirs is not that. Everything
+ * after the quote is one path — the same refund, the same idempotency keys, the
+ * same guarded write — so the two cannot drift.
+ *
+ * `actor` is which door the caller came through, and the caller's side must
+ * match it: the customer's route refuses a vendor and the reverse.
  */
 export async function cancelBooking(
   context: PaymentContext,
@@ -1509,19 +1527,27 @@ export async function cancelBooking(
   reason: string | undefined,
   now: Date,
   expectedRefundCents?: number,
+  actor: 'customer' | 'vendor' = 'customer',
 ): Promise<CancelledBooking> {
   const { booking, side } = await participantIn(context, user, bookingId);
 
-  if (side !== 'customer') {
-    throw forbidden('Only the customer can cancel a confirmed booking');
+  if (side !== actor) {
+    throw forbidden(
+      actor === 'customer'
+        ? 'Only the customer can cancel a confirmed booking'
+        : 'Only the vendor can cancel a booking this way',
+    );
   }
 
+  const byVendor = actor === 'vendor';
+
   /*
-   * A cancel that finds the customer's own cancellation already written — the
+   * A cancel that finds the caller's own cancellation already written — the
    * second tab, or a retry after a dropped response — is told it worked
-   * (VEN-472). Cancelled by an operator or the ban path it stays a refusal.
+   * (VEN-472). Cancelled by the other side, an operator or the ban path it
+   * stays a refusal.
    */
-  if (booking.status === 'cancelled' && booking.cancelledBy === 'customer') {
+  if (booking.status === 'cancelled' && booking.cancelledBy === actor) {
     const refundCents = booking.refundAmountCents ?? 0;
 
     return {
@@ -1532,7 +1558,7 @@ export async function cancelBooking(
   }
 
   if (booking.status !== 'confirmed') {
-    throw conflict(NOT_CANCELLABLE[booking.status]);
+    throw conflict((byVendor ? VENDOR_NOT_CANCELLABLE : NOT_CANCELLABLE)[booking.status]);
   }
 
   /*
@@ -1541,17 +1567,20 @@ export async function cancelBooking(
    * hours at zero, which puts every past date in the late tier: without this a
    * delivered event refunded half and clawed it back out of a payout that had
    * already been released. A customer with a complaint about a delivered event
-   * takes the report path, where an operator decides.
+   * takes the report path, where an operator decides. A vendor who cannot
+   * deliver a past date is sent to support for the same reason.
    */
   if (booking.payoutReleasedAt) {
     throw conflict(PAID_OUT_CANCEL_MESSAGE);
   }
 
   if (!isUniversallyFutureDate(booking.eventDate, now)) {
-    throw conflict(EVENT_PASSED_CANCEL_MESSAGE);
+    throw conflict(byVendor ? VENDOR_EVENT_PASSED_CANCEL_MESSAGE : EVENT_PASSED_CANCEL_MESSAGE);
   }
 
-  const quote = calculateRefund(booking.totalAmountCents, booking.eventDate, booking, now);
+  const refundCents = byVendor
+    ? vendorCancellationRefundCents(booking.totalAmountCents)
+    : calculateRefund(booking.totalAmountCents, booking.eventDate, booking, now).refundCents;
 
   /*
    * The amount the customer was shown and confirmed (VEN-425). The page quotes
@@ -1560,13 +1589,26 @@ export async function cancelBooking(
    * button that said "in full". Nothing has moved yet, so refusing is free, and
    * the message carries the true figure for the second confirm.
    */
-  if (expectedRefundCents !== undefined && expectedRefundCents !== quote.refundCents) {
+  if (expectedRefundCents !== undefined && expectedRefundCents !== refundCents) {
     throw conflict(
-      `The refund for this booking is now ${formatPrice(quote.refundCents)}, not ${formatPrice(expectedRefundCents)}. Review it and confirm again`,
+      `The refund for this booking is now ${formatPrice(refundCents)}, not ${formatPrice(expectedRefundCents)}. Review it and confirm again`,
     );
   }
 
-  const refund = await refundAndUnwind(context, booking, quote.refundCents, 'cancel');
+  /*
+   * The vendor's refund has its own key prefix. Under the customer's, a customer
+   * cancel that had refunded the late tier and not yet written its row would leave
+   * this one topping up the *same* amount under the *same* key, which Stripe
+   * answers with the first refund: the row would then claim a full refund that
+   * Stripe never made. Distinct keys make the top-up a real refund, or the
+   * charge cap's refusal.
+   */
+  const refund = await refundAndUnwind(
+    context,
+    booking,
+    refundCents,
+    byVendor ? 'vendor_cancel' : 'cancel',
+  );
 
   /*
    * Written down rather than left to be inferred (#415), and what the vendor keeps is
@@ -1575,7 +1617,7 @@ export async function cancelBooking(
   const cancellation = {
     cancelledAt: now,
     cancellationReason: reason ?? null,
-    cancelledBy: 'customer',
+    cancelledBy: actor,
     refundAmountCents: refund.amountCents,
     vendorPayoutCents: refund.retainedPayoutCents,
     disputeReason: null,
@@ -1644,30 +1686,41 @@ export async function cancelBooking(
    * answers with it (VEN-472). Cancelled by anyone else it stays a refusal.
    */
   const settled =
-    cancelled ??
-    (lostTo?.status === 'cancelled' && lostTo.cancelledBy === 'customer' ? lostTo : null);
+    cancelled ?? (lostTo?.status === 'cancelled' && lostTo.cancelledBy === actor ? lostTo : null);
 
   if (!settled) {
     alertRefundUnrecorded();
     throw conflict('That booking changed while you were cancelling it');
   }
 
-  const vendorUserId = cancelled ? await findVendorUserId(context.db, cancelled.vendorId) : null;
+  if (cancelled) {
+    await bestEffortNotice(context, { bookingId: cancelled.id }, async () => {
+      const vendorUserId = await findVendorUserId(context.db, cancelled.vendorId);
 
-  if (cancelled && vendorUserId) {
-    await bestEffortNotice(context, { bookingId: cancelled.id }, () =>
-      notify(
-        context,
-        vendorUserId,
-        'booking_cancelled',
-        {
-          title: 'A booking was cancelled',
-          body: `The date is free again on your calendar. ${unwindSentence(refund.transferReversed)}`,
+      if (byVendor) {
+        await notify(context, cancelled.customerId, 'booking_cancelled', {
+          title: 'Your booking was cancelled by the vendor',
+          body: `The vendor cancelled this booking and your payment of ${formatPrice(refund.amountCents)} is refunded in full. Their reason: ${reason ?? ''}`,
           bookingId: cancelled.id,
-        },
-        'vendor',
-      ),
-    );
+        });
+      }
+
+      if (vendorUserId) {
+        await notify(
+          context,
+          vendorUserId,
+          'booking_cancelled',
+          {
+            title: byVendor ? 'You cancelled a booking' : 'A booking was cancelled',
+            body: byVendor
+              ? `The date is free again on your calendar and the customer is refunded in full. ${unwindSentence(refund.transferReversed)}`
+              : `The date is free again on your calendar. ${unwindSentence(refund.transferReversed)}`,
+            bookingId: cancelled.id,
+          },
+          'vendor',
+        );
+      }
+    });
   }
 
   return {

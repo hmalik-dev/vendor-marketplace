@@ -8,6 +8,7 @@ import {
   addDays,
   calculateFees,
   calculateRefund,
+  vendorCancellationRefundCents,
   centsToDollars,
   dollarsToCents,
   expiryCountdown,
@@ -893,5 +894,17 @@ describe('expiryCountdown', () => {
   it('counts calendar days rather than elapsed 24-hour blocks', () => {
     expect(expiryCountdown(local(12, 1), local(10, 23))).toBe('expires in 2d');
     expect(expiryCountdown(local(17, 9), local(10, 9))).toBe('expires in 7d');
+  });
+});
+
+describe('vendorCancellationRefundCents', () => {
+  it('refunds the whole payment whatever the timing', () => {
+    expect(vendorCancellationRefundCents(145_000)).toBe(145_000);
+    expect(vendorCancellationRefundCents(0)).toBe(0);
+  });
+
+  it('refuses a total that is not whole non-negative cents', () => {
+    expect(() => vendorCancellationRefundCents(12.5)).toThrow(/whole|integer/);
+    expect(() => vendorCancellationRefundCents(-1)).toThrow(/non-negative/);
   });
 });

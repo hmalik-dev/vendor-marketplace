@@ -320,3 +320,9 @@ describing.
 Same class as the median reply time recorded above: the frame is older than the
 product, and the rows it draws are corrected by a design pass rather than by
 building furniture to match them.
+
+## A vendor cancels a confirmed booking from `/vendor/bookings` — ruled 2026-09-24 (VEN-659)
+
+No frame draws this action. Each booking card for a paid, `confirmed`, still-future booking with no payout released carries a ghost `Cancel booking` button under `Mark complete`. It opens a **second step in place, not a dialog**, the same pattern as the customer's cancel on the accepted-request card: a required, labelled `Reason for the customer` textarea, the sentence `The customer is refunded {total} in full and you are not paid for this booking. This cannot be undone.`, then `Yes, cancel and refund {total}` and `Keep the booking`. A refusal from the API is shown under the control in `role="alert"`, and a success turns the card into the `Cancelled` list on refresh.
+
+The customer's side reads `The vendor cancelled this booking on {date}, and you were refunded in full.` from the same settlement narrative as every other cancellation. Nothing here is a frame, so there is nothing for parity to compare; the strings above are the record.

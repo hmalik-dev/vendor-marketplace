@@ -44,6 +44,14 @@ unwind key alone, so every key replayed inside the deploy's 24h window answers
 still derive the same one. Related: [[refund-before-row-move-can-double-refund]],
 [[refund-proportionality-is-now-ours-to-state]].
 
+**Two actors, one key (VEN-659).** The vendor cancel (full refund) reuses
+`cancel_${id}_marked` with the customer cancel (tiered). If the vendor's
+`findRefund` sees the customer's half-refund, its "remaining half" replays the
+same key + same params, Stripe returns the customer's refund, and
+`alreadyRefunded + created` double-counts it: the row records a full refund
+Stripe never sent. Only the loser's `alertRefundUnrecorded` catches it. Keys
+are safe to share only between callers that compute the same amount.
+
 **The reversal keys keep the cached-failure half.** Every `reverseTransfer` key
 is fixed per booking (`${keyPrefix}_${id}_reversal`, VEN-424's
 `release_${id}_surplus`); `balance_insufficient` is the realistic refusal and

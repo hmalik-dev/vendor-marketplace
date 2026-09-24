@@ -212,8 +212,7 @@ export function AcceptedRequest({ request, booking }: AcceptedRequestProps): Rea
               )}
             </p>
             <p className="text-[12.5px] leading-[1.55] text-stone-600">
-              If {request.vendor.businessName} cancels, they do it through support and you&apos;re
-              refunded in full.
+              If {request.vendor.businessName} cancels, you&apos;re refunded in full.
             </p>
           </>
         ) : pulled !== null || prePaymentClause === null ? null : (

@@ -1168,6 +1168,12 @@ export const cancelBookingSchema = z.object({
 });
 export type CancelBookingInput = z.infer<typeof cancelBookingSchema>;
 
+/** A vendor cancelling a confirmed booking: the reason is required, the refund is always full. */
+export const vendorCancelBookingSchema = z.object({
+  reason: freeText().min(1).max(1_000),
+});
+export type VendorCancelBookingInput = z.infer<typeof vendorCancelBookingSchema>;
+
 export const resolveDisputeSchema = z.object({
   /**
    * `vendor` lifts the hold and lets the payout run on the next sweep;

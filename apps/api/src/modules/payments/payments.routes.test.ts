@@ -1960,6 +1960,39 @@ describe('payments', () => {
       expect(after).toMatchObject({ status: 'cancelled', refundAmountCents: PRICE_CENTS });
     });
 
+    /*
+     * The customer's late-tier refund went out under `cancel_…_marked` and its row
+     * write has not landed: the vendor's top-up is the same amount, so it must not
+     * reuse that key or Stripe would answer with the first refund and the row
+     * would claim money that never moved.
+     */
+    it('tops a vendor cancel up under its own key after the customer late-tier refund', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+      const halfCents = PRICE_CENTS / 2;
+      harness.stripe.refunds.push({
+        paymentIntentId: booking!.stripePaymentIntentId!,
+        amountCents: halfCents,
+        reason: 'requested_by_customer',
+        idempotencyKey: `cancel_${booking!.id}_marked`,
+        reverseTransfer: false,
+        refundApplicationFee: false,
+      });
+
+      const response = await inject('PUT', `/v1/vendor/bookings/${booking!.id}/cancel`, VENDOR, {
+        reason: 'A family emergency.',
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().refundCents).toBe(PRICE_CENTS);
+      expect(harness.stripe.refunds).toHaveLength(2);
+      expect(harness.stripe.refunds[1]).toMatchObject({
+        amountCents: halfCents,
+        idempotencyKey: `vendor_cancel_${booking!.id}_marked`,
+      });
+    });
+
     it('frees the date again', async () => {
       const requestId = await acceptedRequest();
       await payFor(requestId);
@@ -2230,6 +2263,177 @@ describe('payments', () => {
         (await inject('PUT', `/v1/customer/bookings/${booking!.id}/cancel`, VENDOR, {})).statusCode,
       ).toBe(403);
       expect(harness.stripe.refunds).toEqual([]);
+    });
+
+    /*
+     * VEN-659. The vendor's own cancellation: a full refund at the timing where
+     * the customer's would be half, recorded as theirs, both sides told.
+     */
+    describe('by the vendor (VEN-659)', () => {
+      const vendorCancel = (bookingId: string, body: object = { reason: 'A family emergency.' }) =>
+        inject('PUT', `/v1/vendor/bookings/${bookingId}/cancel`, VENDOR, body);
+
+      it('refunds the full amount inside the customer late window, and frees the date', async () => {
+        const requestId = await acceptedRequest();
+        await payFor(requestId);
+        const [booking] = await harness.database.db.select().from(bookings);
+        const inLateWindow = new Date(clockNow.getTime() + 2 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .slice(0, 10);
+        await harness.database.db
+          .update(bookings)
+          .set({ eventDate: inLateWindow })
+          .where(eq(bookings.id, booking!.id));
+
+        const response = await vendorCancel(booking!.id);
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().refundCents).toBe(PRICE_CENTS);
+        expect(response.json().isFullRefund).toBe(true);
+        expect(harness.stripe.refunds).toEqual([
+          {
+            paymentIntentId: booking!.stripePaymentIntentId,
+            amountCents: PRICE_CENTS,
+            reason: 'requested_by_customer',
+            idempotencyKey: `cancel_${booking!.id}_marked`,
+            reverseTransfer: false,
+            refundApplicationFee: false,
+          },
+        ]);
+
+        const [row] = await harness.database.db.select().from(bookings);
+        expect(row).toMatchObject({
+          status: 'cancelled',
+          cancelledBy: 'vendor',
+          cancellationReason: 'A family emergency.',
+          refundAmountCents: PRICE_CENTS,
+          vendorPayoutCents: 0,
+        });
+      });
+
+      it('frees the date and tells both sides, in the app and by email', async () => {
+        const requestId = await acceptedRequest();
+        await payFor(requestId);
+        const [booking] = await harness.database.db.select().from(bookings);
+
+        await vendorCancel(booking!.id);
+        await harness.flushEmail();
+
+        const [held] = await harness.database.db.select().from(availability);
+        expect(held?.status).not.toBe('booked');
+
+        const rows = await harness.database.db
+          .select()
+          .from(notifications)
+          .where(eq(notifications.type, 'booking_cancelled'));
+        expect(rows.map((row) => row.title).sort()).toEqual([
+          'You cancelled a booking',
+          'Your booking was cancelled by the vendor',
+        ]);
+        expect(rows.find((row) => row.userId === booking!.customerId)?.body).toBe(
+          'The vendor cancelled this booking and your payment of $1,450 is refunded in full. Their reason: A family emergency.',
+        );
+        expect(harness.email.sent.filter((mail) => mail.to === 'grace@example.com')).toHaveLength(
+          1,
+        );
+      });
+
+      it('requires a reason', async () => {
+        const requestId = await acceptedRequest();
+        await payFor(requestId);
+        const [booking] = await harness.database.db.select().from(bookings);
+
+        expect((await vendorCancel(booking!.id, {})).statusCode).toBe(400);
+        expect((await vendorCancel(booking!.id, { reason: '   ' })).statusCode).toBe(400);
+        expect(harness.stripe.refunds).toEqual([]);
+      });
+
+      it('refuses the customer using the vendor route', async () => {
+        const requestId = await acceptedRequest();
+        await payFor(requestId);
+        const [booking] = await harness.database.db.select().from(bookings);
+
+        expect(
+          (
+            await inject('PUT', `/v1/vendor/bookings/${booking!.id}/cancel`, CUSTOMER, {
+              reason: 'x',
+            })
+          ).statusCode,
+        ).toBe(403);
+        expect(harness.stripe.refunds).toEqual([]);
+      });
+
+      it('refuses after the event, refunding nothing', async () => {
+        const booking = await pastBooking();
+
+        const response = await vendorCancel(booking.id);
+
+        expect(response.statusCode).toBe(409);
+        expect(response.json().message).toContain('too close to cancel');
+        expect(harness.stripe.refunds).toEqual([]);
+        const [row] = await harness.database.db.select().from(bookings);
+        expect(row?.status).toBe('confirmed');
+      });
+
+      it('refuses once the payout is released, reversing nothing', async () => {
+        const requestId = await acceptedRequest();
+        await payFor(requestId);
+        const [booking] = await harness.database.db.select().from(bookings);
+        await harness.database.db
+          .update(bookings)
+          .set({ payoutReleasedAt: new Date(), stripeTransferId: 'tr_test_released' })
+          .where(eq(bookings.id, booking!.id));
+
+        const response = await vendorCancel(booking!.id);
+
+        expect(response.statusCode).toBe(409);
+        expect(response.json().message).toContain('already been paid out');
+        expect(harness.stripe.refunds).toEqual([]);
+        expect(harness.stripe.reversals).toEqual([]);
+      });
+
+      it('refuses a booking under the customer report, in the vendor words', async () => {
+        const requestId = await acceptedRequest();
+        await payFor(requestId);
+        const [booking] = await harness.database.db.select().from(bookings);
+        await harness.database.db
+          .update(bookings)
+          .set({ status: 'disputed' })
+          .where(eq(bookings.id, booking!.id));
+
+        const response = await vendorCancel(booking!.id);
+
+        expect(response.statusCode).toBe(409);
+        expect(response.json().message).toBe(
+          'The customer has reported a problem with this booking, so it is being reviewed',
+        );
+        expect(harness.stripe.refunds).toEqual([]);
+      });
+
+      it('answers a repeat with the first and refunds once', async () => {
+        const requestId = await acceptedRequest();
+        await payFor(requestId);
+        const [booking] = await harness.database.db.select().from(bookings);
+
+        const first = await vendorCancel(booking!.id);
+        const second = await vendorCancel(booking!.id);
+
+        expect(second.statusCode).toBe(200);
+        expect(second.json()).toEqual(first.json());
+        expect(harness.stripe.refunds).toHaveLength(1);
+      });
+
+      it('leaves a booking the customer already cancelled a refusal', async () => {
+        const requestId = await acceptedRequest();
+        await payFor(requestId);
+        const [booking] = await harness.database.db.select().from(bookings);
+        await inject('PUT', `/v1/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
+
+        const response = await vendorCancel(booking!.id);
+
+        expect(response.statusCode).toBe(409);
+        expect(response.json().message).toBe('That booking is already cancelled');
+      });
     });
 
     it('tells the vendor their date is free and that nothing is taken back', async () => {
