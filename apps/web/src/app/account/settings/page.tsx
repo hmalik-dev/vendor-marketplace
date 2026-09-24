@@ -1,6 +1,18 @@
 import type { Metadata } from 'next';
 import { pageTitle } from '@vendor-marketplace/shared';
-import { ChangePasswordForm } from '@/components/account/change-password-form';
+import {
+  SettingsLayout,
+  SettingsRows,
+  type SettingsRowData,
+} from '@/components/account/settings-layout';
+import {
+  ACCOUNT_NAME_PATH,
+  ACCOUNT_PASSWORD_PATH,
+  ACCOUNT_SETTINGS_PATH,
+  SETTINGS_SAVED_COPY,
+  SETTINGS_SAVED_PARAM,
+} from '@/components/account/settings-paths';
+import { Banner } from '@/components/ui/banner';
 import { requireCurrentUser } from '@/lib/current-user';
 
 export const metadata: Metadata = {
@@ -9,32 +21,46 @@ export const metadata: Metadata = {
 };
 
 /**
- * The account settings area (VEN-677, ruled by the account holder): one page
- * every signed-in role reaches from the account menu, built as a list of
- * sections so later settings join it rather than growing new routes. Password
- * is the first and, for now, only section.
+ * The account settings list (VEN-703): one row per setting a person has, the
+ * same for every role, each opening its own page under `/account/settings/`.
+ * A later setting (email, sessions, closing the account) is one more entry in
+ * `rows` and one more route — nothing here is redesigned.
  *
- * `requireCurrentUser` rather than `requireRole`: every role has a password,
- * so nothing is bounced, and a signed-out visitor is sent to sign in and back.
- * Changing an email or closing an account stays behind `Contact support`
- * (D39) — see `account-menu.tsx`.
- *
- * No frame draws it; `00-README.md` records it as derived from frame `12`'s
- * field and button vocabulary.
+ * `requireCurrentUser` rather than `requireRole`: every role has a name and a
+ * password, so nothing is bounced, and a signed-out visitor is sent to sign in
+ * and back.
  */
-export default async function AccountSettingsPage(): Promise<React.ReactElement> {
-  await requireCurrentUser('/account/settings');
+export default async function AccountSettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}): Promise<React.ReactElement> {
+  const user = await requireCurrentUser(ACCOUNT_SETTINGS_PATH);
+  const saved = (await searchParams)[SETTINGS_SAVED_PARAM];
+  // `hasOwn`: a bare lookup would answer `?saved=__proto__` with an object React cannot render.
+  const confirmation =
+    typeof saved === 'string' && Object.hasOwn(SETTINGS_SAVED_COPY, saved)
+      ? SETTINGS_SAVED_COPY[saved]
+      : undefined;
+
+  const rows: SettingsRowData[] = [
+    {
+      id: 'name',
+      label: 'Your name',
+      value: `${user.firstName} ${user.lastName}`.trim(),
+      href: ACCOUNT_NAME_PATH,
+    },
+    { id: 'password', label: 'Password', value: '••••••••••', href: ACCOUNT_PASSWORD_PATH },
+  ];
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-6 pt-10 pb-16">
-      <h1 className="font-display text-[33px] leading-[1.1] text-stone-900">Account settings</h1>
-
-      <section aria-labelledby="password-heading" className="mt-8 border-t border-stone-300 pt-6">
-        <h2 id="password-heading" className="mb-4 text-lg font-semibold text-stone-900">
-          Password
-        </h2>
-        <ChangePasswordForm />
-      </section>
-    </div>
+    <SettingsLayout title="Account settings">
+      {confirmation ? (
+        <Banner status="settled" role="status" className="mb-6">
+          {confirmation}
+        </Banner>
+      ) : null}
+      <SettingsRows rows={rows} />
+    </SettingsLayout>
   );
 }

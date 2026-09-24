@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { users } from '@vendor-marketplace/db/schema';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
@@ -361,6 +361,74 @@ describe('/users/me', () => {
 
       expect(response.statusCode).toBe(200);
       expect(response.json()).toMatchObject({ lastName: 'Byron', phone: '+15551234567' });
+    });
+
+    /*
+     * VEN-703: the account settings name page writes through this route for
+     * every role, so each role is asserted, not assumed.
+     */
+    it.each(['customer', 'vendor', 'admin'] as const)(
+      'lets a %s change their own name and nothing else of theirs',
+      async (role) => {
+        const authId = role === 'customer' ? CUSTOMER_AUTH_ID : VENDOR_AUTH_ID;
+        await signIn(authId);
+        // Only the operator grant path may change a role; the test opens it for its own transaction.
+        await harness.database.db.transaction(async (tx) => {
+          await tx.execute(sql`select set_config('app.operator_role_grant', 'on', true)`);
+          await tx.update(users).set({ role }).where(eq(users.authUserId, authId));
+        });
+
+        const response = await harness.app.inject({
+          method: 'PUT',
+          url: '/v1/users/me',
+          headers: bearer(authId),
+          payload: { firstName: 'Augusta', lastName: 'King' },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toMatchObject({ firstName: 'Augusta', lastName: 'King', role });
+      },
+    );
+
+    it.each([
+      ['a blank first name', { firstName: '   ', lastName: 'King' }],
+      ['a blank last name', { firstName: 'Augusta', lastName: '' }],
+      ['a first name over the length limit', { firstName: 'a'.repeat(101), lastName: 'King' }],
+      ['a last name over the length limit', { firstName: 'Augusta', lastName: 'a'.repeat(101) }],
+    ])('refuses %s', async (_name, payload) => {
+      await signIn(CUSTOMER_AUTH_ID);
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: '/v1/users/me',
+        headers: bearer(CUSTOMER_AUTH_ID),
+        payload,
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+
+    it("cannot edit another user's name by naming their id", async () => {
+      await signIn(CUSTOMER_AUTH_ID);
+      await signIn(VENDOR_AUTH_ID);
+      const vendorId = await userIdOf(VENDOR_AUTH_ID);
+      const readVendor = () =>
+        harness.database.db
+          .select({ firstName: users.firstName, lastName: users.lastName })
+          .from(users)
+          .where(eq(users.id, vendorId));
+      const before = await readVendor();
+
+      const response = await harness.app.inject({
+        method: 'PUT',
+        url: '/v1/users/me',
+        headers: bearer(CUSTOMER_AUTH_ID),
+        payload: { id: vendorId, firstName: 'Mallory', lastName: 'Intruder' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ firstName: 'Mallory', lastName: 'Intruder' });
+      expect(await readVendor()).toEqual(before);
     });
 
     /*
