@@ -1094,12 +1094,12 @@ describe('the password floor and the body cap at the auth proxy (VEN-685)', () =
 
   it('spends no address budget on a refused short password', async () => {
     for (let i = 0; i < 8; i++) {
-      await call(RESET, { email: EMAIL, otp: '123456', password: SHORT }, `3.3.3.${i}`);
+      await call(RESET, { email: EMAIL, otp: '123456', password: SHORT }, '3.3.3.3');
     }
     upstreamPost.mockResolvedValue(Response.json({ success: true }));
 
     expect(
-      (await call(RESET, { email: EMAIL, otp: '123456', password: LONG }, '3.3.4.1')).status,
+      (await call(RESET, { email: EMAIL, otp: '123456', password: LONG }, '3.3.3.3')).status,
     ).toBe(200);
   });
 
