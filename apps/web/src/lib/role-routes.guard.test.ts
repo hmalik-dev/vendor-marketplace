@@ -87,6 +87,20 @@ function routesCoveredBy(name: string, route: string): readonly string[] {
     : [route];
 }
 
+/**
+ * The vendor-application screens (VEN-629): each serves a session with no
+ * account yet and sends an account holder of any role to their own home with
+ * `redirect(DASHBOARD_PATH_BY_ROLE[account.role])`. That gate names no role, so
+ * the scan below cannot see it; the files are pinned here and read directly.
+ */
+const NO_ACCOUNT_PAGES: Readonly<Record<string, string>> = {
+  '/waitlist': 'waitlist/page.tsx',
+  '/vendors/apply': 'vendors/apply/page.tsx',
+  '/sign-up/vendor-details': 'sign-up/vendor-details/page.tsx',
+};
+
+const ACCOUNT_BOUNCE = /redirect\(DASHBOARD_PATH_BY_ROLE\[account\.role\]\)/;
+
 let gates: Gate[] = [];
 
 beforeAll(async () => {
@@ -165,11 +179,27 @@ describe('the role-route table against the gates in app/', () => {
    */
   it('carries no rule that no gate backs', () => {
     const unbacked = ROLE_ROUTE_RULES.filter(
-      (rule) => !gates.some((gate) => gate.routes.some((route) => rule.pattern.test(route))),
+      (rule) =>
+        !gates.some((gate) => gate.routes.some((route) => rule.pattern.test(route))) &&
+        !Object.keys(NO_ACCOUNT_PAGES).some((route) => rule.pattern.test(route)),
     ).map((rule) => String(rule.pattern));
 
     expect(unbacked).toEqual([]);
   });
+
+  /*
+   * The no-account pages: each still bounces every account holder, and the table
+   * turns every role away from it, so sign-in never forwards to the bounce.
+   */
+  it.each(Object.entries(NO_ACCOUNT_PAGES))(
+    'turns every role away from %s, as its page does',
+    async (route, file) => {
+      const code = await readFile(path.join(APP, file), 'utf8');
+
+      expect(withoutComments(code)).toMatch(ACCOUNT_BOUNCE);
+      expect(ROLES.filter((role) => roleCanReach(role, route))).toEqual([]);
+    },
+  );
 });
 
 /*
