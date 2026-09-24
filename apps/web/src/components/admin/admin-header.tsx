@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { AccountMenu } from '@/components/account-menu';
+import { SessionSync } from '@/components/auth/session-sync';
 import { DASHBOARD_LABEL_BY_ROLE, DASHBOARD_PATH_BY_ROLE } from '@/lib/role-routes';
 import { Logo, LOGO_SIZES } from '@/components/brand/logo';
 import { TierMarker } from '@/components/brand/tier-marker';
@@ -89,6 +90,7 @@ export function AdminHeader({ email, name }: AdminHeaderProps): React.ReactEleme
         <span className="truncate text-action text-stone-480" title={email}>
           Logged in as {email}
         </span>
+        <SessionSync />
         <AccountMenu
           name={name}
           avatarUrl={null}

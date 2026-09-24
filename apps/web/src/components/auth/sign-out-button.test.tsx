@@ -10,10 +10,12 @@ vi.mock('@/lib/auth/auth-requests', () => ({ signOut: () => signOut() }));
 vi.mock('sonner', () => ({ toast: { error: (message: string) => toastError(message) } }));
 
 const { SignOutButton } = await import('./sign-out-button');
+const { resetSessionEndedForTests } = await import('@/lib/auth/session-ended');
 
 describe('SignOutButton', () => {
   afterEach(() => {
     cleanup();
+    resetSessionEndedForTests();
     signOut.mockReset();
     assign.mockReset();
     toastError.mockReset();
