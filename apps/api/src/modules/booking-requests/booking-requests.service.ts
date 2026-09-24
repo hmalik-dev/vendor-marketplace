@@ -8,6 +8,7 @@ import {
   isUniversallyPastDate,
   pageWindow,
   parseDurationHours,
+  feeRateToBps,
   paymentDeadline,
   replyDeadline,
   requestStatusAsRead,
@@ -991,6 +992,8 @@ interface TransitionOptions {
   mail?: NotificationEmailDeps;
   /** Present when the caller can reach Stripe; settles an intent before a request expires. */
   guard?: ExpiryPaymentGuard;
+  /** `STRIPE_PLATFORM_FEE_RATE`, fixed onto the request when it is accepted (VEN-712). */
+  platformFeeRate?: number;
 }
 
 /**
@@ -1278,7 +1281,13 @@ async function prepareTransition({
    * The deadline moves from "reply by" to "pay by": an accepted request that
    * nobody pays for lapses and frees the vendor's date (VEN-433).
    */
-  const acceptance = { acceptedAt, expiresAt: paymentDeadline(acceptedAt, row.eventDate) };
+  const acceptance = {
+    acceptedAt,
+    expiresAt: paymentDeadline(acceptedAt, row.eventDate),
+    // The rate the vendor agreed to; payment prices from it, not from the env (VEN-712).
+    platformFeeBps:
+      options.platformFeeRate === undefined ? null : feeRateToBps(options.platformFeeRate),
+  };
 
   const finalPriceCents = row.finalPriceCents ?? row.quotedPriceCents;
   const [servicePackage] = row.packageId ? await findPackagesByIds(db, [row.packageId]) : [];

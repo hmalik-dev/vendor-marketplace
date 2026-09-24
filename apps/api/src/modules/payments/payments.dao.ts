@@ -63,6 +63,8 @@ export interface PayableRequestRow {
   eventTimezone: string | null;
   currency: string;
   acceptedAt: Date | null;
+  /** The fee rate fixed when the vendor accepted, in basis points; `null` before VEN-712. */
+  platformFeeBps: number | null;
   /** The intent recorded when checkout was opened, for reconciliation. */
   stripePaymentIntentId: string | null;
   /** Canceled intents replaced so far; the creation key is built from it (VEN-547). */
@@ -118,6 +120,7 @@ export async function findPayableRequest(
       eventTimezone: bookingRequests.eventTimezone,
       currency: bookingRequests.currency,
       acceptedAt: bookingRequests.acceptedAt,
+      platformFeeBps: bookingRequests.platformFeeBps,
       stripePaymentIntentId: bookingRequests.stripePaymentIntentId,
       paymentIntentReplacements: bookingRequests.paymentIntentReplacements,
       vendorSlug: vendorProfiles.slug,

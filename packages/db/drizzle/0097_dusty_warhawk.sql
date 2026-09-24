@@ -1,0 +1,4 @@
+ALTER TABLE "booking_requests" ADD COLUMN "platform_fee_bps" integer;--> statement-breakpoint
+ALTER TABLE "bookings" ADD COLUMN "platform_fee_bps" integer;--> statement-breakpoint
+ALTER TABLE "booking_requests" ADD CONSTRAINT "booking_requests_platform_fee_bps_range" CHECK ("booking_requests"."platform_fee_bps" IS NULL OR ("booking_requests"."platform_fee_bps" >= 0 AND "booking_requests"."platform_fee_bps" <= 10000));--> statement-breakpoint
+ALTER TABLE "bookings" ADD CONSTRAINT "bookings_platform_fee_bps_range" CHECK ("bookings"."platform_fee_bps" IS NULL OR ("bookings"."platform_fee_bps" >= 0 AND "bookings"."platform_fee_bps" <= 10000));
