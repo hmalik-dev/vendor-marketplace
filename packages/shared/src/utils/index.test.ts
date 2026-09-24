@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BACKUP_WITHHOLDING_RATE_BPS,
   CURRENT_REFUND_TERMS,
   FULL_REFUND_CUTOFF_HOURS,
   PAYOUT_RELEASE_HOURS,
 } from '../constants/index.js';
 import {
   addDays,
+  backupWithholdingCents,
   calculateFees,
   calculateRefund,
   vendorCancellationRefundCents,
@@ -906,5 +908,24 @@ describe('vendorCancellationRefundCents', () => {
   it('refuses a total that is not whole non-negative cents', () => {
     expect(() => vendorCancellationRefundCents(12.5)).toThrow(/whole|integer/);
     expect(() => vendorCancellationRefundCents(-1)).toThrow(/non-negative/);
+  });
+});
+
+describe('backupWithholdingCents (VEN-723)', () => {
+  it('is the IRS rate, 24 percent', () => {
+    expect(BACKUP_WITHHOLDING_RATE_BPS).toBe(2400);
+  });
+
+  it('keeps $240 of a $1,000 share, so $760 is sent', () => {
+    expect(backupWithholdingCents(100_000)).toBe(24_000);
+    expect(100_000 - backupWithholdingCents(100_000)).toBe(76_000);
+  });
+
+  it('rounds to whole cents and never exceeds the share', () => {
+    expect(backupWithholdingCents(127_600)).toBe(30_624);
+    expect(backupWithholdingCents(1)).toBe(0);
+    expect(backupWithholdingCents(3)).toBe(1);
+    expect(backupWithholdingCents(0)).toBe(0);
+    expect(backupWithholdingCents(-500)).toBe(0);
   });
 });

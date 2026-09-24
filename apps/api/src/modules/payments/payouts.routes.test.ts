@@ -29,6 +29,7 @@ import {
   TEST_ENV,
   type TestHarness,
 } from '../../testing/test-server.js';
+import { lowerReleasedVendorPayout } from './payments.dao.js';
 import { liftDisputeHold } from './payments.service.js';
 import { releaseDuePayouts, retryPayoutRelease } from './payouts.service.js';
 
@@ -2331,6 +2332,413 @@ describe('payouts', () => {
 
       const { payouts } = (await inject('GET', '/v1/vendor/dashboard', VENDOR)).json();
       expect(payouts).toMatchObject({ debtOutstandingCents: 0, debtRecoveredCents: 0 });
+    });
+  });
+
+  /* VEN-723 (D49): the sweep withholds the statutory rate while an admin has it switched on. */
+  describe('backup withholding (VEN-723)', () => {
+    const LATER_EVENT_DATE = toDateString(addDays(START, 40));
+    const AFTER_LATER_RELEASE = addDays(START, 44);
+    const SHARE_CENTS = 100_000;
+    const WITHHELD_CENTS = 24_000;
+
+    async function switchOn(vendorId: string): Promise<void> {
+      await signInAsAdmin();
+      const response = await inject(
+        'PUT',
+        `/v1/admin/vendors/${vendorId}/backup-withholding`,
+        ADMIN,
+        {
+          withholding: true,
+          reason: 'irs_notice',
+          noticeDate: '2026-05-20',
+        },
+      );
+
+      expect(response.statusCode).toBe(200);
+    }
+
+    async function clear(vendorId: string): Promise<void> {
+      const response = await inject(
+        'PUT',
+        `/v1/admin/vendors/${vendorId}/backup-withholding`,
+        ADMIN,
+        {
+          withholding: false,
+          receivedDate: '2026-05-25',
+        },
+      );
+
+      expect(response.statusCode).toBe(200);
+    }
+
+    async function setShare(bookingId: string, cents: number): Promise<void> {
+      await harness.database.db
+        .update(bookings)
+        .set({ vendorPayoutCents: cents })
+        .where(eq(bookings.id, bookingId));
+    }
+
+    async function moneyOf(bookingId: string) {
+      const [row] = await harness.database.db
+        .select({
+          backupWithheldCents: bookings.backupWithheldCents,
+          debtNettedCents: bookings.debtNettedCents,
+          released: bookings.payoutReleasedAt,
+        })
+        .from(bookings)
+        .where(eq(bookings.id, bookingId));
+
+      return { ...row!, released: row!.released !== null };
+    }
+
+    async function withheldRows() {
+      return harness.database.db
+        .select()
+        .from(adminActions)
+        .where(eq(adminActions.action, 'backup_withholding_withheld'));
+    }
+
+    async function yearTotals(): Promise<{ year: number; cents: number }[]> {
+      return (await inject('GET', '/v1/admin/tax/years', ADMIN)).json().backupWithheld;
+    }
+
+    it('transfers $760 of a $1,000 share, records 24000 cents withheld and raises the year total by exactly that', async () => {
+      const booking = await paidBooking();
+      await setShare(booking.id, SHARE_CENTS);
+      await switchOn(booking.vendorId);
+      expect(await yearTotals()).toEqual([]);
+      clockNow = AFTER_RELEASE;
+
+      expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+
+      expect(harness.stripe.transfers.map((transfer) => transfer.amountCents)).toEqual([76_000]);
+      expect(await moneyOf(booking.id)).toEqual({
+        backupWithheldCents: WITHHELD_CENTS,
+        debtNettedCents: 0,
+        released: true,
+      });
+      expect(await yearTotals()).toEqual([{ year: 2026, cents: WITHHELD_CENTS }]);
+
+      const adminId = await signInAsAdmin();
+      const rows = await withheldRows();
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        actorId: adminId,
+        subjectType: 'booking',
+        subjectId: booking.id,
+        detail: { vendorId: booking.vendorId, cents: WITHHELD_CENTS, rateBps: 2400 },
+      });
+    });
+
+    it('withholds once however often the sweep runs', async () => {
+      const booking = await paidBooking();
+      await setShare(booking.id, SHARE_CENTS);
+      await switchOn(booking.vendorId);
+      clockNow = AFTER_RELEASE;
+
+      await sweep();
+      expect(await sweep()).toEqual({ released: 0, skipped: 0, failed: 0 });
+
+      expect(harness.stripe.transfers).toHaveLength(1);
+      expect(await withheldRows()).toHaveLength(1);
+      expect(await yearTotals()).toEqual([{ year: 2026, cents: WITHHELD_CENTS }]);
+    });
+
+    it('transfers the full share again on the next release once it is cleared', async () => {
+      const { vendorId, packageId } = await createVendor();
+      const first = await paidBookingFor(vendorId, packageId, EVENT_DATE);
+      const second = await paidBookingFor(vendorId, packageId, LATER_EVENT_DATE);
+      await setShare(first.id, SHARE_CENTS);
+      await switchOn(vendorId);
+      clockNow = AFTER_RELEASE;
+      expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+
+      await clear(vendorId);
+      clockNow = AFTER_LATER_RELEASE;
+      expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+
+      expect(harness.stripe.transfers.map((transfer) => transfer.amountCents)).toEqual([
+        76_000,
+        EXPECTED_PAYOUT_CENTS,
+      ]);
+      expect(await moneyOf(second.id)).toMatchObject({ backupWithheldCents: 0 });
+      expect(await withheldRows()).toHaveLength(1);
+    });
+
+    it('transfers a vendor with no withholding exactly vendor_payout_cents less debt_netted_cents, and records none', async () => {
+      const booking = await paidBooking();
+      clockNow = AFTER_RELEASE;
+
+      expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+
+      const after = await moneyOf(booking.id);
+
+      expect(harness.stripe.transfers.map((transfer) => transfer.amountCents)).toEqual([
+        booking.vendorPayoutCents - after.debtNettedCents,
+      ]);
+      expect(harness.stripe.transfers[0]?.amountCents).toBe(EXPECTED_PAYOUT_CENTS);
+      expect(after).toEqual({ backupWithheldCents: 0, debtNettedCents: 0, released: true });
+      expect(await withheldRows()).toHaveLength(0);
+    });
+
+    it('keeps debt back from what is left after the withholding, never from the withheld money', async () => {
+      const { vendorId, packageId } = await createVendor();
+      const lost = await paidBookingFor(vendorId, packageId, EVENT_DATE);
+      const next = await paidBookingFor(vendorId, packageId, LATER_EVENT_DATE);
+      clockNow = AFTER_RELEASE;
+      expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+      await harness.database.db
+        .update(bookings)
+        .set({ vendorOwedCents: 30_000 })
+        .where(eq(bookings.id, lost.id));
+      await switchOn(vendorId);
+      clockNow = AFTER_LATER_RELEASE;
+
+      expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+
+      const withheld = Math.round((EXPECTED_PAYOUT_CENTS * 2400) / 10_000);
+
+      expect(harness.stripe.transfers.map((transfer) => transfer.amountCents)).toEqual([
+        EXPECTED_PAYOUT_CENTS,
+        EXPECTED_PAYOUT_CENTS - withheld - 30_000,
+      ]);
+      expect(await moneyOf(next.id)).toEqual({
+        backupWithheldCents: withheld,
+        debtNettedCents: 30_000,
+        released: true,
+      });
+    });
+
+    it('records nothing while the transfer fails, and withholds on the retry', async () => {
+      const booking = await paidBooking();
+      await setShare(booking.id, SHARE_CENTS);
+      await switchOn(booking.vendorId);
+      clockNow = AFTER_RELEASE;
+      harness.stripe.transfersToRefuse.add(booking.id);
+
+      expect(await sweep()).toEqual({ released: 0, skipped: 0, failed: 1 });
+      expect(await moneyOf(booking.id)).toMatchObject({ backupWithheldCents: 0, released: false });
+      expect(await withheldRows()).toHaveLength(0);
+
+      harness.stripe.transfersToRefuse.clear();
+      expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+      expect(await moneyOf(booking.id)).toMatchObject({ backupWithheldCents: WITHHELD_CENTS });
+      expect(await withheldRows()).toHaveLength(1);
+    });
+
+    it('moves no money for a withholding no admin action accounts for', async () => {
+      const booking = await paidBooking();
+      await setShare(booking.id, SHARE_CENTS);
+      await harness.database.db
+        .update(vendorProfiles)
+        .set({ backupWithholdingReason: 'irs_notice', backupWithholdingNoticeDate: '2026-05-20' })
+        .where(eq(vendorProfiles.id, booking.vendorId));
+      clockNow = AFTER_RELEASE;
+
+      expect(await sweep()).toEqual({ released: 0, skipped: 0, failed: 1 });
+
+      expect(harness.stripe.transfers).toEqual([]);
+      expect(await moneyOf(booking.id)).toMatchObject({ backupWithheldCents: 0, released: false });
+    });
+
+    it('names the withholding on the vendor dashboard while it is on, and stops when it is cleared', async () => {
+      const booking = await paidBooking();
+
+      expect((await inject('GET', '/v1/vendor/dashboard', VENDOR)).json().payouts).toMatchObject({
+        backupWithholding: false,
+      });
+
+      await switchOn(booking.vendorId);
+      expect((await inject('GET', '/v1/vendor/dashboard', VENDOR)).json().payouts).toMatchObject({
+        backupWithholding: true,
+      });
+
+      await clear(booking.vendorId);
+      expect((await inject('GET', '/v1/vendor/dashboard', VENDOR)).json().payouts).toMatchObject({
+        backupWithholding: false,
+      });
+    });
+
+    /*
+     * A transfer found under the group was made by an earlier attempt whose commit
+     * did not land, and the retry records what that attempt withheld: the stamp on
+     * the transfer, never today's setting.
+     */
+    describe('a transfer found from an earlier attempt', () => {
+      async function withPlantedTransfer(stamped: number, amountCents: number) {
+        const booking = await paidBooking();
+        await setShare(booking.id, SHARE_CENTS);
+        await harness.stripe.createTransfer({
+          bookingId: booking.id,
+          attempt: 0,
+          amountCents,
+          destinationAccountId: VENDOR_ACCOUNT,
+          transferGroup: `booking_${booking.requestId}`,
+          ...(stamped > 0 ? { backupWithheldCents: stamped } : {}),
+        });
+        clockNow = AFTER_RELEASE;
+
+        return booking;
+      }
+
+      it('records the withholding it made, once, with no second transfer and no reversal', async () => {
+        const booking = await withPlantedTransfer(WITHHELD_CENTS, 76_000);
+        await switchOn(booking.vendorId);
+
+        expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+
+        expect(harness.stripe.transfers).toHaveLength(1);
+        expect(harness.stripe.reversals).toEqual([]);
+        expect(await moneyOf(booking.id)).toEqual({
+          backupWithheldCents: WITHHELD_CENTS,
+          debtNettedCents: 0,
+          released: true,
+        });
+        expect(await withheldRows()).toHaveLength(1);
+      });
+
+      it('still records it when the admin cleared withholding after that attempt', async () => {
+        const booking = await withPlantedTransfer(WITHHELD_CENTS, 76_000);
+        await switchOn(booking.vendorId);
+        await clear(booking.vendorId);
+
+        expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+
+        expect(harness.stripe.reversals).toEqual([]);
+        expect(await moneyOf(booking.id)).toEqual({
+          backupWithheldCents: WITHHELD_CENTS,
+          debtNettedCents: 0,
+          released: true,
+        });
+        expect(await withheldRows()).toHaveLength(1);
+      });
+
+      it('does not withhold retroactively from a full transfer made before it was switched on', async () => {
+        const booking = await withPlantedTransfer(0, SHARE_CENTS);
+        await switchOn(booking.vendorId);
+
+        expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+
+        expect(harness.stripe.reversals).toEqual([]);
+        expect(await moneyOf(booking.id)).toEqual({
+          backupWithheldCents: 0,
+          debtNettedCents: 0,
+          released: true,
+        });
+        expect(await withheldRows()).toHaveLength(0);
+      });
+    });
+
+    describe('after the payout has gone out', () => {
+      async function releasedWithheld() {
+        const booking = await paidBooking();
+        await switchOn(booking.vendorId);
+        clockNow = AFTER_RELEASE;
+        expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+
+        return booking;
+      }
+
+      const WITHHELD_OF_PAYOUT = Math.round((EXPECTED_PAYOUT_CENTS * 2400) / 10_000);
+
+      it('stops counting the withholding a full refund spent, and reports the year as nothing withheld', async () => {
+        const booking = await releasedWithheld();
+        expect(await yearTotals()).toEqual([{ year: 2026, cents: WITHHELD_OF_PAYOUT }]);
+        await harness.database.db
+          .update(bookings)
+          .set({ status: 'disputed', disputeReason: REPORT })
+          .where(eq(bookings.id, booking.id));
+
+        const resolved = await inject('PUT', `/v1/admin/bookings/${booking.id}/dispute`, ADMIN, {
+          outcome: 'customer',
+        });
+
+        expect(resolved.statusCode).toBe(200);
+        // The transfer held the share less the withholding, so that is all that can come back.
+        expect(harness.stripe.reversals.map((reversal) => reversal.amountCents)).toEqual([
+          EXPECTED_PAYOUT_CENTS - WITHHELD_OF_PAYOUT,
+        ]);
+        expect(await moneyOf(booking.id)).toMatchObject({ backupWithheldCents: 0 });
+        expect(await yearTotals()).toEqual([]);
+        // The vendor owes nothing more: they never held the withheld part.
+        expect((await currentBooking()).vendorOwedCents).toBe(0);
+      });
+
+      it('lowers the withholding once when the unwind is repeated', async () => {
+        const booking = await releasedWithheld();
+        await harness.database.db
+          .update(bookings)
+          .set({ status: 'disputed', disputeReason: REPORT })
+          .where(eq(bookings.id, booking.id));
+
+        await inject('PUT', `/v1/admin/bookings/${booking.id}/dispute`, ADMIN, {
+          outcome: 'customer',
+        });
+        await inject('PUT', `/v1/admin/bookings/${booking.id}/dispute`, ADMIN, {
+          outcome: 'customer',
+        });
+
+        expect(await moneyOf(booking.id)).toMatchObject({ backupWithheldCents: 0 });
+        expect(harness.stripe.reversals).toHaveLength(1);
+      });
+
+      it('bills a lost chargeback only what reached the vendor, and stops counting what the platform kept', async () => {
+        const booking = await releasedWithheld();
+        const dispute = {
+          id: 'dp_lost_withheld',
+          reason: 'fraudulent',
+          amountCents: PRICE_CENTS,
+          paymentIntentId: booking.stripePaymentIntentId!,
+        };
+
+        for (const [type, status] of [
+          ['charge.dispute.created', 'needs_response'],
+          ['charge.dispute.closed', 'lost'],
+        ] as const) {
+          harness.stripe.disputes.set(dispute.id, { ...dispute, status });
+          harness.stripe.nextEvent = { type, accountId: dispute.id, objectId: dispute.id };
+          const delivered = await harness.app.inject({
+            method: 'POST',
+            url: '/webhooks/stripe',
+            headers: { 'stripe-signature': 'valid-signature', 'content-type': 'application/json' },
+            payload: JSON.stringify({ id: 'evt_dispute', object: 'event' }),
+          });
+
+          expect(delivered.statusCode).toBe(200);
+        }
+
+        const row = await currentBooking();
+
+        /* What reached them (share less withholding) plus Stripe's $15 dispute fee. */
+        expect(row.vendorOwedCents).toBe(EXPECTED_PAYOUT_CENTS - WITHHELD_OF_PAYOUT + 1_500);
+        expect(row.backupWithheldCents).toBe(0);
+        expect(await yearTotals()).toEqual([]);
+      });
+    });
+
+    it('does not read the withheld share as a reversal when Stripe echoes the transfer', async () => {
+      const booking = await paidBooking();
+      await harness.database.db
+        .update(bookings)
+        .set({
+          vendorPayoutCents: SHARE_CENTS,
+          stripeTransferId: 'tr_withheld',
+          payoutReleasedAt: AFTER_RELEASE,
+          backupWithheldCents: WITHHELD_CENTS,
+        })
+        .where(eq(bookings.id, booking.id));
+
+      expect(
+        await lowerReleasedVendorPayout(harness.database.db, 'tr_withheld', 76_000),
+      ).toBeNull();
+      expect((await currentBooking()).vendorPayoutCents).toBe(SHARE_CENTS);
+
+      expect(await lowerReleasedVendorPayout(harness.database.db, 'tr_withheld', 70_000)).toBe(
+        booking.id,
+      );
+      expect((await currentBooking()).vendorPayoutCents).toBe(94_000);
     });
   });
 });

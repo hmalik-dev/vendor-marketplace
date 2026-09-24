@@ -246,6 +246,18 @@ describe('transferParams', () => {
     expect(refusedTransferParams(transferParams(INPUT))).toBeNull();
   });
 
+  it('stamps the backup withholding taken off the amount, and nothing when there was none (VEN-723)', () => {
+    expect(
+      transferParams({ ...INPUT, amountCents: 76_000, backupWithheldCents: 24_000 }).metadata,
+    ).toEqual({
+      bookingId: 'bkg_one',
+      backupWithheldCents: '24000',
+    });
+    expect(transferParams({ ...INPUT, backupWithheldCents: 0 }).metadata).toEqual({
+      bookingId: 'bkg_one',
+    });
+  });
+
   /*
    * Reachable from real data: a booking whose total rounds its whole value into
    * the platform fee has `vendor_payout_cents = 0`, and a sweep that sent it
@@ -695,6 +707,26 @@ describe('pickTransfer', () => {
     amount,
     amount_reversed: amountReversed,
     metadata,
+  });
+
+  /* VEN-723: what a transfer withheld travels on it, so a retry that finds it records that. */
+  it('reads back the backup withholding stamped on a transfer, and none from one without a stamp', () => {
+    expect(
+      pickTransfer([transfer('tr_w', 76_000, 0, { bookingId: 'b', backupWithheldCents: '24000' })]),
+    ).toEqual({
+      transferId: 'tr_w',
+      amountCents: 76_000,
+      reversedCents: 0,
+      backupWithheldCents: 24_000,
+    });
+    expect(pickTransfer([transfer('tr_plain', 100_000, 0, { bookingId: 'b' })])).toEqual({
+      transferId: 'tr_plain',
+      amountCents: 100_000,
+      reversedCents: 0,
+    });
+    expect(
+      pickTransfer([transfer('tr_junk', 100_000, 0, { backupWithheldCents: 'lots' })]),
+    ).toEqual({ transferId: 'tr_junk', amountCents: 100_000, reversedCents: 0 });
   });
 
   /* VEN-473 acceptance 3. */

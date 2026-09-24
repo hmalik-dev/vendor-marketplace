@@ -1,4 +1,5 @@
 import { MONEY_COPY, formatPrice } from '@vendor-marketplace/shared';
+import { payoutBreakdown } from '@/lib/payout-breakdown';
 import { formatPayoutDate } from '@/lib/payout-date';
 import type { WireVendorDashboard } from '@/lib/wire-schemas';
 
@@ -44,7 +45,9 @@ export function NextPayout({ payouts, serverToday }: NextPayoutProps): React.Rea
     heldCount,
     debtOutstandingCents,
     debtRecoveredCents,
+    backupWithholding,
   } = payouts;
+  const breakdown = next && payoutBreakdown(next.cents, debtOutstandingCents, backupWithholding);
 
   return (
     <div className="rounded-[13px] bg-stone-0 p-3.75 shadow-sm">
@@ -52,7 +55,7 @@ export function NextPayout({ payouts, serverToday }: NextPayoutProps): React.Rea
         Next payout
       </h3>
       <p className="font-display text-[26px] leading-none text-stone-900">
-        {next === null ? '—' : formatPrice(next.cents - Math.min(next.cents, debtOutstandingCents))}
+        {breakdown ? formatPrice(breakdown.sentCents) : '—'}
       </p>
       {next === null && heldCount === 0 && (
         <p className="mt-0.75 text-helper text-stone-600">{MONEY_COPY.vendorPayout}</p>
@@ -66,12 +69,17 @@ export function NextPayout({ payouts, serverToday }: NextPayoutProps): React.Rea
         */
         <p className="mt-0.75 text-helper text-stone-600">
           {next.customerFirstName === '' ? '' : `${next.customerFirstName} · `}
-          {debtOutstandingCents > 0
-            ? `after ${formatPrice(Math.min(next.cents, debtOutstandingCents))} kept back · `
+          {breakdown && breakdown.keptBackCents > 0
+            ? `after ${formatPrice(breakdown.keptBackCents)} kept back · `
             : ''}
           {next.isDue
             ? 'paying out now'
             : `pays out ${formatPayoutDate(next.releaseAt, serverToday)}`}
+        </p>
+      )}
+      {breakdown && breakdown.withheldCents > 0 && (
+        <p className="mt-0.75 text-helper text-stone-600">
+          Backup withholding (IRS): −{formatPrice(breakdown.withheldCents)}
         </p>
       )}
       {pendingCount > 1 && (

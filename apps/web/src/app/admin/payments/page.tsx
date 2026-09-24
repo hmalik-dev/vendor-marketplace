@@ -88,7 +88,7 @@ export default async function AdminPaymentsPage({
               options={[{ value: 'payout-failing', label: PAYOUT_FAILING_LABEL }]}
             />
           </FilterBar>
-          <TaxYearDownloads years={taxYears.years} />
+          <TaxYearDownloads years={taxYears.years} backupWithheld={taxYears.backupWithheld} />
         </>
       }
       pager={{

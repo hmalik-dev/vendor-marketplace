@@ -508,7 +508,11 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
       onRequest: adminOnly,
       schema: { params: vendorParamsSchema, response: { 200: adminVendorDetailSchema } },
     },
-    async (request) => readVendorDetail(app.db, request.params.vendorId, app.clock()),
+    async (request) =>
+      readVendorDetail(app.db, request.params.vendorId, app.clock(), {
+        stripe: context().stripe,
+        log: app.log,
+      }),
   );
 
   app.get(

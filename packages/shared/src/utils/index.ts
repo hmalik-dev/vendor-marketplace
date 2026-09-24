@@ -1,4 +1,5 @@
 import {
+  BACKUP_WITHHOLDING_RATE_BPS,
   BOOKING_PAYMENT_WINDOW_DAYS,
   BOOKING_REQUEST_EXPIRY_DAYS,
   BPS_PER_UNIT,
@@ -406,6 +407,16 @@ export interface FeeBreakdown {
   totalCents: number;
   platformFeeCents: number;
   vendorPayoutCents: number;
+}
+
+/**
+ * What backup withholding keeps from one vendor share, in whole cents
+ * (VEN-723). The one computation the sweep, the vendor's dashboard and the
+ * admin's confirmation all read, so the figure a vendor is shown is the one
+ * that leaves.
+ */
+export function backupWithholdingCents(shareCents: number): number {
+  return Math.round((Math.max(shareCents, 0) * BACKUP_WITHHOLDING_RATE_BPS) / BPS_PER_UNIT);
 }
 
 /** A fee rate as the whole basis points a booking stores, so the rate is exact in the database. */

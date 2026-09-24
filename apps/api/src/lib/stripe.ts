@@ -1,3 +1,4 @@
+import type { TaxIdState } from '@vendor-marketplace/shared';
 import Stripe from 'stripe';
 
 /**
@@ -45,6 +46,17 @@ export interface StripeConnectGateway {
 
   /** The authoritative capability state, read from Stripe rather than cached. */
   readAccountStatus(accountId: string): Promise<StripeAccountStatus>;
+
+  /**
+   * Asks Stripe to collect and IRS-verify the vendor's tax ID and address by
+   * requesting `tax_reporting_us_1099_k` (VEN-723, D49). Idempotent by reading
+   * first: an account that already carries the capability is left as it is, so
+   * the backfill can be run twice and the second run changes nothing.
+   */
+  ensureTaxReportingCapability(accountId: string): Promise<'requested' | 'already'>;
+
+  /** Where the vendor's tax ID stands at Stripe, in Stripe's vocabulary. Never the number. */
+  readTaxIdState(accountId: string): Promise<TaxIdState>;
 
   /**
    * Verifies a webhook signature over the exact bytes Stripe sent and names
@@ -317,6 +329,8 @@ export interface CreateTransferInput {
   destinationAccountId: string;
   /** `transferGroupFor(requestId)` — ties the transfer back to its charge. */
   transferGroup: string;
+  /** Backup withholding already taken off `amountCents` (VEN-723); stamped on the transfer so a retry can read it back. */
+  backupWithheldCents?: number;
 }
 
 /** A transfer as the unwind paths need to read it back. */
@@ -332,6 +346,14 @@ export interface StripeTransferSnapshot {
    * refuses as an over-reversal and which then wedges the booking.
    */
   reversedCents: number;
+  /**
+   * What backup withholding kept from this transfer's share (VEN-723), read back
+   * from the metadata it was made with. Absent when none was, which is also what
+   * every transfer made before withholding existed reads as. It is what lets a
+   * retry that finds the transfer record what was actually withheld, not what
+   * the vendor's setting says today.
+   */
+  backupWithheldCents?: number;
 }
 
 /** A vendor's bank payout as the failure alert needs it (VEN-645). */
@@ -602,7 +624,12 @@ export function transferParams(input: CreateTransferInput): Stripe.TransferCreat
     currency: 'usd',
     destination: input.destinationAccountId,
     transfer_group: input.transferGroup,
-    metadata: { bookingId: input.bookingId },
+    metadata: {
+      bookingId: input.bookingId,
+      ...(input.backupWithheldCents
+        ? { backupWithheldCents: String(input.backupWithheldCents) }
+        : {}),
+    },
   };
 }
 
@@ -982,6 +1009,84 @@ function readRequirementsDue(account: Stripe.V2.Core.Account): string[] {
 }
 
 /**
+ * The capability that makes Stripe collect the vendor's name, TIN and address
+ * and check the TIN against the IRS (D49). It is not on Stripe's list of
+ * capabilities supported through Accounts v2, but the v1 endpoint accepts it
+ * for a v2 account's id (spiked against the sandbox, VEN-723).
+ */
+export const TAX_REPORTING_CAPABILITY = 'tax_reporting_us_1099_k';
+
+/** The v1 client surface the capability calls use, so a test can stand in for it. */
+export type TaxCapabilityClient = Pick<Stripe, 'accounts'>;
+
+/**
+ * Requests the capability. Setting `requested: true` on a named account is
+ * idempotent by nature, so no idempotency key is sent: one would only replay a
+ * refusal for 24 hours (D36) and hold back the retry.
+ */
+export async function requestTaxReportingCapability(
+  client: TaxCapabilityClient,
+  accountId: string,
+): Promise<void> {
+  await client.accounts.update(accountId, {
+    capabilities: { [TAX_REPORTING_CAPABILITY]: { requested: true } },
+  });
+}
+
+/** Requests the capability unless the account already carries it. */
+export async function ensureTaxReportingCapability(
+  client: TaxCapabilityClient,
+  accountId: string,
+): Promise<'requested' | 'already'> {
+  const account = await client.accounts.retrieve(accountId);
+
+  if (account.capabilities?.[TAX_REPORTING_CAPABILITY] !== undefined) {
+    return 'already';
+  }
+
+  await requestTaxReportingCapability(client, accountId);
+
+  return 'requested';
+}
+
+/** The requirement names that concern the tax ID, whichever entity type the vendor is. */
+const TAX_ID_REQUIREMENT = /(^|\.)(tax_id|id_number|ssn_last_4)$/;
+
+/**
+ * Stripe's tax-ID state read off the v1 view of an account: `id_number_provided`
+ * for an individual, `tax_id_provided` for a company, the 1099 capability's
+ * status, and any error against a tax-ID requirement (the IRS check failing).
+ * Exported so a test can hand it real payload shapes.
+ */
+export function taxIdStateFrom(account: Stripe.Account): TaxIdState {
+  const requirements = account.requirements;
+  const failed = (requirements?.errors ?? []).some((error) =>
+    TAX_ID_REQUIREMENT.test(error.requirement),
+  );
+
+  if (failed) {
+    return 'mismatch';
+  }
+
+  const provided =
+    account.individual?.id_number_provided === true || account.company?.tax_id_provided === true;
+
+  if (!provided) {
+    return 'missing';
+  }
+
+  const outstanding = [
+    ...(requirements?.currently_due ?? []),
+    ...(requirements?.past_due ?? []),
+    ...(requirements?.pending_verification ?? []),
+  ].some((requirement) => TAX_ID_REQUIREMENT.test(requirement));
+
+  return account.capabilities?.[TAX_REPORTING_CAPABILITY] === 'active' && !outstanding
+    ? 'verified'
+    : 'provided';
+}
+
+/**
  * The whole answer read off one retrieved account — capabilities, reason and
  * outstanding requirements.
  *
@@ -1066,19 +1171,24 @@ export interface FindTransferOptions {
 export function pickTransfer(
   transfers: readonly Pick<Stripe.Transfer, 'id' | 'amount' | 'amount_reversed' | 'metadata'>[],
   options: FindTransferOptions = {},
-): { transferId: string; amountCents: number; reversedCents: number } | null {
+): StripeTransferSnapshot | null {
   const candidates = options.live
     ? transfers.filter((transfer) => transfer.amount_reversed < transfer.amount)
     : transfers;
   const transfer = candidates.find((candidate) => candidate.metadata?.bookingId) ?? candidates[0];
 
-  return transfer
-    ? {
-        transferId: transfer.id,
-        amountCents: transfer.amount,
-        reversedCents: transfer.amount_reversed,
-      }
-    : null;
+  if (!transfer) {
+    return null;
+  }
+
+  const withheld = Number(transfer.metadata?.backupWithheldCents);
+
+  return {
+    transferId: transfer.id,
+    amountCents: transfer.amount,
+    reversedCents: transfer.amount_reversed,
+    ...(Number.isInteger(withheld) && withheld > 0 ? { backupWithheldCents: withheld } : {}),
+  };
 }
 
 export function createStripeClient(secretKey: string): Stripe {
@@ -1154,6 +1264,12 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
         });
 
       return { accountId: account.id };
+    },
+
+    ensureTaxReportingCapability: (accountId) => ensureTaxReportingCapability(stripe, accountId),
+
+    async readTaxIdState(accountId) {
+      return taxIdStateFrom(await stripe.accounts.retrieve(accountId));
     },
 
     async createOnboardingLink(input) {

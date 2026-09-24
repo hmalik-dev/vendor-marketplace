@@ -727,8 +727,11 @@ export async function lowerReleasedVendorPayout(
   transferId: string,
   netCents: number,
 ): Promise<string | null> {
-  /* What Stripe holds is the payout less what later netting kept back, so that gap is not a reversal. */
-  const expectedCents = sql`(${netCents} + ${bookings.debtNettedCents})`;
+  /*
+   * What Stripe holds is the payout less what netting and backup withholding
+   * (VEN-723) kept back, so those gaps are not reversals.
+   */
+  const expectedCents = sql`(${netCents} + ${bookings.debtNettedCents} + ${bookings.backupWithheldCents})`;
   const rows = await db
     .update(bookings)
     .set({
@@ -747,6 +750,25 @@ export async function lowerReleasedVendorPayout(
     .returning({ id: bookings.id });
 
   return rows[0]?.id ?? null;
+}
+
+/**
+ * Lowers what backup withholding is recorded as having kept from a booking's
+ * payout to at most `cents` (VEN-723). Never raises it, so the retry of an
+ * unwind that half-landed lowers it once.
+ */
+export async function lowerBackupWithheld(
+  db: AppDatabase,
+  bookingId: string,
+  cents: number,
+): Promise<void> {
+  await db
+    .update(bookings)
+    .set({
+      backupWithheldCents: sql`least(${bookings.backupWithheldCents}, ${Math.max(cents, 0)})`,
+      updatedAt: sql`now()`,
+    })
+    .where(eq(bookings.id, bookingId));
 }
 
 /** Records what a vendor owes after a lost chargeback on a payout that had already left. */

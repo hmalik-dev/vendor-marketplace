@@ -1,6 +1,6 @@
 'use client';
 
-import { apiErrorSchema, ERROR_CODES } from '@vendor-marketplace/shared';
+import { apiErrorSchema, ERROR_CODES, formatPrice } from '@vendor-marketplace/shared';
 import { useState } from 'react';
 import { StepUpPanel } from '@/components/admin/step-up-panel';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,8 @@ import { REQUEST_DID_NOT_ARRIVE } from '@/lib/user-facing-error';
 export interface TaxYearDownloadsProps {
   /** Calendar years with at least one settled booking, newest first. */
   years: readonly number[];
+  /** What backup withholding kept in each year, the Form 945 figure (VEN-723). */
+  backupWithheld: readonly { year: number; cents: number }[];
 }
 
 /**
@@ -20,7 +22,10 @@ export interface TaxYearDownloadsProps {
  * first, like the other hand-overs, and the pressed year is retried once it
  * is entered.
  */
-export function TaxYearDownloads({ years }: TaxYearDownloadsProps): React.ReactElement | null {
+export function TaxYearDownloads({
+  years,
+  backupWithheld,
+}: TaxYearDownloadsProps): React.ReactElement | null {
   const [busyYear, setBusyYear] = useState<number | null>(null);
   const [stepUpYear, setStepUpYear] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -110,6 +115,16 @@ export function TaxYearDownloads({ years }: TaxYearDownloadsProps): React.ReactE
           </Button>
         ))}
       </div>
+      {backupWithheld.length > 0 ? (
+        <ul data-testid="backup-withheld-by-year" className="text-sm text-stone-600">
+          {backupWithheld.map(({ year, cents }) => (
+            <li key={year}>
+              Backup withholding kept in {year}:{' '}
+              <span className="font-mono">{formatPrice(cents)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {stepUpYear !== null ? (
         <StepUpPanel
           lead="This downloads every vendor's tax figures, so confirm it is you first."

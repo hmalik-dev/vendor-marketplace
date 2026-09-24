@@ -17,6 +17,7 @@ import {
   type SQLWrapper,
 } from 'drizzle-orm';
 import {
+  adminActions,
   bookings,
   legalAcceptances,
   supportCases,
@@ -276,6 +277,8 @@ export interface ReleasableBookingRow {
   vendorStripeOnboarded: boolean;
   /** An admin is holding this vendor's automatic payouts (VEN-404). */
   vendorPayoutHold: boolean;
+  /** An admin has backup withholding on for this vendor; the share is reduced by the statutory rate (VEN-723). */
+  vendorBackupWithholding: boolean;
   /** Whether the vendor has accepted any version of the vendor agreement (VEN-509). */
   vendorHasAcceptedAgreement: boolean;
 }
@@ -425,6 +428,7 @@ export async function claimReleasableBooking(
       vendorStripeAccountId: vendorProfiles.stripeAccountId,
       vendorStripeOnboarded: vendorProfiles.stripeOnboarded,
       vendorPayoutHold: vendorProfiles.payoutHold,
+      vendorBackupWithholding: sql<boolean>`${vendorProfiles.backupWithholdingReason} IS NOT NULL`,
       vendorHasAcceptedAgreement: sql<boolean>`EXISTS (
         SELECT 1 FROM ${legalAcceptances}
         WHERE ${legalAcceptances.acceptedByUserId} = ${vendorProfiles.userId}
@@ -561,7 +565,12 @@ export async function findVendorDebtTotals(
 export async function recordPayoutRelease(
   tx: AppDatabase,
   bookingId: string,
-  release: { stripeTransferId: string | null; releasedAt: Date; debtNettedCents: number },
+  release: {
+    stripeTransferId: string | null;
+    releasedAt: Date;
+    debtNettedCents: number;
+    backupWithheldCents: number;
+  },
 ): Promise<void> {
   await tx
     .update(bookings)
@@ -569,10 +578,64 @@ export async function recordPayoutRelease(
       stripeTransferId: release.stripeTransferId,
       payoutReleasedAt: release.releasedAt,
       debtNettedCents: release.debtNettedCents,
+      backupWithheldCents: release.backupWithheldCents,
       payoutFailureReason: null,
       updatedAt: sql`now()`,
     })
     .where(eq(bookings.id, bookingId));
+}
+
+/**
+ * The admin who switched backup withholding on for a vendor (VEN-723): the
+ * actor the sweep's own audit row is written under, because the sweep has no
+ * actor of its own. Read **before** the transfer, and throws when no such row
+ * exists, so a payout the trail could not explain fails for a retry instead of
+ * moving money first.
+ */
+export async function findBackupWithholdingSetter(
+  tx: AppDatabase,
+  vendorId: string,
+): Promise<string> {
+  const setters = await tx
+    .select({ actorId: adminActions.actorId })
+    .from(adminActions)
+    .where(
+      and(
+        eq(adminActions.action, 'vendor_backup_withholding_set'),
+        eq(adminActions.subjectId, vendorId),
+      ),
+    )
+    .orderBy(desc(adminActions.createdAt))
+    .limit(1);
+  const actorId = setters[0]?.actorId;
+
+  if (!actorId) {
+    throw new Error('Backup withholding is on but no admin action records who set it');
+  }
+
+  return actorId;
+}
+
+/** The audit row for the cents one payout withheld, written in the transaction that claims it. */
+export async function recordBackupWithholdingWithheld(
+  tx: AppDatabase,
+  withheld: {
+    actorId: string;
+    bookingId: string;
+    vendorId: string;
+    cents: number;
+    rateBps: number;
+    at: Date;
+  },
+): Promise<void> {
+  await tx.insert(adminActions).values({
+    actorId: withheld.actorId,
+    action: 'backup_withholding_withheld',
+    subjectType: 'booking',
+    subjectId: withheld.bookingId,
+    detail: { vendorId: withheld.vendorId, cents: withheld.cents, rateBps: withheld.rateBps },
+    createdAt: withheld.at,
+  });
 }
 
 /**

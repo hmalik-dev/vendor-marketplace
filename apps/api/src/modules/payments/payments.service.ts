@@ -6,6 +6,7 @@ import {
   MIN_BOOKING_AMOUNT_CENTS,
   STRIPE_DISPUTE_FEE_CENTS,
   BPS_PER_UNIT,
+  backupWithholdingCents,
   calculateFees,
   feeRateToBps,
   calculateRefund,
@@ -76,6 +77,7 @@ import {
   findBookingById,
   findBookingIdByTransferId,
   lockBookingById,
+  lowerBackupWithheld,
   lowerReleasedVendorPayout,
   raiseVendorOwed,
   recordVendorOwed,
@@ -1481,10 +1483,18 @@ async function reverseOutstanding(
 }
 
 /**
- * Records, as owed by the vendor, the part of a refund's clawback that the
- * payout's transfer no longer holds because the sweep netted it off against a
- * chargeback debt (VEN-658). Capped at what was netted, and set rather than
- * added, so the retry of a reversal that half-landed records it once.
+ * Settles the part of a refund's clawback that the payout's transfer no longer
+ * holds, because the sweep kept it back (VEN-658, VEN-723). It is settled in
+ * the order the sweep took it:
+ *
+ * - what was netted against a chargeback debt is owed by the vendor again,
+ *   capped at what was netted, and set rather than added, so the retry of a
+ *   reversal that half-landed records it once (VEN-658);
+ * - the rest was withheld for the IRS and never reached the vendor. The platform
+ *   still holds it, and it has just paid the customer back with it, so it is no
+ *   longer withheld: the booking's figure falls by it, or Form 945 would report
+ *   money the refund already spent. Set from the row's own figures and never
+ *   raised, so a retry lowers it once (VEN-723).
  */
 async function owePayoutRecoveredByNetting(
   context: BookingContext,
@@ -1495,6 +1505,18 @@ async function owePayoutRecoveredByNetting(
 
   if (owedCents > 0) {
     await raiseVendorOwed(context.db, booking.id, owedCents);
+  }
+
+  const unwithheldCents = shortfallCents - owedCents;
+
+  if (unwithheldCents > 0 && booking.backupWithheldCents > 0) {
+    /* What the release withheld: the stored figure, or what the payout implies if a retry has already lowered it. */
+    const releasedCents = Math.max(
+      booking.backupWithheldCents,
+      backupWithholdingCents(booking.vendorPayoutCents),
+    );
+
+    await lowerBackupWithheld(context.db, booking.id, Math.max(releasedCents - unwithheldCents, 0));
   }
 }
 
@@ -2387,12 +2409,27 @@ export async function settleLostChargeback(
 
     if (paid || amountCents < locked.totalAmountCents) {
       const shareCents = Math.min(amountCents, locked.vendorPayoutCents);
+      /*
+       * The part of the lost share that backup withholding kept (VEN-723): the
+       * platform holds it, so the vendor owes only what actually reached them,
+       * and it stops being withheld. Proportional to the share lost, so a
+       * partial loss unwinds a partial withholding.
+       */
+      const withheldShareCents =
+        locked.vendorPayoutCents > 0
+          ? Math.min(
+              locked.backupWithheldCents,
+              Math.round((locked.backupWithheldCents * shareCents) / locked.vendorPayoutCents),
+            )
+          : 0;
+      const receivedCents = shareCents - withheldShareCents;
       /* Stripe's dispute fee rides on the vendor's own share, so a booking that paid them nothing owes nothing. */
-      const owedCents = shareCents > 0 ? shareCents + STRIPE_DISPUTE_FEE_CENTS : 0;
+      const owedCents = receivedCents > 0 ? receivedCents + STRIPE_DISPUTE_FEE_CENTS : 0;
       const record = locked.vendorOwedCents === 0 && owedCents > 0;
 
       if (record) {
         await recordVendorOwed(tx, bookingId, owedCents);
+        await lowerBackupWithheld(tx, bookingId, locked.backupWithheldCents - withheldShareCents);
       }
 
       if (locked.status === 'disputed') {

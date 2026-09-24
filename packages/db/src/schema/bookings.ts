@@ -331,6 +331,14 @@ export const bookings = pgTable(
      */
     debtNettedCents: integer('debt_netted_cents').notNull().default(0),
     /**
+     * What this booking's payout was reduced by as backup withholding (VEN-723,
+     * D49). The transfer sent is `vendor_payout_cents` less this and less
+     * `debt_netted_cents`; the year's sum is what is reported on Form 945 and on
+     * the 1099-K's `federal_income_tax_withheld`. Written in the transaction
+     * that claims the payout, and never afterwards.
+     */
+    backupWithheldCents: integer('backup_withheld_cents').notNull().default(0),
+    /**
      * The customer's own words about the problem they reported, kept while the
      * complaint is open and cleared when it is resolved.
      *
@@ -487,6 +495,7 @@ export const bookings = pgTable(
       sql`${table.vendorOwedRecoveredCents} >= 0 AND ${table.vendorOwedRecoveredCents} <= ${table.vendorOwedCents}`,
     ),
     check('bookings_debt_netted_cents_non_negative', sql`${table.debtNettedCents} >= 0`),
+    check('bookings_backup_withheld_cents_non_negative', sql`${table.backupWithheldCents} >= 0`),
     check(
       'bookings_refund_amount_cents_range',
       sql`${table.refundAmountCents} IS NULL OR (${table.refundAmountCents} >= 0 AND ${table.refundAmountCents} <= ${table.totalAmountCents})`,

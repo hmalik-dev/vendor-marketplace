@@ -1194,6 +1194,25 @@ export const DEFAULT_CURRENCY = 'USD';
  */
 export const PAYOUT_RELEASE_HOURS = 72;
 
+/**
+ * The federal backup-withholding rate, in basis points (VEN-723, D49): "the
+ * payer is required to withhold at the current rate of 24 percent"
+ * (https://www.irs.gov/businesses/small-businesses-self-employed/backup-withholding).
+ * While an admin has withholding switched on for a vendor, the sweep transfers
+ * their share less this rate, and the withheld cents are reported on Form 945.
+ */
+export const BACKUP_WITHHOLDING_RATE_BPS = 2400;
+
+/** Why an admin switched backup withholding on: no TIN on file, or an IRS notice. */
+export const BACKUP_WITHHOLDING_REASONS = ['missing_tin', 'irs_notice'] as const;
+export type BackupWithholdingReason = (typeof BACKUP_WITHHOLDING_REASONS)[number];
+
+/** What the console calls each reason. */
+export const BACKUP_WITHHOLDING_REASON_LABELS: Record<BackupWithholdingReason, string> = {
+  missing_tin: 'No taxpayer ID on file',
+  irs_notice: 'IRS notice',
+};
+
 /** How long the `session-revoke-marker` cookie lives; `/cookies` states it from here. */
 export const SESSION_REVOKE_MARKER_MAX_AGE_SECONDS = 20 * 60;
 
@@ -1476,6 +1495,16 @@ export const ADMIN_ACTIONS = [
    * the tax year, the row count and the SHA-256 of the file, never a figure.
    */
   'tax_report_exported',
+  /**
+   * Backup withholding on a vendor's payouts (VEN-723, D49). `set` carries the
+   * reason and the IRS notice date, `cleared` the date a corrected TIN or
+   * certified W-9 was received; `withheld` is the sweep's own row, one per
+   * payout, carrying the cents kept back. It is written under the admin who
+   * switched withholding on, because the sweep has no actor of its own.
+   */
+  'vendor_backup_withholding_set',
+  'vendor_backup_withholding_cleared',
+  'backup_withholding_withheld',
 ] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
 

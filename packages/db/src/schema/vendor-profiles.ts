@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   check,
+  date,
   decimal,
   index,
   integer,
@@ -13,7 +14,7 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
-import { usStateEnum } from './enums.js';
+import { backupWithholdingReasonEnum, usStateEnum } from './enums.js';
 import { users } from './users.js';
 
 export const vendorProfiles = pgTable(
@@ -147,6 +148,16 @@ export const vendorProfiles = pgTable(
      * by `PUT /admin/vendors/:vendorId/payout-hold` alone.
      */
     payoutHold: boolean('payout_hold').notNull().default(false),
+    /**
+     * Why an admin switched backup withholding on for this vendor (VEN-723,
+     * D49), or `null` when it is off. The sweep withholds
+     * `BACKUP_WITHHOLDING_RATE_BPS` of each share while it is set. Set together
+     * with `backup_withholding_notice_date`, and cleared with it, by
+     * `PUT /admin/vendors/:vendorId/backup-withholding` alone.
+     */
+    backupWithholdingReason: backupWithholdingReasonEnum('backup_withholding_reason'),
+    /** The IRS notice date (or the day the missing TIN was noticed) behind the reason. */
+    backupWithholdingNoticeDate: date('backup_withholding_notice_date'),
     /** Soft delete — preserves booking history integrity. */
     isDeleted: boolean('is_deleted').notNull().default(false),
     /** Derived from reviews; never written directly by an endpoint. */
@@ -204,6 +215,10 @@ export const vendorProfiles = pgTable(
     check(
       'vendor_profiles_stripe_onboarded_requires_account',
       sql`${table.stripeOnboarded} = false OR ${table.stripeAccountId} IS NOT NULL`,
+    ),
+    check(
+      'vendor_profiles_backup_withholding_pair',
+      sql`(${table.backupWithholdingReason} IS NULL) = (${table.backupWithholdingNoticeDate} IS NULL)`,
     ),
   ],
 ).enableRLS();

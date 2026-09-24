@@ -146,6 +146,16 @@ export async function startPayoutOnboarding(
     accountId = claimed.stripeAccountId;
   }
 
+  /*
+   * The 1099-K capability is what makes the hosted form ask for the address and
+   * TIN (VEN-723, D49). Requested here, after the account is saved, on every
+   * visit: it is a read for an account that already has it, and an account made
+   * before it existed catches up at its next visit. Requesting it inside the
+   * create instead would fail after the account existed but before it was
+   * stored, orphaning it.
+   */
+  await deps.stripe.ensureTaxReportingCapability(accountId);
+
   return deps.stripe.createOnboardingLink({
     accountId,
     returnUrl: `${deps.returnOrigin}${VENDOR_PAYMENTS_RETURN_PATH}`,

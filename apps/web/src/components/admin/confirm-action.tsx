@@ -77,6 +77,8 @@ export interface ConfirmActionProps {
    * clears whenever the dialog closes so a reopened dialog starts from nothing.
    */
   typedConfirmation?: { phrase: string; label: string };
+  /** Holds the confirm back while the fields the description asks for are incomplete. */
+  confirmDisabled?: boolean;
   onConfirm: () => Promise<void>;
 }
 
@@ -100,6 +102,7 @@ export function ConfirmAction({
   caution,
   destructive = false,
   typedConfirmation,
+  confirmDisabled = false,
   onConfirm,
 }: ConfirmActionProps): React.ReactElement {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
@@ -269,7 +272,7 @@ export function ConfirmAction({
               type="button"
               size="sm"
               variant={destructive ? 'destructive' : 'primary'}
-              disabled={busy || stepUpNeeded || !typedMatches}
+              disabled={busy || stepUpNeeded || !typedMatches || confirmDisabled}
               onClick={() => void confirm()}
             >
               {busy ? 'Working…' : confirmLabel}

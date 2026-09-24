@@ -25,21 +25,46 @@ afterEach(() => {
 
 describe('TaxYearDownloads', () => {
   it('renders nothing when no year has settled bookings', () => {
-    const { container } = render(<TaxYearDownloads years={[]} />);
+    const { container } = render(<TaxYearDownloads years={[]} backupWithheld={[]} />);
 
     expect(container.innerHTML).toBe('');
   });
 
   it('draws one labelled control per year', () => {
-    render(<TaxYearDownloads years={[2027, 2026]} />);
+    render(<TaxYearDownloads years={[2027, 2026]} backupWithheld={[]} />);
 
     expect(screen.getByRole('button', { name: '1099-K figures, 2027' })).toBeTruthy();
     expect(screen.getByRole('button', { name: '1099-K figures, 2026' })).toBeTruthy();
   });
 
+  it('lists what backup withholding kept in each year that withheld something, for Form 945', () => {
+    render(
+      <TaxYearDownloads
+        years={[2027, 2026]}
+        backupWithheld={[
+          { year: 2027, cents: 12_000 },
+          { year: 2026, cents: 24_000 },
+        ]}
+      />,
+    );
+
+    const items = screen.getAllByRole('listitem').map((item) => item.textContent);
+
+    expect(items).toEqual([
+      'Backup withholding kept in 2027: $120',
+      'Backup withholding kept in 2026: $240',
+    ]);
+  });
+
+  it('draws no withholding list when nothing was withheld', () => {
+    render(<TaxYearDownloads years={[2026]} backupWithheld={[]} />);
+
+    expect(screen.queryByTestId('backup-withheld-by-year')).toBeNull();
+  });
+
   it('requests the pressed year with the session token and downloads the file', async () => {
     fetchMock.mockResolvedValue(new Response('a,b\n', { status: 200 }));
-    render(<TaxYearDownloads years={[2026]} />);
+    render(<TaxYearDownloads years={[2026]} backupWithheld={[]} />);
 
     fireEvent.click(screen.getByRole('button', { name: '1099-K figures, 2026' }));
 
@@ -54,7 +79,7 @@ describe('TaxYearDownloads', () => {
     fetchMock
       .mockResolvedValueOnce(new Response('', { status: 401 }))
       .mockResolvedValueOnce(new Response('a,b\n', { status: 200 }));
-    render(<TaxYearDownloads years={[2026]} />);
+    render(<TaxYearDownloads years={[2026]} backupWithheld={[]} />);
 
     fireEvent.click(screen.getByRole('button', { name: '1099-K figures, 2026' }));
 
@@ -74,7 +99,7 @@ describe('TaxYearDownloads', () => {
         { status: 403 },
       ),
     );
-    render(<TaxYearDownloads years={[2026]} />);
+    render(<TaxYearDownloads years={[2026]} backupWithheld={[]} />);
 
     fireEvent.click(screen.getByRole('button', { name: '1099-K figures, 2026' }));
 
@@ -84,7 +109,7 @@ describe('TaxYearDownloads', () => {
 
   it('says so when the download fails for any other reason', async () => {
     fetchMock.mockResolvedValue(new Response('boom', { status: 500 }));
-    render(<TaxYearDownloads years={[2026]} />);
+    render(<TaxYearDownloads years={[2026]} backupWithheld={[]} />);
 
     fireEvent.click(screen.getByRole('button', { name: '1099-K figures, 2026' }));
 
