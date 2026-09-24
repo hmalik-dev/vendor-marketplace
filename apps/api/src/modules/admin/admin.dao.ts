@@ -729,6 +729,11 @@ export async function declineOpenRequests(
  * **Unban does not republish.** The vendor publishes again themselves, which is
  * the ticket's rule: reinstating an account is not the same as reinstating a
  * listing, and the admin does not decide when a vendor is ready to trade.
+ *
+ * A change only writes an account that is not already in the target state, and
+ * returns `null` when nothing changed (VEN-636), as `banAdminById` does: two
+ * bans at once claim the row in turn, so the loser neither moves `bannedAt` nor lets its caller write
+ * a second audit row.
  */
 export async function setBanned(
   db: AppDatabase,
@@ -736,12 +741,17 @@ export async function setBanned(
   vendorProfileId: string | null,
   isBanned: boolean,
   now: Date,
-): Promise<{ profileUnpublished: boolean }> {
+): Promise<{ profileUnpublished: boolean } | null> {
   return db.transaction(async (tx) => {
-    await tx
+    const changed = await tx
       .update(users)
       .set({ isBanned, bannedAt: isBanned ? now : null, updatedAt: now })
-      .where(eq(users.id, userId));
+      .where(and(eq(users.id, userId), eq(users.isBanned, !isBanned)))
+      .returning({ id: users.id });
+
+    if (changed.length === 0) {
+      return null;
+    }
 
     if (isBanned && vendorProfileId) {
       const unpublished = await tx
