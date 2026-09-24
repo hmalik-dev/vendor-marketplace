@@ -87,6 +87,17 @@ describe('Banner', () => {
   });
 
   /*
+   * The sentence sits in a `<p>`, which is why a caller may pass it phrasing
+   * content only: a block element there is closed out of the paragraph by the
+   * browser's parser and the page fails to hydrate (React error 418, VEN-725).
+   */
+  it('holds its sentence in a paragraph, so callers pass phrasing content only', () => {
+    render(<Banner status="settled">No payment was taken.</Banner>);
+
+    expect(screen.getByText('No payment was taken.').tagName).toBe('P');
+  });
+
+  /*
    * Frame `26 State library` is the banner's vocabulary — "build these once as
    * components; every screen above composes from them" — and draws all four at
    * `border-radius: 12px`, which is `--radius-panel`.
