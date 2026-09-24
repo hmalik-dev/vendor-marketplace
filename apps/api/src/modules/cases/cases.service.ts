@@ -293,6 +293,11 @@ export interface ChargebackDeps extends CaseDeps {
  */
 const CLOSED_DISPUTE_STATUSES: ReadonlySet<string> = new Set(['won', 'warning_closed']);
 
+/** What an open dispute's status says about the money: `lost`, an inquiry as itself, else nothing yet. */
+function openOutcome(status: string): string | null {
+  return status === 'lost' || status.startsWith('warning_') ? status : null;
+}
+
 /**
  * The sentence the operator reads. Composed here, from figures Stripe answered
  * with — never a field a payload could have carried arbitrary text in.
@@ -334,7 +339,11 @@ function describeHoldRefusal(target: DisputedBookingProjection): string {
     );
   }
 
-  if (target.bookingStatus === 'cancelled' && target.vendorPayoutCents > 0) {
+  if (
+    target.bookingStatus === 'cancelled' &&
+    target.payoutModel === 'separate' &&
+    target.vendorPayoutCents > 0
+  ) {
     return (
       'The booking is cancelled, so the payout was not frozen, but the vendor’s remaining share ' +
       'is held by this case. It is released only once the card network rules in the platform’s favour.'
@@ -575,10 +584,12 @@ export async function openChargebackCase(
     /*
      * A `lost` that closed while this delivery was failing and being retried
      * matched no case and was dropped; `retrieve` is the only place left that
-     * still knows it. Only `lost`: every other open status means the dispute is
-     * still with the network, which is what `null` says.
+     * still knows it. An inquiry (`warning_*`) is recorded as itself, because
+     * Stripe debits nothing for one and the balance check counts it apart from
+     * a chargeback. Every other open status means the dispute is still with the
+     * network, which is what `null` says.
      */
-    networkOutcome: dispute.status === 'lost' ? 'lost' : null,
+    networkOutcome: openOutcome(dispute.status),
   });
 
   if (written && audience) {
@@ -790,6 +801,7 @@ export async function resolveCase(
     state.caseStatus === 'open' &&
     state.origin === 'chargeback' &&
     state.bookingStatus === 'cancelled' &&
+    state.payoutModel === 'separate' &&
     !state.payoutReleasedAt &&
     (state.vendorPayoutCents ?? 0) > 0 &&
     !DISPUTE_RESOLVABLE_OUTCOMES.includes(state.networkOutcome ?? '')

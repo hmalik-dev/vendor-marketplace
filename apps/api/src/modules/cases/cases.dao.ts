@@ -339,6 +339,7 @@ export interface DisputedBookingProjection {
   disputeReason: string | null;
   payoutReleasedAt: Date | null;
   vendorPayoutCents: number;
+  payoutModel: (typeof bookings.$inferSelect)['payoutModel'];
 }
 
 /** The booking a Stripe dispute is about, found by the intent that paid it. */
@@ -357,6 +358,7 @@ export async function findBookingForDispute(
       disputeReason: bookings.disputeReason,
       payoutReleasedAt: bookings.payoutReleasedAt,
       vendorPayoutCents: bookings.vendorPayoutCents,
+      payoutModel: bookings.payoutModel,
     })
     .from(bookings)
     .innerJoin(users, eq(users.id, bookings.customerId))
@@ -534,6 +536,7 @@ export interface CaseResolutionState {
   networkOutcome: string | null;
   payoutReleasedAt: Date | null;
   vendorPayoutCents: number | null;
+  payoutModel: (typeof bookings.$inferSelect)['payoutModel'] | null;
 }
 
 /**
@@ -564,6 +567,7 @@ export async function findCaseResolutionState(
       networkOutcome: supportCases.networkOutcome,
       payoutReleasedAt: bookings.payoutReleasedAt,
       vendorPayoutCents: bookings.vendorPayoutCents,
+      payoutModel: bookings.payoutModel,
     })
     .from(supportCases)
     .leftJoin(bookings, eq(bookings.id, supportCases.bookingId))
