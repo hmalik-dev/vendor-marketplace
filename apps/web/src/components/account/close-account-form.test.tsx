@@ -60,6 +60,15 @@ describe('CloseAccountForm (VEN-680)', () => {
     expect(screen.queryByRole('button')).toBeNull();
   });
 
+  it('centres its capped column under the centred heading (VEN-698)', () => {
+    const { container } = render(<CloseAccountForm role="customer" email={EMAIL} blockers={[]} />);
+
+    const classes = (container.firstElementChild?.className ?? '').split(' ');
+
+    expect(classes).toContain('mx-auto');
+    expect(classes).toContain('max-w-sm');
+  });
+
   it('says what is kept and what goes, and adds the storefront and refunds for a vendor', () => {
     const { unmount } = render(<CloseAccountForm role="customer" email={EMAIL} blockers={[]} />);
     expect(screen.getByText(/Payment and booking records stay/)).toBeDefined();
