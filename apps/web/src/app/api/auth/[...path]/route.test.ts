@@ -29,6 +29,7 @@ vi.mock('next/server', async (importOriginal) => ({
 }));
 
 const { POST } = await import('./route');
+const { PASSWORD_MIN_LENGTH } = await import('@vendor-marketplace/shared');
 const { resetThrottle } = await import('@/lib/auth/proxy-throttle');
 
 /*
@@ -59,6 +60,9 @@ function call(path: string, body: unknown, ip = '1.1.1.1'): Promise<Response> {
 
   return POST(request as never, { params: Promise.resolve({ path: path.split('/') }) });
 }
+
+const LONG = 'x'.repeat(PASSWORD_MIN_LENGTH);
+const SHORT = 'x'.repeat(PASSWORD_MIN_LENGTH - 1);
 
 async function drain(): Promise<void> {
   await Promise.all(afterTasks.splice(0).map((task) => task()));
@@ -209,7 +213,11 @@ describe('password reset through the auth proxy', () => {
       Response.json({ code: 'INVALID_OTP' }, { status: 400 }),
     ]) {
       upstreamPost.mockResolvedValueOnce(upstream);
-      const response = await call(RESET, { email: `p${answers.length}@example.com`, otp: '1' });
+      const response = await call(RESET, {
+        email: `p${answers.length}@example.com`,
+        otp: '1',
+        password: LONG,
+      });
       answers.push([response.status, await response.json()]);
     }
 
@@ -222,7 +230,7 @@ describe('password reset through the auth proxy', () => {
   it('passes a successful code check through', async () => {
     upstreamPost.mockResolvedValue(Response.json({ success: true }));
 
-    const response = await call(RESET, { email: 'a@example.com', otp: '123456', password: 'x' });
+    const response = await call(RESET, { email: 'a@example.com', otp: '123456', password: LONG });
 
     expect([response.status, await response.json()]).toEqual([200, { success: true }]);
   });
@@ -407,7 +415,7 @@ describe('password reset through the auth proxy', () => {
   it('drops the length and encoding headers of the original bytes when forwarding', async () => {
     upstreamPost.mockResolvedValue(Response.json({ success: true }));
 
-    await call(RESET, { email: 'a@example.com', otp: '123456', password: 'x' });
+    await call(RESET, { email: 'a@example.com', otp: '123456', password: LONG });
 
     const forwarded = upstreamPost.mock.calls[0]?.[0].headers;
     expect(forwarded?.get('content-length')).toBeNull();
@@ -999,5 +1007,165 @@ describe('changing a password through the auth proxy (VEN-677)', () => {
     }
 
     expect(statuses).toEqual(Array(6).fill(200));
+  });
+});
+
+describe('the password floor and the body cap at the auth proxy (VEN-685)', () => {
+  const SIGN_UP = 'sign-up/email';
+  const EMAIL = 'floor@example.com';
+
+  beforeEach(() => {
+    vi.stubEnv('WEB_TIER_KEY', '');
+    resetThrottle();
+    upstreamPost.mockReset();
+    mintedUserIdForCaller.mockResolvedValue('user-9');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  const bodies: Array<[string, string, Record<string, string>]> = [
+    [SIGN_UP, 'a sign-up', { email: EMAIL, role: 'customer', name: 'F', password: SHORT }],
+    [RESET, 'a code check', { email: EMAIL, otp: '123456', password: SHORT }],
+    ['change-password', 'a change', { currentPassword: 'the-old-password', newPassword: SHORT }],
+  ];
+
+  it.each(bodies)(
+    'refuses %s with a password one short of the floor, provider untouched',
+    async (path, _name, body) => {
+      const response = await call(path, body);
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ message: 'Bad request' });
+      expect(upstreamPost).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(bodies)('refuses %s that carries no password at all', async (path, _name, body) => {
+    const { password: _p, newPassword: _n, ...rest } = body;
+    const response = await call(path, rest);
+
+    expect(response.status).toBe(400);
+    expect(upstreamPost).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [SIGN_UP, { email: EMAIL, role: 'customer', name: 'F', password: LONG }],
+    [RESET, { email: EMAIL, otp: '123456', password: LONG }],
+    ['change-password', { currentPassword: 'the-old-password', newPassword: LONG }],
+  ])('still forwards %s at exactly the floor', async (path, body) => {
+    upstreamPost.mockResolvedValue(Response.json({ success: true, user: { id: 'u-1' } }));
+    // Sign-up records its role at the API, so these two need the key and a stubbed API.
+    vi.stubEnv('WEB_TIER_KEY', 'k'.repeat(40));
+    vi.stubGlobal('fetch', () => Promise.resolve(Response.json({ throttled: false })));
+
+    const response = await call(path, body);
+
+    expect(response.status).toBe(200);
+    expect(upstreamPost).toHaveBeenCalled();
+  });
+
+  it('spends no address budget on a refused short password', async () => {
+    for (let i = 0; i < 8; i++) {
+      await call(RESET, { email: EMAIL, otp: '123456', password: SHORT }, `3.3.3.${i}`);
+    }
+    upstreamPost.mockResolvedValue(Response.json({ success: true }));
+
+    expect(
+      (await call(RESET, { email: EMAIL, otp: '123456', password: LONG }, '3.3.4.1')).status,
+    ).toBe(200);
+  });
+
+  it.each(['sign-in/email', RESET, 'change-password'])(
+    'refuses a %s body streamed past the cap with no content-length, provider untouched',
+    async (path) => {
+      const chunk = new TextEncoder().encode('x'.repeat(1024));
+      let sent = 0;
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (sent === 64) {
+            controller.close();
+            return;
+          }
+          sent += 1;
+          controller.enqueue(chunk);
+        },
+      });
+      const request = new Request(`http://localhost/api/auth/${path}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-forwarded-for': '4.4.4.4' },
+        body,
+        duplex: 'half',
+      } as RequestInit);
+
+      expect(request.headers.get('content-length')).toBeNull();
+
+      const response = await POST(request as never, {
+        params: Promise.resolve({ path: path.split('/') }),
+      });
+
+      expect(response.status).toBe(400);
+      expect(upstreamPost).not.toHaveBeenCalled();
+      expect(sent).toBeLessThan(64);
+    },
+  );
+
+  /*
+   * A body checked as JSON must be read as JSON upstream: under a form
+   * content-type the same bytes could carry a second, shorter `password`.
+   */
+  it.each([
+    [SIGN_UP, { email: EMAIL, role: 'customer', name: 'x&password=short&', password: LONG }],
+    [RESET, { email: EMAIL, otp: '123456', name: 'x&password=short&', password: LONG }],
+  ])(
+    'forwards %s as application/json whatever content-type the caller named',
+    async (path, body) => {
+      upstreamPost.mockResolvedValue(Response.json({ success: true, user: { id: 'u-1' } }));
+      // Sign-up records its role at the API, so these two need the key and a stubbed API.
+      vi.stubEnv('WEB_TIER_KEY', 'k'.repeat(40));
+      vi.stubGlobal('fetch', () => Promise.resolve(Response.json({ throttled: false })));
+
+      await POST(
+        new Request(`http://localhost/api/auth/${path}`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/x-www-form-urlencoded',
+            'x-forwarded-for': '5.5.5.5',
+          },
+          body: JSON.stringify(body),
+        }) as never,
+        { params: Promise.resolve({ path: path.split('/') }) },
+      );
+      vi.unstubAllGlobals();
+
+      expect(upstreamPost.mock.calls[0]?.[0].headers.get('content-type')).toBe('application/json');
+    },
+  );
+
+  it('still reads a streamed body inside the cap', async () => {
+    upstreamPost.mockResolvedValue(Response.json({ token: 't' }));
+    const bytes = new TextEncoder().encode(JSON.stringify({ email: EMAIL, password: 'p' }));
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes.slice(0, 10));
+        controller.enqueue(bytes.slice(10));
+        controller.close();
+      },
+    });
+    const request = new Request('http://localhost/api/auth/sign-in/email', {
+      method: 'POST',
+      headers: { 'x-forwarded-for': '4.4.5.5' },
+      body,
+      duplex: 'half',
+    } as RequestInit);
+
+    const response = await POST(request as never, {
+      params: Promise.resolve({ path: ['sign-in', 'email'] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await upstreamPost.mock.calls[0]?.[0].json()).toEqual({ email: EMAIL, password: 'p' });
   });
 });
