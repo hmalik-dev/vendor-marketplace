@@ -6,8 +6,10 @@ metadata:
 ---
 
 `/search` is the only public unauthenticated route in `apps/web` that answers
-`searchParams` with a redirect (`permanentRedirect`, HTTP 308, added #419).
-Audited clean 2026-09-06. Its safety is not "URLSearchParams escapes things" —
+`searchParams` with a redirect (HTTP 308, added #419). Audited clean 2026-09-06;
+VEN-715 (2026-09-24) moved it into `middleware.ts` (`NextResponse.redirect`,
+absolute Location from the request host — safe on Vercel, re-check if the web
+is ever self-hosted behind a Host-forwarding proxy). Re-audited clean. Its safety is not "URLSearchParams escapes things" —
 it rests on three invariants, and a future change is dangerous only if it breaks
 one of them:
 

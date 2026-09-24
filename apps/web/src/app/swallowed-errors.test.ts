@@ -76,7 +76,7 @@ describe('swallowed errors', () => {
       // server-side deadline, and a timeout must not turn the screen that
       // explains a failure into the 500 boundary — so it falls back to the
       // vaguer of the two variants and logs why.
-      'src/app/bookings/[requestId]/checkout/page.tsx',
+      'src/app/bookings/[requestId]/checkout/(gate)/page.tsx',
       // VEN-711: a failed reviews read is hidden from the list but *shown* as its error banner with a Try again, and reported.
       'src/app/customer/profile/page.tsx',
       // VEN-680: a sign-out the provider could not take after a closure changes nothing for the person, and is reported.
