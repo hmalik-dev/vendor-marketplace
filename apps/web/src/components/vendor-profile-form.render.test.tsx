@@ -412,11 +412,11 @@ describe('the storefront preview rail (#360)', () => {
     expect(rail().closest('form')).toBeNull();
   });
 
-  it('carries the mono label and the promise it makes', () => {
+  it('carries the mono label and no line restating that it is live', () => {
     renderSaved();
 
     expect(within(rail()).getByText('Preview')).toBeTruthy();
-    expect(within(rail()).getByText('Updates as you type')).toBeTruthy();
+    expect(within(rail()).queryByText('Updates as you type')).toBeNull();
   });
 
   it('offers both placements of the one photo', () => {
@@ -468,8 +468,9 @@ describe('the storefront preview rail (#360)', () => {
   });
 
   /*
-   * "Updates as you type" is the rail's own promise, so it is asserted rather
-   * than trusted: the mirror reads the live form, not the saved row.
+   * The rail no longer says it updates as you type, so the behaviour is
+   * asserted rather than trusted: the mirror reads the live form, not the
+   * saved row.
    */
   it('mirrors the business name as it is typed', async () => {
     const user = userEvent.setup();

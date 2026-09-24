@@ -20,6 +20,13 @@ describe('Banner', () => {
     ['settled', 'bg-sage-50', 'bg-sage-400'],
   ];
 
+  it('renders no body paragraph when there is only a title', () => {
+    const { container } = render(<Banner status="settled" title="Payouts connected" />);
+
+    expect(container.querySelectorAll('p')).toHaveLength(1);
+    expect(screen.getByRole('status').textContent).toBe('Payouts connected');
+  });
+
   it.each(CASES)('paints %s with its own surface and dot', (status, surface, dot) => {
     const { container } = render(<Banner status={status}>A sentence.</Banner>);
     const banner = screen.getByRole('status');

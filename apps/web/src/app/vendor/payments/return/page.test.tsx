@@ -46,7 +46,7 @@ describe('VendorPaymentsReturnPage', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe("You're set up");
 
     const banner = screen.getByRole('status');
-    expect(banner.textContent).toContain('Nothing else to do here.');
+    expect(banner.textContent).toBe('Payouts connected');
     expect(document.body.textContent).toContain(
       `pays it out to you ${PAYOUT_RELEASE_HOURS} hours after the event date.`,
     );

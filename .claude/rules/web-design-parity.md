@@ -308,6 +308,15 @@ because the `Browse by category` cards sit directly below and repeat it. The
 footer's category links stay. A parity pass reading the missing row is reading
 this ruling; the frames are corrected by a design pass, not by a ticket.
 
+**Helper and reassurance lines that add no fact are gone (VEN-707, ruled
+2026-09-23).** Frame `29 Contact support` draws the message helper ("What you
+were doing, and what you expected instead.") and "One email, no ticket to
+track." beside `Send message`; frame `09` draws "Updates as you type" and the
+preview caption under the storefront card. The account holder removed them: each
+restates the control, placeholder or toggle beside it. A parity pass reading
+them as missing text is reading this ruling; the frames are corrected by a
+design pass, not by a ticket.
+
 **The Florals category no longer exists (#419, ruled 2026-09-06).** It was
 folded into `Decor`, so the taxonomy is ten categories and three frames now
 draw a category the product does not have. All three are overruled, not drift:

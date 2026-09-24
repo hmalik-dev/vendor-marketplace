@@ -537,7 +537,6 @@ export function SupportScreen({
           readOnly={locked}
           className={cn(FIELD, 'mt-1.5 min-h-[132px] leading-[1.6]')}
         />
-        <p className={HELPER}>What you were doing, and what you expected instead.</p>
       </div>
 
       {/*
@@ -579,9 +578,6 @@ export function SupportScreen({
           */}
           {locked ? 'Sending…' : phase === 'failed' ? 'Try again' : 'Send message'}
         </Button>
-        <span className="text-[12.5px] text-stone-600">
-          {locked ? 'Fields locked' : 'One email, no ticket to track.'}
-        </span>
       </div>
 
       {/*
