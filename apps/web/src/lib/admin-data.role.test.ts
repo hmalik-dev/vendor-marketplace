@@ -39,7 +39,9 @@ beforeEach(() => {
   role = null;
   apiRequest.mockReset();
   apiRequest.mockImplementation(async (path: string) =>
-    path === '/users/me' ? { id: 'user-1', role } : { tags: [] },
+    path === '/users/me'
+      ? { id: 'user-1', role, firstName: 'Ada', lastName: 'Lovelace' }
+      : { tags: [] },
   );
 });
 
