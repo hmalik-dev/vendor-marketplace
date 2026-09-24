@@ -81,6 +81,7 @@ import { reportRoutes } from './modules/reports/reports.routes.js';
 import { supportRoutes } from './modules/support/support.routes.js';
 import { tagRoutes } from './modules/tags/tags.routes.js';
 import { uploadRoutes } from './modules/uploads/uploads.routes.js';
+import { ownClosureRoutes } from './modules/users/own-closure.routes.js';
 import { userRoutes } from './modules/users/users.routes.js';
 import { vendorRoutes } from './modules/vendors/vendors.routes.js';
 import { stripeConnectRoutes } from './modules/vendors/stripe-connect.routes.js';
@@ -617,6 +618,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
       await v1.register(tagRoutes);
       await v1.register(placeRoutes);
       await v1.register(userRoutes);
+      await v1.register(ownClosureRoutes, { webOrigin: canonicalWebOrigin(env) });
       await v1.register(customerRoutes);
       await v1.register(vendorRoutes);
       await v1.register(recordingRoutes(stripeConnectRoutes, moneyRoutes), {

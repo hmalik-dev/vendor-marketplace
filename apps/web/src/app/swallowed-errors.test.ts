@@ -77,6 +77,8 @@ describe('swallowed errors', () => {
       // explains a failure into the 500 boundary — so it falls back to the
       // vaguer of the two variants and logs why.
       'src/app/bookings/[requestId]/checkout/page.tsx',
+      // VEN-680: a sign-out the provider could not take after a closure changes nothing for the person, and is reported.
+      'src/components/account/close-account-form.tsx',
       // VEN-540: a rejected `confirmPayment` shows its own banner; the cause is reported.
       'src/components/checkout/checkout-screen.tsx',
       // VEN-706: a failed unread read leaves the header's dot at its last value

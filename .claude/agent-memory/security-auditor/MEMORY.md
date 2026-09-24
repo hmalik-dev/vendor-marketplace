@@ -93,29 +93,29 @@
 
 ## Input, output and logging
 
-- [URL params validated in the nuqs hook](url-params-validated-in-the-nuqs-hook.md) — the hook is the boundary
-- [Query-keyed literal maps need `Object.hasOwn`](query-keyed-literal-maps-need-hasown.md) — `?saved=__proto__`
-- [Image key columns are client-supplied](image-key-columns-are-client-supplied.md) — `/_next/image` patterns derive from storage env
-- [Image-ref bypasses FIXED; host is not](image-ref-scheme-allowlist-is-whitespace-bypassable.md) — `https://evil.example/x.png` open
-- [Image pipeline is one 2-slot queue](image-pipeline-is-one-process-wide-queue.md) — unbounded FIFO of 12 MB buffers
-- [NUL/22021 and 22001 fail a statement](free-text-accepts-nul-so-any-text-insert-can-be-failed-on-demand.md) — bare `z.string()` still accepts NUL
-- [Webhook payload text bypasses the bidi strip](provider-payload-text-bypasses-the-bidi-strip.md) — hand-`safeParse` is invisible
-- [Reviews: profanity floor, eligibility, tombstones](review-profanity-filter-is-a-hard-reject-floor.md) — a review can outlive a cancel
-- [The `err` serialiser is the log sink](err-serializer-is-the-log-sink.md) — fields beside `err` are verbatim
-- [Sentry is a second log sink](sentry-is-a-second-log-sink.md) — `request.url` path-only; VEN-674 ReDoS notes
-- [Webhook error objects carry the redacted header](webhook-error-objects-carry-the-redacted-header.md) — `{err}` re-emits signature
-- [Log redaction covers query, not path](log-redaction-covers-query-not-path.md) — path credentials logged whole
-- [Failure-reason columns store raw gateway text](failure-reason-columns-rest-on-a-status-only-gateway.md) — admins read one
-- [Error handler 4xx passthrough FIXED](error-handler-4xx-passthrough-leaks-sdk-messages.md) — only `FST_` errors speak
-- [`violatesConstraint` FIXED](violates-constraint-matches-bound-parameters.md) — SQLSTATE + `constraint_name`
-- [Browser parse failure is reader-visible](client-parse-failures-are-shown-verbatim.md) — a landed transfer reports failed
-- [500 screen hides chrome, does not unmount it](error-screen-chrome-is-hidden-not-unmounted.md) — header hydrates hidden
-- [Legal claims rest on two under-matching scans](no-cookie-consent-claim-rests-on-a-source-scan.md) — `TRACKERS` is a vendor list
-- [Rate limiting: hop-0 proxy, pre-auth hook](rate-limit-key-is-the-proxy-not-the-caller.md) — `rateLimitRan` can disable a route's limit
-- [`request.ip` is one hop, never validated](request-ip-is-one-hop-trusted-not-validated.md) — unbounded vs `varchar(45)`
-- [`/ready` is unthrottled by design](ready-probe-is-unthrottled-and-now-reads-a-file.md) — owner check must follow role membership
-- [Operator alert dedupe is attacker-armable](operator-alert-dedupe-is-attacker-armable.md) — cap drops on DB outage
-- [Daily send cap closure is sticky](email-send-cap-closure-is-sticky.md) — blocks step-up codes till UTC midnight
+- [URL params are validated in the nuqs hook](url-params-validated-in-the-nuqs-hook.md) — the hook is the boundary, not the screen
+- [Query-keyed literal maps need `Object.hasOwn`](query-keyed-literal-maps-need-hasown.md) — `?saved=__proto__` indexes `Object.prototype`; VEN-703 settings banner
+- [Image key columns are client-supplied](image-key-columns-are-client-supplied.md) — probe with the bucket-path base; `/_next/image`'s remote patterns are an anonymous fetcher and must derive from the storage env var; VEN-618 owner segment is a digest, raw id still accepted
+- [Every image-ref bypass is FIXED; the host is not](image-ref-scheme-allowlist-is-whitespace-bypassable.md) — `https://evil.example/x.png` was never closed
+- [The image pipeline is one process-wide 2-slot queue](image-pipeline-is-one-process-wide-queue.md) — VEN-464: hand-off is sound, the unbounded FIFO of 12 MB buffers is the ceiling; WebP input audited clean (VEN-618)
+- [NUL/22021 and 22001 fail a statement on demand](free-text-accepts-nul-so-any-text-insert-can-be-failed-on-demand.md) — `freeText()` refuses NUL now (VEN-689 search params clean); a bare `z.string()` still doesn't
+- [Webhook payload text bypasses the bidi strip](provider-payload-text-bypasses-the-bidi-strip.md) — a hand-`safeParse`d schema is invisible to the free-text guard
+- [Reviews: profanity floor, eligibility and tombstones](review-profanity-filter-is-a-hard-reject-floor.md) — tombstone finality rests on read order; a review can outlive a cancel
+- [The `err` serialiser is the log sink](err-serializer-is-the-log-sink.md) — pino's three doors and bound params closed; the fields _beside_ `err` are verbatim, and the convention is an opaque id
+- [Sentry is a second log sink](sentry-is-a-second-log-sink.md) — VEN-522 made `request.url` path-only; VEN-674 ReDoS notes (boundary-captured EMAIL leaks chains, QUERY_VALUE `?`-run)
+- [Webhook error objects carry the redacted header](webhook-error-objects-carry-the-redacted-header.md) — `log.warn({err})` re-emits `stripe-signature` and the raw body
+- [Log redaction covers the query, not the path](log-redaction-covers-query-not-path.md) — a credential in a path segment is logged whole
+- [Two failure-reason columns store the gateway's raw message](failure-reason-columns-rest-on-a-status-only-gateway.md) — admins read one; the only guard is `Resend refused the send (status)` carrying no address
+- [The error handler's 4xx passthrough is FIXED](error-handler-4xx-passthrough-leaks-sdk-messages.md) — only `FST_` errors speak now
+- [`violatesConstraint` is FIXED](violates-constraint-matches-bound-parameters.md) — SQLSTATE + `constraint_name` only
+- [A browser parse failure is reader-visible copy](client-parse-failures-are-shown-verbatim.md) — a landed transfer reports as failed
+- [The 500 screen hides chrome, it does not unmount it](error-screen-chrome-is-hidden-not-unmounted.md) — the header hydrates behind `display:none`
+- [Legal claims rest on two under-matching scans](no-cookie-consent-claim-rests-on-a-source-scan.md) — `TRACKERS` is a vendor list; VEN-596 closed the prose denials; "not tied to your account" rests on `analytics-scrub.ts`
+- [Rate limiting: hop-0 proxy, pre-auth hook, per-account keys](rate-limit-key-is-the-proxy-not-the-caller.md) — one `rateLimitRan` symbol can silently disable a route's own limit; VEN-649's once-per-process tier-key report is spendable by any probe
+- [`request.ip` is one hop, never IP-validated](request-ip-is-one-hop-trusted-not-validated.md) — unbounded text against `varchar(45)` when persisted as evidence
+- [`/ready` is unthrottled by design](ready-probe-is-unthrottled-and-now-reads-a-file.md) — VEN-495 sync read on the unlimited route; presence booleans (VEN-632) and RLS posture (VEN-671) accepted; the owner check must follow role membership
+- [Operator alert dedupe is attacker-armable](operator-alert-dedupe-is-attacker-armable.md) — a shed 429 costs a DB write; the email cap drops on a DB outage
+- [The daily send cap's closure is sticky](email-send-cap-closure-is-sticky.md) — VEN-661: a closed day blocks step-up codes till UTC midnight; raising the cap does not reopen it; [VEN-680 self-closure codes spend the essential headroom](self-closure-step-up-codes-are-essential-mail.md)
 
 ## Data layer, seeds and tooling
 
