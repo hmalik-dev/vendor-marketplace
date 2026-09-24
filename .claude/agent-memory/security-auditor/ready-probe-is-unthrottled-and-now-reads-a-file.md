@@ -35,3 +35,12 @@ value. Accepted: constant `true` on a healthy tier; a `false` only discloses a
 misconfiguration the release gate already refuses (e.g. `WEB_TIER_KEY` false
 means the auth proxy throttle fell back to per-instance counts). Do not
 re-report; do re-open if a value, length or prefix is ever added.
+
+**VEN-671 (2026-09-24)** adds a third per-request catalog query and publishes
+`rowLevelSecurity` (enum) + a static `reason` on staging/production; same
+precedent, not re-reported (healthy tier always says `enforced`). The finding
+was the detector failing open: `t.tableowner = current_user` misses a role that
+inherits the owner, and Postgres's owner exemption goes through
+`has_privs_of_role`; the fix is `pg_has_role(current_user, t.tableowner, 'USAGE')`.
+Railway's `healthcheckPath` is `/ready`, so a 503 here blocks every deploy.
+The smoke regex `"reason"\s*:\s*"((?:[^"\\]|\\.)*)"` is linear (disjoint branches).

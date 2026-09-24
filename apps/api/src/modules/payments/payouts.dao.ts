@@ -1,6 +1,7 @@
 import {
   and,
   asc,
+  count,
   desc,
   eq,
   gt,
@@ -279,6 +280,43 @@ export interface ReleasableBookingRow {
   vendorHasAcceptedAgreement: boolean;
 }
 
+/** The sweep's scan predicate: what is owed, releasable, unheld and past `dueThroughDate`. */
+function duePayoutPredicate(dueThroughDate: string): SQL | undefined {
+  return and(
+    inArray(bookings.status, [...RELEASABLE_STATUSES]),
+    ...payoutOwedClauses(),
+    not(payoutResidualHeld()),
+    lte(bookings.eventDate, dueThroughDate),
+    eq(vendorProfiles.payoutHold, false),
+    not(
+      unfinishedUnwindExpr(
+        { isBanned: users.isBanned, bannedAt: users.bannedAt, deletedAt: users.deletedAt },
+        bookings.eventDate,
+      ),
+    ),
+  );
+}
+
+/**
+ * How many bookings the sweep would pick up for `dueThroughDate`, by the very
+ * predicate `findDuePayoutBookingIds` scans with. The digest counts these for a
+ * date one sweep interval old: whatever is still here then has been passed over
+ * by every sweep since, which is a stopped or failing sweep, not a slow one.
+ */
+export async function countDuePayoutBookings(
+  db: AppDatabase,
+  dueThroughDate: string,
+): Promise<number> {
+  const rows = await db
+    .select({ count: count() })
+    .from(bookings)
+    .innerJoin(vendorProfiles, eq(bookings.vendorId, vendorProfiles.id))
+    .innerJoin(users, eq(vendorProfiles.userId, users.id))
+    .where(duePayoutPredicate(dueThroughDate));
+
+  return rows[0]?.count ?? 0;
+}
+
 /**
  * The ids of every booking whose payout has come due, oldest event first.
  *
@@ -318,21 +356,7 @@ export async function findDuePayoutBookingIds(
      */
     .innerJoin(vendorProfiles, eq(bookings.vendorId, vendorProfiles.id))
     .innerJoin(users, eq(vendorProfiles.userId, users.id))
-    .where(
-      and(
-        inArray(bookings.status, [...RELEASABLE_STATUSES]),
-        ...payoutOwedClauses(),
-        not(payoutResidualHeld()),
-        lte(bookings.eventDate, dueThroughDate),
-        eq(vendorProfiles.payoutHold, false),
-        not(
-          unfinishedUnwindExpr(
-            { isBanned: users.isBanned, bannedAt: users.bannedAt, deletedAt: users.deletedAt },
-            bookings.eventDate,
-          ),
-        ),
-      ),
-    )
+    .where(duePayoutPredicate(dueThroughDate))
     /*
      * Fewest failures first, then oldest event.
      *
