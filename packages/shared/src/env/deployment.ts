@@ -10,7 +10,7 @@
  * taught once.
  *
  * Nothing here is a registry row on purpose: these are variables the *platform*
- * injects, not values an operator writes into `.env`.
+ * injects, not values an admin writes into `.env`.
  */
 
 import { trimTrailingSlashes } from '../utils/trim-slashes.js';

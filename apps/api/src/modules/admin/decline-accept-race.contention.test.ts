@@ -37,7 +37,7 @@ import {
 describe('declining a pending request while a rival accepts the same date', () => {
   /*
    * Below `ADMIN_DESTRUCTIVE_ACTIONS_PER_HOUR` (10): each trial bans a fresh
-   * customer, and the hourly ceiling on bans and closures is real per-operator
+   * customer, and the hourly ceiling on bans and closures is real per-admin
    * state, not something a test clock can fast-forward past.
    */
   const TRIALS = 8;

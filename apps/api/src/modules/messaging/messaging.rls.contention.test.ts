@@ -131,10 +131,10 @@ describe('with the API ownership check taken away', () => {
     ).rejects.toThrow();
   });
 
-  it('gives the operator export path the thread, and an admin on a participant path nothing', async () => {
-    const asOperator = await withRequestIdentity(
+  it('gives the admin export path the thread, and an admin on a participant path nothing', async () => {
+    const asAdmin = await withRequestIdentity(
       api,
-      { userId: stranger.id, role: 'admin', operator: true },
+      { userId: stranger.id, role: 'admin', admin: true },
       (tx) => findExportMessages(tx, customer.id, null),
     );
     const asParticipantPath = await withRequestIdentity(
@@ -143,7 +143,7 @@ describe('with the API ownership check taken away', () => {
       (tx) => findExportMessages(tx, customer.id, null),
     );
 
-    expect(asOperator.map((row) => row.content)).toEqual(['Are you free on the 14th?', 'I am.']);
+    expect(asAdmin.map((row) => row.content)).toEqual(['Are you free on the 14th?', 'I am.']);
     expect(asParticipantPath).toEqual([]);
   });
 

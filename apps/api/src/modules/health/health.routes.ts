@@ -15,7 +15,7 @@ const dependencyStateSchema = z.enum(['up', 'down']);
 
 /**
  * `behind` is a database that answers but has fewer migrations applied than
- * this build ships. It is its own state, not `down`, so the operator reads the
+ * this build ships. It is its own state, not `down`, so the admin reads the
  * cause: the fix is running the migration, not restarting anything.
  */
 const databaseStateSchema = z.enum(['up', 'down', 'behind']);

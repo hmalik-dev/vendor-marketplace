@@ -1,4 +1,4 @@
-import { operatorAlerts, stripeWebhookFailures } from '@vendor-marketplace/db/schema';
+import { adminAlerts, stripeWebhookFailures } from '@vendor-marketplace/db/schema';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestHarness, TEST_ENV, type TestHarness } from '../../testing/test-server.js';
 
@@ -10,7 +10,7 @@ describe('Stripe webhook rate limiting', () => {
   });
 
   afterAll(async () => {
-    await harness.database.db.delete(operatorAlerts);
+    await harness.database.db.delete(adminAlerts);
     await harness.database.db.delete(stripeWebhookFailures);
     await harness.close();
   });

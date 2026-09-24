@@ -379,7 +379,7 @@ export function refundSchedule(
     /*
      * Not a refund claim either. It is where the customer's money goes: #423
      * holds the payment until the event and releases it `PAYOUT_RELEASE_HOURS`
-     * later, so past this row a cancellation is an unwind an operator has to
+     * later, so past this row a cancellation is an unwind an admin has to
      * drive rather than a refund (D31).
      */
     { kind: 'release', from: releaseAt, until: null, refundCents: null },
@@ -774,7 +774,7 @@ export type PayoutFailureSubject = PayoutStatusSubject & {
  * **Deliberately not a fourth `PayoutStatus`.** `payoutStatusOf` omits `failed`
  * on purpose: a failed transfer is retried every quarter of an hour and
  * self-heals, so surfacing it to a *vendor* would alarm them about something
- * already in hand. An operator is the one reader who has to know, and this is
+ * already in hand. An admin is the one reader who has to know, and this is
  * the fact they need — beside the shared status rather than as a rival reading
  * of it.
  *
@@ -782,7 +782,7 @@ export type PayoutFailureSubject = PayoutStatusSubject & {
  * clears.** `payout_attempts > 0 and not released` looks like the whole answer
  * and is not: a booking whose transfer failed once and was then *fully
  * refunded* has `vendor_payout_cents` rewritten to `0` (D37), which drops it
- * out of the sweep's own predicate for ever — so it would sit in the operator's
+ * out of the sweep's own predicate for ever — so it would sit in the admin's
  * failing list permanently, pinning an alert that says the scheduled release
  * keeps trying, about a row the scheduled release will never touch again. A
  * dispute filed after a failed attempt is the same shape: it is `held`, which
@@ -822,7 +822,7 @@ export type PayoutStrandedSubject = PayoutStatusSubject & {
  * The sweep still attempts and records failures for a merely-banned-or-closed
  * vendor's row, so this is not "the sweep leaves it out" any more — it is the
  * one case even the sweep's own retries cannot self-heal. It is a flag beside
- * the shared status for the same reason `isPayoutFailing` is: an operator's
+ * the shared status for the same reason `isPayoutFailing` is: an admin's
  * fact, not a fourth state a vendor or customer surface should have to draw.
  */
 export function isPayoutStranded(booking: PayoutStrandedSubject): boolean {

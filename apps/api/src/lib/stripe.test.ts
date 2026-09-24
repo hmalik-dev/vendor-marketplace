@@ -379,7 +379,7 @@ describe('readAccountStatusFrom', () => {
    *
    * Every field here is one Stripe owns: `status_details[].code` from its
    * closed vocabulary, and `requirements.entries[]` with the two properties
-   * that decide whether an entry is worth showing an operator —
+   * that decide whether an entry is worth showing an admin —
    * `awaiting_action_from` and `minimum_deadline.status`.
    */
   const RESTRICTED = {

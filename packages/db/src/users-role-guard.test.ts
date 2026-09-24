@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestDatabase, refusalOf, type TestDatabase } from './testing/test-db.js';
 
 /**
- * `users.role` changes only inside a transaction that names the operator-grant
+ * `users.role` changes only inside a transaction that names the admin-grant
  * setting, proved by attempting the writes against the engine rather than by
  * reading the DDL.
  */
@@ -37,7 +37,7 @@ describe('users.role guard', () => {
       `UPDATE users SET role = 'admin' WHERE id = '${USER}'`,
     );
 
-    expect(refusal).toContain('users.role can only change through the operator grant path');
+    expect(refusal).toContain('users.role can only change through the admin grant path');
     expect(await roleOf()).toBe('customer');
   });
 

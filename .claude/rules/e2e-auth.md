@@ -30,15 +30,15 @@ Customer and vendor are **Neon Auth** identities on the `dev` branch
 (`br-silent-queen-ax78ksii`), created once with a verified address, so signing in
 is an email and a password: no challenge, no code, no inbox. A third persistent
 account, `E2E_NEWCOMER_EMAIL`, has **no `users` row** and must never accept the
-Terms — it is the no-row persona (`e2e/no-row-account.ts`). The operator account
+Terms — it is the no-row persona (`e2e/no-row-account.ts`). The admin account
 is the fourth, `E2E_ADMIN_EMAIL` / `E2E_ADMIN_PASSWORD`: an identity like the
 others, but the one that `db:seed:e2e` gives `users.role = 'admin'` — the role
 is never reachable by signing up. `db:seed:e2e` resolves its id by signing in
 as it, exactly as it does the customer and vendor, so all three roles come from
 one mechanism. **Never close it**: closing an account deletes its Neon Auth
 identity, the seed resolves ids and cannot rebuild one, and `/admin` is then
-unreachable until a person recreates it. The operator-closure spec closes a
-disposable `seed_e2e_…` operator row instead.
+unreachable until a person recreates it. The admin-closure spec closes a
+disposable `seed_e2e_…` admin row instead.
 
 ## Rules
 

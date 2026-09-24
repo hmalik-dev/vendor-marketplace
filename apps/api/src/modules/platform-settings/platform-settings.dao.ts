@@ -19,7 +19,7 @@ export async function findPlatformSettings(db: AppDatabase): Promise<PlatformSet
   return rows?.[0] ?? null;
 }
 
-/** The row with the name of the operator who last changed it. */
+/** The row with the name of the admin who last changed it. */
 export async function findPlatformSettingsWithEditor(
   db: AppDatabase,
 ): Promise<{ row: PlatformSettingsRow; updatedByName: string | null } | null> {
@@ -48,7 +48,7 @@ export async function findPlatformSettingsWithEditor(
 
 /**
  * Creates the row if it is missing and takes its lock, in the caller's
- * transaction, so two operators flipping at once each read the other's result
+ * transaction, so two admins flipping at once each read the other's result
  * as their "before".
  */
 export async function lockPlatformSettings(tx: AppDatabase): Promise<PlatformSettingsRow> {
@@ -81,7 +81,7 @@ export async function updatePlatformSettingsRow(
     .where(eq(platformSettings.id, PLATFORM_SETTINGS_ID));
 }
 
-/** Every vendor an operator is holding payouts for, by name. */
+/** Every vendor an admin is holding payouts for, by name. */
 export async function findHeldVendors(db: AppDatabase): Promise<AdminHeldVendor[]> {
   return db
     .select({

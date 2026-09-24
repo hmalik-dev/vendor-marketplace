@@ -48,7 +48,7 @@ export function TagCategorySection({
   const options = allTags.filter((tag) => tag.category === category);
   const selectedIds = new Set(selectedTagIds);
   const selected = options.filter((tag) => selectedIds.has(tag.id));
-  // A tag an operator has since deactivated is held, not offered: it shows as a
+  // A tag an admin has since deactivated is held, not offered: it shows as a
   // removable pill but is not a choice once it is removed.
   const choices = options.filter((tag) => tag.isActive || selectedIds.has(tag.id));
   const atLimit = selected.length >= MAX_TAGS_PER_CATEGORY;
@@ -96,7 +96,7 @@ export function TagCategorySection({
             {/*
               A placeholder is not an accessible name: it is a fallback some
               readers use and others ignore, and it disappears the moment the
-              operator types. Named explicitly, once per category, so the three
+              admin types. Named explicitly, once per category, so the three
               search boxes on this screen are told apart rather than all
               reading as "search".
             */}

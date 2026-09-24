@@ -69,7 +69,7 @@ const COMPANY_LINKS = [
  * dashboard — so for them it has always been a link that silently goes
  * somewhere else, and it goes now with the customer's.
  *
- * A signed-out visitor and an operator both render the section and keep it.
+ * A signed-out visitor and an admin both render the section and keep it.
  * Written as the roles that *lose* it, because that is the question being
  * asked: not "who is signed in" but "for whom does the target exist".
  */
@@ -113,7 +113,7 @@ const SIGNED_OUT_LINKS = [
  * specifically is forbidden outright: `20-customer-bookings-hub.md`'s
  * acceptance is *"the word 'dashboard' appears nowhere in the UI"*.
  *
- * An operator gets the console and nothing else. `/messages` and a profile are
+ * An admin gets the console and nothing else. `/messages` and a profile are
  * customer-and-vendor surfaces; an admin has neither, and offering them rows
  * that bounce would be worse than a short column.
  */

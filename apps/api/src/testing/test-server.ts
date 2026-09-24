@@ -52,7 +52,7 @@ import { buildServer } from '../server.js';
 import { StepUpStore } from '../lib/step-up.js';
 import type { Clock } from '../plugins/clock.js';
 
-/** A store that treats every operator as freshly confirmed; see `enforceStepUp`. */
+/** A store that treats every admin as freshly confirmed; see `enforceStepUp`. */
 class AlwaysFreshStepUpStore extends StepUpStore {
   override async isFresh(): Promise<boolean> {
     return true;
@@ -124,7 +124,7 @@ export const TEST_ENV: ApiEnv = {
   RESEND_WEBHOOK_SECRET: ['whsec', 'not', 'used', 'by', 'the', 'suites'].join('_'),
   EMAIL_FROM: 'noreply@test.invalid',
   SUPPORT_EMAIL_TO: 'support@test.invalid',
-  OPERATOR_ALERT_EMAIL: 'operator@test.invalid',
+  OPERATOR_ALERT_EMAIL: 'admin@test.invalid',
   OPERATOR_TIMEZONE: 'America/New_York',
 };
 
@@ -185,7 +185,7 @@ export interface TestHarnessOptions<TDatabase extends HarnessDatabase = TestData
   /**
    * The real step-up store (VEN-500), for the suites whose subject is the
    * control itself. Every other suite is about what an admin route does once an
-   * operator is confirmed, so it gets a store that is always fresh; the
+   * admin is confirmed, so it gets a store that is always fresh; the
    * production wiring never can be, because `buildServer` builds the real one.
    */
   enforceStepUp?: boolean;
@@ -500,7 +500,7 @@ export interface FakeStripe extends StripeConnectGateway {
    */
   intentsByKey: Map<string, string>;
   /** Refunds asked for, in order, so a suite can assert exact cent amounts. */
-  /** `reason` is absent on an operator-driven refund — see `CreateRefundInput`. */
+  /** `reason` is absent on an admin-driven refund — see `CreateRefundInput`. */
   refunds: {
     paymentIntentId: string;
     amountCents: number;
@@ -1261,12 +1261,12 @@ export async function createTestHarness(
     emailRetryIntervalMs: 0,
     // Nor the upload sweep: suites call `sweepOrphanedUploads` with a pinned clock.
     uploadSweepIntervalMs: 0,
-    // The digest likewise: suites call `runOperatorDigest` with a pinned clock.
-    operatorDigestIntervalMs: 0,
+    // The digest likewise: suites call `runAdminDigest` with a pinned clock.
+    adminDigestIntervalMs: 0,
     // And the balance reconciliation: suites call `reconcilePlatformBalance`.
     platformBalanceIntervalMs: 0,
     // Alert send retries do not wait on a real timer in a suite.
-    operatorAlertWait: async () => undefined,
+    adminAlertWait: async () => undefined,
     ...(options.enforceStepUp ? {} : { stepUp: new AlwaysFreshStepUpStore(database.db) }),
     ...(options.loggerStream ? { loggerStream: options.loggerStream } : {}),
     ...(options.clock ? { clock: options.clock } : {}),
@@ -1447,7 +1447,7 @@ export function bearer(authUserId: string): Record<string, string> {
  *
  * `promoteToAdmin` is a second step and cannot be a first one: `normalizeRole`
  * refuses `admin` from auth metadata **by design**, precisely so the role can
- * only be granted by an operator with database access. Every admin-facing suite
+ * only be granted by an admin with database access. Every admin-facing suite
  * therefore signs in and then promotes, and three of them had written that out
  * by hand before this lived here.
  */

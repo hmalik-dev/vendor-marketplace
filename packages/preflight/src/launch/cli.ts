@@ -7,7 +7,7 @@ import { renderLaunchReport, runLaunchChecks } from './run.js';
 /**
  * `pnpm launch:check` — whether production is configured for real users and
  * real money, read from the providers themselves. Read-only: every provider
- * call is a GET and the database session is `READ ONLY`. Run by the operator
+ * call is a GET and the database session is `READ ONLY`. Run by the admin
  * before a release; it needs production credentials, so never in CI.
  */
 const { env, envFileFound } = loadContext({ capabilities: [], target: 'production' });

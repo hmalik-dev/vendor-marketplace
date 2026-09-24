@@ -203,7 +203,7 @@ describe('every scheduled sweep plugin is monitored (VEN-671)', () => {
       'auth-reconcile.ts',
       'email-retry.ts',
       'expiry-sweep.ts',
-      'operator-alerts.ts',
+      'admin-alerts.ts',
       'payout-release.ts',
       'platform-balance.ts',
       'upload-sweep.ts',

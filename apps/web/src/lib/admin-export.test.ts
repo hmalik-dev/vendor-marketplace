@@ -13,7 +13,7 @@ import { adminQueryString } from './admin-params';
 /*
  * The shared `Export CSV` walk (VEN-388). `/admin/vendors` had the only one;
  * `/admin/activity` and `/admin/cases` now go through the same function, so
- * what is asserted here holds for all three files an operator can download.
+ * what is asserted here holds for all three files an admin can download.
  */
 describe('csvExport', () => {
   it('walks every page under the page’s own filters and quotes every field', async () => {

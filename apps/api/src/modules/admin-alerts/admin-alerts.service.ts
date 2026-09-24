@@ -1,12 +1,12 @@
 import {
   BRAND_NAME,
   formatPrice,
-  OPERATOR_ALERT_DEDUPE_MS,
+  ADMIN_ALERT_DEDUPE_MS,
   PAYOUT_FAILURE_ALERT_ATTEMPTS,
   STRIPE_WEBHOOK_FAILURE_THRESHOLD,
   STRIPE_WEBHOOK_FAILURE_WINDOW_MS,
   STRIPE_WEBHOOK_PERSISTED_FAILURE_WINDOW_MS,
-  type ImmediateOperatorAlertKind,
+  type ImmediateAdminAlertKind,
   type StripeWebhookFailureKind,
 } from '@vendor-marketplace/shared';
 import { randomUUID } from 'node:crypto';
@@ -25,29 +25,29 @@ import {
   recordAlertUnlessRecent,
   recordStripeWebhookFailure,
   releaseAlert,
-} from './operator-alerts.dao.js';
+} from './admin-alerts.dao.js';
 
 /**
- * Operator alerts (VEN-405): the events that need a person within hours, pushed
+ * Admin alerts (VEN-405): the events that need a person within hours, pushed
  * to one address instead of waiting in an admin list.
  *
  * **Never customer PII.** An alert carries ids, amounts, a vendor's business
- * name and an `/admin/...` link; the operator opens the console for the rest.
+ * name and an `/admin/...` link; the admin opens the console for the rest.
  * Every composer below is written to that rule, and a caller composing its own
  * alert (the launch switches, VEN-404) is held to it too.
  */
-export interface OperatorAlert {
-  kind: ImmediateOperatorAlertKind;
+export interface AdminAlert {
+  kind: ImmediateAdminAlertKind;
   /** Deduplication key within the kind — a case, booking or vendor id. */
   subjectId: string;
   /** One line; becomes the email subject. */
   summary: string;
   details: readonly string[];
-  /** Console path the operator should open, e.g. `/admin/cases/<id>`. */
+  /** Console path the admin should open, e.g. `/admin/cases/<id>`. */
   adminPath: string | null;
 }
 
-export interface OperatorAlertDeps {
+export interface AdminAlertDeps {
   db: AppDatabase;
   email: EmailGateway;
   log: FastifyBaseLogger;
@@ -68,25 +68,25 @@ export interface OperatorAlertDeps {
 }
 
 /** Waits before each retry of a failed alert send — two retries, then give up. */
-export const OPERATOR_ALERT_RETRY_DELAYS_MS = [2_000, 10_000] as const;
+export const ADMIN_ALERT_RETRY_DELAYS_MS = [2_000, 10_000] as const;
 
 /** When each alert last went out with no dedupe row behind it, per instance. */
 const unrecordedSends = new Map<string, number>();
 
 export type AlertResult = 'sent' | 'logged' | 'deduplicated' | 'failed';
 
-export interface RenderedOperatorEmail {
+export interface RenderedAdminEmail {
   subject: string;
   html: string;
   text: string;
 }
 
-/** The one layout every operator email uses, the digest included. */
-export function renderOperatorEmail(input: {
+/** The one layout every admin email uses, the digest included. */
+export function renderAdminEmail(input: {
   summary: string;
   details: readonly string[];
   link: string | null;
-}): RenderedOperatorEmail {
+}): RenderedAdminEmail {
   const lines = input.link === null ? input.details : [...input.details, `Open: ${input.link}`];
   const htmlLines = input.details.map((line) => `<p>${escapeHtml(line)}</p>`);
 
@@ -104,10 +104,10 @@ export function renderOperatorEmail(input: {
 
 /**
  * Sends one alert now, unless the same kind and subject was alerted within
- * `OPERATOR_ALERT_DEDUPE_MS`.
+ * `ADMIN_ALERT_DEDUPE_MS`.
  *
  * **Never throws.** Every caller is on a money or webhook path whose own
- * outcome must not depend on whether the operator's mail went out.
+ * outcome must not depend on whether the admin's mail went out.
  *
  * **A failed send is retried here**, under the same idempotency key, because
  * most of these events never recur: a chargeback's redelivery answers
@@ -117,10 +117,7 @@ export function renderOperatorEmail(input: {
  * and the loss is logged at `error`. A process killed mid-retry loses the
  * alert; `background.drain` covers a graceful shutdown.
  */
-export async function alertNow(
-  deps: OperatorAlertDeps,
-  alert: OperatorAlert,
-): Promise<AlertResult> {
+export async function alertNow(deps: AdminAlertDeps, alert: AdminAlert): Promise<AlertResult> {
   const now = deps.clock();
   const outcome = deps.to === undefined ? 'logged' : 'sent';
 
@@ -139,17 +136,17 @@ export async function alertNow(
     id = await recordAlertUnlessRecent(
       deps.db,
       { kind: alert.kind, subjectId: alert.subjectId, outcome, sentAt: now },
-      new Date(now.getTime() - OPERATOR_ALERT_DEDUPE_MS),
+      new Date(now.getTime() - ADMIN_ALERT_DEDUPE_MS),
     );
   } catch (error) {
     deps.log.error(
       { kind: alert.kind, subjectId: alert.subjectId, err: error },
-      'Could not record an operator alert; sending it unrecorded',
+      'Could not record an admin alert; sending it unrecorded',
     );
     const key = `${alert.kind}:${alert.subjectId}`;
     const last = unrecordedSends.get(key);
 
-    if (last !== undefined && now.getTime() - last < OPERATOR_ALERT_DEDUPE_MS) {
+    if (last !== undefined && now.getTime() - last < ADMIN_ALERT_DEDUPE_MS) {
       return 'deduplicated';
     }
 
@@ -167,14 +164,14 @@ export async function alertNow(
   if (deps.to === undefined) {
     deps.log.warn(
       { kind: alert.kind, subjectId: alert.subjectId, summary: alert.summary, link },
-      'Operator alert (OPERATOR_ALERT_EMAIL is not set, so it was logged rather than sent)',
+      'Admin alert (OPERATOR_ALERT_EMAIL is not set, so it was logged rather than sent)',
     );
     return 'logged';
   }
 
-  const rendered = renderOperatorEmail({ summary: alert.summary, details: alert.details, link });
+  const rendered = renderAdminEmail({ summary: alert.summary, details: alert.details, link });
 
-  for (const [attempt, delayMs] of OPERATOR_ALERT_RETRY_DELAYS_MS.entries()) {
+  for (const [attempt, delayMs] of ADMIN_ALERT_RETRY_DELAYS_MS.entries()) {
     try {
       await deps.email.send({ to: deps.to, ...rendered, idempotencyKey: id, essential: true });
       return 'sent';
@@ -186,7 +183,7 @@ export async function alertNow(
 
       deps.log.warn(
         { kind: alert.kind, subjectId: alert.subjectId, attempt: attempt + 1, err: error },
-        'An operator alert send failed; retrying',
+        'An admin alert send failed; retrying',
       );
       await deps.wait(delayMs);
     }
@@ -198,15 +195,15 @@ export async function alertNow(
   } catch (error) {
     deps.log.error(
       { kind: alert.kind, subjectId: alert.subjectId, err: error },
-      'An operator alert could not be sent after every retry',
+      'An admin alert could not be sent after every retry',
     );
     // The kind names what was lost; the summary and details can carry a person's name, so they stay out.
-    deps.reporter?.capture(new Error(`Operator alert could not be sent: ${alert.kind}`), {});
+    deps.reporter?.capture(new Error(`Admin alert could not be sent: ${alert.kind}`), {});
     if (recorded) {
       await releaseAlert(deps.db, id).catch((releaseError: unknown) => {
         deps.log.error(
           { kind: alert.kind, subjectId: alert.subjectId, err: releaseError },
-          'Could not release the record of an unsent operator alert',
+          'Could not release the record of an unsent admin alert',
         );
       });
     }
@@ -215,11 +212,11 @@ export async function alertNow(
 }
 
 /** An alert, or a lookup that composes one (and may find nothing to say). */
-export type AlertSource = OperatorAlert | (() => Promise<OperatorAlert | null>);
+export type AlertSource = AdminAlert | (() => Promise<AdminAlert | null>);
 
-export interface OperatorAlerts {
+export interface AdminAlerts {
   /** Sends and waits. For jobs with no request to answer. */
-  alertNow(alert: OperatorAlert): Promise<AlertResult>;
+  alertNow(alert: AdminAlert): Promise<AlertResult>;
   /**
    * Sends off the request path, through the same tracked background queue the
    * transactional email uses, so a shutdown drains it and a suite can await it.
@@ -227,7 +224,7 @@ export interface OperatorAlerts {
   dispatch(source: AlertSource): void;
 }
 
-export function createOperatorAlerts(deps: OperatorAlertDeps): OperatorAlerts {
+export function createAdminAlerts(deps: AdminAlertDeps): AdminAlerts {
   return {
     alertNow: (alert) => alertNow(deps, alert),
     dispatch(source) {
@@ -248,7 +245,7 @@ export function createOperatorAlerts(deps: OperatorAlertDeps): OperatorAlerts {
 export async function disputeOpenedAlert(
   db: AppDatabase,
   stripeDisputeId: string,
-): Promise<OperatorAlert | null> {
+): Promise<AdminAlert | null> {
   const subject = await findDisputeAlertSubject(db, stripeDisputeId);
 
   if (!subject) {
@@ -274,7 +271,7 @@ export async function disputeOpenedAlert(
 /**
  * A chargeback on a charge no booking here owns. Stripe has still debited the
  * disputed amount and fee from the platform balance and the evidence deadline
- * runs regardless, but there is no case to work from — so the operator is told
+ * runs regardless, but there is no case to work from — so the admin is told
  * directly, by payment intent, and answers in the Stripe dashboard.
  *
  * Shares `dispute_opened`'s kind with its own `pi:` subject, so it dedupes
@@ -284,7 +281,7 @@ export function unmatchedDisputeAlert(input: {
   disputeId: string;
   paymentIntentId: string;
   amountCents: number;
-}): OperatorAlert {
+}): AdminAlert {
   return {
     kind: 'dispute_opened',
     subjectId: `pi:${input.paymentIntentId}`,
@@ -306,7 +303,7 @@ export function earlyFraudWarningAlert(input: {
   reference: string;
   bookingId: string;
   fraudType: string;
-}): OperatorAlert {
+}): AdminAlert {
   return {
     kind: 'early_fraud_warning',
     subjectId: input.caseId,
@@ -330,7 +327,7 @@ export async function vendorBankPayoutFailedAlert(
   db: AppDatabase,
   stripeAccountId: string,
   payout: { payoutId: string; amountCents: number; failureMessage: string | null },
-): Promise<OperatorAlert | null> {
+): Promise<AdminAlert | null> {
   const vendor = await findVendorAlertSubject(db, stripeAccountId);
 
   if (!vendor) {
@@ -354,7 +351,7 @@ export async function vendorBankPayoutFailedAlert(
 export async function vendorPayoutsDisabledAlert(
   db: AppDatabase,
   stripeAccountId: string,
-): Promise<OperatorAlert | null> {
+): Promise<AdminAlert | null> {
   const vendor = await findVendorAlertSubject(db, stripeAccountId);
 
   if (!vendor) {
@@ -383,7 +380,7 @@ export function payoutFailedAlert(input: {
   attempts: number;
   amountCents: number;
   reason: string;
-}): OperatorAlert | null {
+}): AdminAlert | null {
   if (input.attempts < PAYOUT_FAILURE_ALERT_ATTEMPTS) {
     return null;
   }
@@ -414,7 +411,7 @@ export function platformBalanceShortAlert(input: {
   pendingCents: number;
   unreleasedPayoutCents: number;
   refundableExposureCents: number;
-}): OperatorAlert {
+}): AdminAlert {
   const balanceCents = input.availableCents + input.pendingCents;
   const requiredCents = input.unreleasedPayoutCents + input.refundableExposureCents;
 
@@ -440,7 +437,7 @@ export function refundFailedAlert(input: {
   bookingId: string;
   during: string;
   refundId?: string;
-}): OperatorAlert {
+}): AdminAlert {
   const { bookingId, during, refundId } = input;
 
   return {
@@ -472,7 +469,7 @@ export function externalRefundAlert(input: {
   externalCents: number;
   outcome: 'held' | 'recorded';
   payoutReleased: boolean;
-}): OperatorAlert {
+}): AdminAlert {
   return {
     kind: 'refund_unrecorded',
     subjectId: `${input.bookingId}:${input.externalCents}`,
@@ -496,7 +493,7 @@ export type RefusedPaymentCause = 'declined_request' | 'duplicate_intent' | 'ven
 /**
  * A refund Stripe later failed on a payment no booking owns — the refund of a
  * charge on a request the platform had already declined, which by design has no
- * booking row. The operator was told that refund was on its way, so this is the
+ * booking row. The admin was told that refund was on its way, so this is the
  * correction, keyed on the payment intent.
  */
 export function unmatchedRefundFailedAlert(input: {
@@ -504,7 +501,7 @@ export function unmatchedRefundFailedAlert(input: {
   paymentIntentId: string;
   status: string;
   amountCents: number;
-}): OperatorAlert {
+}): AdminAlert {
   return {
     kind: 'refund_failed',
     subjectId: `pi:${input.paymentIntentId}`,
@@ -551,7 +548,7 @@ export function paymentRefusedAlert(input: {
   amountCents: number;
   refunded: boolean;
   cause: RefusedPaymentCause;
-}): OperatorAlert {
+}): AdminAlert {
   const wording = REFUSED_PAYMENT_WORDING[input.cause];
 
   return {
@@ -559,7 +556,7 @@ export function paymentRefusedAlert(input: {
     /*
      * Two subjects, deduplicated apart: the failed refund is raised and then
      * redelivered into a success, and one shared key would let the first alert
-     * swallow the second, leaving the operator told a charge is still unrefunded.
+     * swallow the second, leaving the admin told a charge is still unrefunded.
      */
     subjectId: `${input.requestId}:${input.refunded ? 'refunded' : 'unrefunded'}`,
     summary: input.refunded
@@ -587,7 +584,7 @@ export function expiryPaymentUnsettledAlert(input: {
   requestId: string;
   paymentIntentId: string;
   attempts: number;
-}): OperatorAlert {
+}): AdminAlert {
   return {
     kind: 'expiry_payment_unsettled',
     subjectId: input.requestId,
@@ -609,7 +606,7 @@ export function reportFiledAlert(input: {
   subjectLabel: string;
   reasonLabel: string;
   vendorBusinessName: string;
-}): OperatorAlert {
+}): AdminAlert {
   return {
     kind: 'report_filed',
     subjectId: input.caseId,
@@ -644,7 +641,7 @@ export function stripeWebhookFailingAlert(
   failure: StripeWebhookFailure,
   failures: number,
   windowMs: number = STRIPE_WEBHOOK_FAILURE_WINDOW_MS,
-): OperatorAlert {
+): AdminAlert {
   const span =
     windowMs >= 60 * 60_000 ? `${windowMs / 3_600_000} hours` : `${windowMs / 60_000} minutes`;
   const { verb, described } = FAILURE_DESCRIPTIONS[failure];

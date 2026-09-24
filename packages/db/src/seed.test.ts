@@ -74,9 +74,9 @@ describe('seedCategories', () => {
 
   /*
    * VEN-401. The console deactivates and reorders categories; a re-seed that
-   * reset both would undo an operator's decision on the next lane or CI run.
+   * reset both would undo an admin's decision on the next lane or CI run.
    */
-  it("keeps an operator's order and deactivation across a re-seed", async () => {
+  it("keeps an admin's order and deactivation across a re-seed", async () => {
     const seed = CATEGORY_SEEDS[1];
     expect(seed).toBeDefined();
 

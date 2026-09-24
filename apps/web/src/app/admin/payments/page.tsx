@@ -37,7 +37,7 @@ export default async function AdminPaymentsPage({
    * Cancelled bookings are excluded from the sum, and carry a pill saying so.
    *
    * `cancelBooking` never clears `paid_at`, so a fully refunded booking stays
-   * on this list — correctly, because the money did move and an operator has to
+   * on this list — correctly, because the money did move and an admin has to
    * be able to find it. What was wrong was counting it: the Overview's Revenue
    * card excludes cancelled bookings, so the same dollar read as taken here and
    * given back there, on two screens one person compares.

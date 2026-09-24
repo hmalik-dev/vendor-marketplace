@@ -1,4 +1,4 @@
-import { bookings, operatorAlerts, supportCases } from '@vendor-marketplace/db/schema';
+import { bookings, adminAlerts, supportCases } from '@vendor-marketplace/db/schema';
 import { randomUUID } from 'node:crypto';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createTestHarness, type TestHarness } from '../../testing/test-server.js';
@@ -35,9 +35,7 @@ describe('POST /webhooks/stripe for an object another deployment created', () =>
   }
 
   async function nobodyWasTold() {
-    expect(
-      await harness.database.db.select({ id: operatorAlerts.id }).from(operatorAlerts),
-    ).toEqual([]);
+    expect(await harness.database.db.select({ id: adminAlerts.id }).from(adminAlerts)).toEqual([]);
     expect(harness.email.sent).toEqual([]);
   }
 
@@ -46,7 +44,7 @@ describe('POST /webhooks/stripe for an object another deployment created', () =>
   });
 
   afterEach(async () => {
-    await harness.database.db.delete(operatorAlerts);
+    await harness.database.db.delete(adminAlerts);
     await harness.database.db.delete(supportCases);
     harness.email.sent.length = 0;
     harness.stripe.paymentIntents.clear();

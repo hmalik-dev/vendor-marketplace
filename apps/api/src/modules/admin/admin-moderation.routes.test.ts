@@ -382,7 +382,7 @@ describe('admin graduated moderation', () => {
   // --- Acceptance 1, 2 and 9: a storefront comes down without a ban ---------
 
   describe('PUT /admin/vendors/:vendorId/publish', () => {
-    /* VEN-509: an operator's republish runs the same blockers, agreement included. */
+    /* VEN-509: an admin's republish runs the same blockers, agreement included. */
     it('refuses to publish a vendor who has not accepted the agreement, then allows it once they do', async () => {
       await signIn(ADMIN, true);
       const vendor = await seedVendor([150_000], { acceptsAgreement: false });
@@ -842,7 +842,7 @@ describe('admin graduated moderation', () => {
       ]);
     });
 
-    it('shows the operator which reviews are hidden', async () => {
+    it('shows the admin which reviews are hidden', async () => {
       await signIn(ADMIN, true);
       const customerId = await signIn(CUSTOMER);
       const vendor = await seedVendor();
@@ -1071,7 +1071,7 @@ describe('admin graduated moderation', () => {
     /**
      * Publishing requires one bookable package, so removing the last one takes
      * the storefront with it — the same rule the vendor's own editor enforces.
-     * The operator asked to remove a service and took a business off the
+     * The admin asked to remove a service and took a business off the
      * marketplace, so the result has to say so.
      */
     it('unpublishes the storefront when the last bookable package goes', async () => {
@@ -1129,7 +1129,7 @@ describe('admin graduated moderation', () => {
      *
      * The one behaviour this path does not share with the vendor's own delete is
      * that it reaps with the *vendor's* user id rather than the caller's, and
-     * `reapObjects` swallows every failure — so passing the operator's id would
+     * `reapObjects` swallows every failure — so passing the admin's id would
      * leave every removed photo in the bucket, silently, and a test that only
      * checked the row would stay green through it.
      */
@@ -1184,7 +1184,7 @@ describe('admin graduated moderation', () => {
    * levers enforcing rather than advisory.
    *
    * Before it, `is_published` and `is_active` were each written by two parties
-   * and the second silently undid the first: an operator took a storefront down
+   * and the second silently undid the first: an admin took a storefront down
    * for a policy breach and the vendor put it back from their own dashboard
    * seconds later, with no refusal and no notification. Every test here is
    * therefore written against **the vendor's own route**, signed in as the
@@ -1247,7 +1247,7 @@ describe('admin graduated moderation', () => {
 
     // --- Acceptance 1 -------------------------------------------------------
 
-    it('refuses the vendor republishing a storefront an operator took down', async () => {
+    it('refuses the vendor republishing a storefront an admin took down', async () => {
       await signIn(ADMIN, true);
       const vendor = await seedVendor();
       await unpublishAsAdmin(vendor.id);
@@ -1307,7 +1307,7 @@ describe('admin graduated moderation', () => {
 
     // --- Acceptance 2 -------------------------------------------------------
 
-    it('refuses the vendor reactivating a package an operator switched off', async () => {
+    it('refuses the vendor reactivating a package an admin switched off', async () => {
       await signIn(ADMIN, true);
       /*
        * Two packages, so deactivating one leaves the storefront live and its
@@ -1390,7 +1390,7 @@ describe('admin graduated moderation', () => {
 
     // --- Acceptance 3 -------------------------------------------------------
 
-    it('lets the vendor publish again once an operator clears the hold', async () => {
+    it('lets the vendor publish again once an admin clears the hold', async () => {
       await signIn(ADMIN, true);
       const vendor = await seedVendor();
       await unpublishAsAdmin(vendor.id);
@@ -1430,7 +1430,7 @@ describe('admin graduated moderation', () => {
       expect(profile.statusCode).toBe(200);
     });
 
-    it('lets the vendor switch a package back on once an operator reactivates it', async () => {
+    it('lets the vendor switch a package back on once an admin reactivates it', async () => {
       await signIn(ADMIN, true);
       const vendor = await seedVendor([150_000, 90_000]);
       const heldPackageId = vendor.packageIds[1]!;
@@ -1664,7 +1664,7 @@ describe('admin graduated moderation', () => {
      * route's no-op check, so `{ isPublished: false }` against a paused
      * storefront answered 409 and wrote nothing. A vendor who took themselves
      * down first — which is what a vendor does when support contacts them — was
-     * the one vendor an operator could not hold, and every storefront the
+     * the one vendor an admin could not hold, and every storefront the
      * last-package cascade or a lifted ban had left down was in the same state.
      */
     it('holds a storefront the vendor had already taken down themselves', async () => {
@@ -1745,7 +1745,7 @@ describe('admin graduated moderation', () => {
     /*
      * The other half of the same rule: a request that would change neither
      * column is still a 409. Without this the route would append an audit row
-     * every time an operator pressed a button twice, and "how many storefronts
+     * every time an admin pressed a button twice, and "how many storefronts
      * did we take down last week" would count presses instead of takedowns.
      */
     it('still refuses a press that would change nothing', async () => {
@@ -1871,7 +1871,7 @@ describe('admin graduated moderation', () => {
       expect(deactivated.json().vendorUnpublished).toBe(true);
 
       /*
-       * The operator decided about a **package**. Holding the storefront for it
+       * The admin decided about a **package**. Holding the storefront for it
        * would leave the vendor unable to publish a storefront nobody moderated,
        * with no lever in the console that says so. The package's own hold is
        * what stops them trading, and `publishBlockers` is what refuses the

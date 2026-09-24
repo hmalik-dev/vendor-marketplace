@@ -26,14 +26,14 @@ async function bootedApp(directory: object | null = { lookup: vi.fn() }, interva
   await app.register(
     fp(
       async (instance) => {
-        instance.decorate('operatorAlerts', { dispatch: () => undefined } as never);
+        instance.decorate('adminAlerts', { dispatch: () => undefined } as never);
         instance.decorate('db', {} as never);
         instance.decorate('stripe', {} as never);
         instance.decorate('events', {} as never);
         instance.decorate('email', {} as never);
         instance.decorate('background', {} as never);
       },
-      { name: 'operator-alerts' },
+      { name: 'admin-alerts' },
     ),
   );
   await app.register(

@@ -14,7 +14,7 @@ export interface JumpCategory {
  * The ruled jump shortcuts (#419) that the live taxonomy still offers.
  *
  * The four and their order are a design ruling, so they stay a constant; an
- * operator can hide one from the console (VEN-401), and a shortcut to a hidden
+ * admin can hide one from the console (VEN-401), and a shortcut to a hidden
  * category opens a search filtered on nothing. An empty `categories` means the
  * taxonomy read degraded rather than that every category is hidden, so the
  * row keeps all four instead of vanishing during an API outage.

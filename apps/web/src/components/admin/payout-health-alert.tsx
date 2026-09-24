@@ -31,7 +31,7 @@ export interface PayoutHealthAlertProps {
  * unaware.
  *
  * Both numbers are query results read at request time, and the sentence leads
- * to the rows behind them — a count an operator cannot act on is the furniture
+ * to the rows behind them — a count an admin cannot act on is the furniture
  * `page.tsx` already warns about.
  */
 export function PayoutHealthAlert({

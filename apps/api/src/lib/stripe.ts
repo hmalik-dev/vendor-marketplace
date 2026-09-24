@@ -132,7 +132,7 @@ export interface StripeConnectGateway {
    * The `charge.dispute.*` handler re-reads for the same reason the intent
    * handler does and the account handler does: the event body is
    * attacker-shaped input that happens to be signed, and the amount and reason
-   * on it are what the operator's case will quote. The figures that reach the
+   * on it are what the admin's case will quote. The figures that reach the
    * row are the ones Stripe answers with, never the ones that arrived.
    */
   retrieveDispute(disputeId: string): Promise<StripeDisputeSnapshot>;
@@ -371,9 +371,9 @@ export interface CreateRefundInput {
   paymentIntentId: string;
   amountCents: number;
   /**
-   * Distinguishes a customer cancellation from an operator-driven one.
+   * Distinguishes a customer cancellation from an admin-driven one.
    *
-   * **Omitted for an operator-driven refund**, which is the accurate signal:
+   * **Omitted for an admin-driven refund**, which is the accurate signal:
    * Stripe's vocabulary is `duplicate`, `fraudulent` and
    * `requested_by_customer`, and a refund the *platform* issued when it
    * suspended an account (#15) is none of the three. Sending
@@ -687,7 +687,7 @@ export const PAYMENT_INTENT_PROCESSING = 'processing';
  *
  * `status` and `reason` are **Stripe's vocabulary in plain strings**, not enums
  * of ours. Both are lists Stripe owns and extends, and a member we had not heard
- * of must reach the operator's case rather than fail a webhook we are obliged to
+ * of must reach the admin's case rather than fail a webhook we are obliged to
  * acknowledge — the same reasoning `support_cases.network_outcome` carries.
  */
 export interface StripeDisputeSnapshot {
@@ -928,7 +928,7 @@ export function describeAccountEvent(verified: unknown): StripeEventNotification
  *
  * `eventually_due` is deliberately excluded: every account carries some of
  * those from the moment it is created, so surfacing them would put a permanent
- * list in front of an operator looking for the thing that is actually wrong.
+ * list in front of an admin looking for the thing that is actually wrong.
  */
 const OUTSTANDING_REQUIREMENT_STATUSES = new Set(['currently_due', 'past_due']);
 
@@ -957,7 +957,7 @@ function readDisabledReason(
  * What Stripe is still waiting on **from the vendor**.
  *
  * `awaiting_action_from === 'stripe'` is filtered out because there is nothing
- * anyone here can do about it, and an operator handed a list they cannot act on
+ * anyone here can do about it, and an admin handed a list they cannot act on
  * will chase the vendor for a document Stripe is already verifying.
  */
 function readRequirementsDue(account: Stripe.V2.Core.Account): string[] {
@@ -1171,7 +1171,7 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
          * `requirements` as well as the capabilities, because the capability
          * status says only *that* payouts are off and the requirement entries
          * say what would turn them back on — which is the whole question an
-         * operator looking at a restricted vendor is asking (#432).
+         * admin looking at a restricted vendor is asking (#432).
          */
         include: ['configuration.recipient', 'requirements'],
       });

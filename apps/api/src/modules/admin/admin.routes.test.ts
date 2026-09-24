@@ -22,7 +22,7 @@ import {
   vendorTags,
 } from '@vendor-marketplace/db/schema';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import type { AlertSource } from '../operator-alerts/operator-alerts.service.js';
+import type { AlertSource } from '../admin-alerts/admin-alerts.service.js';
 import { bookingContextFor } from '../payments/payments.service.js';
 import { SUSPENSION_UNWIND, unwindAccountBookings } from './account-unwind.js';
 import {
@@ -225,7 +225,7 @@ describe('admin routes', () => {
       { method: 'GET', url: '/v1/admin/tags' },
       /*
        * #434. The action log records what the console did to other people's
-       * accounts, so reading it is itself a privileged read — an operator's
+       * accounts, so reading it is itself a privileged read — an admin's
        * whole history is exactly what a stranger must not be able to walk.
        */
       { method: 'GET', url: '/v1/admin/activity' },
@@ -254,7 +254,7 @@ describe('admin routes', () => {
       { method: 'PUT', url: `/v1/admin/cases/${NIL}/resolve` },
       /*
        * #432. The retry moves money out of the platform's balance, so it is a
-       * write, not a refresh — and the operator who pressed it is recorded.
+       * write, not a refresh — and the admin who pressed it is recorded.
        */
       { method: 'PUT', url: `/v1/admin/bookings/${NIL}/payout/retry` },
       /*
@@ -289,9 +289,9 @@ describe('admin routes', () => {
       /* VEN-475. The web tier reports each CSV export here. */
       { method: 'POST', url: '/v1/admin/exports' },
       /* VEN-506. Whoever holds the console: granting and revoking it is privilege escalation. */
-      { method: 'GET', url: '/v1/admin/operators' },
-      { method: 'POST', url: '/v1/admin/operators' },
-      { method: 'DELETE', url: `/v1/admin/operators/${NIL}` },
+      { method: 'GET', url: '/v1/admin/admins' },
+      { method: 'POST', url: '/v1/admin/admins' },
+      { method: 'DELETE', url: `/v1/admin/admins/${NIL}` },
     ] as const;
 
     it('covers every route the admin plugin registers', async () => {
@@ -459,7 +459,7 @@ describe('admin routes', () => {
        * Retirement outranks the ban (#433). This row is *both* banned and
        * retired, which is the case that decides the precedence: an account
        * whose owner deleted their auth identity cannot be reinstated, so
-       * `flagged` would offer the operator a lever that does nothing.
+       * `flagged` would offer the admin a lever that does nothing.
        */
       await harness.database.db
         .update(vendorProfiles)
@@ -476,7 +476,7 @@ describe('admin routes', () => {
     /*
      * The console is the only place a retired account is visible at all, which
      * is the point of listing them (#433): every public read hides them, so an
-     * operator asking "what happened to this vendor" has nowhere else to look.
+     * admin asking "what happened to this vendor" has nowhere else to look.
      */
     it('lists a retired vendor and filters to it, and keeps it out of the other statuses', async () => {
       await signIn(ADMIN, true);
@@ -636,7 +636,7 @@ describe('admin routes', () => {
       expect(response.json().message).toBe('You cannot ban your own account');
     });
 
-    it('bans another admin, so one operator is not unremovable', async () => {
+    it('bans another admin, so one admin is not unremovable', async () => {
       await signIn(ADMIN, true);
       const other = await signIn(OTHER_ADMIN, true);
 
@@ -732,7 +732,7 @@ describe('admin routes', () => {
      * logged and continued — right, because a booking whose money did not come
      * back must not be cancelled underneath the customer, and one failure must
      * not abandon the rest of the ban — but `AdminBanResult` had no field for
-     * it, so the operator's table showed a clean suspension while a confirmed
+     * it, so the admin's table showed a clean suspension while a confirmed
      * booking stood on the account with neither party told and the money still
      * at Stripe.
      */
@@ -772,7 +772,7 @@ describe('admin routes', () => {
       const customerId = await signIn(CUSTOMER);
       const vendor = await createVendorProfile({ isPublished: true });
       const bookingId = await createFutureBooking(customerId, vendor.profileId);
-      /* A ban is taken once, so the unwind is re-run as an operator's retry would. */
+      /* A ban is taken once, so the unwind is re-run as an admin's retry would. */
       const unwind = () =>
         unwindAccountBookings(
           bookingContextFor(harness.app, harness.app.log, 'http://localhost:3000'),
@@ -1006,10 +1006,10 @@ describe('admin routes', () => {
 
     /*
      * #415. The customer's screen must not tell them they cancelled a booking
-     * an operator unwound, and reading that off `cancellation_reason` would
-     * make an operator-facing sentence load-bearing copy.
+     * an admin unwound, and reading that off `cancellation_reason` would
+     * make an admin-facing sentence load-bearing copy.
      */
-    it('records the unwind as the operator’s, with the whole charge refunded', async () => {
+    it('records the unwind as the admin’s, with the whole charge refunded', async () => {
       await signIn(ADMIN, true);
       const customerId = await signIn(CUSTOMER);
       const vendor = await createVendorProfile({ isPublished: true });
@@ -1190,7 +1190,7 @@ describe('admin routes', () => {
         expect(await actions()).toEqual(actionsBefore);
       });
 
-      it('cannot be re-run by anyone but an operator', async () => {
+      it('cannot be re-run by anyone but an admin', async () => {
         const { vendorUserId, intents } = await threeBookings();
         harness.stripe.refundsToRefuse.add(intents[1]!);
         await ban(vendorUserId);
@@ -1379,7 +1379,7 @@ describe('admin routes', () => {
     /*
      * The class of defect, already fixed once on public vendor search (#29) and
      * reintroduced verbatim here: `ilike` interpolates the pattern with no
-     * `ESCAPE`, so `?q=%` matched every row and dumped the table an operator was
+     * `ESCAPE`, so `?q=%` matched every row and dumped the table an admin was
      * trying to narrow. Both admin lists that take a term are asserted, because
      * the fix is one shared helper and a caller that forgets it is the next bug.
      */
@@ -1464,7 +1464,7 @@ describe('admin routes', () => {
     });
 
     /**
-     * **Acceptance 2 of #462: the divergence is somewhere an operator sees it.**
+     * **Acceptance 2 of #462: the divergence is somewhere an admin sees it.**
      *
      * A `user.updated` whose address another row holds cannot be written, so
      * the row keeps the old address and every notification keeps going there.
@@ -1498,7 +1498,7 @@ describe('admin routes', () => {
         headers: bearer(ADMIN),
       });
 
-      // Carried on every row, so an operator scanning the table sees it
+      // Carried on every row, so an admin scanning the table sees it
       // without having to already know the filter exists.
       expect(unfiltered.json().total).toBe(2);
       const other = unfiltered
@@ -1569,7 +1569,7 @@ describe('admin routes', () => {
     /*
      * #415. A ban that cannot refund leaves a `confirmed` booking on a
      * suspended account, deliberately — cancelling underneath a customer whose
-     * money did not come back is worse. The operator was told about it once,
+     * money did not come back is worse. The admin was told about it once,
      * as a `role="alert"` in component state, and after the next navigation
      * the only record was a log line. This is the durable list.
      */
@@ -1610,7 +1610,7 @@ describe('admin routes', () => {
      * thing that unwound an account when #415 built it. A deletion strands a
      * booking the same two ways and writes `deleted_at`, never `is_banned` — so
      * the one surface built to find stranded money filtered out every booking a
-     * deletion stranded, and told the operator "No refunds are stuck" while a
+     * deletion stranded, and told the admin "No refunds are stuck" while a
      * customer's payment sat at Stripe.
      */
     it('lists a confirmed booking left behind on a retired account', async () => {
@@ -1695,12 +1695,12 @@ describe('admin routes', () => {
     });
 
     /*
-     * VEN-423. The unwind's day bound is yesterday-UTC, so an operator west of
+     * VEN-423. The unwind's day bound is yesterday-UTC, so an admin west of
      * UTC still catches tomorrow's booking. At 01:00Z on Oct 8 a booking dated
-     * Oct 8 is still ahead of an operator at 21:00 Oct 7 US Eastern; one dated
+     * Oct 8 is still ahead of an admin at 21:00 Oct 7 US Eastern; one dated
      * Oct 6 is gone and stays out, so the bound cannot simply be loosened.
      */
-    it('lists a booking on the operator’s next local day, not one already gone', async () => {
+    it('lists a booking on the admin’s next local day, not one already gone', async () => {
       clockNow = new Date('2026-10-08T01:00:00Z');
       await signIn(ADMIN, true);
       const customerId = await signIn(CUSTOMER);
@@ -1732,7 +1732,7 @@ describe('admin routes', () => {
     /*
      * The filter has to *filter*. Reading `total` off an unfiltered count is
      * how a pager comes to promise pages the table cannot show, and a list
-     * that returns every booking would send the operator hunting.
+     * that returns every booking would send the admin hunting.
      */
     it('leaves out a booking on an account nobody suspended', async () => {
       await signIn(ADMIN, true);
@@ -1792,7 +1792,7 @@ describe('admin routes', () => {
   describe('payments name what happened to the money', () => {
     /*
      * `cancelBooking` never clears `paid_at`, so a refunded booking stays on
-     * this list — correctly, because the money did move and an operator has to
+     * this list — correctly, because the money did move and an admin has to
      * find it. What it must not do is read as revenue: the Overview excludes
      * cancelled bookings, so the same dollar was taken on one console screen
      * and given back on another.
@@ -2197,9 +2197,9 @@ describe('admin routes', () => {
       });
     });
 
-    it('keeps the operator’s note when an approval turns out to be a merge', async () => {
+    it('keeps the admin’s note when an approval turns out to be a merge', async () => {
       // The recursion into the merge branch dropped it, so the queue recorded
-      // the machine's "Merged with X" and the operator's reasoning was gone.
+      // the machine's "Merged with X" and the admin's reasoning was gone.
       await signIn(ADMIN, true);
       await signIn(VENDOR);
       await harness.database.db

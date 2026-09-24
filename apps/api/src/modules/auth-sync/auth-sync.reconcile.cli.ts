@@ -68,7 +68,7 @@ try {
     `${dryRun ? 'Would reconcile' : 'Reconciled'} ${summary.examined} user(s) against Neon Auth\n` +
       `  ${summary.updated} ${dryRun ? 'would be corrected' : 'corrected'}\n` +
       `  ${summary.deleted} ${dryRun ? 'would be retired' : 'retired'} (deleted in Neon Auth)\n` +
-      `  ${summary.flagged} deleted in Neon Auth but holding confirmed bookings — an operator was ${dryRun ? 'not alerted (dry run)' : 'alerted'}\n` +
+      `  ${summary.flagged} deleted in Neon Auth but holding confirmed bookings — an admin was ${dryRun ? 'not alerted (dry run)' : 'alerted'}\n` +
       `  ${summary.diverged} still disagree — the address is held by another account\n` +
       `  ${summary.unchanged} already in agreement\n` +
       `  ${summary.skipped} skipped — seeded accounts Neon Auth never issued\n`,

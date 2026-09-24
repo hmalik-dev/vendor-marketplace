@@ -103,7 +103,7 @@ export function payoutOwedClauses(): SQL[] {
  *
  * - `external_refund_cents > 0` — a refund made at Stripe outside the platform,
  *   written only by `recordExternalRefund`.
- * - an `open` chargeback case on the booking. It stays open until an operator
+ * - an `open` chargeback case on the booking. It stays open until an admin
  *   rules, so resolving it is what lifts the hold; the sweep then pays.
  *
  * Not folded into `payoutOwedClauses`: the vendor dashboard selects owed rows
@@ -146,7 +146,7 @@ export const DISPUTE_FUNDS_NOT_HELD: readonly string[] = [
   'warning_under_review',
 ];
 
-/** The outcomes under which an operator may close a chargeback case and release its payout. */
+/** The outcomes under which an admin may close a chargeback case and release its payout. */
 export const DISPUTE_RESOLVABLE_OUTCOMES: readonly string[] = ['won', 'warning_closed'];
 
 /**
@@ -177,7 +177,7 @@ export function vendorUnpayableExpr(
  * Banning or closing a vendor unwinds every **still-future** confirmed booking
  * by refunding it (`findConfirmedBookingsToUnwind`, `unwindAccountBookings`) —
  * and that refund can fail at Stripe. `account-unwind.ts`'s failure branch
- * alerts the operator and leaves the row exactly as it stood: `confirmed`,
+ * alerts the admin and leaves the row exactly as it stood: `confirmed`,
  * fully owed, with nothing durable on it besides the transient alert. D41's
  * "a ban must not change money already earned for an event that happened"
  * holds for every row the unwind actually finished, or never owned in the
@@ -191,7 +191,7 @@ export function vendorUnpayableExpr(
  * (`setBanned`, `closeAccount`) — is what tells the two cases apart without a
  * new column: a booking already due when banned was never the unwind's
  * concern and is `false` here; one still ahead of the ban was, and stays
- * excluded until an operator resolves it by hand.
+ * excluded until an admin resolves it by hand.
  */
 export function unfinishedUnwindExpr(
   owner: { isBanned: SQLWrapper; bannedAt: SQLWrapper; deletedAt: SQLWrapper },
@@ -204,7 +204,7 @@ export function unfinishedUnwindExpr(
 }
 
 /**
- * A transfer this sweep still owes and has already tried — the operator's
+ * A transfer this sweep still owes and has already tried — the admin's
  * question, as clauses (#432).
  *
  * The SQL twin of `isPayoutFailing`, and here rather than in the console
@@ -218,10 +218,10 @@ export function unfinishedUnwindExpr(
  * `payout_attempts > 0 and not released` reads like the whole answer and is
  * not: a booking whose transfer failed once and was then fully refunded has
  * `vendor_payout_cents` rewritten to `0` (D37), so this sweep will never work
- * it again — and it would sit in the operator's failing list for ever under an
+ * it again — and it would sit in the admin's failing list for ever under an
  * alert promising that the scheduled release keeps trying. The status bound
  * does the same job for a dispute filed after a failed attempt: that row is
- * `held`, which is a different thing to tell an operator.
+ * `held`, which is a different thing to tell an admin.
  */
 export function payoutFailingClauses(): SQL[] {
   return [
@@ -235,7 +235,7 @@ export function payoutFailingClauses(): SQL[] {
      * closed vendor's due row, because a ban must not change money already
      * earned for an event that happened. Only `vendorUnpayableExpr` — closed
      * *and* no connected account — can never self-heal, so that is the one the
-     * operator's failing list excludes; "the scheduled release keeps trying"
+     * admin's failing list excludes; "the scheduled release keeps trying"
      * is still true of every other banned or closed row. A subquery, so the
      * count queries need no new join.
      */
@@ -274,7 +274,7 @@ export interface ReleasableBookingRow {
   stripePaymentIntentId: string | null;
   vendorStripeAccountId: string | null;
   vendorStripeOnboarded: boolean;
-  /** An operator is holding this vendor's automatic payouts (VEN-404). */
+  /** An admin is holding this vendor's automatic payouts (VEN-404). */
   vendorPayoutHold: boolean;
   /** Whether the vendor has accepted any version of the vendor agreement (VEN-509). */
   vendorHasAcceptedAgreement: boolean;

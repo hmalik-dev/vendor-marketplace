@@ -50,7 +50,7 @@ function storageResult(env: NodeJS.ProcessEnv): LaunchResult {
 }
 
 /**
- * Printed values are the registry's own placeholders, never what the operator
+ * Printed values are the registry's own placeholders, never what the admin
  * set. A registry default is not refused: `support@<BRAND_DOMAIN>` can be the
  * real monitored address, and production must only state it.
  */

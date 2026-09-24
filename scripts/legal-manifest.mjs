@@ -11,7 +11,7 @@
  * only two outcomes are "the bytes match what is pinned" and "you bumped the
  * version".
  *
- * The refusal is **checked, not asserted by the operator**: the pinned version
+ * The refusal is **checked, not asserted by the admin**: the pinned version
  * is a literal in the manifest and the version in force is a constant in
  * `legal.ts`, so this compares them rather than taking a `--i-bumped-it` flag's
  * word for it.

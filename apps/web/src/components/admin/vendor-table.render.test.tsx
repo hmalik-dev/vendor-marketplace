@@ -64,7 +64,7 @@ describe('SuspensionConsequence', () => {
   /*
    * #416 / D31. A suspension refunds every future confirmed booking, and that
    * refund reverses the vendor's transfer back out of their connected account
-   * — which can take a vendor already paid out negative. The operator is the
+   * — which can take a vendor already paid out negative. The admin is the
    * only party who can weigh that before pressing the button, so the dialog
    * describing the action has to name it rather than stop at "refunded in
    * full".
@@ -93,7 +93,7 @@ describe('SuspensionConsequence', () => {
  * The two controls sit in the same overflow menu on the same row. One takes a
  * storefront off search and is undone from that same menu; the other declines
  * every open request, cancels every confirmed booking, refunds them in full and
- * reverses the vendor's share out of their Stripe balance. An operator who reads
+ * reverses the vendor's share out of their Stripe balance. An admin who reads
  * the wrong one and acts has destroyed a business by mistake, so the distinction
  * has to be carried by the words rather than by remembering which item they
  * clicked.
@@ -144,11 +144,11 @@ describe('UnpublishConsequence, against the dialog it sits beside', () => {
   });
 
   /**
-   * The way back is the **operator's**, and the copy has to say so (#457).
+   * The way back is the **admin's**, and the copy has to say so (#457).
    *
    * This sentence read *"Publish it again from this menu whenever you like"*
    * until the moderation hold landed, at which point it described — on the
-   * control that removes the ability, to the operator, at the instant of the
+   * control that removes the ability, to the admin, at the instant of the
    * press — the exact ability it removes. A consequence line that contradicts
    * the consequence is worse than no line.
    *
@@ -182,7 +182,7 @@ describe('UnpublishConsequence, against the dialog it sits beside', () => {
       .find((line) => line.includes('**Unpublish profile**') && line.startsWith('|'));
 
     expect(row, 'the Unpublish profile row is missing from the approved-copy table').toBeDefined();
-    expect(row).toMatch(/only an operator can/i);
+    expect(row).toMatch(/only an admin can/i);
     expect(row).not.toMatch(/whenever you like/);
   });
 
@@ -199,7 +199,7 @@ describe('UnpublishConsequence, against the dialog it sits beside', () => {
  * **`ReviewTable` got this and `VendorTable` did not, and an adversarial review
  * proved the gap by mutation**: deleting the `retired` guard and inverting the
  * publish label both left the entire web suite — 202 files, 2898 tests — green.
- * Two operator-facing breakages shipping silently is what an untested control
+ * Two admin-facing breakages shipping silently is what an untested control
  * costs, so each assertion below names the mutation it fails on.
  */
 describe('VendorRowActions', () => {
@@ -213,7 +213,7 @@ describe('VendorRowActions', () => {
     /*
      * Both directions on a row that is already down (#457). Unpublish is what
      * sets the moderation hold, so a menu that offered only Publish here left
-     * the one vendor an operator could not moderate as the one who had taken
+     * the one vendor an admin could not moderate as the one who had taken
      * themselves down first — which is the evasion the hold exists to close,
      * and is reachable in one request from the vendor's own dashboard.
      *
@@ -247,7 +247,7 @@ describe('VendorRowActions', () => {
    *
    * The *inverse* and *plural* labels are not drawn and were changed with them
    * on coherence grounds: `Publish storefront` sitting in the same menu as
-   * `Unpublish profile` gives an operator two nouns for one object. The
+   * `Unpublish profile` gives an admin two nouns for one object. The
    * consequence prose still says "storefront", deliberately — the button names
    * the record and the description names the effect, and #456 recorded the
    * descriptions as already agreeing with the frame.
@@ -313,9 +313,9 @@ describe('VendorRowActions', () => {
   });
 
   /*
-   * VEN-395. The vendor's own toggle confirms with a toast and the operator's
+   * VEN-395. The vendor's own toggle confirms with a toast and the admin's
    * did nothing visible. Read off a mounted `Toaster`, not a mocked `toast`: the
-   * requirement is a confirmation the operator can read.
+   * requirement is a confirmation the admin can read.
    */
   it.each([
     ['live', 'Unpublish profile', "Fernbank Studio's profile is hidden."],
@@ -341,9 +341,9 @@ describe('VendorRowActions', () => {
  * Republishing is not always an undo, and the dialog must not imply it is.
  *
  * `is_published` records that a storefront is down and never who put it down —
- * an operator moderating it and a vendor pausing their own trading write the
+ * an admin moderating it and a vendor pausing their own trading write the
  * same column. So the console can offer Publish on a row it cannot explain, and
- * the operator can put a business back on the marketplace against its owner's
+ * the admin can put a business back on the marketplace against its owner's
  * own choice. Flagged by the adversarial review as the mirror of the recorded
  * acceptance-1 amendment.
  *
@@ -377,7 +377,7 @@ describe('RepublishConsequence', () => {
  * The moderation hold's one console-facing requirement (#457, acceptance 6).
  *
  * `is_published` recorded that a storefront was down and never who put it
- * down, so an operator arriving at an unpublished row could not tell their
+ * down, so an admin arriving at an unpublished row could not tell their
  * colleague's moderation from the vendor's own pause — the ambiguity
  * `RepublishConsequence` warns about in prose because nothing on the row could
  * answer it. `moderation_hold` answers it, and `Held` is how the table says so.
@@ -404,7 +404,7 @@ describe('the held status (#457)', () => {
     cleanup();
     expect(pillFor('paused')).toEqual({ label: 'Paused', tone: 'inert' });
     cleanup();
-    /* Shared with `Flagged` deliberately — both say an operator did this. */
+    /* Shared with `Flagged` deliberately — both say an admin did this. */
     expect(pillFor('flagged')).toEqual({ label: 'Flagged', tone: 'needsYou' });
   });
 
@@ -412,9 +412,9 @@ describe('the held status (#457)', () => {
    * The clearing lever. A held storefront is unpublished, so the menu offers
    * the publish direction — and `PUT /admin/vendors/:id/publish` is the only
    * writer that clears the hold, which makes this menu item the whole of
-   * acceptance 3's operator path.
+   * acceptance 3's admin path.
    */
-  it('offers the operator the publish direction on a held row, and only that', () => {
+  it('offers the admin the publish direction on a held row, and only that', () => {
     /* No Unpublish: the hold it would set already stands. */
     expect(menuLabelsFor('held')).toEqual(['View', 'Publish profile', 'Suspend vendor']);
   });
@@ -488,7 +488,7 @@ describe('bulk Suspend selected', () => {
 
   /**
    * VEN-500. A missing step-up is not a row's refusal: swallowing it into the
-   * banner left the operator with no field to type a code into. The run stops
+   * banner left the admin with no field to type a code into. The run stops
    * at the first call and the dialog offers the code step.
    */
   it('stops at a missing step-up and offers the code instead of a banner', async () => {

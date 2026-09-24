@@ -50,7 +50,7 @@ export function RowMenu({
    * Called with `restoreFocus`, which the caller **must** invoke when a dialog
    * closes. Radix returns focus to a menu's trigger on close, but a dialog
    * outlives the menu — the item that opened it has already unmounted — so
-   * without this a keyboard operator who cancels is dropped on `document.body`
+   * without this a keyboard admin who cancels is dropped on `document.body`
    * and has to tab roughly twenty stops to get back to the row. Caught by the
    * parity pass, and a regression of the move from a button to a menu: before
    * #435 the `···` was itself the dialog's trigger and got focus back for free.

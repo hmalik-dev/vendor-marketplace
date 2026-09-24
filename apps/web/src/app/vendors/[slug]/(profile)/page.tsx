@@ -352,7 +352,7 @@ export default async function VendorProfilePage({
                   it *about* them, and objecting to it is the ordinary case
                   rather than the noise this ticket removes. It is also their
                   only channel — there is no vendor-side reviews surface — so
-                  hiding it would trade a case an operator dismisses for one
+                  hiding it would trade a case an admin dismisses for one
                   nobody can raise.
                 */
               />

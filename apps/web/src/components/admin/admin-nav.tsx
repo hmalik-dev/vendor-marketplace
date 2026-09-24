@@ -68,7 +68,7 @@ const ITEMS = [
    */
   { href: '/admin/vendor-applications', label: 'Vendor applications' },
   /* Who can sign in to this console (VEN-506). Unframed, and kept beside Settings. */
-  { href: '/admin/operators', label: 'Operators' },
+  { href: '/admin/admins', label: 'Admins' },
   /*
    * The launch switches (VEN-404). Deliberately unframed: the delta draws nine
    * rows and predates the switches, so this sits last, after the record the

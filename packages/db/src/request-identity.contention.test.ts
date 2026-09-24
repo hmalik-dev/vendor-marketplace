@@ -62,7 +62,7 @@ async function seed(): Promise<Cast> {
   const customerB = await make('customer-b', 'customer');
   const vendorOne = await make('vendor-one', 'vendor');
   const vendorTwo = await make('vendor-two', 'vendor');
-  const admin = await make('operator', 'admin');
+  const admin = await make('admin', 'admin');
 
   const profile = async (identity: RequestIdentity, slug: string): Promise<string> => {
     const [row] = await db
@@ -166,9 +166,9 @@ describe('as app_api, reading messages', () => {
     expect(row?.total).toBe(0);
   });
 
-  it('lets an operator read every thread, keyed on the role and not the user', async () => {
-    expect(await countAs({ ...cast.admin, operator: true })).toBe(3);
-    expect(await countAs({ userId: cast.admin.userId, role: 'customer', operator: true })).toBe(0);
+  it('lets an admin read every thread, keyed on the role and not the user', async () => {
+    expect(await countAs({ ...cast.admin, admin: true })).toBe(3);
+    expect(await countAs({ userId: cast.admin.userId, role: 'customer', admin: true })).toBe(0);
     // An admin account on a participant path is bound to its own threads.
     expect(await countAs(cast.admin)).toBe(0);
   });
@@ -229,7 +229,7 @@ describe('as app_api, writing messages', () => {
     ).rejects.toThrow();
   });
 
-  it('refuses an operator write and any delete', async () => {
+  it('refuses an admin write and any delete', async () => {
     await expect(
       withRequestIdentity(api, cast.admin, (tx) =>
         tx.insert(messages).values({
@@ -293,7 +293,7 @@ describe('the identity on a shared connection', () => {
 
   it('does not outlive a nested call inside the caller’s own transaction', async () => {
     const seenAfter = await api.transaction(async (outer) => {
-      await withRequestIdentity(outer, { ...cast.admin, operator: true }, async () => undefined);
+      await withRequestIdentity(outer, { ...cast.admin, admin: true }, async () => undefined);
       const [row] = await outer.execute<{ total: number }>(
         sql`select count(*)::int as total from messages`,
       );

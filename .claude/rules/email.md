@@ -3,7 +3,7 @@ paths:
   - 'apps/api/src/lib/email*.ts'
   - 'apps/api/src/plugins/email*.ts'
   - 'apps/api/src/modules/notifications/**'
-  - 'apps/api/src/modules/operator-alerts/**'
+  - 'apps/api/src/modules/admin-alerts/**'
   - '.claude/agents/browser-verifier.md'
 ---
 
@@ -12,7 +12,7 @@ paths:
 Every send through Resend spends one account-wide quota that production shares
 (VEN-661): a lane, staging and a user's booking confirmation draw on the same
 100 a day. So **a ticket sends real email only when the flow it changes is an
-email flow** — a notification, an invite, the support form, an operator alert,
+email flow** — a notification, an invite, the support form, an admin alert,
 step-up. Everything else verifies with the log-only gateway, which records
 what would have been sent and delivers nothing.
 
@@ -26,8 +26,8 @@ else. A lane's E2E specs never need it: the lane mailbox
 Production's cap is 80 a day, below the plan limit, and a day that hits it — or
 that Resend refuses with a spent quota — closes: every later send that day is
 refused without reaching Resend, the retry sweep waits for tomorrow, and Sentry
-is paged once. Operator mail (step-up codes, alerts, the digest) is marked
+is paged once. Admin mail (step-up codes, alerts, the digest) is marked
 `essential` and may spend 15 slots past the cap, so a flood of ordinary mail
-never locks the operator out of the console. Raising the cap is an env change on
+never locks the admin out of the console. Raising the cap is an env change on
 the API service, never a code change; the redeploy it takes reopens a day the
 old cap closed. A spent Resend quota reopens only at the next UTC day.

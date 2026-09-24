@@ -38,7 +38,7 @@ export interface BranchResolution {
 /**
  * Resolves which Neon branch `DATABASE_URL` points at.
  *
- * `NEON_BRANCH` is only a hint the operator can delete, so the local Neon CLI
+ * `NEON_BRANCH` is only a hint the admin can delete, so the local Neon CLI
  * state file is consulted next. When a Neon host is configured and neither
  * source answers, that is a failure rather than a pass — otherwise the guard
  * would be bypassed by removing one line from `.env`.

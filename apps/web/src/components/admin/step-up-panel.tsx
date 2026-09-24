@@ -12,7 +12,7 @@ import { useApi } from '@/lib/use-api';
 import { REQUEST_DID_NOT_ARRIVE, userFacingError } from '@/lib/user-facing-error';
 
 export interface StepUpPanelProps {
-  /** Runs once the code is accepted — the confirm the operator was interrupted in. */
+  /** Runs once the code is accepted — the confirm the admin was interrupted in. */
   onVerified: () => Promise<void>;
   /** The sentence that says why a code is asked for; defaults to the irreversible-action one. */
   lead?: string;
@@ -24,12 +24,12 @@ const IRREVERSIBLE_LEAD = 'This cannot be undone, so confirm it is you first.';
 
 /**
  * The second step of an irreversible console action (VEN-500): the API refused
- * with `STEP_UP_REQUIRED`, so the operator asks for a code, types it, and the
+ * with `STEP_UP_REQUIRED`, so the admin asks for a code, types it, and the
  * action they pressed is retried.
  *
  * Rendered by `ConfirmAction` only when that refusal arrives, so every
  * destructive control gets it and none has to know it exists. The code goes to
- * the address on the operator's own account; nothing here says which.
+ * the address on the admin's own account; nothing here says which.
  */
 export function StepUpPanel({
   onVerified,

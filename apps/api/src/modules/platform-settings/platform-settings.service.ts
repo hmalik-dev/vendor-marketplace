@@ -16,7 +16,7 @@ import type { AppDatabase } from '../../lib/database.js';
 import { AppError, conflict, notFound } from '../../lib/errors.js';
 import { insertAdminAction } from '../admin/admin.dao.js';
 import type { AdminContext } from '../admin/account-unwind.js';
-import type { OperatorAlert } from '../operator-alerts/operator-alerts.service.js';
+import type { AdminAlert } from '../admin-alerts/admin-alerts.service.js';
 import {
   findHeldVendors,
   findPlatformSettings,
@@ -240,7 +240,7 @@ function describeValue(field: SwitchField, value: PlatformValues[SwitchField]): 
   return value === true ? 'on' : 'off';
 }
 
-function switchFlippedAlert(changes: readonly SwitchChange[]): OperatorAlert {
+function switchFlippedAlert(changes: readonly SwitchChange[]): AdminAlert {
   return {
     kind: 'launch_switch_flipped',
     // A fresh subject per write, so flipping back within the dedupe window still alerts.
@@ -256,7 +256,7 @@ function switchFlippedAlert(changes: readonly SwitchChange[]): OperatorAlert {
 
 /**
  * `PUT /admin/settings`: writes the fields that actually change, one audit row
- * per field in the same transaction, then alerts the operator.
+ * per field in the same transaction, then alerts the admin.
  */
 export async function updatePlatformSettings(
   context: AdminContext,

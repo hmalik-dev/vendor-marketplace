@@ -26,7 +26,7 @@ export const rateLimitCounters = pgTable(
 ).enableRLS();
 
 /**
- * The operator's pending step-up code (VEN-500), one per operator: issuing a
+ * The admin's pending step-up code (VEN-500), one per admin: issuing a
  * new one replaces the old. Only the SHA-256 of the code is stored.
  */
 export const stepUpChallenges = pgTable('step_up_challenges', {

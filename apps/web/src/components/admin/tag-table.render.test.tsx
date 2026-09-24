@@ -44,7 +44,7 @@ afterEach(() => {
 });
 
 describe('TagTable', () => {
-  it('tells the operator when Reactivate fails, and does not refresh', async () => {
+  it('tells the admin when Reactivate fails, and does not refresh', async () => {
     const hidden = tag({ isActive: false });
     render(<TagTable tags={[hidden]} />);
     failNext = true;

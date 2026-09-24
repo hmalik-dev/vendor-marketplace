@@ -7,19 +7,19 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createTestHarness, signInAs, type TestHarness } from '../../testing/test-server.js';
 import { setUserRole } from '../../testing/set-user-role.js';
-import { OPERATOR_RETIREMENT_LOCK } from '../users/users.dao.js';
-import { grantOperator, revokeOperator } from './admin-operators.service.js';
+import { ADMIN_RETIREMENT_LOCK } from '../users/users.dao.js';
+import { grantAdmin, revokeAdmin } from './admins.service.js';
 
 /**
- * Operator grant and revoke racing the other ways out of the live set
+ * Admin grant and revoke racing the other ways out of the live set
  * (VEN-506).
  *
- * The competing write is held open by hand under `OPERATOR_RETIREMENT_LOCK`,
- * as `operator-ban.contention.test.ts` does, so the grant or revoke overlaps
+ * The competing write is held open by hand under `ADMIN_RETIREMENT_LOCK`,
+ * as `admin-ban.contention.test.ts` does, so the grant or revoke overlaps
  * it for certain. Real Postgres, because PGlite is one connection and passes
  * with the lock deleted.
  */
-describe('operator grant and revoke against a competing change to the live set', () => {
+describe('admin grant and revoke against a competing change to the live set', () => {
   const ONE = 'user_opaccess_one';
   const TWO = 'user_opaccess_two';
   const CANDIDATE = 'user_opaccess_candidate';
@@ -42,7 +42,7 @@ describe('operator grant and revoke against a competing change to the live set',
     const written = new Promise<void>((resolve) => (markWritten = resolve));
 
     const settled = db().transaction(async (tx) => {
-      await tx.execute(OPERATOR_RETIREMENT_LOCK);
+      await tx.execute(ADMIN_RETIREMENT_LOCK);
       await tx.update(users).set(change).where(eq(users.id, userId));
       markWritten();
       await released;
@@ -69,7 +69,7 @@ describe('operator grant and revoke against a competing change to the live set',
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
 
-    throw new Error('The operator change never blocked on the held write');
+    throw new Error('The admin change never blocked on the held write');
   }
 
   const outcome = async (work: Promise<unknown>): Promise<number | 'done'> =>
@@ -87,7 +87,7 @@ describe('operator grant and revoke against a competing change to the live set',
         authUserId,
         email: `${authUserId}@example.com`,
         firstName: 'Test',
-        lastName: 'Operator',
+        lastName: 'Admin',
         roleHint: 'customer',
         avatarUrl: null,
       });
@@ -127,11 +127,11 @@ describe('operator grant and revoke against a competing change to the live set',
     await database?.close();
   });
 
-  it('makes a revoke wait for a ban of the other operator, then refuses it with a 409', async () => {
+  it('makes a revoke wait for a ban of the other admin, then refuses it with a 409', async () => {
     const otherBan = holdUnderLock(oneId, { isBanned: true });
     await otherBan.written;
 
-    const revoke = outcome(revokeOperator(db(), oneId, twoId, NOW));
+    const revoke = outcome(revokeAdmin(db(), oneId, twoId, NOW));
 
     const raced = await Promise.race([revoke.then(() => 'finished' as const), lockWaiter()]);
     expect(raced).toBe('waiting');
@@ -151,7 +151,7 @@ describe('operator grant and revoke against a competing change to the live set',
     const targetBan = holdUnderLock(candidateId, { isBanned: true });
     await targetBan.written;
 
-    const grant = outcome(grantOperator(db(), oneId, `${CANDIDATE}@example.com`, NOW));
+    const grant = outcome(grantAdmin(db(), oneId, `${CANDIDATE}@example.com`, NOW));
 
     const raced = await Promise.race([grant.then(() => 'finished' as const), lockWaiter()]);
     expect(raced).toBe('waiting');
@@ -167,8 +167,8 @@ describe('operator grant and revoke against a competing change to the live set',
     expect(candidate!.role).toBe('customer');
   });
 
-  it('still revokes while another operator stays live', async () => {
-    expect(await outcome(revokeOperator(db(), oneId, twoId, NOW))).toBe('done');
+  it('still revokes while another admin stays live', async () => {
+    expect(await outcome(revokeAdmin(db(), oneId, twoId, NOW))).toBe('done');
     const [two] = await db().select({ role: users.role }).from(users).where(eq(users.id, twoId));
     expect(two!.role).toBe('customer');
   });

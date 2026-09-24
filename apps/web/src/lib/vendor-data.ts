@@ -239,7 +239,7 @@ export async function getOwnAvailability(): Promise<WireAvailability[]> {
 const REFERENCE_DATA_REVALIDATE_SECONDS = 3600;
 
 /**
- * The taxonomy's window is a minute, not an hour (VEN-401). An operator can now
+ * The taxonomy's window is a minute, not an hour (VEN-401). An admin can now
  * hide or reorder a category from the console, and a hidden one lingering on
  * the landing pills and the header picker for an hour reads as the write not
  * having worked. A minute keeps the header's read off the API on nearly every

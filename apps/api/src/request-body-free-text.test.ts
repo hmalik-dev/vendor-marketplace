@@ -236,7 +236,7 @@ describe('free text on a request body', () => {
     // 35 since VEN-500 added `adminStepUpVerifySchema`, a six-digit code.
     // 36 since VEN-462 added `throttleChargeSchema`, an opaque printable-ASCII key and two numbers.
     // 37 since VEN-475 added `adminExportAuditSchema`.
-    // 38 since VEN-506 added `grantOperatorSchema`, an email.
+    // 38 since VEN-506 added `grantAdminSchema`, an email.
     // 39 since VEN-513 added `bulkInviteApplicationsSchema`, a capped uuid list with no free text.
     // 40 since VEN-680 added `closeOwnAccountSchema`, a typed address and a six-digit code.
     //

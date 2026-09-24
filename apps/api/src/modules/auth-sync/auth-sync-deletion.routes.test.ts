@@ -53,7 +53,7 @@ describe('the reconcile pass — a deleted Neon Auth identity retires a vendor',
   }
 
   /**
-   * The unwind itself, entered as the operator's closure enters it (VEN-480).
+   * The unwind itself, entered as the admin's closure enters it (VEN-480).
    *
    * The scheduled pass never runs it for an account holding confirmed bookings —
    * it alerts instead — so the refund behaviour is driven at the handler.
@@ -345,10 +345,10 @@ describe('the reconcile pass — a deleted Neon Auth identity retires a vendor',
 
   /*
    * VEN-480 acceptance 4. Confirmed gone, holding confirmed bookings: the pass
-   * tells the operator and closes nothing, so no refund moves on an automatic
+   * tells the admin and closes nothing, so no refund moves on an automatic
    * read. The account is then closed through the existing unwind.
    */
-  it('alerts the operator, and closes nothing, for a deleted vendor holding confirmed bookings', async () => {
+  it('alerts the admin, and closes nothing, for a deleted vendor holding confirmed bookings', async () => {
     const customerId = await signIn(CUSTOMER);
     const vendor = await createPublishedVendor();
     const bookingId = await createFutureBooking(customerId, vendor.profileId);
@@ -383,7 +383,7 @@ describe('the reconcile pass — a deleted Neon Auth identity retires a vendor',
       .where(eq(bookings.id, bookingId));
     expect(booked[0]?.status).toBe('confirmed');
 
-    // The operator's closure is the existing unwind, and it still refunds in full.
+    // The admin's closure is the existing unwind, and it still refunds in full.
     expect(await unwindDeletedIdentity(VENDOR)).toBe('deleted');
     expect(harness.stripe.refunds).toHaveLength(1);
   });

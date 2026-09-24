@@ -46,7 +46,7 @@ export interface VendorTagSelection {
  * knowable up front, so the vendor gets one failed save rather than a profile
  * edit that stands with no tags to go with it.
  *
- * `heldTagIds` are the tags the vendor already holds. One an operator has since
+ * `heldTagIds` are the tags the vendor already holds. One an admin has since
  * deactivated still resolves, so a vendor can save unchanged or remove it; a
  * deactivated tag they do not hold is still refused.
  */

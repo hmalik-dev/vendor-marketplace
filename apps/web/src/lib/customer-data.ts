@@ -184,7 +184,7 @@ export type CheckoutOutcome =
    * rather than minting a second one.
    */
   | { state: 'failed' }
-  /** The operator has paused checkout (VEN-404) — 503 `checkout_paused`. */
+  /** The admin has paused checkout (VEN-404) — 503 `checkout_paused`. */
   | { state: 'paused' }
   /** The price is over the beta cap (VEN-404) — 422 `over_beta_cap`. */
   | { state: 'over-cap' };

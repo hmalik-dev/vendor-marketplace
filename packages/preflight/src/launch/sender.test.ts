@@ -78,7 +78,7 @@ describe('the Resend shared test sender exception (VEN-626)', () => {
   /*
    * The script the deploy step runs, invoked directly: the exception passes
    * without a Resend double at all, since the shared sender never reaches the
-   * domain probe — the line an operator reads in the Actions log, and the
+   * domain probe — the line an admin reads in the Actions log, and the
    * exit code that lets the release continue past it.
    */
   it('the release:sender script passes the shared test sender, calling Resend for nothing', () => {
@@ -174,7 +174,7 @@ describe('the release sender check (VEN-609)', () => {
 
   /*
    * The script the deploy step runs, invoked directly with a faked Resend
-   * answer: the line an operator reads in the Actions log, and the exit code
+   * answer: the line an admin reads in the Actions log, and the exit code
    * that stops the release before anything migrates.
    */
   it.each([

@@ -13,7 +13,7 @@ const INTERVAL_MS = 60_000;
 /** The plugin name each decorator is registered under, where it differs. */
 const PLUGIN_NAMES: Record<string, string> = {
   db: 'database',
-  operatorAlerts: 'operator-alerts',
+  adminAlerts: 'admin-alerts',
 };
 
 describe('the expiry sweep (VEN-528)', () => {
@@ -40,7 +40,7 @@ describe('the expiry sweep (VEN-528)', () => {
       background: {},
       stripe: {},
       events: {},
-      operatorAlerts: { dispatch: () => undefined },
+      adminAlerts: { dispatch: () => undefined },
     };
 
     for (const [name, value] of Object.entries(decorations)) {

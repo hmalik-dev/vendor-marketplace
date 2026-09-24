@@ -120,7 +120,7 @@ describe('insertUserIfAbsent, when the insert is declined', () => {
   /**
    * **The discriminating case.** A different auth identity arriving with an
    * address somebody else holds is not this identity meeting itself, so `null`
-   * would report an operator-actionable collision as the ordinary "no account
+   * would report an admin-actionable collision as the ordinary "no account
    * yet". It throws, and the message names the auth id, because the 23505 it
    * replaced put `constraint: users_email_key` into the record and a sentence
    * alone would be quieter than what it replaced.
@@ -274,7 +274,7 @@ describe('updateUserByAuthId, when another account already holds the address', (
   /**
    * The repair, which is what makes `pending_email` mean *currently* diverged
    * rather than *once* diverged. Without this an account that fixed itself
-   * would sit on the operator's list for ever.
+   * would sit on the admin's list for ever.
    */
   it('clears the record once the address can be written', async () => {
     await updateUserByAuthId(harness.database.db, ADA, { email: BEA_EMAIL });

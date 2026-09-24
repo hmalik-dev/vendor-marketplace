@@ -93,7 +93,7 @@ export interface LockBookingRow {
 
 /**
  * One vendor with the Vendors table's projection and the columns only the
- * detail shows. Retired vendors are read too: the detail is where an operator
+ * detail shows. Retired vendors are read too: the detail is where an admin
  * learns what happened to one.
  */
 export async function findAdminVendorDetail(

@@ -53,7 +53,7 @@ describe('AdminHeader', () => {
    * The token's own end is guarded by `theme-tokens.test.ts`, which carries the
    * `stone-480` on `stone-900` contrast pair. This is the call site.
    */
-  it('reads the operator line off the ink-ground ramp, not off a border token', () => {
+  it('reads the admin line off the ink-ground ramp, not off a border token', () => {
     render(<AdminHeader email={EMAIL} name="Admin" />);
 
     const classes = screen.getByText(`Logged in as ${EMAIL}`).className.split(/\s+/);

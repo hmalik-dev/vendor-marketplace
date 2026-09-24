@@ -38,7 +38,7 @@ import {
  * In-product reporting and case-scoped message reads (#436).
  *
  * The suite is written against the two things the ticket says must not happen:
- * a report that reaches nobody, and an operator who can read any thread they
+ * a report that reaches nobody, and an admin who can read any thread they
  * can name. Everything else here follows from those.
  */
 
@@ -350,7 +350,7 @@ describe('reporting and message visibility (#436)', () => {
 
   /*
    * The id is attacker-controlled, so a subject that does not resolve is the
-   * refusal rather than a case an operator opens onto nothing.
+   * refusal rather than a case an admin opens onto nothing.
    */
   it('refuses a subject that resolves to no row', async () => {
     await seed();
@@ -529,7 +529,7 @@ describe('reporting and message visibility (#436)', () => {
     });
     await harness.flushEmail();
 
-    // The operator's own alert (VEN-405) goes elsewhere; this is the support inbox's copy.
+    // The admin's own alert (VEN-405) goes elsewhere; this is the support inbox's copy.
     const inbox = harness.email.sent.filter((message) => message.to === TEST_ENV.SUPPORT_EMAIL_TO);
     expect(inbox).toHaveLength(1);
     const sent = inbox[0]!;
@@ -602,7 +602,7 @@ describe('reporting and message visibility (#436)', () => {
    * hour, so the queue fills with the same complaint and its author is told
    * none of it arrived.
    *
-   * The row is what an operator works, so the row is the delivery. The send is
+   * The row is what an admin works, so the row is the delivery. The send is
    * a nudge, and its failure is recorded on the case rather than raised.
    */
   it('still files the report, and answers with its reference, when the notice cannot be sent', async () => {
@@ -618,7 +618,7 @@ describe('reporting and message visibility (#436)', () => {
     const [filed] = await casesFor(fixture.vendorProfileId);
     expect(filed?.reference).toBe(response.json().reference);
     expect(filed?.status).toBe('open');
-    /* Recorded, so an operator can see this one is a case nobody was told about. */
+    /* Recorded, so an admin can see this one is a case nobody was told about. */
     expect(filed?.emailFailedAt).toBeInstanceOf(Date);
   });
 
@@ -912,7 +912,7 @@ describe('reporting and message visibility (#436)', () => {
     expect(logged).toHaveLength(0);
   });
 
-  // --- Acceptance 5: the operator reads, and never writes --------------------
+  // --- Acceptance 5: the admin reads, and never writes --------------------
 
   it('exposes no admin route that writes a message', async () => {
     const fixture = await seed();

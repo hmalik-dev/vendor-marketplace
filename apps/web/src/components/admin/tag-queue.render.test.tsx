@@ -48,7 +48,7 @@ describe('assignmentNotice', () => {
 });
 
 describe('TagQueue', () => {
-  it('keeps telling the operator why after the resolved card leaves the list', async () => {
+  it('keeps telling the admin why after the resolved card leaves the list', async () => {
     answer = { suggestion: SUGGESTION, tag: null, assignment: 'category-full' };
     const { rerender } = render(<TagQueue suggestions={[SUGGESTION]} tags={[]} showActions />);
 

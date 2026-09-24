@@ -10,7 +10,7 @@ import { adminActions } from './schema/index.js';
  * Inspecting the schema would only prove that somebody wrote a trigger. What
  * has to hold is that an UPDATE, a DELETE and a TRUNCATE actually fail against
  * the engine this ships on, and that the one delete that is legitimate — the
- * cascade from erasing the operator's whole account — still gets through. All
+ * cascade from erasing the admin's whole account — still gets through. All
  * four are attempted here.
  *
  * The same shape as `legal-acceptance-immutability.test.ts`, deliberately: this
@@ -33,7 +33,7 @@ beforeAll(async () => {
 
   await testDb.db.execute(
     sql.raw(`INSERT INTO users (id, auth_user_id, email, role, first_name, last_name)
-             VALUES ('${ACTOR}', 'user_operator', 'operator@example.com', 'admin', 'Dana', 'Okafor')`),
+             VALUES ('${ACTOR}', 'user_admin', 'admin@example.com', 'admin', 'Dana', 'Okafor')`),
   );
   await testDb.db.insert(adminActions).values({
     actorId: ACTOR,
@@ -64,7 +64,7 @@ describe('admin_actions is append-only', () => {
     expect(await actionCount()).toBe(1);
   });
 
-  it('refuses a delete while the operator it names is still here', async () => {
+  it('refuses a delete while the admin it names is still here', async () => {
     const message = await refusalOf(
       testDb.db,
       `DELETE FROM admin_actions WHERE actor_id = '${ACTOR}'`,
@@ -91,12 +91,12 @@ describe('admin_actions is append-only', () => {
   /**
    * The way out that a test which never touches `search_path` cannot see.
    *
-   * The trigger asks "is this operator still here" by reading `users`. A
+   * The trigger asks "is this admin still here" by reading `users`. A
    * `SECURITY INVOKER` function resolves that name against the **caller's**
    * path, so an empty shadow table on the path makes the answer "no" for every
    * row and the guard waves the delete through — three statements, from any
    * role that can create a schema, and the whole record of what the console did
-   * is gone while every operator is still serving.
+   * is gone while every admin is still serving.
    *
    * Every test above ran on the default path and is green either way. This is
    * the reason `SET search_path` is on both functions rather than left to
@@ -155,11 +155,11 @@ describe('admin_actions is append-only', () => {
   });
 
   /**
-   * VEN-463, AC1: erasing the operator's account is refused while a row names
+   * VEN-463, AC1: erasing the admin's account is refused while a row names
    * them, because `actor_id` is `RESTRICT`. It used to cascade, which made
-   * deleting the operator the one way to delete their history.
+   * deleting the admin the one way to delete their history.
    */
-  it('refuses to erase an operator who has a logged action', async () => {
+  it('refuses to erase an admin who has a logged action', async () => {
     const message = await refusalOf(testDb.db, `DELETE FROM users WHERE id = '${ACTOR}'`);
 
     expect(message).toContain('admin_actions_actor_id_users_id_fk');

@@ -3,7 +3,7 @@ import {
   bookings,
   categories,
   notifications,
-  operatorAlerts,
+  adminAlerts,
   supportCases,
   users,
   vendorCategories,
@@ -185,7 +185,7 @@ describe('money events after checkout (VEN-645)', () => {
   });
 
   afterEach(async () => {
-    await harness.database.db.delete(operatorAlerts);
+    await harness.database.db.delete(adminAlerts);
     await harness.database.db.delete(notifications);
     await harness.database.db.delete(supportCases);
     await harness.database.db.delete(bookings);
@@ -265,7 +265,7 @@ describe('money events after checkout (VEN-645)', () => {
   });
 
   describe('payout.failed', () => {
-    it('alerts the operator naming the vendor when Stripe still reports the payout failed', async () => {
+    it('alerts the admin naming the vendor when Stripe still reports the payout failed', async () => {
       await seedReleasedBooking();
       harness.stripe.payouts.set('po_failed', {
         payoutId: 'po_failed',
@@ -308,7 +308,7 @@ describe('money events after checkout (VEN-645)', () => {
       return deliver('radar.early_fraud_warning.created', warningId);
     }
 
-    it('opens one case and alerts the operator, refunding and freezing nothing', async () => {
+    it('opens one case and alerts the admin, refunding and freezing nothing', async () => {
       const { bookingId } = await seedReleasedBooking();
 
       const first = await warn('issfr_1');

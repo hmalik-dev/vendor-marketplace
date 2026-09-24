@@ -116,7 +116,7 @@ export const tagSuggestions = pgTable(
      * admin queue then carried N identical suggestions; approving the first
      * creates the tag and approving the rest falls into the merge branch, so
      * nothing corrupts, but the `already_suggested` contract is not kept and
-     * every duplicate costs an operator an action.
+     * every duplicate costs an admin an action.
      *
      * On `lower(suggested_name)` because that is exactly what
      * `findPendingSuggestion` compares, and the writer already collapses

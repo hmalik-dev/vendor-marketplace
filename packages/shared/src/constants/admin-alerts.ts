@@ -1,18 +1,18 @@
 /**
- * Operator alerts (VEN-405): what pushes to the one person running the
+ * Admin alerts (VEN-405): what pushes to the one person running the
  * platform, instead of waiting in an admin list for them to open it.
  */
 
 /**
- * Every kind of operator email. The immediate kinds are deduplicated per
- * subject; `daily_digest` is claimed once per operator-local calendar date.
+ * Every kind of admin email. The immediate kinds are deduplicated per
+ * subject; `daily_digest` is claimed once per admin-local calendar date.
  *
  * `launch_switch_flipped` is raised by the launch switches (VEN-404), so an
  * accidental flip is noticed the same hour rather than when bookings dry up.
  *
  * `auth_identity_deleted` (VEN-480) is an account Neon Auth no longer knows that
  * still holds confirmed bookings. The reconcile never closes it: refunding those
- * bookings is an operator's decision, made through the console's closure.
+ * bookings is an admin's decision, made through the console's closure.
  *
  * `platform_balance_short` (VEN-644) is the daily reconciliation finding the
  * platform's Stripe balance below what it still owes vendors and customers —
@@ -20,12 +20,12 @@
  *
  * `auth_identity_kept` (VEN-649) is an account closure whose delete at Neon Auth
  * removed nothing: the person may still be able to sign in, and only an
- * operator looking at the provider can say why.
+ * admin looking at the provider can say why.
  *
  * `early_fraud_warning` (VEN-645) is a card issuer telling Stripe a charge looks
  * fraudulent, which usually precedes a chargeback by days.
  */
-export const OPERATOR_ALERT_KINDS = [
+export const ADMIN_ALERT_KINDS = [
   'dispute_opened',
   'early_fraud_warning',
   'payout_failed',
@@ -42,10 +42,10 @@ export const OPERATOR_ALERT_KINDS = [
   'auth_identity_kept',
   'daily_digest',
 ] as const;
-export type OperatorAlertKind = (typeof OPERATOR_ALERT_KINDS)[number];
+export type AdminAlertKind = (typeof ADMIN_ALERT_KINDS)[number];
 
 /** The kinds sent the moment they happen, as opposed to the morning digest. */
-export type ImmediateOperatorAlertKind = Exclude<OperatorAlertKind, 'daily_digest'>;
+export type ImmediateAdminAlertKind = Exclude<AdminAlertKind, 'daily_digest'>;
 
 /**
  * What became of a recorded alert.
@@ -54,20 +54,20 @@ export type ImmediateOperatorAlertKind = Exclude<OperatorAlertKind, 'daily_diges
  * because a deployment refuses to boot without one. `skipped` is a digest day
  * with nothing to report, recorded so the day is not re-examined every tick.
  */
-export const OPERATOR_ALERT_OUTCOMES = ['sent', 'logged', 'skipped'] as const;
-export type OperatorAlertOutcome = (typeof OPERATOR_ALERT_OUTCOMES)[number];
+export const ADMIN_ALERT_OUTCOMES = ['sent', 'logged', 'skipped'] as const;
+export type AdminAlertOutcome = (typeof ADMIN_ALERT_OUTCOMES)[number];
 
 /** One email per kind and subject in this window, however often the event recurs. */
-export const OPERATOR_ALERT_DEDUPE_MS = 6 * 60 * 60_000;
+export const ADMIN_ALERT_DEDUPE_MS = 6 * 60 * 60_000;
 
-/** The operator-local hour from which the day's digest is due. */
-export const OPERATOR_DIGEST_LOCAL_HOUR = 7;
+/** The admin-local hour from which the day's digest is due. */
+export const ADMIN_DIGEST_LOCAL_HOUR = 7;
 
 /**
  * How often each instance asks whether the digest is due. The claim makes a
  * second instance's tick a no-op, so this bounds lateness, not correctness.
  */
-export const OPERATOR_DIGEST_POLL_INTERVAL_MS = 5 * 60_000;
+export const ADMIN_DIGEST_POLL_INTERVAL_MS = 5 * 60_000;
 
 /** Stripe webhook failures (bad signature, a 5xx or a 429) that raise one alert… */
 export const STRIPE_WEBHOOK_FAILURE_THRESHOLD = 3;
@@ -98,7 +98,7 @@ export const STRIPE_WEBHOOK_FAILURE_KINDS = [
 export type StripeWebhookFailureKind = (typeof STRIPE_WEBHOOK_FAILURE_KINDS)[number];
 
 /**
- * Failed transfer attempts on one booking before the operator is told.
+ * Failed transfer attempts on one booking before the admin is told.
  *
  * The sweep retries every quarter of an hour forever, so there is no literal
  * final retry. A first failure is usually a vendor finishing onboarding and
