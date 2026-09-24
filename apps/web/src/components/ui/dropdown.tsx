@@ -173,6 +173,11 @@ export interface DropdownProps {
    * compact header, where the results have to stay readable behind it.
    */
   scrim?: boolean;
+  /**
+   * Called before Radix dismisses on Escape; `preventDefault()` keeps the panel
+   * open. For a body with an inner view that Escape should leave first.
+   */
+  onEscapeKeyDown?: (event: KeyboardEvent) => void;
   children: ReactNode;
 }
 
@@ -187,6 +192,7 @@ export function Dropdown({
   density = 'default',
   padding = 'rows',
   scrim = false,
+  onEscapeKeyDown,
   children,
 }: DropdownProps): React.ReactElement {
   const anchored = useAnchoredMount();
@@ -209,6 +215,7 @@ export function Dropdown({
           width={width}
           padding={padding}
           scrim={scrim}
+          onEscapeKeyDown={onEscapeKeyDown}
         >
           {children}
         </AnchoredDropdown>
@@ -238,6 +245,7 @@ function AnchoredDropdown({
   width,
   padding,
   scrim,
+  onEscapeKeyDown,
   children,
 }: Omit<DropdownProps, 'density'> & {
   width: DropdownWidth;
@@ -277,6 +285,7 @@ function AnchoredDropdown({
           align="start"
           sideOffset={8}
           collisionPadding={8}
+          onEscapeKeyDown={onEscapeKeyDown}
           /*
             In `anchor` mode the caller's input keeps focus for the whole
             interaction — it is what `aria-activedescendant` is announced from,

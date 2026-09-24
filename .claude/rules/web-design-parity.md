@@ -45,8 +45,8 @@ attribute. Ruled 2026-09-04 (D30); the worked example is in `04-laws.md`.
 **Where a ruling has already overruled a frame, the frame is the record of what
 was overruled.** Do not file it again. Live overrides: sub-16px avatar monograms
 render Instrument Sans though the frames draw serif (D24); **no trigger draws the
-`▾` the frames draw except the vendor-type picker** (D25, amended by #426 on
-2026-09-06); `01-foundations.md` records two colour values as accepted
+`▾` the frames draw except the vendor-type picker and the date picker's month
+title** (D25, amended by #426 on 2026-09-06 and VEN-710); `01-foundations.md` records two colour values as accepted
 deviations; and the hero badge reads **"Early access"** where frame `01
 Landing` and `31-content-voice.md` draw "Now booking in Austin" (VEN-639,
 2026-09-23) — the account holder ruled the city claim a stale placeholder
@@ -66,7 +66,11 @@ in **two** directions, and only one of them is a finding:
   `clay-400` is a fill and never text on cream.
 - On the other thirteen sites, the frames draw a caret and the app must not.
   That is still D25 and still not a finding. `app/dropdown-caret.test.ts`
-  enforces it and exempts exactly one file.
+  enforces it and exempts exactly two files: the vendor-type picker, and the
+  date picker's month title. That title is a button with no frame: it draws `▾`
+  in `stone-600` (never `▴`) after "September 2026" because nothing else says
+  it opens the month and year view (VEN-710, account holder, 2026-09-23). A
+  parity pass reading that caret against frame `28` is reading this ruling.
 
 **The open state is both signals, deliberately.** The value turns
 `font-semibold text-clay-600` **and** the caret flips — `42-dropdowns.md` states
