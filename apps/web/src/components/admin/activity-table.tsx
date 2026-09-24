@@ -154,6 +154,8 @@ export interface ActivityTableProps {
    * no button at all.
    */
   filteredEmpty?: React.ReactNode;
+  /** A page past the last one, supplied by the page; shown before either empty state. */
+  pastEnd?: React.ReactNode;
 }
 
 /**
@@ -173,6 +175,7 @@ export function ActivityTable({
   path,
   filtered,
   filteredEmpty,
+  pastEnd,
 }: ActivityTableProps): React.ReactElement {
   /*
    * Everything each cell needs, computed once per row.
@@ -195,7 +198,9 @@ export function ActivityTable({
       rows={prepared}
       rowKey={({ row }) => row.id}
       empty={
-        filtered && filteredEmpty ? (
+        pastEnd ? (
+          pastEnd
+        ) : filtered && filteredEmpty ? (
           filteredEmpty
         ) : (
           /*

@@ -27,6 +27,7 @@ export function ReviewTable({
   rows,
   filtered,
   filteredEmpty,
+  pastEnd,
 }: {
   rows: readonly WireAdminReviewRow[];
   filtered: boolean;
@@ -35,6 +36,8 @@ export function ReviewTable({
    * on the widening button are the screen's copy, not this component's.
    */
   filteredEmpty?: React.ReactNode;
+  /** A page past the last one, supplied by the page; shown before either empty state. */
+  pastEnd?: React.ReactNode;
 }): React.ReactElement {
   const router = useRouter();
 
@@ -43,7 +46,9 @@ export function ReviewTable({
       rows={rows}
       rowKey={(row) => row.id}
       empty={
-        filtered && filteredEmpty ? (
+        pastEnd ? (
+          pastEnd
+        ) : filtered && filteredEmpty ? (
           filteredEmpty
         ) : (
           <EmptyState
