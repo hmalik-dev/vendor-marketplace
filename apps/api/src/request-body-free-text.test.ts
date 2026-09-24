@@ -238,10 +238,11 @@ describe('free text on a request body', () => {
     // 37 since VEN-475 added `adminExportAuditSchema`.
     // 38 since VEN-506 added `grantOperatorSchema`, an email.
     // 39 since VEN-513 added `bulkInviteApplicationsSchema`, a capped uuid list with no free text.
+    // 40 since VEN-680 added `closeOwnAccountSchema`, a typed address and a six-digit code.
     //
     // A merge is where this number goes wrong: two lanes each add to 23 and a
     // both-sides union keeps one of the answers rather than the sum.
-    expect(names).toHaveLength(39);
+    expect(names).toHaveLength(40);
     expect(names).toContain('reorderCategoriesSchema');
     expect(names).toContain('createVendorProfileSchema');
     expect(names).toContain('createBookingRequestSchema');
@@ -291,6 +292,8 @@ describe('free text on a request body', () => {
       'acceptVendorAgreementSchema.version',
       // VEN-500's emailed step-up code: six digits by pattern, not prose.
       'adminStepUpVerifySchema.code',
+      // VEN-680's closure code is the same six-digit pattern.
+      'closeOwnAccountSchema.code',
       'createBookingRequestSchema.eventDate',
       'createBookingRequestSchema.eventStartTime',
       /*
