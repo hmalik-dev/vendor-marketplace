@@ -242,9 +242,20 @@ describe('the accepted record', () => {
 
     const rows = screen.getAllByRole('row').slice(1);
 
-    expect(screen.getAllByText(/· 06\/04\/2026/).length).toBeGreaterThan(0);
     expect(rows[0].textContent).toContain('06/08/2026');
     expect(rows[1].textContent).toContain('05/01/2026');
+  });
+
+  it('renders the agreement header date as MM/DD/YYYY before it is accepted', () => {
+    render(
+      <VendorAgreementScreen
+        status={status()}
+        agreement={{ ...AGREEMENT, lastUpdated: '2026-06-04' }}
+        payoutsLive={false}
+      />,
+    );
+
+    expect(screen.getByText(/ · 06\/04\/2026$/)).toBeDefined();
   });
 
   /** Acceptance 9, on the surface: a new version adds a row, it never replaces one. */
