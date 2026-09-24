@@ -1,7 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import type { UserRole } from '@vendor-marketplace/shared';
 import { ACCOUNT_SETTINGS_PATH } from '@/components/account/settings-paths';
+import { accountLinksFor } from '@/components/account-links';
 import { SignOutButton } from '@/components/auth/sign-out-button';
 import { DropdownMenu } from 'radix-ui';
 import { useRef, useState } from 'react';
@@ -26,43 +28,20 @@ import { cn } from '@/lib/utils';
  * lives there, behind the proxy's rules. Email and closure stay out of it.
  *
  * The same menu sits in the admin console's header (ruled by the account
- * holder on VEN-677), in the console's ink `tone` and with its dashboard row
- * pointing at the console itself.
+ * holder on VEN-677), in the console's ink `tone`, its first row being the console itself.
  */
 
 /** Where signing out lands, stated rather than inherited from a provider's config. */
 export const SIGN_OUT_REDIRECT = '/';
 
-export interface AccountLink {
-  label: string;
-  href: string;
-}
-
 export { ACCOUNT_SETTINGS_PATH };
-
-/**
- * The menu's three links, shared with the drawer that carries the same rows at
- * narrow widths — one list, so the bar and the drawer cannot disagree.
- */
-export function accountLinks(
-  dashboardLabel: string,
-  dashboardHref = '/dashboard',
-): readonly [AccountLink, AccountLink, AccountLink] {
-  return [
-    { label: dashboardLabel, href: dashboardHref },
-    { label: 'Account settings', href: ACCOUNT_SETTINGS_PATH },
-    { label: 'Contact support', href: '/support' },
-  ];
-}
 
 export interface AccountMenuProps {
   /** The reader's name from our own record, never the session's claims. */
   name: string;
   avatarUrl: string | null;
-  /** `DASHBOARD_LABEL_BY_ROLE` for this reader, resolved once by the header. */
-  dashboardLabel: string;
-  /** Where that row goes: `/dashboard` resolves the role; the console names itself. */
-  dashboardHref?: string;
+  /** Decides the rows: `accountLinksFor(role)`, the list the drawer reads too. */
+  role: UserRole;
   /**
    * `dark` on the admin console's ink header: frame `13`'s 30px monogram in the
    * inverted pair, rather than the site header's 32px one.
@@ -80,8 +59,7 @@ const ITEM_CLASS =
 export function AccountMenu({
   name,
   avatarUrl,
-  dashboardLabel,
-  dashboardHref,
+  role,
   tone = 'light',
 }: AccountMenuProps): React.ReactElement {
   const trigger = useRef<HTMLButtonElement>(null);
@@ -92,7 +70,7 @@ export function AccountMenu({
     <DropdownMenu.Root open={open} onOpenChange={setOpen}>
       <DropdownMenu.Trigger
         ref={trigger}
-        // On the console the line beside it carries only an address, so the trigger names the operator.
+        // On the console the line beside it carries only an address, so the trigger names the account.
         aria-label={tone === 'dark' ? `Account menu, ${name}` : 'Account menu'}
         /*
           44px of target around the frame's 32px circle, per `04-laws.md`. No
@@ -134,7 +112,7 @@ export function AccountMenu({
           }}
           className="z-50 flex min-w-[13rem] flex-col rounded-panel border border-stone-300 bg-stone-0 p-[6px] shadow-dropdown"
         >
-          {accountLinks(dashboardLabel, dashboardHref).map((link) => (
+          {accountLinksFor(role).map((link) => (
             <DropdownMenu.Item key={link.href} asChild data-focus-own>
               <Link href={link.href} className={ITEM_CLASS}>
                 {link.label}

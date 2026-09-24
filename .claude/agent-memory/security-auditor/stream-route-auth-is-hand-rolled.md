@@ -46,6 +46,13 @@ another instance's write waits for the re-read, and `EventHub` is in-process, so
 multi-instance delivery is already unsupported (VEN-462). Reopen if a ban or
 delete path skips the unwind, or when VEN-462 adds replicas.
 
+**Stream budget (VEN-706, 2026-09-24):** `useEventStream` opens one `EventSource`
+per _hook call_ despite its "one for the whole app" doc; `MAX_STREAMS_PER_USER`
+is 5 and the sixth gets a 429 the client backs off from, then gives up after
+six attempts. Bell + `MessagesLink` + messages screen = 3 per tab on
+`/messages`, 2 elsewhere, so the 3rd tab loses live updates. Count hook callers
+whenever a diff adds one.
+
 **Why:** a reviewer scanning for route guards, or a refactor that "restores
 consistency" by adding `requireAuth`, breaks live updates outright and looks
 like a security improvement while doing it.

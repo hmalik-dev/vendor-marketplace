@@ -13,7 +13,7 @@ import { tokenExpiryMs } from './token-expiry';
 /** Refetch when the cached token has this long or less left. */
 export const REFRESH_WINDOW_MS = 60_000;
 
-const SESSION_TOKEN_PATH = '/api/session/token';
+export const SESSION_TOKEN_PATH = '/api/session/token';
 
 interface CachedToken {
   token: string;

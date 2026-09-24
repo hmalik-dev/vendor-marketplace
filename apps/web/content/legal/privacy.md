@@ -1,6 +1,6 @@
 ---
 title: Privacy Policy
-lastUpdated: 2026-09-22
+lastUpdated: 2026-09-24
 note: Every mention of Vercel Web Analytics below, other than the closing note, is interim, AI-drafted wording pending the account holder's own version; the closing note was already approved.
 ---
 

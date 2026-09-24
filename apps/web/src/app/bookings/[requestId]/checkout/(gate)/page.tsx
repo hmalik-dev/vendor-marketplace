@@ -1,13 +1,12 @@
 import type { Metadata } from 'next';
-import { notFound, redirect } from 'next/navigation';
-import { expiryCountdown, pageTitle, uuidSchema } from '@vendor-marketplace/shared';
+import { expiryCountdown, pageTitle } from '@vendor-marketplace/shared';
 import { CheckoutScreen } from '@/components/checkout/checkout-screen';
 import {
   CheckoutUnavailable,
   type CheckoutUnavailableReason,
 } from '@/components/checkout/checkout-unavailable';
-import { getBookingForRequest, getOwnBookingRequest, openCheckout } from '@/lib/customer-data';
-import { requireRole } from '@/lib/current-user';
+import { gateCheckout, readBookingRequest } from '@/lib/booking-route';
+import { openCheckout } from '@/lib/customer-data';
 import { reportSwallowedError } from '@/lib/report-error';
 
 export const metadata: Metadata = {
@@ -31,44 +30,25 @@ interface PageProps {
  * too. See the note there.
  */
 export default async function CheckoutPage({ params }: PageProps): Promise<React.ReactElement> {
-  await requireRole('customer');
-  const { requestId } = await params;
-
   /*
-   * Parsed before it reaches a query, for the reason `web-route-boundaries.md`
-   * gives: this URL is pasteable, and an id the API cannot parse is an
-   * identifier that cannot exist — `notFound()`, never the 500 page.
+   * The customer gate, the 404 for a request that does not exist (#387: every
+   * other failure is a screen below) and the redirect for an already-paid one
+   * are `layout.tsx`'s, above the loading boundary (VEN-715). This awaits the
+   * same per-request gate **before** opening checkout: opening it mints a
+   * payment intent, so it must never run for a visitor the gate refuses, nor
+   * from the layout, which a link prefetch renders.
    */
-  const parsed = uuidSchema.safeParse(requestId);
-  if (!parsed.success) {
-    notFound();
-  }
-
-  /*
-   * Already paid: there is nothing to take. Checked before opening checkout so
-   * a customer who reloads the URL after paying lands on their confirmation
-   * rather than on a card form for a booking they already hold.
-   */
-  const existing = await getBookingForRequest(parsed.data);
-  if (existing) {
-    redirect(`/bookings/${parsed.data}/confirmed`);
-  }
-
-  /*
-   * Only a request that does not exist reaches `notFound()`. #387: every other
-   * failure used to land here too, so an upstream payment error rendered
-   * "this page isn't here" over a live booking on a published vendor.
-   */
-  const outcome = await openCheckout(parsed.data);
+  const requestId = await gateCheckout({ params });
+  const outcome = await openCheckout(requestId);
 
   if (outcome.state === 'not-found') {
-    notFound();
+    throw new Error('Booking request vanished after the checkout gate read it');
   }
 
   return outcome.state === 'ready' ? (
-    <CheckoutScreen checkout={outcome.checkout} requestId={parsed.data} />
+    <CheckoutScreen checkout={outcome.checkout} requestId={requestId} />
   ) : (
-    await unavailableScreen(outcome.state, parsed.data)
+    await unavailableScreen(outcome.state, requestId)
   );
 }
 
@@ -113,7 +93,7 @@ async function unavailableScreen(
    * explain a failure well. The customer still gets an honest screen; the
    * reason it was the vaguer of the two goes to the log.
    */
-  const request = await getOwnBookingRequest(requestId).catch((error: unknown) => {
+  const request = await readBookingRequest(requestId).catch((error: unknown) => {
     reportSwallowedError('checkout: reading the request to explain a refusal', error);
     return null;
   });

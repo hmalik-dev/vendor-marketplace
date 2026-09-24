@@ -21,6 +21,7 @@ vi.mock('./api-client', async () => {
 });
 
 const { useApi } = await import('./use-api');
+const { resetSessionEndedForTests } = await import('./auth/session-ended');
 
 /**
  * The acceptance gate's **client** half, handled once for every browser call.
@@ -149,6 +150,7 @@ describe('useApi and a session refused mid-session', () => {
     clearSessionToken.mockReset();
     apiRequest.mockReset();
     stubLocation('/vendor/profile', '?tab=hours');
+    resetSessionEndedForTests();
   });
 
   afterEach(() => {
@@ -181,6 +183,24 @@ describe('useApi and a session refused mid-session', () => {
     expect(replace).not.toHaveBeenCalled();
   });
 
+  // VEN-699: a burst of calls in a tab whose session ended is one navigation.
+  it('navigates once when three calls are refused together', async () => {
+    apiRequest.mockRejectedValue(new ApiClientError(401, ERROR_CODES.UNAUTHORIZED, 'Unauthorized'));
+
+    const { result } = renderHook(() => useApi());
+
+    await Promise.allSettled([
+      result.current('/a', { schema: z.unknown() }),
+      result.current('/b', { schema: z.unknown() }),
+      result.current('/c', { schema: z.unknown() }),
+    ]);
+
+    expect(clearSessionToken).toHaveBeenCalledTimes(3);
+    expect(assign).toHaveBeenCalledExactlyOnceWith(
+      '/sign-in?returnTo=%2Fvendor%2Fprofile%3Ftab%3Dhours',
+    );
+  });
+
   it('leaves an ordinary 403 to its caller — a stale tab or a moderation hold is not a ban', async () => {
     apiRequest.mockRejectedValue(new ApiClientError(403, ERROR_CODES.FORBIDDEN, 'Not yours'));
 
@@ -188,6 +208,7 @@ describe('useApi and a session refused mid-session', () => {
 
     await expect(result.current('/x', { schema: z.unknown() })).rejects.toThrow();
 
+    expect(clearSessionToken).not.toHaveBeenCalled();
     expect(replace).not.toHaveBeenCalled();
     expect(assign).not.toHaveBeenCalled();
   });

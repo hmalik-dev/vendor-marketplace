@@ -63,6 +63,22 @@ vi.mock('@/components/messaging/notification-bell', () => ({
 }));
 
 /*
+ * The cross-tab sign-out listener and focus probe (VEN-699) are
+ * `session-sync.test.tsx`'s; the header's job is to mount them for a signed-in
+ * visitor and for nobody else, so it is stubbed to whether it rendered.
+ */
+vi.mock('@/components/auth/session-sync', () => ({
+  SessionSync: () => <span data-testid="session-sync" />,
+}));
+
+/*
+ * The `Messages` link asks the API whether any thread is unread (VEN-706).
+ */
+const apiCall = vi.fn();
+vi.mock('@/lib/use-api', () => ({ useApi: () => apiCall }));
+vi.mock('@/lib/report-error', () => ({ reportSwallowedError: vi.fn() }));
+
+/*
  * The role decides whether the header carries the vendor chip. It comes from
  * the local account record rather than the session, so it is mocked separately from
  * the signed-in/signed-out state above — the two can disagree, and the chip
@@ -96,6 +112,7 @@ describe('SiteHeader', () => {
     currentlyGated = false;
     signOut.mockClear();
     notificationBellGated.mockClear();
+    apiCall.mockReset().mockResolvedValue({ items: [], nextBefore: null, hasUnread: false });
     currentUser = {
       firstName: 'Ada',
       lastName: 'Lovelace',
@@ -122,12 +139,12 @@ describe('SiteHeader', () => {
    * of other vendors and `redirectVendorToDashboard` sends a vendor straight
    * back out of it, so a wordmark pointing there makes the one control every
    * screen carries a round trip through a redirect. A customer's home is the
-   * marketplace, and an admin renders it too. Frame `30`.
+   * marketplace, and an admin's is the console (VEN-702). Frame `30`.
    */
   it.each([
     ['vendor' as const, '/dashboard'],
     ['customer' as const, '/'],
-    ['admin' as const, '/'],
+    ['admin' as const, '/admin'],
     [null, '/'],
   ])('points the wordmark at home as a %s reads it', async (role, href) => {
     authState = role === null ? 'signed-out' : 'signed-in';
@@ -215,6 +232,17 @@ describe('SiteHeader', () => {
     expect(landing.getByRole('link', { name: 'Browse' })).toBeDefined();
   });
 
+  it('mounts the session listener for a signed-in visitor and never for a signed-out one', async () => {
+    authState = 'signed-out';
+    const signedOut = render(await SiteHeader());
+    expect(screen.queryAllByTestId('session-sync')).toHaveLength(0);
+    signedOut.unmount();
+
+    authState = 'signed-in';
+    render(await SiteHeader());
+    expect(screen.getAllByTestId('session-sync')).toHaveLength(1);
+  });
+
   it('hides the marketing nav from a signed-in visitor', async () => {
     authState = 'signed-in';
 
@@ -253,11 +281,29 @@ describe('SiteHeader', () => {
   });
 
   /*
+   * VEN-702: an admin lives on `/admin` and has no inbox, so the bar draws no
+   * `Messages` link and no bell; a customer and a vendor keep both.
+   */
+  it.each([
+    ['customer' as const, true],
+    ['vendor' as const, true],
+    ['admin' as const, false],
+  ])('draws Messages and the bell for a %s: %s', async (role, drawn) => {
+    authState = 'signed-in';
+    currentRole = role;
+
+    render(await SiteHeader());
+
+    expect(screen.queryByRole('link', { name: 'Messages' }) !== null).toBe(drawn);
+    expect(screen.queryByRole('button', { name: 'Notifications' }) !== null).toBe(drawn);
+    expect(screen.getByRole('button', { name: 'Account menu' })).toBeDefined();
+  });
+
+  /*
    * One control, three destinations — `/dashboard` resolves the role and
    * forwards — so no single string is true for every reader. The label is
-   * therefore the role's, and it is the same word in the bar and in the drawer
-   * the bar hides it into below `sm`: two copies of that decision is how one
-   * destination ends up called two things.
+   * therefore the role's. The drawer and the avatar menu read `accountLinksFor`
+   * instead, where a customer's row is `My bookings` (VEN-702).
    */
   it.each([
     ['customer' as const, 'Bookings'],
@@ -331,38 +377,51 @@ describe('SiteHeader', () => {
    * `Account settings` is the app's own page (VEN-677).
    */
   it.each([
-    ['customer' as const, 'Bookings'],
-    ['vendor' as const, 'Dashboard'],
-    ['admin' as const, 'Admin'],
-  ])(
-    'opens a %s account menu of exactly dashboard, settings, support and sign out',
-    async (role, label) => {
-      authState = 'signed-in';
-      currentRole = role;
+    [
+      'customer' as const,
+      [
+        ['My bookings', '/dashboard'],
+        ['My profile', '/customer/profile'],
+        ['Account settings', '/account/settings'],
+        ['Contact support', '/support'],
+      ],
+    ],
+    [
+      'vendor' as const,
+      [
+        ['Dashboard', '/dashboard'],
+        ['Account settings', '/account/settings'],
+        ['Contact support', '/support'],
+      ],
+    ],
+    [
+      'admin' as const,
+      [
+        ['Admin', '/admin'],
+        ['Account settings', '/account/settings'],
+      ],
+    ],
+  ])('opens a %s account menu of exactly its own rows and sign out', async (role, rows) => {
+    authState = 'signed-in';
+    currentRole = role;
 
-      render(await SiteHeader());
-      // jsdom has no PointerEvent, and Radix opens a menu from the keyboard too.
-      fireEvent.keyDown(screen.getByRole('button', { name: 'Account menu' }), { key: 'Enter' });
+    render(await SiteHeader());
+    // jsdom has no PointerEvent, and Radix opens a menu from the keyboard too.
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Account menu' }), { key: 'Enter' });
 
-      const menu = screen.getByRole('menu');
-      const items = within(menu).getAllByRole('menuitem');
+    const items = within(screen.getByRole('menu')).getAllByRole('menuitem');
+    const signOutItem = items[items.length - 1]!;
 
-      expect(items.map((item) => item.textContent)).toEqual([
-        label,
-        'Account settings',
-        'Contact support',
-        'Sign out',
-      ]);
-      expect(items[0]).toHaveProperty('href', 'http://localhost:3000/dashboard');
-      expect(items[1]).toHaveProperty('href', 'http://localhost:3000/account/settings');
-      expect(items[2]).toHaveProperty('href', 'http://localhost:3000/support');
-      expect(items[3]?.tagName).toBe('BUTTON');
+    expect(items.slice(0, -1).map((item) => [item.textContent, item.getAttribute('href')])).toEqual(
+      rows,
+    );
+    expect(signOutItem.textContent).toBe('Sign out');
+    expect(signOutItem.tagName).toBe('BUTTON');
 
-      // Sign out lands signed out on `/` — criterion 2's half that jsdom can see.
-      fireEvent.click(items[3]!);
-      expect(signOut).toHaveBeenCalledExactlyOnceWith('/');
-    },
-  );
+    // Sign out lands signed out on `/` — criterion 2's half that jsdom can see.
+    fireEvent.click(signOutItem);
+    expect(signOut).toHaveBeenCalledExactlyOnceWith('/');
+  });
 
   /*
    * #435's ruling for an ARIA menu button: Tab closes the panel and parks focus
@@ -526,5 +585,55 @@ describe('SiteHeader', () => {
     render(await SiteHeader());
 
     expect(notificationBellGated).toHaveBeenCalledWith(gated);
+  });
+
+  /*
+   * VEN-706. The unread cue moved off the bookings sidebar onto the header link,
+   * so it is asserted here where a reader meets it.
+   */
+  describe('the Messages link unread cue', () => {
+    it('names the link `Messages, unread` and draws the dot when a thread is unread', async () => {
+      authState = 'signed-in';
+      currentRole = 'customer';
+      apiCall.mockResolvedValue({ items: [], nextBefore: null, hasUnread: true });
+
+      render(await SiteHeader());
+
+      const link = await screen.findByRole('link', { name: 'Messages, unread' });
+
+      expect(link).toHaveProperty('href', 'http://localhost:3000/messages');
+      expect(screen.getByTestId('messages-unread-dot')).toBeDefined();
+      expect(apiCall).toHaveBeenCalledWith('/conversations', expect.anything());
+    });
+
+    it('is plain `Messages` with no dot when nothing is unread', async () => {
+      authState = 'signed-in';
+      currentRole = 'vendor';
+
+      render(await SiteHeader());
+
+      await waitFor(() => expect(apiCall).toHaveBeenCalled());
+      expect(screen.getByRole('link', { name: 'Messages' })).toBeDefined();
+      expect(screen.queryByTestId('messages-unread-dot')).toBeNull();
+    });
+
+    it('issues no unread request for a signed-out visitor', async () => {
+      render(await SiteHeader());
+
+      expect(screen.queryByRole('link', { name: /Messages/ })).toBeNull();
+      expect(apiCall).not.toHaveBeenCalled();
+    });
+
+    it('stays quiet for a gated session on a gate-exempt page', async () => {
+      authState = 'signed-in';
+      currentRole = 'customer';
+      currentlyGated = true;
+      pathname = '/search';
+
+      render(await SiteHeader());
+
+      expect(screen.getByRole('link', { name: 'Messages' })).toBeDefined();
+      expect(apiCall).not.toHaveBeenCalled();
+    });
   });
 });

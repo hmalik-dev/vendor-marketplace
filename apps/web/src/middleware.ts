@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { CSP_NONCE_HEADER, withNonce } from '@/config/security-headers';
 import { REQUEST_PATH_HEADER } from '@/lib/return-path';
+import { searchParamsFrom, successorSearchPath } from '@/lib/search-params';
 
 /**
  * Route protection is deliberately *not* done here: a path-matcher guard can
@@ -60,6 +61,22 @@ export default function middleware(request: NextRequest): NextResponse {
   const destination = new URL(request.nextUrl);
   for (const param of INTERNAL_QUERY_PARAMS) {
     destination.searchParams.delete(param);
+  }
+
+  /*
+   * `/search`'s 308 for a retired category (#419), answered here rather than in
+   * a layout or the page (VEN-715). `/search` has a loading boundary, which
+   * streams, so a `permanentRedirect()` beneath it would go out as a meta
+   * refresh under HTTP 200; and a layout has no `searchParams`, and is not
+   * re-rendered by a client navigation that only changes the query. This runs
+   * on every request, RSC fetches included. It canonicalises; it guards nothing.
+   */
+  if (destination.pathname === '/search') {
+    const successor = successorSearchPath(searchParamsFrom(destination.searchParams));
+
+    if (successor !== null) {
+      return NextResponse.redirect(new URL(successor, destination), 308);
+    }
   }
 
   const headers = new Headers(request.headers);

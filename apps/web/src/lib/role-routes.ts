@@ -118,6 +118,8 @@ export const ROLE_ROUTE_RULES: ReadonlyArray<{
    * out of it, and it is the customer's own start.
    */
   { pattern: /^\/$/, roles: ['customer', 'admin'] },
+  // `app/messages/layout.tsx` — `requireNonAdmin()`: an admin has no inbox (VEN-702).
+  { pattern: /^\/messages(?:\/|$)/, roles: ['customer', 'vendor'] },
   // `/for-vendors` — `redirectVendorToDashboard`: its only ask is sign-up.
   { pattern: /^\/for-vendors\/?$/, roles: ['customer', 'admin'] },
 ];

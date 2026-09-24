@@ -4,7 +4,20 @@ import { AdminHeader } from './admin-header';
 
 afterEach(cleanup);
 
+// The listener is `session-sync.test.tsx`'s (VEN-699); here only that it is mounted.
+vi.mock('@/components/auth/session-sync', () => ({
+  SessionSync: () => <span data-testid="session-sync" />,
+}));
+
 const EMAIL = 'admin+auth_test@example.com';
+
+describe('AdminHeader and a sign-out in another tab', () => {
+  it('mounts the session listener, since it replaces the site header on /admin', () => {
+    render(<AdminHeader email={EMAIL} name="Admin" />);
+
+    expect(screen.getAllByTestId('session-sync')).toHaveLength(1);
+  });
+});
 
 /*
  * jsdom performs no layout, so none of this measures a width — the 390px
@@ -97,7 +110,7 @@ describe('AdminHeader', () => {
    * VEN-677, ruled by the account holder: the console's avatar opens the same
    * account menu as the site header's, with its first row back to the console.
    */
-  it('opens the account menu: the console, settings, support and sign out', () => {
+  it('opens the account menu: the console, settings and sign out, with no support row', () => {
     render(<AdminHeader email={EMAIL} name="Admin" />);
 
     // jsdom has no PointerEvent, and Radix opens a menu from the keyboard too.
@@ -109,7 +122,6 @@ describe('AdminHeader', () => {
     expect(items.map((item) => [item.textContent, item.getAttribute('href')])).toEqual([
       ['Admin', '/admin'],
       ['Account settings', '/account/settings'],
-      ['Contact support', '/support'],
       ['Sign out', null],
     ]);
   });

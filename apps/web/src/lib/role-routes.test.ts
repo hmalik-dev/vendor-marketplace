@@ -37,6 +37,19 @@ describe('roleCanReach', () => {
   });
 
   /*
+   * `/messages` is the inbox: customers and vendors have one, an admin has no
+   * one to write to and goes to the console (VEN-702).
+   */
+  it.each(['/messages', '/messages?conversation=abc'])(
+    'turns an admin away from %s only',
+    (path) => {
+      expect(roleCanReach('customer', path)).toBe(true);
+      expect(roleCanReach('vendor', path)).toBe(true);
+      expect(roleCanReach('admin', path)).toBe(false);
+    },
+  );
+
+  /*
    * The gate is `/vendors/<slug>/request`, not the storefront around it. A
    * prefix match on `/vendor` would have swallowed the whole public catalogue
    * and bounced every customer off every vendor's page.
@@ -46,7 +59,6 @@ describe('roleCanReach', () => {
     '/vendors/june-harlow',
     '/vendors/june-harlow?date=2026-06-14',
     '/search',
-    '/messages',
     '/vendor-guide',
     // The public vendor agreement (VEN-402); the accept step at /vendor/agreement stays gated.
     '/legal/vendor-agreement',

@@ -822,11 +822,20 @@ describe('the slug preview names a URL the router actually serves (#360)', () =>
   }
 
   it('advertises a segment that exists as a dynamic route', () => {
-    const routeFile = join(process.cwd(), 'src/app', advertisedSegment(), '[slug]', 'page.tsx');
-
-    expect(existsSync(routeFile), `${advertisedSegment()}/[slug]/page.tsx does not exist`).toBe(
-      true,
+    /* `(profile)` is a route group (VEN-715): it does not appear in the URL. */
+    const routeFile = join(
+      process.cwd(),
+      'src/app',
+      advertisedSegment(),
+      '[slug]',
+      '(profile)',
+      'page.tsx',
     );
+
+    expect(
+      existsSync(routeFile),
+      `${advertisedSegment()}/[slug]/(profile)/page.tsx does not exist`,
+    ).toBe(true);
   });
 
   it('sends the Preview link to that same segment', () => {

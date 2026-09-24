@@ -1,10 +1,8 @@
 import type { Metadata } from 'next';
-import { notFound, redirect } from 'next/navigation';
-import { pageTitle, uuidSchema } from '@vendor-marketplace/shared';
+import { pageTitle } from '@vendor-marketplace/shared';
 import { BookingConfirmed } from '@/components/bookings/booking-confirmed';
-import { getBookingForRequest, getOwnBookingRequest } from '@/lib/customer-data';
+import { gateConfirmedBooking } from '@/lib/booking-route';
 import { getOwnConversations } from '@/lib/messaging-data';
-import { requireRole } from '@/lib/current-user';
 
 export const metadata: Metadata = {
   title: pageTitle('Booking confirmed'),
@@ -29,31 +27,12 @@ interface PageProps {
 export default async function BookingConfirmedPage({
   params,
 }: PageProps): Promise<React.ReactElement> {
-  await requireRole('customer');
-  const { requestId } = await params;
-
-  const parsed = uuidSchema.safeParse(requestId);
-  if (!parsed.success) {
-    notFound();
-  }
-
-  const [booking, request] = await Promise.all([
-    getBookingForRequest(parsed.data),
-    getOwnBookingRequest(parsed.data),
-  ]);
-
-  if (!request) {
-    notFound();
-  }
-
   /*
-   * Not paid yet. Back to checkout rather than a 404 — the customer is one step
-   * behind rather than somewhere they should not be, and the destination they
-   * wanted is the one they get sent to.
+   * The 404 and the redirect back to checkout for an unpaid request are
+   * `layout.tsx`'s, above the loading boundary (VEN-715). This awaits the same
+   * per-request gate, so nothing below runs for a visitor it refuses.
    */
-  if (!booking) {
-    redirect(`/bookings/${parsed.data}/checkout`);
-  }
+  const { request, booking } = await gateConfirmedBooking({ params });
 
   /*
    * The thread with this vendor, so `Message …` has somewhere to go. Read from
