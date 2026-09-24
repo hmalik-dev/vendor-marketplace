@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiClientError } from '@/lib/api-client';
 
@@ -106,6 +106,15 @@ describe('CustomerProfilePage when the history reads fail', () => {
       expect(screen.getByRole('form', { name: 'Profile form' })).toBeTruthy();
       expect(screen.getByTestId('sidebar-count').textContent).toBe('null');
     });
+  });
+
+  it('Try again re-runs the route once', async () => {
+    getOwnBookings.mockRejectedValue(new ApiClientError(500, 'INTERNAL_ERROR', 'boom'));
+    await renderTab('active');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
   });
 
   it('a failed reviews read does not take down the bookings tabs', async () => {

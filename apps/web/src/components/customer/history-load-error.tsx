@@ -36,7 +36,7 @@ export function HistoryLoadError({ subject }: HistoryLoadErrorProps): React.Reac
         </Button>
       }
     >
-      This is a problem on our side. Your bookings are not affected.
+      This is a problem on our side.
     </Banner>
   );
 }
