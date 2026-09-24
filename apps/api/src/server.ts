@@ -150,10 +150,11 @@ export interface BuildServerOptions {
    */
   expirySweepIntervalMs?: number;
   /**
-   * How often an open event stream is kept alive and its account re-read, so a
-   * ban or deletion ends it on any instance. Default 30 s; suites shorten it.
+   * How often an open event stream is kept alive. Default 30 s; suites shorten it.
    */
   streamHeartbeatMs?: number;
+  /** How often an open stream's account is re-read, so a ban ends it on any instance. Default 5 min. */
+  streamSubjectRecheckMs?: number;
   /**
    * How often failed transactional email is re-sent; `0` disables it. On by
    * default for `payoutSweepIntervalMs`'s reason.
@@ -639,6 +640,9 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
         conversationRateLimitMax: env.CONVERSATION_RATE_LIMIT_MAX,
         messageRateLimitMax: env.MESSAGE_RATE_LIMIT_MAX,
         ...(options.streamHeartbeatMs ? { heartbeatMs: options.streamHeartbeatMs } : {}),
+        ...(options.streamSubjectRecheckMs
+          ? { subjectRecheckMs: options.streamSubjectRecheckMs }
+          : {}),
       });
       await v1.register(uploadRoutes, {
         rateLimitMax: env.UPLOAD_RATE_LIMIT_MAX,
