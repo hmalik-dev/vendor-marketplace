@@ -31,6 +31,13 @@ visible in the SQL.
   holds only `messages as newest`. Alias the outer table, or call the DAO with
   ids that did not come from `findConversationsFor`, and the scoping is gone.
 
+VEN-611 (2026-09-24) paged the list. The `before` cursor is ANDed onto the
+tenancy predicate (`olderThan` over `coalesce(last_message_at, epoch)`), and its
+values are bound parameters cast to `::timestamptz` and `::uuid` after the
+shared regex plus a real-instant check. The page size is a server constant.
+Previews and unread counts still take ids only from the page's rows. Audited
+clean.
+
 The negative case for the vendor arm is held by `does not list another vendor
 thread to a vendor who has their own profile` (`messaging.routes.test.ts`),
 added in #402 after this was flagged. It gives `OTHER_VENDOR` a real profile

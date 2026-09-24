@@ -147,6 +147,13 @@ mapping is exactly how the count went from five to nine with nobody noticing.
 assert each route appears in the parity ledger with either a frame or a recorded
 exemption. That is code, which `#306` does not write — **filed as `#319`.**
 
+**A control inside a framed route (VEN-611).** `/messages` is framed by `10`, but
+the conversation rail's `Load older conversations` button — the list is paged, 20
+to a page — is drawn by no frame. It is deliberately unframed: it reuses the
+thread pane's `Load earlier messages` button (secondary, `sm`) at the list end,
+and a parity pass reading the rail past its twentieth row is looking at this
+ruling.
+
 ## Non-negotiables
 
 - **Desktop-first.** Every layout is designed at 1440 × 900. Narrower viewports are adaptations, never the source of truth.
