@@ -36,6 +36,13 @@ export interface StripeConnectGateway {
    */
   createOnboardingLink(input: CreateOnboardingLinkInput): Promise<{ url: string }>;
 
+  /**
+   * A single-use link into the vendor's Stripe Express dashboard, where their
+   * payouts and tax forms live (VEN-725). Minted per click, never stored. The
+   * Express login-link endpoint is v1; Stripe accepts a v2 account id there.
+   */
+  createDashboardLink(accountId: string): Promise<{ url: string }>;
+
   /** The authoritative capability state, read from Stripe rather than cached. */
   readAccountStatus(accountId: string): Promise<StripeAccountStatus>;
 
@@ -1161,6 +1168,12 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
           },
         },
       });
+
+      return { url: link.url };
+    },
+
+    async createDashboardLink(accountId) {
+      const link = await stripe.accounts.createLoginLink(accountId);
 
       return { url: link.url };
     },

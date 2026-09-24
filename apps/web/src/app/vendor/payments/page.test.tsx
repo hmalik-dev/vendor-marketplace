@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const requireRole = vi.fn<() => Promise<void>>();
 const getPayoutStatus = vi.fn<() => Promise<WireVendorPayoutStatus | null>>();
 const getAgreementStatus = vi.fn<() => Promise<WireVendorAgreementStatus | null>>();
+const getTaxStatementYears = vi.fn<() => Promise<number[]>>();
 const redirect = vi.fn((path: string) => {
   throw new Error(`REDIRECT:${path}`);
 });
@@ -14,6 +15,19 @@ vi.mock('@/lib/current-user', () => ({ requireRole: () => requireRole() }));
 vi.mock('@/lib/vendor-data', () => ({
   getPayoutStatus: () => getPayoutStatus(),
   getAgreementStatus: () => getAgreementStatus(),
+  getTaxStatementYears: () => getTaxStatementYears(),
+}));
+vi.mock('@/components/vendor/stripe-dashboard-link', () => ({
+  StripeDashboardLink: () => <button type="button">Open your Stripe dashboard</button>,
+}));
+vi.mock('@/components/vendor/tax-statement-downloads', () => ({
+  TaxStatementDownloads: ({ years }: { years: number[] }) => (
+    <ul>
+      {years.map((year) => (
+        <li key={year}>{`${year} statement (CSV)`}</li>
+      ))}
+    </ul>
+  ),
 }));
 vi.mock('next/navigation', () => ({ redirect: (path: string) => redirect(path) }));
 vi.mock('@/components/vendor/connect-payouts-form', () => ({
@@ -55,6 +69,8 @@ describe('VendorPaymentsPage', () => {
     getPayoutStatus.mockReset();
     getAgreementStatus.mockReset();
     getAgreementStatus.mockResolvedValue(accepted());
+    getTaxStatementYears.mockReset();
+    getTaxStatementYears.mockResolvedValue([]);
     redirect.mockClear();
   });
 
@@ -128,16 +144,44 @@ describe('VendorPaymentsPage', () => {
     expect(banners[0]!.className).toContain('steel');
   });
 
-  it('shows no gate and no button once payouts are connected', async () => {
+  it('shows no gate and no setup button once payouts are connected', async () => {
     await renderPage({ stripeAccountId: 'acct_1', stripeOnboarded: true });
 
     expect(screen.queryByText(/You can't take payment/)).toBeNull();
-    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.queryByText('Set up payouts')).toBeNull();
+    expect(screen.queryByText('Continue setup')).toBeNull();
     expect(screen.getByRole('status').className).toContain('sage');
     expect(screen.getByRole('status').textContent).toContain(
       `pays it out to you ${PAYOUT_RELEASE_HOURS} hours after the event date.`,
     );
     expect(document.body.textContent).not.toContain('until the event is complete');
+  });
+
+  it('opens the Stripe dashboard from the connected banner and lists a statement per year (VEN-725)', async () => {
+    getTaxStatementYears.mockResolvedValue([2027, 2026]);
+    await renderPage({ stripeAccountId: 'acct_1', stripeOnboarded: true });
+
+    const banner = screen.getByRole('status');
+    expect(banner.textContent).toContain('Open your Stripe dashboard');
+    expect(banner.textContent).toContain('2027 statement (CSV)');
+    expect(banner.textContent).toContain('2026 statement (CSV)');
+    expect(document.body.textContent).not.toContain(
+      ['There is nothing', 'else to do here.'].join(' '),
+    );
+  });
+
+  it('offers no dashboard link before payouts are connected, but keeps a past year statement', async () => {
+    getTaxStatementYears.mockResolvedValue([2026]);
+    await renderPage({ stripeAccountId: 'acct_1', stripeOnboarded: false });
+
+    expect(screen.queryByText('Open your Stripe dashboard')).toBeNull();
+    expect(screen.getByText('2026 statement (CSV)')).toBeTruthy();
+  });
+
+  it('does not ask for statements before an account exists', async () => {
+    await renderPage({ stripeAccountId: null, stripeOnboarded: false });
+
+    expect(getTaxStatementYears).not.toHaveBeenCalled();
   });
 
   /** MVP takes no vendor fee, so no rate may appear anywhere in this flow. */

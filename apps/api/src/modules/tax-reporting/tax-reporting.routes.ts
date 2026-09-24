@@ -10,6 +10,8 @@ import {
   sha256Hex,
   taxYearFigures,
   taxYearsWithSettledBookings,
+  vendorStatementFor,
+  vendorTaxYearsFor,
 } from './tax-reporting.service.js';
 
 const yearQuerySchema = z.object({ year: z.coerce.number().int().min(2020).max(2100) });
@@ -29,6 +31,31 @@ export const taxReportingRoutes: FastifyPluginAsyncZod<{ webOrigin: string }> = 
   app.get('/admin/tax/years', { onRequest: adminOnly }, async () => ({
     years: await taxYearsWithSettledBookings(app.db),
   }));
+
+  /*
+   * The vendor's own yearly statement (VEN-725). The vendor is always the
+   * caller's own profile: no id is read from the request, so there is nothing
+   * to tamper with, and an admin or customer is refused before validation.
+   */
+  const vendorOnly = requireRoleBeforeValidation('vendor');
+
+  app.get('/vendor/tax/years', { onRequest: vendorOnly }, async (request) => ({
+    years: await vendorTaxYearsFor(app.db, assertRole(request.auth, ['vendor']).id),
+  }));
+
+  app.get(
+    '/vendor/tax/statement.csv',
+    { onRequest: vendorOnly, schema: { querystring: yearQuerySchema } },
+    async (request, reply) => {
+      const { year } = request.query;
+
+      return reply
+        .type('text/csv; charset=utf-8')
+        .header('content-disposition', `attachment; filename="statement-${year}.csv"`)
+        .header('cache-control', 'no-store')
+        .send(await vendorStatementFor(app.db, assertRole(request.auth, ['vendor']).id, year));
+    },
+  );
 
   app.get(
     '/admin/tax/1099-k.csv',

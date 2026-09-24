@@ -9,8 +9,10 @@ import { redirect } from 'next/navigation';
 import { Banner } from '@/components/ui/banner';
 import { VendorSurface } from '@/components/vendor-surface';
 import { ConnectPayoutsForm } from '@/components/vendor/connect-payouts-form';
+import { StripeDashboardLink } from '@/components/vendor/stripe-dashboard-link';
+import { TaxStatementDownloads } from '@/components/vendor/tax-statement-downloads';
 import { requireRole } from '@/lib/current-user';
-import { getAgreementStatus, getPayoutStatus } from '@/lib/vendor-data';
+import { getAgreementStatus, getPayoutStatus, getTaxStatementYears } from '@/lib/vendor-data';
 
 export const metadata: Metadata = { title: pageTitle('Payments') };
 
@@ -57,6 +59,8 @@ export default async function VendorPaymentsPage({
     redirect(VENDOR_AGREEMENT_PATH);
   }
 
+  // A vendor paid in a past year keeps the statement even if the account has since been restricted.
+  const statementYears = status.stripeAccountId ? await getTaxStatementYears() : [];
   const hasStarted = Boolean(status.stripeAccountId);
   // Stripe sends the vendor here when the link it gave them expired or was
   // already used. Saying so is the difference between "this is broken" and
@@ -77,7 +81,9 @@ export default async function VendorPaymentsPage({
         {status.stripeOnboarded ? (
           <Banner status="settled" title="Payouts connected">
             {BRAND_NAME} holds each payment and pays it out to you {PAYOUT_RELEASE_HOURS} hours
-            after the event date. There is nothing else to do here.
+            after the event date.
+            <StripeDashboardLink />
+            <TaxStatementDownloads years={statementYears} />
           </Banner>
         ) : (
           <>
@@ -108,6 +114,7 @@ export default async function VendorPaymentsPage({
               Stripe asks for your bank details and enough identification to pay you legally.{' '}
               {BRAND_NAME} never sees them.
             </p>
+            <TaxStatementDownloads years={statementYears} />
           </>
         )}
       </div>
