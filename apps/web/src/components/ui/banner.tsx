@@ -58,7 +58,13 @@ export interface BannerProps {
   status: BannerStatus;
   /** The headline. One line — the sentence goes in `children`. */
   title?: ReactNode;
-  /** One sentence per job, per `40-states.md`. Omitted when the title says it all. */
+  /**
+   * One sentence per job, per `40-states.md`. Omitted when the title says it all.
+   * Rendered inside a `<p>`, so text and inline elements only: a `<div>`, list
+   * or table here is closed out of the paragraph by the browser's parser and
+   * the page then fails to hydrate (React error 418). Put a block beside the
+   * banner, or in `action`.
+   */
   children?: ReactNode;
   /**
    * The one control that fixes what the banner reports, held right of the
