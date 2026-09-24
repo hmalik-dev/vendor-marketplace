@@ -16,7 +16,7 @@ import {
   type FastifyPluginAsyncZod,
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
-import { createDatabase, createListener } from '@vendor-marketplace/db';
+import { createApiDatabase, createListener } from '@vendor-marketplace/db';
 import { bootEnv } from './config/boot.js';
 import {
   API_VERSION_PREFIX,
@@ -716,7 +716,7 @@ let bootstrapped: Promise<FastifyInstance> | undefined;
  */
 async function bootstrap(): Promise<FastifyInstance> {
   const env = bootEnv();
-  const { db } = createDatabase();
+  const { db } = createApiDatabase();
   const listener = createListener(env.DATABASE_URL);
 
   // `buildServer` awaits `app.ready()`, which is what makes `app.server` able

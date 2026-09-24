@@ -160,6 +160,21 @@ describe('createS3Storage wiring', () => {
       }),
     ]);
   });
+
+  it('bounds a stalled request and tries at most twice (VEN-607)', () => {
+    createS3Storage(env);
+
+    expect(clientConfigs).toEqual([
+      expect.objectContaining({
+        maxAttempts: 2,
+        requestHandler: {
+          connectionTimeout: 3_000,
+          requestTimeout: 15_000,
+          throwOnRequestTimeout: true,
+        },
+      }),
+    ]);
+  });
 });
 
 /**

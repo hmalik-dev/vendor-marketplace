@@ -1902,6 +1902,11 @@ export const ERROR_CODES = {
   INVALID_STATE_TRANSITION: 'INVALID_STATE_TRANSITION',
   UPLOAD_FAILED: 'UPLOAD_FAILED',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
+  /**
+   * The database gave up on a statement or a lock wait (VEN-607). A 503 rather
+   * than a 500 because the same request is expected to succeed a moment later.
+   */
+  SERVICE_BUSY: 'SERVICE_BUSY',
   /*
    * The launch switches (VEN-404). Lowercase because the operator runbook and
    * the ticket name them that way, and the web app branches on them to show
