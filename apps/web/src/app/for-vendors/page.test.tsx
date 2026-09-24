@@ -219,6 +219,10 @@ describe('/for-vendors', () => {
     expect(page).not.toContain('Cancellations refund our fee');
     expect(page).not.toContain('which detail Stripe rejected');
     expect(page).not.toContain('as soon as it clears');
+    // A free date stores nothing and a live request holds nothing, so neither promise is true.
+    expect(page).not.toContain('a day you did not open');
+    expect(page).not.toContain('unanswered requests expire');
+    expect(page).toContain('That date closes to every other customer.');
   });
 
   it('links the vendor agreement from the closing band', async () => {

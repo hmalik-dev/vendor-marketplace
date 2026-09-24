@@ -100,8 +100,8 @@ const PAYOUT_FACTS = [
     body: 'They are refunded under the schedule shown at checkout, and the rest is released to you.',
   },
   {
-    lead: 'You cannot be booked on a day you did not open.',
-    body: 'Accepting closes that date everywhere; unanswered requests expire and free it.',
+    lead: 'Accepted a request?',
+    body: 'That date closes to every other customer.',
   },
 ] as const;
 
@@ -284,7 +284,7 @@ export default async function ForVendorsPage(): Promise<React.ReactElement> {
             ))}
           </ul>
           <p className="mt-4 text-sm leading-[1.7] text-stone-700 lg:hidden">
-            You cannot be booked on a day you did not open.
+            Accepting a request closes that date to every other customer.
           </p>
         </div>
       </section>

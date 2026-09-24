@@ -126,8 +126,8 @@ const VENDOR_STEPS = [
 /**
  * Where the closing band's two controls send a vendor: `/for-vendors`, which
  * states what a vendor keeps and when they are paid *before* asking them to
- * sign up. The headline CTA opens the page and the payouts link opens its
- * second section — one destination, so the two controls never disagree.
+ * sign up. Both the headline CTA and the payouts link open the page from
+ * the top — one destination, so the two controls never disagree.
  */
 const VENDOR_ENTRY_PATH = FOR_VENDORS_PATH;
 
