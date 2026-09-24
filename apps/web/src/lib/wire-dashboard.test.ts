@@ -50,12 +50,22 @@ const PAID_DASHBOARD = {
     },
     heldCents: 50_000,
     heldCount: 1,
+    debtOutstandingCents: 0,
+    debtRecoveredCents: 0,
   },
 };
 
 const OWED_NOTHING = {
   ...PAID_DASHBOARD,
-  payouts: { pendingCents: 0, pendingCount: 0, next: null, heldCents: 0, heldCount: 0 },
+  payouts: {
+    pendingCents: 0,
+    pendingCount: 0,
+    next: null,
+    heldCents: 0,
+    heldCount: 0,
+    debtOutstandingCents: 0,
+    debtRecoveredCents: 0,
+  },
 };
 
 /**

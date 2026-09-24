@@ -804,6 +804,17 @@ describe('isLegacyDestinationPayout', () => {
     ).toBe(false);
   });
 
+  it('is false for a modern payout whose whole amount went to repaying a lost chargeback (VEN-658)', () => {
+    expect(
+      isLegacyDestinationPayout({
+        status: 'confirmed',
+        payoutReleasedAt: new Date('2026-06-18T00:00:00Z'),
+        stripeTransferId: null,
+        debtNettedCents: 127_600,
+      }),
+    ).toBe(false);
+  });
+
   it('is false for a booking that has not been released at all', () => {
     expect(
       isLegacyDestinationPayout({

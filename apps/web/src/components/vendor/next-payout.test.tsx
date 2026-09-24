@@ -12,7 +12,16 @@ const TODAY = '2026-06-15';
 function payouts(
   overrides: Partial<WireVendorDashboard['payouts']> = {},
 ): WireVendorDashboard['payouts'] {
-  return { pendingCents: 0, pendingCount: 0, next: null, heldCents: 0, heldCount: 0, ...overrides };
+  return {
+    pendingCents: 0,
+    pendingCount: 0,
+    next: null,
+    heldCents: 0,
+    heldCount: 0,
+    debtOutstandingCents: 0,
+    debtRecoveredCents: 0,
+    ...overrides,
+  };
 }
 
 function next(
@@ -181,5 +190,41 @@ describe('NextPayout', () => {
     expect(screen.getByText('Paid out after each event')).toBeDefined();
     expect(screen.queryByText('$0')).toBeNull();
     expect(container.textContent).not.toContain('pays out');
+  });
+
+  it('says what is kept back from payouts to repay a lost chargeback, and what is already repaid (VEN-658)', () => {
+    const { container } = render(
+      <NextPayout
+        payouts={payouts({ debtOutstandingCents: 61_500, debtRecoveredCents: 20_000 })}
+        serverToday={TODAY}
+      />,
+    );
+
+    expect(container.textContent).toContain(
+      '$615 is kept back from your payouts until it is repaid: the card network ruled against a chargeback on a booking you were already paid for, and $200 is already repaid',
+    );
+  });
+
+  it('shows the next payout net of what is kept back, with the amount kept back beside its date (VEN-658)', () => {
+    render(
+      <NextPayout
+        payouts={payouts({
+          pendingCents: 175_000,
+          pendingCount: 1,
+          next: next(),
+          debtOutstandingCents: 61_500,
+        })}
+        serverToday={TODAY}
+      />,
+    );
+
+    expect(screen.getByText('$1,135')).toBeDefined();
+    expect(screen.getByText('Anjali · after $615 kept back · pays out Jun 18')).toBeDefined();
+  });
+
+  it('says nothing about debt when none is owed', () => {
+    const { container } = render(<NextPayout payouts={payouts()} serverToday={TODAY} />);
+
+    expect(container.textContent).not.toContain('kept back');
   });
 });

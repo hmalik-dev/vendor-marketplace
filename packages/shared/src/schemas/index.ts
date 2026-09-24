@@ -1584,6 +1584,14 @@ export const vendorPayoutSummarySchema = z.object({
   /** The same sum over the rows a dispute is holding. No release date exists. */
   heldCents: z.int().min(0),
   heldCount: z.int().min(0),
+  /**
+   * What the vendor still owes after chargebacks the platform lost on payouts
+   * already sent (VEN-658). It is kept back from upcoming payouts until it is
+   * cleared, so `pendingCents` is what is owed *before* that deduction.
+   */
+  debtOutstandingCents: z.int().min(0),
+  /** How much of that debt earlier payouts have already recovered. */
+  debtRecoveredCents: z.int().min(0),
 });
 
 export type VendorPayoutSummary = z.infer<typeof vendorPayoutSummarySchema>;
@@ -3549,6 +3557,8 @@ export const adminVendorDetailProfileSchema = adminVendorRowSchema.extend({
   moderationHold: z.boolean(),
   /** VEN-404's per-vendor switch; the sweep skips a held vendor's payouts. */
   payoutHold: z.boolean(),
+  /** What the vendor still owes for chargebacks lost on paid bookings, netted off their payouts (VEN-658). */
+  debtOutstandingCents: z.int().min(0),
 });
 export type AdminVendorDetailProfile = z.infer<typeof adminVendorDetailProfileSchema>;
 
@@ -3888,6 +3898,8 @@ export const adminCaseBookingSchema = z.object({
   vendorPayoutCents: z.int(),
   /** What the vendor owes after a chargeback the platform lost on a released payout (VEN-645). */
   vendorOwedCents: z.int(),
+  /** How much of `vendorOwedCents` later payouts have recovered (VEN-658). */
+  vendorOwedRecoveredCents: z.int(),
   refundAmountCents: z.int().nullable(),
   paidAt: z.date().nullable(),
   payoutReleasedAt: z.date().nullable(),
