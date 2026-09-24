@@ -1,0 +1,1 @@
+ALTER TYPE "public"."support_topic" ADD VALUE 'feature-request' BEFORE 'something-else';
