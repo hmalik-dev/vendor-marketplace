@@ -2,7 +2,7 @@
 
 import { ERROR_CODES } from '@vendor-marketplace/shared';
 import { AlertDialog } from 'radix-ui';
-import { useId, useState, type ReactNode } from 'react';
+import { useId, useRef, useState, type ReactNode } from 'react';
 import { StepUpPanel } from '@/components/admin/step-up-panel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -104,6 +104,7 @@ export function ConfirmAction({
 }: ConfirmActionProps): React.ReactElement {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [typed, setTyped] = useState('');
   const [stepUpNeeded, setStepUpNeeded] = useState(false);
@@ -129,6 +130,16 @@ export function ConfirmAction({
   }
 
   async function confirm(): Promise<void> {
+    /*
+     * `busy` disables the button only after the next render, so a second click
+     * inside the same tick still reaches here. The ref closes that window
+     * (VEN-682): the duplicate publish answered 409 and undid the first.
+     */
+    if (inFlight.current) {
+      return;
+    }
+
+    inFlight.current = true;
     setBusy(true);
     setError(null);
 
@@ -161,6 +172,7 @@ export function ConfirmAction({
        */
       setError(userFacingError(failure, REQUEST_DID_NOT_ARRIVE));
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   }
@@ -257,7 +269,7 @@ export function ConfirmAction({
               type="button"
               size="sm"
               variant={destructive ? 'destructive' : 'primary'}
-              disabled={busy || !typedMatches}
+              disabled={busy || stepUpNeeded || !typedMatches}
               onClick={() => void confirm()}
             >
               {busy ? 'Working…' : confirmLabel}

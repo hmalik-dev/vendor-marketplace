@@ -110,6 +110,18 @@ describe('ConfirmAction when the API asks for a step-up', () => {
     expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 
+  it('holds the main confirm off while the code step is showing', async () => {
+    const dialog = open(vi.fn<() => Promise<void>>().mockRejectedValue(stepUpRefusal));
+
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Suspend' }));
+    });
+
+    expect(
+      (within(dialog).getByRole('button', { name: 'Suspend' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
   it('keeps the code button off until six digits are typed', async () => {
     const onConfirm = vi.fn<() => Promise<void>>().mockRejectedValue(stepUpRefusal);
     const dialog = open(onConfirm);
@@ -142,5 +154,66 @@ describe('ConfirmAction when the API asks for a step-up', () => {
 
     expect(within(dialog).getByRole('alert').textContent).toBe('Already suspended');
     expect(within(dialog).queryByRole('button', { name: 'Email me a code' })).toBeNull();
+  });
+});
+
+/**
+ * VEN-682: `busy` disables the confirm only after React re-renders, so two clicks
+ * inside one act reach `onConfirm` twice. The second publish answered 409 and
+ * left the E2E fixture vendor unpublished.
+ */
+describe('ConfirmAction confirmed twice in quick succession', () => {
+  function openDialog(onConfirm: () => Promise<void>): HTMLElement {
+    render(
+      <ConfirmAction
+        trigger={<button type="button">Open</button>}
+        title="Unpublish?"
+        description="Unpublishes it."
+        confirmLabel="Unpublish profile"
+        onConfirm={onConfirm}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    return screen.getByRole('alertdialog');
+  }
+
+  it('sends one request, however many clicks land before the re-render', async () => {
+    let release: () => void = () => {};
+    const onConfirm = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const dialog = openDialog(onConfirm);
+    const confirmButton = within(dialog).getByRole('button', { name: 'Unpublish profile' });
+
+    await act(async () => {
+      fireEvent.click(confirmButton);
+      fireEvent.click(confirmButton);
+    });
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      release();
+    });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('accepts a retry after the first attempt failed', async () => {
+    const onConfirm = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(undefined);
+    const dialog = openDialog(onConfirm);
+
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Unpublish profile' }));
+    });
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Unpublish profile' }));
+    });
+
+    expect(onConfirm).toHaveBeenCalledTimes(2);
   });
 });
