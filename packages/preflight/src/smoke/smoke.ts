@@ -142,7 +142,14 @@ export async function runSmokeCheck(options: SmokeOptions): Promise<SmokeResult>
     const response = await fetchWithTimeout(`${api}/ready`, requestTimeoutMs, fetchImpl);
 
     if (!response.ok) {
-      return { ok: false, detail: `HTTP ${response.status} — ${response.body.slice(0, 120)}` };
+      // A database role row-level security does not bind is named in `reason`,
+      // which the 120-character cut below would lose behind the other fields (VEN-671).
+      const reason = /"reason"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(response.body)?.[1];
+
+      return {
+        ok: false,
+        detail: `HTTP ${response.status} — ${reason ?? response.body.slice(0, 120)}`,
+      };
     }
 
     // The body is what proves the dependencies answered, not the status.

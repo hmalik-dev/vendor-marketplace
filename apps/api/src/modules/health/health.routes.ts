@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { expectedMigrationCount } from '@vendor-marketplace/db';
-import { releaseIdentifier } from '@vendor-marketplace/shared/env';
+import { releaseIdentifier, type DeployEnv } from '@vendor-marketplace/shared/env';
 import type { AppDatabase } from '../../lib/database.js';
 
 export const healthResponseSchema = z.object({
@@ -19,10 +19,23 @@ const dependencyStateSchema = z.enum(['up', 'down']);
  */
 const databaseStateSchema = z.enum(['up', 'down', 'behind']);
 
+/**
+ * Whether the API's database role is one row-level security binds (VEN-671).
+ * `bypassed` is a role with `BYPASSRLS` or superuser, `owner` one that owns the
+ * `public` tables (an owner is exempt from policies that are not `FORCE`d), and
+ * `unknown` a check that could not run. `not_checked` is a local API, where the
+ * owner role is the intended connection.
+ */
+const rowLevelSecuritySchema = z.enum(['enforced', 'bypassed', 'owner', 'unknown', 'not_checked']);
+
 export const readyResponseSchema = z.object({
   status: z.enum(['ready', 'not_ready']),
   database: databaseStateSchema,
+  /** Reported, never gating: only uploads depend on object storage, and a blip must not fail a release. */
   storage: dependencyStateSchema,
+  rowLevelSecurity: rowLevelSecuritySchema,
+  /** Names what made the API not ready when the cause is the database role; otherwise `null`. */
+  reason: z.string().nullable(),
   /**
    * The commit this process is running, or `null` off a platform.
    *
@@ -66,6 +79,38 @@ async function appliedMigrations(db: AppDatabase): Promise<number> {
     .from(sql`drizzle.__drizzle_migrations`);
 
   return rows[0]?.applied ?? 0;
+}
+
+const RLS_REASONS = {
+  bypassed:
+    'The API connects as a role with BYPASSRLS or superuser, so row-level security is not enforced; point DATABASE_URL at app_api (docs/app-api-role.md)',
+  owner:
+    'The API connects as the owner of the public tables, which row-level security does not bind; point DATABASE_URL at app_api (docs/app-api-role.md)',
+  unknown: 'The database role could not be inspected, so row-level security is unproven',
+} as const;
+
+/** Reads what the connected role is, straight from the catalog; `pg_roles` and `pg_tables` are readable by every role. */
+async function connectedRolePosture(db: AppDatabase): Promise<'enforced' | 'bypassed' | 'owner'> {
+  const rows = await db.execute<{ bypass: boolean; owns: boolean }>(sql`
+    select (r.rolbypassrls or r.rolsuper) as bypass,
+           exists (
+             select 1 from pg_tables t
+              where t.schemaname = 'public' and t.tableowner = current_user
+           ) as owns
+      from pg_roles r
+     where r.rolname = current_user`);
+  const role = rows[0];
+
+  if (!role) {
+    throw new Error('current_user has no pg_roles row');
+  }
+
+  return role.bypass ? 'bypassed' : role.owns ? 'owner' : 'enforced';
+}
+
+export interface HealthRoutesOptions {
+  /** Staging and production must run under a role row-level security binds; `local` is not checked. */
+  deployEnv: DeployEnv;
 }
 
 /**
@@ -125,7 +170,7 @@ async function probe<T>(run: () => Promise<T>, timeoutMs: number): Promise<Probe
  * throttles the probe takes the service down by itself — and neither depends on
  * CORS, since the caller is the platform rather than a browser.
  */
-export const healthRoutes: FastifyPluginAsyncZod = async (app) => {
+export const healthRoutes: FastifyPluginAsyncZod<HealthRoutesOptions> = async (app, options) => {
   app.get(
     '/health',
     { config: { rateLimit: false }, schema: { response: { 200: healthResponseSchema } } },
@@ -139,9 +184,11 @@ export const healthRoutes: FastifyPluginAsyncZod = async (app) => {
       schema: { response: { 200: readyResponseSchema, 503: readyResponseSchema } },
     },
     async (request, reply) => {
-      const [database, storage] = await Promise.all([
+      const checkRole = options.deployEnv !== 'local';
+      const [database, storage, role] = await Promise.all([
         probe(() => appliedMigrations(app.db), DEPENDENCY_TIMEOUT_MS),
         probe(() => app.storage.checkAvailable(), DEPENDENCY_TIMEOUT_MS),
+        checkRole ? probe(() => connectedRolePosture(app.db), DEPENDENCY_TIMEOUT_MS) : undefined,
       ]);
 
       if (database.error) {
@@ -161,12 +208,28 @@ export const healthRoutes: FastifyPluginAsyncZod = async (app) => {
         );
       }
       const databaseState: z.infer<typeof databaseStateSchema> = behind ? 'behind' : database.state;
-      const ready = databaseState === 'up' && storage.state === 'up';
+      const rowLevelSecurity: z.infer<typeof rowLevelSecuritySchema> = !role
+        ? 'not_checked'
+        : (role.value ?? 'unknown');
+      // A database that is down or behind is its own answer; the role is named only once it is reachable.
+      const roleFault =
+        databaseState === 'up' &&
+        rowLevelSecurity !== 'enforced' &&
+        rowLevelSecurity !== 'not_checked'
+          ? rowLevelSecurity
+          : null;
+      if (roleFault) {
+        request.log.error({ err: role?.error, rowLevelSecurity }, RLS_REASONS[roleFault]);
+      }
+      // Storage is reported above and never gates: only uploads depend on it.
+      const ready = databaseState === 'up' && roleFault === null;
 
       return reply.code(ready ? 200 : 503).send({
         status: ready ? ('ready' as const) : ('not_ready' as const),
         database: databaseState,
         storage: storage.state,
+        rowLevelSecurity,
+        reason: roleFault ? RLS_REASONS[roleFault] : null,
         commit: deployedCommit(),
         timestamp: new Date().toISOString(),
       });

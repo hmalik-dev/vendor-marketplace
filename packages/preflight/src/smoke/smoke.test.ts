@@ -83,6 +83,29 @@ describe('runSmokeCheck', () => {
     expect(result.checks[0]?.detail).toContain('503');
   });
 
+  it('names the database role when readiness fails on row-level security (VEN-671)', async () => {
+    const reason = 'The API connects as the owner of the public tables, which RLS does not bind';
+    const body = `{"status":"not_ready","database":"up","storage":"up","rowLevelSecurity":"owner","reason":"${reason}","commit":"${SHA}"}`;
+    const fetchImpl = vi.fn(async (input: string | URL | Request) =>
+      String(input).endsWith('/ready') ? response(body, 503) : response(LANDING),
+    ) as unknown as typeof fetch;
+
+    const result = await runSmokeCheck({
+      apiUrl: API,
+      webUrl: WEB,
+      fetchImpl,
+      ...controls(),
+      deadlineMs: 20,
+      retryDelayMs: 5,
+    });
+
+    expect(result.checks[0]).toEqual({
+      name: 'API /ready',
+      ok: false,
+      detail: `HTTP 503 — ${reason}`,
+    });
+  });
+
   /*
    * The outage that motivated this ticket presented as a hang, not an error.
    * A check without a per-request ceiling would have waited alongside it.
