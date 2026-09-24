@@ -8,7 +8,11 @@ import {
   formatPrice,
   MAX_PACKAGE_PRICE_CENTS,
   MAX_NAME_LENGTH,
+  PLATFORM_NOTICE_MAX_LENGTH,
+  PLATFORM_NOTICE_TONES,
+  type PlatformNoticeTone,
   type PlatformSwitches,
+  type UpdatePlatformSettings,
 } from '@vendor-marketplace/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -89,6 +93,9 @@ export function PlatformSettingsPanel({
     settings.maxBookingCents === null ? '' : String(settings.maxBookingCents / CENTS_PER_DOLLAR),
   );
 
+  const [noticeDraft, setNoticeDraft] = useState(settings.noticeMessage ?? '');
+  const [noticeTone, setNoticeTone] = useState<PlatformNoticeTone>(settings.noticeTone);
+
   useEffect(() => {
     setConfirmed(settings);
   }, [settings]);
@@ -107,7 +114,7 @@ export function PlatformSettingsPanel({
     }
   }
 
-  function save(patch: Partial<PlatformSwitches>): Promise<void> {
+  function save(patch: UpdatePlatformSettings): Promise<void> {
     return run(async () => {
       setConfirmed(
         await call('/admin/settings', {
@@ -127,6 +134,14 @@ export function PlatformSettingsPanel({
         : current.heldVendors.filter((held) => held.id !== vendor.id),
     }));
   }
+
+  const noticeText = noticeDraft.trim();
+  const noticeValid =
+    noticeText !== '' &&
+    noticeText.length <= PLATFORM_NOTICE_MAX_LENGTH &&
+    !/[<>]/.test(noticeText);
+  const noticeUnchanged =
+    noticeText === (confirmed.noticeMessage ?? '') && noticeTone === confirmed.noticeTone;
 
   const capCents = Math.round(Number(capDollars) * CENTS_PER_DOLLAR);
   const capValid =
@@ -223,6 +238,88 @@ export function PlatformSettingsPanel({
               />
             </div>
           </div>
+        </section>
+
+        <section
+          aria-labelledby={`${fieldId}-notice-heading`}
+          className="rounded-xl border border-stone-300 bg-stone-0 px-4 py-3.5"
+        >
+          <h2 id={`${fieldId}-notice-heading`} className="text-base font-semibold text-stone-900">
+            Site-wide notice
+          </h2>
+          <p className="mt-1 text-sm text-stone-600">
+            {confirmed.noticeMessage === null
+              ? 'No notice is posted. While checkout or booking requests are paused, visitors see a default notice instead.'
+              : 'Every visitor sees this above the navigation within a minute. Each can dismiss it for their session.'}
+          </p>
+          <form
+            noValidate
+            className="mt-3 flex flex-col gap-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (noticeValid && !noticeUnchanged) {
+                void save({ noticeMessage: noticeText, noticeTone });
+              }
+            }}
+          >
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor={`${fieldId}-notice`} className="text-sm font-semibold text-stone-700">
+                Notice text
+              </label>
+              <textarea
+                id={`${fieldId}-notice`}
+                rows={3}
+                maxLength={PLATFORM_NOTICE_MAX_LENGTH}
+                value={noticeDraft}
+                onChange={(event) => setNoticeDraft(event.target.value)}
+                aria-describedby={`${fieldId}-notice-count`}
+                className="w-full resize-y rounded-lg border border-stone-300 bg-stone-0 px-3 py-2 text-sm text-stone-900 focus-visible:outline-2 focus-visible:outline-offset-2"
+              />
+              <p id={`${fieldId}-notice-count`} className="text-sm text-stone-600">
+                {noticeDraft.length} of {PLATFORM_NOTICE_MAX_LENGTH} characters. Plain text: no
+                links or markup.
+              </p>
+            </div>
+            <fieldset className="flex flex-wrap items-center gap-x-5 gap-y-2">
+              <legend className="mb-1.5 text-sm font-semibold text-stone-700">Tone</legend>
+              {PLATFORM_NOTICE_TONES.map((tone) => (
+                <label key={tone} className="flex items-center gap-2 text-sm text-stone-900">
+                  <input
+                    type="radio"
+                    name={`${fieldId}-tone`}
+                    value={tone}
+                    checked={noticeTone === tone}
+                    onChange={() => setNoticeTone(tone)}
+                  />
+                  {tone === 'info' ? 'Information' : 'Warning (announced to screen readers)'}
+                </label>
+              ))}
+            </fieldset>
+            <div className="flex flex-wrap gap-3">
+              <Button
+                type="submit"
+                size="sm"
+                variant="secondary"
+                disabled={saving || !noticeValid || noticeUnchanged}
+              >
+                Post notice
+              </Button>
+              {confirmed.noticeMessage !== null ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={saving}
+                  onClick={() => {
+                    setNoticeDraft('');
+                    void save({ noticeMessage: null });
+                  }}
+                >
+                  Clear notice
+                </Button>
+              ) : null}
+            </div>
+          </form>
         </section>
 
         <section

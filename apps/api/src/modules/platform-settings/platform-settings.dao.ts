@@ -71,7 +71,9 @@ export async function lockPlatformSettings(tx: AppDatabase): Promise<PlatformSet
 
 export async function updatePlatformSettingsRow(
   tx: AppDatabase,
-  values: Partial<PlatformSwitches> & { updatedBy: string },
+  values: Partial<PlatformSwitches & Pick<PlatformSettingsRow, 'noticeMessage' | 'noticeTone'>> & {
+    updatedBy: string;
+  },
 ): Promise<void> {
   await tx
     .update(platformSettings)
