@@ -65,6 +65,28 @@ describe('openCheckout', () => {
   });
 
   /*
+   * VEN-637: the webhook can land between the page's booking pre-check and this
+   * POST. The API then answers 2xx with a settled intent and no client secret,
+   * and mapping that to `ready` built a Payment Element with nothing to pay.
+   */
+  it('reports an already-succeeded intent as paid, not ready', async () => {
+    apiRequest.mockResolvedValue({
+      paymentIntentId: 'pi_1',
+      clientSecret: null,
+      status: 'succeeded',
+      amountCents: 145_000,
+      customerFeeCents: 0,
+      eventDate: '2026-10-15',
+      eventLocation: 'Austin, TX',
+      guestCount: 80,
+      vendor: { businessName: 'E2E Test Studio', slug: 'e2e-test-studio', coverImageUrl: null },
+      lineItems: [{ label: 'Full-day coverage', amountCents: 145_000 }],
+    });
+
+    await expect(openCheckout(REQUEST_ID)).resolves.toEqual({ state: 'paid' });
+  });
+
+  /*
    * The whole defect, as a test. A Stripe misconfiguration answers 400, and the
    * one thing this must not be is the surface for a page that does not exist.
    */
