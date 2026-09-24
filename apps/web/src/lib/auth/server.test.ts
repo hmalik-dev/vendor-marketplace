@@ -3,11 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const getSession = vi.fn();
 const token = vi.fn();
 const getAll = vi.fn();
+const setCookie = vi.fn();
 
 vi.mock('@neondatabase/auth/next/server', () => ({
   createNeonAuth: () => ({ getSession, token }),
 }));
-vi.mock('next/headers', () => ({ cookies: async () => ({ getAll }) }));
+vi.mock('next/headers', () => ({ cookies: async () => ({ getAll, set: setCookie }) }));
 // `cache()` memoises per request; each call here stands for a fresh request.
 vi.mock('react', () => ({ cache: <T>(fn: T): T => fn }));
 const captureMessage = vi.fn();
@@ -21,7 +22,9 @@ import {
   clearServerSessions,
   forgetSessionsFor,
   getServerSession,
+  markSessionsRevoked,
   mintedUserIdForCaller,
+  REVOKE_MARKER_COOKIE,
 } from './server';
 
 const NOW = Date.UTC(2026, 8, 20, 12, 0, 0);
@@ -50,6 +53,7 @@ describe('getServerSession', () => {
     getSession.mockReset();
     token.mockReset();
     getAll.mockReset();
+    setCookie.mockReset();
     clearServerSessions();
   });
 
@@ -89,6 +93,66 @@ describe('getServerSession', () => {
     getAll.mockReturnValue([{ name: '__Secure-neon-auth.session_token', value: 'cookie-b' }]);
     expect((await getServerSession())?.userId).toBe('user-2');
     expect(getSession).toHaveBeenCalledTimes(3);
+  });
+
+  it('re-mints a token cached before another instance handled a revoke (VEN-713)', async () => {
+    const stale = jwt(NOW / 1000 + 900);
+    const fresh = jwt(NOW / 1000 + 901);
+    const sessionCookie = { name: '__Secure-neon-auth.session_token', value: 'cookie-a' };
+    getSession.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null });
+    token
+      .mockResolvedValueOnce({ data: { token: stale }, error: null })
+      .mockResolvedValueOnce({ data: { token: fresh }, error: null });
+
+    // This process is instance X: it caches the caller's token.
+    getAll.mockReturnValue([sessionCookie]);
+    expect((await getServerSession())?.token).toBe(stale);
+
+    // Instance Y handled the revoke and handed the surviving device a marker; its next request lands here.
+    const marker = { name: REVOKE_MARKER_COOKIE, value: 'marker-1' };
+    getAll.mockReturnValue([sessionCookie, marker]);
+    expect((await getServerSession())?.token).toBe(fresh);
+
+    // Minted under the marker, so it is served from the cache from here on.
+    expect((await getServerSession())?.token).toBe(fresh);
+    expect(token).toHaveBeenCalledTimes(2);
+
+    // A second revoke changes the marker and forces one more mint.
+    token.mockResolvedValueOnce({ data: { token: jwt(NOW / 1000 + 902) }, error: null });
+    getAll.mockReturnValue([sessionCookie, { ...marker, value: 'marker-2' }]);
+    await getServerSession();
+    expect(token).toHaveBeenCalledTimes(3);
+  });
+
+  it('hands a revoked device nothing once the provider has ended its session (VEN-713)', async () => {
+    const sessionCookie = { name: '__Secure-neon-auth.session_token', value: 'cookie-b' };
+    getSession.mockResolvedValueOnce({ data: { user: { id: 'user-1' } }, error: null });
+    token.mockResolvedValue({ data: { token: jwt(NOW / 1000 + 900) }, error: null });
+    getAll.mockReturnValue([sessionCookie]);
+    await getServerSession();
+
+    forgetSessionsFor('user-1');
+    getSession.mockResolvedValue({ data: null, error: null });
+
+    expect(await getServerSession()).toBeNull();
+  });
+
+  it('marks the caller with an httpOnly, random, expiring marker cookie', async () => {
+    await markSessionsRevoked();
+    await markSessionsRevoked();
+
+    expect(setCookie).toHaveBeenCalledTimes(2);
+    const [name, value, options] = setCookie.mock.calls[0] as [string, string, object];
+    expect(name).toBe(REVOKE_MARKER_COOKIE);
+    expect(value).toMatch(/^[0-9a-f-]{36}$/);
+    expect(setCookie.mock.calls[1]?.[1]).not.toBe(value);
+    expect(options).toEqual({
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: false,
+      path: '/',
+      maxAge: 1200,
+    });
   });
 
   it('asks again once the remembered token is inside the refresh window', async () => {

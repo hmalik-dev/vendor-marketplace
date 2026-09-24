@@ -133,9 +133,14 @@ export const getServerSession = cache(
       return null;
     }
 
+    const marker = await revokeMarkerValue();
     const remembered = mintedSessions.get(cookieValue);
 
-    if (remembered && remembered.expiresAtMs - Date.now() > REFRESH_WINDOW_MS) {
+    if (
+      remembered &&
+      remembered.marker === marker &&
+      remembered.expiresAtMs - Date.now() > REFRESH_WINDOW_MS
+    ) {
       return { userId: remembered.userId, token: remembered.token };
     }
 
@@ -161,7 +166,7 @@ export const getServerSession = cache(
     const { token } = tokenResult.data;
 
     const minted: ServerSession = { userId: user.id, token };
-    remember(cookieValue, minted);
+    remember(cookieValue, minted, marker);
 
     return minted;
   },
@@ -191,6 +196,8 @@ const MAX_REMEMBERED_SESSIONS = 5_000;
 
 interface MintedSession extends ServerSession {
   expiresAtMs: number;
+  /** The {@link REVOKE_MARKER_COOKIE} value the caller carried when this was minted. */
+  marker: string | null;
 }
 
 const mintedSessions = new Map<string, MintedSession>();
@@ -222,7 +229,7 @@ async function sessionCookieValue(): Promise<string | null> {
   return present.length === 0 ? null : present.join(';');
 }
 
-function remember(cookieValue: string, session: ServerSession): void {
+function remember(cookieValue: string, session: ServerSession, marker: string | null): void {
   const expiresAtMs = tokenExpiryMs(session.token);
 
   if (expiresAtMs === null) {
@@ -239,8 +246,42 @@ function remember(cookieValue: string, session: ServerSession): void {
   }
 
   if (mintedSessions.size < MAX_REMEMBERED_SESSIONS) {
-    mintedSessions.set(cookieValue, { ...session, expiresAtMs });
+    mintedSessions.set(cookieValue, { ...session, expiresAtMs, marker });
   }
+}
+
+/**
+ * Carries a revoke across instances (VEN-713). A revoke bumps the account's
+ * `sessions_invalidated_at`, which the API enforces on every instance, but
+ * {@link forgetSessionsFor} clears only the map of the process that handled it;
+ * the surviving device's next request can land on another instance still
+ * holding a token minted before the bump, and the API refuses it. The device
+ * that ended its other sessions is the one that survives, so the instance that
+ * handled the revoke hands it a fresh random marker cookie, and every instance
+ * serves a remembered token only if it was minted under the marker the caller
+ * now carries. A marker is compared for equality, never ordered, so no two
+ * clocks are involved. It outlives the JWT's own 15 minutes, after which every
+ * token in circulation postdates the revoke anyway.
+ */
+export const REVOKE_MARKER_COOKIE = 'session-revoke-marker';
+const REVOKE_MARKER_MAX_AGE_SECONDS = 20 * 60;
+
+async function revokeMarkerValue(): Promise<string | null> {
+  const jar = await cookies();
+  const marker = jar.getAll().find((cookie) => cookie.name === REVOKE_MARKER_COOKIE)?.value;
+
+  return marker ? marker : null;
+}
+
+/** Marks the caller as having ended sessions, so no instance serves them a pre-revoke token. */
+export async function markSessionsRevoked(): Promise<void> {
+  (await cookies()).set(REVOKE_MARKER_COOKIE, crypto.randomUUID(), {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: REVOKE_MARKER_MAX_AGE_SECONDS,
+  });
 }
 
 /**
@@ -259,8 +300,8 @@ export async function mintedUserIdForCaller(): Promise<string | undefined> {
 /**
  * Forgets what this process remembers for one user. A revoke at the provider
  * leaves the cookie value unchanged, so without this a revoked cookie keeps its
- * remembered token until it lapses (VEN-518). Other server instances lapse on
- * their own within the JWT's life.
+ * remembered token until it lapses (VEN-518). Other server instances are reached
+ * through {@link markSessionsRevoked} instead.
  */
 export function forgetSessionsFor(userId: string): void {
   for (const [key, minted] of mintedSessions) {
