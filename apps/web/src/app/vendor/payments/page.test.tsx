@@ -122,6 +122,9 @@ describe('VendorPaymentsPage', () => {
     const banners = screen.getAllByRole('status');
     expect(banners).toHaveLength(1);
     expect(banners[0]!.textContent).toContain('That link had expired');
+    // No lifetime is stated: nothing in this repo decides how long Stripe's link lasts.
+    expect(banners[0]!.textContent).toContain("Stripe's setup links expire.");
+    expect(banners[0]!.textContent).not.toMatch(/minute|hour/);
     expect(banners[0]!.className).toContain('steel');
   });
 

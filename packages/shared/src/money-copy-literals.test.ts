@@ -126,8 +126,23 @@ function readableUnits(source: string): string[] {
     }
   }
 
-  for (const match of code.matchAll(/>((?:[^<>{}]|\{[^{}]*\})+)</g)) {
-    units.push((match[1] as string).replace(/\{[^{}]*\}/g, INTERPOLATION));
+  /*
+   * An expression container with no markup inside is a value (a constant read),
+   * so it is replaced, innermost first. One that holds markup — `{ok ? (<p>…</p>)
+   * : null}` — is left in place so the text inside it is read as JSX text, and
+   * its own braces are dropped below.
+   */
+  let flat = code;
+  for (let previous = ''; previous !== flat;) {
+    previous = flat;
+    flat = flat.replace(/\{[^{}<]*\}/g, INTERPOLATION);
+  }
+
+  /* An inline tag splits nothing: `<strong>50%</strong> back` is one sentence. */
+  flat = flat.replace(/<\/?(?:strong|em|b|i|span|a|code|Link)\b[^<>]*>/g, '');
+
+  for (const match of flat.matchAll(/>([^<>]+)</g)) {
+    units.push((match[1] as string).replace(/[{}]/g, INTERPOLATION));
   }
 
   return units.map((unit) => unit.replace(/\s+/g, ' ').trim()).filter(Boolean);
@@ -176,6 +191,30 @@ describe('a money sentence types no figure or duration', () => {
         withMutation(source, 'const mutated = <p>The refund lands in two weeks.</p>;'),
       ),
     ).toEqual(['The refund lands in two weeks.']);
+    /* The shapes real copy sits in: a conditional branch, and a figure split by an inline tag. */
+    expect(
+      typedMoneyFigures(
+        withMutation(
+          source,
+          'const mutated = <div>{shown ? (<p>Your payment is held for 24 hours.</p>) : null}</div>;',
+        ),
+      ),
+    ).toEqual(['Your payment is held for 24 hours.']);
+    expect(
+      typedMoneyFigures(
+        withMutation(
+          source,
+          'const mutated = <p>You get <strong>50%</strong> back if you cancel.</p>;',
+        ),
+      ),
+    ).toEqual(['You get 50% back if you cancel.']);
+  });
+
+  it('reads the text inside a conditional branch, as the vendor payments page sets it', () => {
+    const branch =
+      'const a = <>{linkExpired ? (<Banner title="Expired">Stripe links only last a few minutes.</Banner>) : (<Banner title="Gate">Connect payouts.</Banner>)}</>;';
+
+    expect(typedMoneyFigures(branch)).toEqual(['Stripe links only last a few minutes.']);
   });
 
   it('reads a figure that arrives as an interpolation as a constant, not a typed value', () => {

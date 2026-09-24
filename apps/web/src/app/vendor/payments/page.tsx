@@ -91,8 +91,8 @@ export default async function VendorPaymentsPage({
             */}
             {linkExpired ? (
               <Banner status="informational" title="That link had expired">
-                Stripe links only last a few minutes. Start again and you will pick up where you
-                left off.
+                Stripe&apos;s setup links expire. Start again and you will pick up where you left
+                off.
               </Banner>
             ) : (
               <Banner status="pending" title="Payouts not connected">

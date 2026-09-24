@@ -106,7 +106,7 @@ export function composeDigestLines(figures: DigestFigures): string[] {
     `Bounced emails: ${figures.bounces}`,
     'Open cases',
     `Under 1 day: ${openCases.underOneDay}; 1–3 days: ${openCases.oneToThreeDays}; over 3 days: ${openCases.overThreeDays}`,
-    `Accepted but unpaid, event in the next 48 hours: ${figures.unpaidSoon.length}`,
+    `Accepted but unpaid, event today or in the next ${LOOKAHEAD_DAYS} days: ${figures.unpaidSoon.length}`,
     ...unpaid,
     ...(unlisted > 0 ? [`  …and ${unlisted} more`] : []),
     `Payouts overdue (due more than one sweep interval ago, still unreleased): ${figures.overduePayouts}`,
