@@ -23,6 +23,23 @@ export async function requestedPath(): Promise<string | null> {
 }
 
 /**
+ * The pathname the visitor asked for, without the query and **without
+ * `safeReturnPath`'s 512-character cap**, for deciding which page is being
+ * rendered rather than where to send anyone. A page's own URL can carry a long
+ * `returnTo`, and reading that as "unknown" is how the name step redirected to
+ * itself (VEN-701). Never a redirect target: only compared against known paths.
+ */
+export async function requestedPathname(): Promise<string | null> {
+  try {
+    const raw = (await headers()).get(REQUEST_PATH_HEADER);
+
+    return raw ? (raw.split(/[?#]/, 1)[0] ?? null) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * `/sign-in` carrying wherever the caller currently is. The single spelling of
  * "you need to be signed in for this" for every read that has no explicit
  * destination of its own to pass.

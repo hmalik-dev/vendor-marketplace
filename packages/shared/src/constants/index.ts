@@ -1878,6 +1878,12 @@ export const ERROR_CODES = {
    */
   TERMS_REQUIRED: 'TERMS_REQUIRED',
   /**
+   * The caller is a customer with no real first and last name yet, and the
+   * action would show that name to someone else (VEN-701). Its own code so the
+   * web tier sends the reader to the name step, not to `/suspended`.
+   */
+  NAME_REQUIRED: 'NAME_REQUIRED',
+  /**
    * An irreversible admin route was reached without a fresh step-up (VEN-500).
    * Its own code so the console opens the code prompt instead of `/suspended`.
    */

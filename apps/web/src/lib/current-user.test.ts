@@ -61,8 +61,11 @@ const {
   requireRole,
 } = await import('./current-user');
 
-const CUSTOMER = { id: 'u1', firstName: 'Ada', role: 'customer' as const };
-const VENDOR = { id: 'u2', firstName: 'Grace', role: 'vendor' as const };
+const CUSTOMER = { id: 'u1', firstName: 'Ada', lastName: 'Lovelace', role: 'customer' as const };
+const VENDOR = { id: 'u2', firstName: 'Grace', lastName: 'Hopper', role: 'vendor' as const };
+/* A fresh sign-up: the placeholder name split with no space, so the last name is empty (VEN-642). */
+const NAMELESS_CUSTOMER = { ...CUSTOMER, lastName: '' };
+const NAME_STEP = '/sign-up/customer-details';
 
 describe('getCurrentUser', () => {
   beforeEach(() => {
@@ -738,6 +741,97 @@ describe('readIdentityForSupport', () => {
     getToken.mockResolvedValue(null);
 
     expect(await readIdentityForSupport()).toBeNull();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The name gate (VEN-701): a customer with a blank name is sent back to the
+ * step from every gated read, carrying where they were going.
+ */
+describe('the name gate', () => {
+  beforeEach(() => {
+    getToken.mockReset();
+    apiRequest.mockReset();
+    redirect.mockClear();
+    getToken.mockResolvedValue('token');
+    apiRequest.mockResolvedValue(NAMELESS_CUSTOMER);
+  });
+
+  afterEach(() => {
+    requestPath = null;
+  });
+
+  it('sends requireCurrentUser to the name step, carrying the requested path', async () => {
+    requestPath = '/bookings?tab=past';
+
+    await expect(requireCurrentUser()).rejects.toThrow(
+      `NEXT_REDIRECT:${NAME_STEP}?returnTo=%2Fbookings%3Ftab%3Dpast`,
+    );
+  });
+
+  it('sends requireRole to the name step, and an explicit destination wins', async () => {
+    requestPath = '/customer/profile';
+
+    await expect(requireRole('customer', '/vendors/june/request?date=2026-10-01')).rejects.toThrow(
+      `NEXT_REDIRECT:${NAME_STEP}?returnTo=%2Fvendors%2Fjune%2Frequest%3Fdate%3D2026-10-01`,
+    );
+  });
+
+  it('treats a whitespace-only first name as blank too', async () => {
+    requestPath = '/messages';
+    apiRequest.mockResolvedValue({ ...CUSTOMER, firstName: '   ' });
+
+    await expect(requireCurrentUser()).rejects.toThrow(`NEXT_REDIRECT:${NAME_STEP}`);
+  });
+
+  it('sends the home page to the name step', async () => {
+    requestPath = '/';
+
+    await expect(redirectVendorToDashboard()).rejects.toThrow(
+      `NEXT_REDIRECT:${NAME_STEP}?returnTo=%2F`,
+    );
+  });
+
+  it('returns a named customer untouched', async () => {
+    requestPath = '/bookings';
+    apiRequest.mockResolvedValue(CUSTOMER);
+
+    await expect(requireRole('customer')).resolves.toEqual(CUSTOMER);
+    await expect(redirectVendorToDashboard()).resolves.toBeUndefined();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it('never gates a vendor, whatever their name', async () => {
+    requestPath = '/vendor/dashboard';
+    apiRequest.mockResolvedValue({ ...VENDOR, firstName: '', lastName: '' });
+
+    await expect(requireRole('vendor')).resolves.toMatchObject({ role: 'vendor' });
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  /* A long destination makes the step's own URL past `safeReturnPath`'s cap; it must still render. */
+  it('lets the name step render when its own URL is too long to be a return path', async () => {
+    const destination = `/${'a'.repeat(476)}`;
+    requestPath = `${NAME_STEP}?returnTo=${encodeURIComponent(destination)}`;
+    expect(requestPath.length).toBeGreaterThan(512);
+
+    await expect(requireRole('customer', destination)).resolves.toEqual(NAMELESS_CUSTOMER);
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    '/sign-up/customer-details',
+    '/sign-up/customer-details?returnTo=%2Fbookings',
+    '/accept-terms',
+    '/terms',
+    '/privacy',
+    '/support',
+    '/api/health',
+  ])('lets a nameless customer stay on %s', async (path) => {
+    requestPath = path;
+
+    await expect(requireRole('customer', '/bookings')).resolves.toEqual(NAMELESS_CUSTOMER);
     expect(redirect).not.toHaveBeenCalled();
   });
 });
