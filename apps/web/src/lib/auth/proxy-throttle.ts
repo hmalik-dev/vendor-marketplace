@@ -211,6 +211,7 @@ export async function chargeAddress(
   return shared ?? isAddressThrottled(address, path, now, record);
 }
 
+const SIGN_IN = 'sign-in/email';
 const SIGN_IN_PATH: readonly string[] = ['sign-in', 'email'];
 const pairHits = new Map<string, number[]>();
 
@@ -227,6 +228,7 @@ const pairHits = new Map<string, number[]>();
  * device token to exempt the owner by.
  */
 async function chargePair(
+  route: string,
   address: string,
   caller: string,
   limit: number,
@@ -238,7 +240,7 @@ async function chargePair(
   const digest = createHash('sha256').update(normalized).digest('hex');
   const callerDigest = createHash('sha256').update(caller).digest('hex');
   const shared = await chargeShared(
-    `pair|sign-in/email|${digest}|${callerDigest}`,
+    `pair|${route}|${digest}|${callerDigest}`,
     ADDRESS_WINDOW_MS,
     limit,
     record,
@@ -248,7 +250,7 @@ async function chargePair(
     return shared;
   }
 
-  const key = `${normalized}|${caller}`;
+  const key = `${route}|${normalized}|${caller}`;
   const recent = (pairHits.get(key) ?? []).filter((at) => now - at < ADDRESS_WINDOW_MS);
 
   if (record) {
@@ -313,8 +315,8 @@ export async function isSignInRefused(
   const who = signInCaller(caller);
 
   if (
-    (await chargePair(address, who, SIGN_IN_ADDRESS_LIMIT, false, now)) ||
-    (await chargePair(address, ALL_CALLERS, SIGN_IN_CEILING, false, now))
+    (await chargePair(SIGN_IN, address, who, SIGN_IN_ADDRESS_LIMIT, false, now)) ||
+    (await chargePair(SIGN_IN, address, ALL_CALLERS, SIGN_IN_CEILING, false, now))
   ) {
     return true;
   }
@@ -322,7 +324,7 @@ export async function isSignInRefused(
   // Below the ceiling, the address budget binds only a caller that has already failed for it.
   return (
     (await chargeAddress(address, SIGN_IN_PATH, now, false)) &&
-    (await chargePair(address, who, 1, false, now))
+    (await chargePair(SIGN_IN, address, who, 1, false, now))
   );
 }
 
@@ -333,8 +335,44 @@ export async function recordSignInFailure(
   now: number = Date.now(),
 ): Promise<void> {
   await chargeAddress(address, SIGN_IN_PATH, now);
-  await chargePair(address, signInCaller(caller), SIGN_IN_ADDRESS_LIMIT, true, now);
-  await chargePair(address, ALL_CALLERS, SIGN_IN_CEILING, true, now);
+  await chargePair(SIGN_IN, address, signInCaller(caller), SIGN_IN_ADDRESS_LIMIT, true, now);
+  await chargePair(SIGN_IN, address, ALL_CALLERS, SIGN_IN_CEILING, true, now);
+}
+
+/**
+ * True when this reset, code or mail request is refused (VEN-718). Counted like
+ * a sign-in (`isSignInRefused`), but every request is a use of the budget, not
+ * only a failure: a caller is refused when it spent its own budget for the
+ * address, or the address budget is spent and it has already asked once itself,
+ * or a hard ceiling of ten times the budget per address is spent by everyone.
+ * A stranger who spent the address budget therefore cannot stop the owner's
+ * first request from another caller. A refused request records nothing.
+ */
+export async function chargeRequest(
+  address: string,
+  caller: string,
+  path: readonly string[],
+  now: number = Date.now(),
+): Promise<boolean> {
+  const route = path.join('/');
+  const who = signInCaller(caller);
+  const limit = addressLimit(path) ?? ADDRESS_LIMIT;
+  const ceiling = 10 * limit;
+
+  if (
+    (await chargePair(route, address, who, limit, false, now)) ||
+    (await chargePair(route, address, ALL_CALLERS, ceiling, false, now)) ||
+    ((await chargeAddress(address, path, now, false)) &&
+      (await chargePair(route, address, who, 1, false, now)))
+  ) {
+    return true;
+  }
+
+  await chargeAddress(address, path, now);
+  await chargePair(route, address, who, limit, true, now);
+  await chargePair(route, address, ALL_CALLERS, ceiling, true, now);
+
+  return false;
 }
 
 /** Test seam: forgets every recorded call. */

@@ -144,18 +144,28 @@ describe('password reset through the auth proxy', () => {
     );
   });
 
-  it('throttles requests per address: the sixth from many callers looks the same but is not sent', async () => {
+  it('throttles requests per address and caller: the sixth from one caller looks the same but is not sent', async () => {
     upstreamPost.mockResolvedValue(Response.json({ success: true }));
 
     const statuses: number[] = [];
     for (let i = 0; i < 6; i++) {
-      const response = await call(REQUEST, { email: 'Known@Example.com' }, `9.9.9.${i}`);
+      const response = await call(REQUEST, { email: 'Known@Example.com' }, '9.9.9.9');
       statuses.push(response.status);
     }
     await drain();
 
     expect(statuses).toEqual([200, 200, 200, 200, 200, 200]);
     expect(upstreamPost).toHaveBeenCalledTimes(5);
+  });
+
+  it("does not let a stranger's five requests stop the owner's first from another caller (VEN-718)", async () => {
+    upstreamPost.mockResolvedValue(Response.json({ success: true }));
+
+    for (let i = 0; i < 6; i++) await call(REQUEST, { email: 'known@example.com' }, '9.9.9.9');
+    await call(REQUEST, { email: 'known@example.com' }, '2.2.2.2');
+    await drain();
+
+    expect(upstreamPost).toHaveBeenCalledTimes(6);
   });
 
   it('throttles requests per caller: the eleventh in a minute is a 429', async () => {
@@ -178,7 +188,7 @@ describe('password reset through the auth proxy', () => {
       const response = await call(
         RESET,
         { email: 'known@example.com', otp: '000000', password: 'a-long-password' },
-        `8.8.8.${i}`,
+        '8.8.8.8',
       );
       statuses.push(response.status);
     }
@@ -670,13 +680,8 @@ describe('sign-in through the auth proxy', () => {
     const statuses: number[] = [];
     for (let i = 0; i < 6; i++) {
       statuses.push(
-        (
-          await call(
-            'email-otp/verify-email',
-            { email: 'c@example.com', otp: '123456' },
-            `6.6.6.${i}`,
-          )
-        ).status,
+        (await call('email-otp/verify-email', { email: 'c@example.com', otp: '123456' }, '6.6.6.6'))
+          .status,
       );
     }
 
