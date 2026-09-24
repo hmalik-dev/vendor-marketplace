@@ -59,7 +59,7 @@ export interface AcceptTermsScreenProps {
 const ROLE_LABELS: Record<UserRole, string> = {
   customer: 'a customer',
   vendor: 'a vendor',
-  admin: 'an operator',
+  admin: 'an admin',
 };
 
 export function AcceptTermsScreen({
@@ -192,12 +192,9 @@ export function AcceptTermsScreen({
   if (landedAs !== null) {
     return (
       <div className="mx-auto max-w-[700px] px-6 py-13">
-        <h1 className="display-heading text-display-md text-stone-900">
-          This account is {ROLE_LABELS[landedAs]}
-        </h1>
-        <p className="mt-2 text-sm leading-prose text-stone-600">
-          This account was set up as {ROLE_LABELS[landedAs]}, and that can&apos;t be changed later.
-          To switch, close the account and register again.
+        <h1 className="display-heading text-display-md text-stone-900">{`Welcome to ${BRAND_NAME}`}</h1>
+        <p className="mt-6 text-base leading-prose text-stone-800" data-testid="landed-role">
+          You&apos;re joining as {ROLE_LABELS[landedAs]}.
         </p>
         <Button variant="primary" size="lg" className="mt-6" onClick={continueOn}>
           Continue
@@ -231,8 +228,7 @@ export function AcceptTermsScreen({
 
       {tickMode ? null : knownRole !== null ? (
         <p className="mt-6 text-base leading-prose text-stone-800" data-testid="stored-role">
-          You&apos;re joining as {ROLE_LABELS[knownRole]}. This can&apos;t be changed later. To
-          switch, close the account and register again.
+          You&apos;re joining as {ROLE_LABELS[knownRole]}.
         </p>
       ) : (
         /*
@@ -321,9 +317,6 @@ export function AcceptTermsScreen({
             {saving ? 'Recording…' : tickMode ? 'Accept and continue' : 'Continue'}
           </Button>
           {tickMode ? null : <ContinueNotice className="mt-3 text-left" />}
-          <p className="mt-2 text-helper text-stone-600">
-            We record the moment, this browser and its address, so the record means something later.
-          </p>
         </div>
       </form>
     </div>

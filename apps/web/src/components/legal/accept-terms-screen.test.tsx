@@ -85,6 +85,9 @@ function recorded(role: 'customer' | 'vendor'): TermsAcceptanceStatus {
   return status({ signUpRole: role });
 }
 
+/* The welcome screen names the account and accepts: no closing, no "can't change", no recording talk (VEN-700). */
+const FORBIDDEN_COPY = /close|can't be changed|record the moment|register again/i;
+
 describe('the role recorded at sign-up (VEN-507, VEN-662)', () => {
   it.each(['customer', 'vendor'] as const)(
     'states a recorded %s from the server render, with no picker and nothing read from storage',
@@ -98,7 +101,9 @@ describe('the role recorded at sign-up (VEN-507, VEN-662)', () => {
       expect(html).not.toContain('type="radio"');
       expect(html).not.toContain('<fieldset');
       expect(html).toContain('data-testid="stored-role"');
-      expect(html.replaceAll('<!-- -->', '')).toContain(`joining as a ${role}`);
+      const text = html.replaceAll('<!-- -->', '').replaceAll('&#x27;', "'");
+      expect(text).toContain(`You're joining as a ${role}.`);
+      expect(text).not.toMatch(FORBIDDEN_COPY);
       expect(getItem).not.toHaveBeenCalled();
     },
   );
@@ -110,9 +115,7 @@ describe('the role recorded at sign-up (VEN-507, VEN-662)', () => {
     );
     render(<AcceptTermsScreen status={recorded('vendor')} terms={TERMS} returnTo={null} />);
 
-    expect(screen.getByTestId('stored-role').textContent).toBe(
-      "You're joining as a vendor. This can't be changed later. To switch, close the account and register again.",
-    );
+    expect(screen.getByTestId('stored-role').textContent).toBe("You're joining as a vendor.");
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(`Welcome to ${BRAND_NAME}`);
     expect(post).not.toHaveBeenCalled();
 
@@ -176,12 +179,22 @@ describe('the role recorded at sign-up (VEN-507, VEN-662)', () => {
 
     await user.click(submit());
 
-    await waitFor(() => expect(screen.getByText('This account is a customer')).toBeDefined());
+    await waitFor(() =>
+      expect(screen.getByTestId('landed-role').textContent).toBe("You're joining as a customer."),
+    );
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(`Welcome to ${BRAND_NAME}`);
+    expect(document.body.textContent).not.toMatch(FORBIDDEN_COPY);
     expect(replace).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     expect(replace).toHaveBeenCalledWith('/after-sign-in');
+  });
+
+  it('names an admin account as an admin, never an operator', () => {
+    render(<AcceptTermsScreen status={stored('admin')} terms={TERMS} returnTo={null} />);
+
+    expect(screen.getByTestId('stored-role').textContent).toBe("You're joining as an admin.");
   });
 
   it('keeps the stated role and offers a retry when the save fails', async () => {
@@ -412,6 +425,17 @@ describe('the acceptance gate', () => {
       expect(link.getAttribute('target')).toBe('_blank');
       expect(link.getAttribute('rel')).toBe('noopener noreferrer');
     }
+  });
+
+  it('keeps its own explanatory copy word for word (VEN-700)', () => {
+    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} />);
+
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('The Terms have changed');
+    expect(
+      screen.getByText(
+        `Everyone using ${BRAND_NAME} accepts the current Terms. We record that you did — the version, the moment, and this browser — so both sides can say what was agreed.`,
+      ),
+    ).toBeDefined();
   });
 
   it('shows no role choice and no notice on the new-version screen', () => {
