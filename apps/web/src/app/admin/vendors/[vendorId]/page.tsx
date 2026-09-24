@@ -196,7 +196,7 @@ export default async function AdminVendorDetailPage({
                 )}
               </KeyValue>
               {vendor.debtOutstandingCents > 0 ? (
-                <KeyValue label="Owed to Orla" kind="mono">
+                <KeyValue label="Owed to the platform" kind="mono">
                   {formatPrice(vendor.debtOutstandingCents)}
                 </KeyValue>
               ) : null}
