@@ -21,9 +21,13 @@
  * `auth_identity_kept` (VEN-649) is an account closure whose delete at Neon Auth
  * removed nothing: the person may still be able to sign in, and only an
  * operator looking at the provider can say why.
+ *
+ * `early_fraud_warning` (VEN-645) is a card issuer telling Stripe a charge looks
+ * fraudulent, which usually precedes a chargeback by days.
  */
 export const OPERATOR_ALERT_KINDS = [
   'dispute_opened',
+  'early_fraud_warning',
   'payout_failed',
   'refund_failed',
   'payment_refused',

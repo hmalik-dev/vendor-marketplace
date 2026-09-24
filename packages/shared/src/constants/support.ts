@@ -128,8 +128,17 @@ export const SUPPORT_REFERENCE_PATTERN = new RegExp(
  * to announce to the vendor — which is the asymmetry #431 closed between the
  * other two, kept closed here by not opening a third way to freeze money
  * silently. Money still moves through `POST /support/messages` alone.
+ *
+ * `fraud_warning` (VEN-645) is a card issuer's early fraud warning: no money has
+ * moved yet and nothing is frozen, so it is a case for a person to rule on, not
+ * a hold.
  */
-export const SUPPORT_CASE_ORIGINS = ['support_message', 'chargeback', 'user_report'] as const;
+export const SUPPORT_CASE_ORIGINS = [
+  'support_message',
+  'chargeback',
+  'user_report',
+  'fraud_warning',
+] as const;
 export type SupportCaseOrigin = (typeof SUPPORT_CASE_ORIGINS)[number];
 
 /**
