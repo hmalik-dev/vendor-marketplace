@@ -88,7 +88,7 @@ async function notificationsFor({ conversationId, vendor }: Thread): Promise<num
 async function sendersWaitingOnALock(): Promise<number> {
   // postgres-js hands back the rows themselves, not a `{ rows }` wrapper.
   const rows = await owner.db.execute<{ total: number }>(
-    sql`select count(*)::int as total from pg_locks where not granted and locktype = 'transactionid'`,
+    sql`select count(*)::int as total from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'`,
   );
 
   return rows[0]?.total ?? 0;
@@ -122,6 +122,16 @@ describe('the backlog counted when a message is stored', () => {
     const firstStored = new Promise<void>((resolve) => {
       stored = resolve;
     });
+
+    /*
+     * A thread whose ordering key is already ahead of both sends, so the
+     * `last_message_at` bump inside `insertMessage` matches nothing and takes no
+     * row lock: only the explicit lock can queue the second send.
+     */
+    await owner.db
+      .update(conversations)
+      .set({ lastMessageAt: sql`now() + interval '1 day'` })
+      .where(eq(conversations.id, thread.conversationId));
 
     // The first send has stored its message and not committed: its transaction stays open.
     const firstSend = owner.db.transaction(async (tx) => {
