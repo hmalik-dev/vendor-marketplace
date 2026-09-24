@@ -79,6 +79,9 @@ describe('swallowed errors', () => {
       'src/app/bookings/[requestId]/checkout/page.tsx',
       // VEN-540: a rejected `confirmPayment` shows its own banner; the cause is reported.
       'src/components/checkout/checkout-screen.tsx',
+      // VEN-706: a failed unread read leaves the header's dot at its last value
+      // rather than drawing an error in the nav bar, and reports why.
+      'src/components/messaging/messages-link.tsx',
       'src/components/messaging/messages-screen.tsx',
       'src/components/messaging/notification-bell.tsx',
       'src/components/search/nearby-dates-band.tsx',
