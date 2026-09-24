@@ -270,6 +270,14 @@ describe('an auth proxy with no auth configuration (VEN-635)', () => {
 
     await expect(requestPasswordReset('nobody@example.invalid')).resolves.toBe('unreachable');
   });
+
+  it('reads a paced reset request as mailPaced, and any other 429 as throttled (VEN-719)', async () => {
+    stubFetchBody(429, { code: 'RESET_MAIL_PACED' });
+    await expect(requestPasswordReset('a@example.com')).resolves.toBe('mailPaced');
+
+    stubFetchBody(429, { message: 'Too many attempts' });
+    await expect(requestPasswordReset('a@example.com')).resolves.toBe('throttled');
+  });
 });
 
 describe('changePassword (VEN-677)', () => {

@@ -384,9 +384,73 @@ export async function chargeRequest(
   return own || all;
 }
 
+const MAIL_PACE_WINDOW_MS = 60_000;
+/**
+ * One send per address per window. The provider drops mail after a burst without a word, and not
+ * on a clean clock: after three sends inside a second, two owner requests 75s and 150s later went
+ * unmailed, while ten requests after a single earlier send (62s and 75s apart) all arrived.
+ */
+const MAIL_PACE_LIMIT = 1;
+const paceHits = new Map<string, number[]>();
+
+/**
+ * True when a reset mail for this address would be one send too many for the
+ * minute, whoever asked (VEN-719). The provider limits mail per address itself
+ * and drops the rest without a word, so a stranger's burst used up its allowance
+ * and the owner's next request was answered "sent" and never arrived. Sending
+ * one per minute keeps the owner's mail deliverable; past that the caller is
+ * told to wait. A refused request records nothing, so
+ * polling cannot hold the window shut. The same for every address, so it says
+ * nothing about whether an account exists. `record = false` only reads: asked
+ * before the request budgets are charged, so a request told to wait spends none
+ * of them and the retry it was told to make is not refused for it.
+ */
+export async function isMailPaced(
+  address: string,
+  now: number = Date.now(),
+  record = true,
+): Promise<boolean> {
+  const normalized = address.trim().toLowerCase();
+  // Hashed: the API stores the bucket, and an address is personal data it has no use for.
+  const bucket = `mail|${createHash('sha256').update(normalized).digest('hex')}`;
+  const recentLocal = (): number[] =>
+    (paceHits.get(normalized) ?? []).filter((at) => now - at < MAIL_PACE_WINDOW_MS);
+
+  const spent = await chargeShared(bucket, MAIL_PACE_WINDOW_MS, MAIL_PACE_LIMIT, false);
+
+  if (spent ?? recentLocal().length >= MAIL_PACE_LIMIT) {
+    return true;
+  }
+
+  if (!record) {
+    return false;
+  }
+
+  if (paceHits.size > 5_000) {
+    for (const [stale, times] of paceHits) {
+      if (times.every((at) => now - at >= MAIL_PACE_WINDOW_MS)) {
+        paceHits.delete(stale);
+      }
+    }
+  }
+
+  // The read passed; a burst that passed it together is caught by the count of its own charge.
+  const over = await chargeShared(bucket, MAIL_PACE_WINDOW_MS, MAIL_PACE_LIMIT, true);
+
+  if (over !== null) {
+    return over;
+  }
+
+  const recent = [...recentLocal(), now];
+  paceHits.set(normalized, recent);
+
+  return recent.length > MAIL_PACE_LIMIT;
+}
+
 /** Test seam: forgets every recorded call. */
 export function resetThrottle(): void {
   hits.clear();
   addressHits.clear();
   pairHits.clear();
+  paceHits.clear();
 }

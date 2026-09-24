@@ -10,7 +10,7 @@ import { announceSessionEnded } from './session-ended';
  * `no-raw-upstream-message.test.ts`), so nothing here returns one.
  */
 export type AuthOutcome =
-  'ok' | 'unverified' | 'rejected' | 'throttled' | 'codeInvalid' | 'unreachable';
+  'ok' | 'unverified' | 'rejected' | 'throttled' | 'mailPaced' | 'codeInvalid' | 'unreachable';
 
 async function post(path: string, body: Record<string, string> | null): Promise<Response | null> {
   try {
@@ -167,7 +167,24 @@ export async function resendVerificationCode(email: string): Promise<AuthOutcome
  * caller-level refusal (`throttled`, the per-caller 429) are ever different.
  */
 export async function requestPasswordReset(email: string): Promise<AuthOutcome> {
-  return outcomeOf(await post('/email-otp/request-password-reset', { email }));
+  const response = await post('/email-otp/request-password-reset', { email });
+
+  // Too many mails for this address this minute (VEN-719): a shorter wait than the other 429s.
+  if (response?.status === 429) {
+    const body = (await response
+      .clone()
+      .json()
+      .catch((error: unknown) => {
+        reportSwallowedError('auth-requests: could not read a 429 body', error);
+        return null;
+      })) as { code?: unknown } | null;
+
+    if (body?.code === 'RESET_MAIL_PACED') {
+      return 'mailPaced';
+    }
+  }
+
+  return outcomeOf(response);
 }
 
 /** `rejected` covers a wrong, used or expired code, and a password Neon refuses. */
