@@ -40,8 +40,6 @@ export const AUTH_COPY = {
   changeTooShort: 'Your new password needs at least 10 characters.',
   changeTooLong: 'Your new password can be at most 128 characters.',
   changeMismatch: 'The two new passwords do not match.',
-  changeDone:
-    'Your password is changed. You are still signed in here, and signed out everywhere else.',
   throttled: "This isn't going through right now. Wait a few minutes and try again.",
   unreachable: 'We could not reach the sign-in service. Try again in a moment.',
 } as const;
