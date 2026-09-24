@@ -40,9 +40,10 @@ export function SignedOutDrawer(): React.ReactElement | null {
 export interface SignedInDrawerProps {
   /**
    * The reader's role, which decides the rows: the same `accountLinksFor` list
-   * the avatar menu reads, so the drawer, which holds the control the bar
-   * hides below `sm`, names it what the bar does. `Messages` follows the first
-   * row for the roles that have an inbox.
+   * the avatar menu reads, so the two cannot disagree. A customer's first row
+   * reads `My bookings`, as the menu's does, where the bar's own link (frame
+   * `02`, VEN-413) reads `Bookings`. `Messages` follows the first row for the
+   * roles that have an inbox.
    */
   role: UserRole;
 }

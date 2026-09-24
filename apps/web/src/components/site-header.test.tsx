@@ -302,9 +302,8 @@ describe('SiteHeader', () => {
   /*
    * One control, three destinations — `/dashboard` resolves the role and
    * forwards — so no single string is true for every reader. The label is
-   * therefore the role's, and it is the same word in the bar and in the drawer
-   * the bar hides it into below `sm`: two copies of that decision is how one
-   * destination ends up called two things.
+   * therefore the role's. The drawer and the avatar menu read `accountLinksFor`
+   * instead, where a customer's row is `My bookings` (VEN-702).
    */
   it.each([
     ['customer' as const, 'Bookings'],
