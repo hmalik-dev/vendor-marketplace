@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { PASSWORD_MIN_LENGTH } from '@vendor-marketplace/shared';
 
 const push = vi.fn();
 const requestPasswordReset = vi.fn();
@@ -109,15 +110,18 @@ describe('ResetPasswordForm', () => {
     expect(screen.getByRole('link', { name: 'Sign in' }).getAttribute('href')).toBe('/sign-in');
   });
 
-  it('keeps submit disabled until the password meets the ten-character rule', async () => {
+  it.each([
+    [PASSWORD_MIN_LENGTH - 1, true],
+    [PASSWORD_MIN_LENGTH, false],
+  ])('with a %i-character password, submit disabled is %s', async (length, disabled) => {
     const user = userEvent.setup();
     render(<ResetPasswordForm initialEmail="sam@example.com" />);
 
-    await fill(user, 'short-9ch');
+    await fill(user, 'x'.repeat(length));
 
     expect(
       (screen.getByRole('button', { name: 'Set new password' }) as HTMLButtonElement).disabled,
-    ).toBe(true);
+    ).toBe(disabled);
   });
 
   it('says one fixed sentence for a used, expired or wrong code', async () => {
