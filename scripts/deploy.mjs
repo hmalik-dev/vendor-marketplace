@@ -8,7 +8,9 @@
  * The web is *built* (pulled and compiled) before anything moves, so the step
  * most likely to fail — `vercel build` — fails before the migration or the API
  * ever runs, and only *deployed* once the API is already live on the new
- * commit. Each phase stays callable on its own, for a manual run and for this
+ * commit. A web deploy that fails after that leaves the tiers on different
+ * commits; `release` says so, naming both, and points at the runbook step
+ * (VEN-634) rather than rolling anything back. Each phase stays callable on its own, for a manual run and for this
  * file's own suite, but the workflow names no phase itself: promoting an older
  * commit calls that commit's `deploy.mjs release`, which can never disagree
  * with a newer `deploy.yml` about what phases exist.
@@ -20,6 +22,9 @@
  *
  * Each run targets one environment, `staging` or `production`, named by the
  * branch CI ran on (`DEPLOY_TARGET`); nothing else deploys, and `main` never does.
+ * A person can also start one by hand to redeploy that branch's tip
+ * (`workflow_dispatch`, VEN-634); the gate holds it to the same rules: CI green
+ * for the commit, and the commit is still the branch's tip.
  *
  * The workflow owns nothing about ordering or stop-on-failure — `release`
  * below does, by awaiting each phase in turn and letting a thrown `PhaseError`
@@ -75,6 +80,9 @@ export const API_HOSTS = {
         service,
         '--set',
         `SENTRY_RELEASE=${release}`,
+        // VEN-634: the Dockerfile's `ARG RELEASE_COMMIT`, baked into the image `up` builds.
+        '--set',
+        `RELEASE_COMMIT=${release}`,
         '--set',
         `NEON_AUTH_BASE_URL=${neonAuthBaseUrl}`,
         '--skip-deploys',
@@ -126,6 +134,9 @@ export function presenceFlag(name) {
 const KNOWN_HOSTS = Object.keys(API_HOSTS).join(', ');
 
 export class PhaseError extends Error {}
+
+/** The runbook heading a release that stopped after the API sends a person to. */
+export const SKEW_RUNBOOK_STEP = 'A release that stopped after the API';
 
 function blank(value) {
   return value === undefined || value.trim() === '';
@@ -315,8 +326,12 @@ async function runPhase(io, name, fn) {
  * whose CI runs finish out of order would otherwise deploy the newer release
  * and then roll it back to the older one. A superseded run exits
  * 0 without deploying, because the run for the tip carries both commits.
+ *
+ * A `manual` run (VEN-634) is a person asking for that commit, so a commit that
+ * is not the tip fails rather than being quietly passed over: nothing else
+ * would deploy it, and a green run that shipped nothing is what they would read.
  */
-export function gateVerdict({ conclusion, event, branch, headSha, tipSha }) {
+export function gateVerdict({ conclusion, event, branch, headSha, tipSha, manual = false }) {
   if (conclusion !== 'success') {
     return {
       deploy: false,
@@ -346,6 +361,14 @@ export function gateVerdict({ conclusion, event, branch, headSha, tipSha }) {
       deploy: false,
       fail: true,
       message: 'Could not tell which commit to deploy; not deploying.',
+    };
+  }
+
+  if (headSha !== tipSha && manual) {
+    return {
+      deploy: false,
+      fail: true,
+      message: `${headSha.slice(0, 7)} is not ${branch}'s tip (${tipSha.slice(0, 7)}); a manual release deploys only the tip.`,
     };
   }
 
@@ -659,9 +682,78 @@ export async function checkNeonAuth(env, io) {
   io.write(`Neon Auth: NEON_AUTH_BASE_URL and WEB_URL are the ${name} branch's own.\n`);
 }
 
+/** The workflow event that starts a release by hand rather than from a CI run (VEN-634). */
+const MANUAL_EVENT = 'workflow_dispatch';
+
+/**
+ * What CI concluded for `RELEASE_SHA` on `DEPLOY_TARGET`'s push, for a manual
+ * release, which has no CI run of its own to hand the gate. A commit CI never
+ * ran for, or has not finished, answers `''`, which the verdict refuses.
+ */
+async function manualCiConclusion(env, io) {
+  if (!ENVIRONMENTS.includes(env.DEPLOY_TARGET) || blank(env.RELEASE_SHA)) {
+    return '';
+  }
+  need(env, ['GH_TOKEN', 'GITHUB_REPOSITORY']);
+
+  let listing = '';
+  await io.run(
+    'gh',
+    [
+      'run',
+      'list',
+      '--repo',
+      env.GITHUB_REPOSITORY,
+      '--workflow',
+      'CI',
+      '--branch',
+      env.DEPLOY_TARGET,
+      '--commit',
+      env.RELEASE_SHA,
+      '--event',
+      'push',
+      '--status',
+      'completed',
+      '--limit',
+      '1',
+      '--json',
+      'conclusion',
+      '--jq',
+      '.[0].conclusion // ""',
+    ],
+    {
+      env: pick(env, [...TOOL_ENV, 'GH_TOKEN']),
+      redact: redactor([env.GH_TOKEN]),
+      write: (text) => {
+        listing += text;
+      },
+    },
+  );
+  return listing.trim();
+}
+
+/**
+ * The commit the web's `/api/ready` names right now, or `null`: what a partial
+ * release's failure says the web is still on. Never throws; the failure it is
+ * annotating is the one that matters.
+ */
+async function currentWebCommit(env, io) {
+  if (blank(env.WEB_URL)) {
+    return null;
+  }
+  const response = await tryFetch(io.fetch ?? fetch, `${webOrigin(env)}/api/ready`);
+  try {
+    const body = response?.ok ? await response.json() : null;
+    return typeof body?.commit === 'string' && body.commit !== '' ? body.commit : null;
+  } catch {
+    return null;
+  }
+}
+
 export const PHASES = {
   async gate(env, io) {
     const branch = env.DEPLOY_TARGET;
+    const manual = env.CI_EVENT === MANUAL_EVENT;
     let listing = '';
     // Only an environment's own ref is looked up; any other branch is refused by the verdict.
     if (ENVIRONMENTS.includes(branch)) {
@@ -675,8 +767,10 @@ export const PHASES = {
     }
 
     const verdict = gateVerdict({
-      conclusion: env.CI_CONCLUSION,
-      event: env.CI_EVENT,
+      conclusion: manual ? await manualCiConclusion(env, io) : env.CI_CONCLUSION,
+      // The CI run a manual release relies on is the push one; its own event is not a push.
+      event: manual ? 'push' : env.CI_EVENT,
+      manual,
       branch,
       headSha: env.RELEASE_SHA,
       tipSha: listing.trim().split(/\s+/)[0] ?? '',
@@ -695,7 +789,7 @@ export const PHASES = {
      * green rather than failing: the tip's own run normally carries this commit
      * too, and reddening every close pair of merges would spend the signal. The
      * case it does not cover — the tip's CI then fails, so neither commit ships
-     * — announces itself as a red CI run on `main`.
+     * — announces itself as a red CI run on the environment branch (`staging` or `production`).
      */
     if (!verdict.deploy) {
       io.error(`::warning::${verdict.message}\n`);
@@ -921,8 +1015,8 @@ export const PHASES = {
    * --prebuilt` reuses that build rather than compiling again, so nothing here
    * can fail the way `vercel build` does.
    *
-   * Production is a production deployment, so it needs no alias. Staging
-   * aliases its preview deployment to the host of `WEB_URL` so the readiness
+   * Production is a production deployment, promoted to the domain explicitly.
+   * Staging aliases its preview deployment to the host of `WEB_URL` so the readiness
    * poll and people have one stable address; `vercel deploy` prints the
    * deployment's URL on its own line, which is what the alias names.
    */
@@ -966,20 +1060,49 @@ export const PHASES = {
       },
     );
 
+    /*
+     * VEN-634. Production is promoted, not left to auto-assign: after a
+     * `vercel rollback` Vercel turns auto-assignment off, so every later
+     * `--prod` deploy stays unassigned, the domain keeps serving the
+     * rolled-back build and `ready` fails on skew after the migration and the
+     * API have already moved. Promoting a deployment that is already live is a
+     * no-op. Staging aliases its preview to its host.
+     */
+    // stdout and stderr share one stream here, so the URL is the last line that is one.
+    const deployment = printed
+      .split('\n')
+      .map((line) => line.trim())
+      .findLast((line) => /^https:\/\/[\w.-]+$/.test(line));
+    if (!deployment) {
+      throw new PhaseError(
+        `vercel deploy did not print a deployment URL to ${production ? 'promote' : 'alias'}.`,
+      );
+    }
     if (!production) {
-      // stdout and stderr share one stream here, so the URL is the last line that is one.
-      const deployment = printed
-        .split('\n')
-        .map((line) => line.trim())
-        .findLast((line) => /^https:\/\/[\w.-]+$/.test(line));
-      if (!deployment) {
-        throw new PhaseError('vercel deploy did not print a deployment URL to alias.');
-      }
       await io.run('npx', [...cli, 'alias', 'set', deployment, aliasHost(env)], {
         env: child,
         redact,
         write: io.write,
       });
+      return;
+    }
+    /*
+     * A failed promote is a warning, not a failure: with auto-assign on (every
+     * release but the one after a rollback) the domain is already on this
+     * deployment, and the CLI's own refusals — a team it cannot resolve, a
+     * deployment already live — must not fail a release that is otherwise
+     * fine. `ready` is the arbiter: it fails on Web/API skew if the domain is
+     * still on the old build.
+     */
+    try {
+      await io.run('npx', [...cli, 'promote', deployment], { env: child, redact, write: io.write });
+    } catch (error) {
+      if (!(error instanceof PhaseError)) {
+        throw error;
+      }
+      io.error(
+        `::warning::${error.message}; the domain may not be on this deployment, and the readiness check will say (docs/runbook-rollback.md, step 1).\n`,
+      );
     }
   },
 
@@ -1032,7 +1155,17 @@ export const PHASES = {
     await runPhase(io, 'web-build', () => PHASES['web-build'](env, io));
     await runPhase(io, 'migrate', () => PHASES.migrate(env, io));
     await runPhase(io, 'api', () => PHASES.api(env, io));
-    await runPhase(io, 'web-deploy', () => PHASES['web-deploy'](env, io));
+    try {
+      await runPhase(io, 'web-deploy', () => PHASES['web-deploy'](env, io));
+    } catch (error) {
+      // The API is already on this commit; the web is not (VEN-634).
+      const reason = error instanceof PhaseError ? error.message : 'web-deploy failed unexpectedly';
+      const served = await currentWebCommit(env, io);
+      throw new PhaseError(
+        `${reason.replace(/\.*$/, '.')} The API is already live on ${env.SENTRY_RELEASE.slice(0, 7)} but the web still serves ${served ? served.slice(0, 7) : 'a commit its /api/ready did not name'}: the tiers are on different commits. ` +
+          `Follow "${SKEW_RUNBOOK_STEP}" in docs/runbook-rollback.md.`,
+      );
+    }
     await runPhase(io, 'ready', () => PHASES.ready(env, io));
   },
 };

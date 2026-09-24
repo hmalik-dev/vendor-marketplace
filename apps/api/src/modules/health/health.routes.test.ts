@@ -1,8 +1,12 @@
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { expectedMigrationCount } from '@vendor-marketplace/db';
 import { sql } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createTestHarness, type TestHarness } from '../../testing/test-server.js';
-import { deployedCommit } from './health.routes.js';
+import { bakedCommit, deployedCommit, RELEASE_COMMIT_FILE } from './health.routes.js';
 
 describe('GET /health', () => {
   let harness: TestHarness;
@@ -225,4 +229,55 @@ describe('deployedCommit', () => {
       expect(deployedCommit(source)).toBeNull();
     },
   );
+});
+
+describe('deployedCommit: the commit baked into the image (VEN-634)', () => {
+  const baked = 'b'.repeat(40);
+  const stale = 'a'.repeat(40);
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), 'release-commit-'));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('reports the baked commit even when SENTRY_RELEASE names a different sha', () => {
+    const file = path.join(dir, 'RELEASE_COMMIT');
+    writeFileSync(file, `${baked}\n`);
+
+    expect(
+      deployedCommit({ SENTRY_RELEASE: stale, RAILWAY_GIT_COMMIT_SHA: stale }, bakedCommit(file)),
+    ).toBe(baked);
+  });
+
+  it.each(['', '  \n'])('falls back to the variables when the file holds %j', (content) => {
+    const file = path.join(dir, 'RELEASE_COMMIT');
+    writeFileSync(file, content);
+
+    expect(deployedCommit({ SENTRY_RELEASE: stale }, bakedCommit(file))).toBe(stale);
+  });
+
+  it('falls back to the variables when there is no file, and has none without them', () => {
+    const file = path.join(dir, 'missing');
+
+    expect(deployedCommit({ SENTRY_RELEASE: stale }, bakedCommit(file))).toBe(stale);
+    expect(deployedCommit({}, bakedCommit(file))).toBeNull();
+  });
+});
+
+describe('the image bakes the commit the API reads (VEN-634)', () => {
+  const dockerfile = readFileSync(
+    fileURLToPath(new URL('../../../Dockerfile', import.meta.url)),
+    'utf8',
+  );
+
+  it('writes the RELEASE_COMMIT build arg to the file deployedCommit reads, in the runtime stage', () => {
+    const runtime = dockerfile.slice(dockerfile.indexOf('FROM base AS runtime'));
+
+    expect(runtime).toContain('ARG RELEASE_COMMIT');
+    expect(runtime).toContain(`> ${RELEASE_COMMIT_FILE}`);
+  });
 });
