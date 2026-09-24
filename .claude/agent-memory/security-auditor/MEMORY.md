@@ -113,7 +113,7 @@
 - [`request.ip` is one hop, never IP-validated](request-ip-is-one-hop-trusted-not-validated.md) — unbounded text vs `varchar(45)`
 - [`/ready` is unthrottled by design](ready-probe-is-unthrottled-and-now-reads-a-file.md) — presence booleans and RLS posture accepted
 - [Operator alert dedupe is attacker-armable](operator-alert-dedupe-is-attacker-armable.md) — a shed 429 costs a DB write
-- [The daily send cap's closure is sticky](email-send-cap-closure-is-sticky.md) — blocks step-up codes till midnight; [VEN-680 codes](self-closure-step-up-codes-are-essential-mail.md)
+- [The daily send cap's closure is sticky](email-send-cap-closure-is-sticky.md) — blocks step-up codes till midnight; VEN-688 recorded cap + refusal marker clean; [VEN-680 codes](self-closure-step-up-codes-are-essential-mail.md)
 - [Auth proxy parser differential](auth-proxy-parser-differential.md) — body-derived key fails closed; VEN-630/718 per-caller budgets are IP-rotatable to a 10x ceiling
 
 ## Data layer, seeds and tooling

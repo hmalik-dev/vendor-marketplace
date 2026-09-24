@@ -3,9 +3,11 @@ import { createTestDatabase, type TestDatabase } from '@vendor-marketplace/db/te
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppDatabase } from './database.js';
 import {
+  closeSendDay,
   ESSENTIAL_SEND_HEADROOM,
   EmailSendingClosedError,
   reopenCapClosedDay,
+  reserveSend,
   sendDayClosedReason,
   withDailySendCap,
 } from './email-send-cap.js';
@@ -198,5 +200,62 @@ describe('withDailySendCap (VEN-661)', () => {
     });
     await expect(quota.gateway.send(MESSAGE)).rejects.toBeInstanceOf(EmailSendingClosedError);
     expect(await reopenCapClosedDay(database.db, '2026-09-23', 500)).toBe(false);
+  });
+
+  it('keeps a raised cap open through a rolling deploy: the old instance cannot re-close the day (VEN-688)', async () => {
+    const oldCap = capped(2);
+    const newCap = capped(5);
+
+    await oldCap.gateway.send(MESSAGE);
+    await oldCap.gateway.send(MESSAGE);
+    await expect(oldCap.gateway.send(MESSAGE)).rejects.toBeInstanceOf(EmailSendingClosedError);
+    expect(await sendDayClosedReason(database.db, '2026-09-23')).toBe('cap');
+
+    // The new container boots and reopens the day; the old one is still serving.
+    expect(await reopenCapClosedDay(database.db, '2026-09-23', 5)).toBe(true);
+
+    await oldCap.gateway.send(MESSAGE);
+    await newCap.gateway.send(MESSAGE);
+
+    expect(oldCap.send).toHaveBeenCalledTimes(3);
+    expect(newCap.send).toHaveBeenCalledTimes(1);
+    expect(await sendDayClosedReason(database.db, '2026-09-23')).toBeNull();
+    // 2 + 1 + 1 = 4 of 5; the fifth is the last either instance may take.
+    await oldCap.gateway.send(MESSAGE);
+    await expect(newCap.gateway.send(MESSAGE)).rejects.toBeInstanceOf(EmailSendingClosedError);
+    // One page each for the two closures the budget really reached, none for a re-closure.
+    expect(oldCap.reporter.capture).toHaveBeenCalledTimes(1);
+    expect(newCap.reporter.capture).toHaveBeenCalledTimes(1);
+  });
+
+  it('records the raised cap before the day has closed, so a still-serving old instance cannot close it', async () => {
+    const oldCap = capped(2);
+    await oldCap.gateway.send(MESSAGE);
+
+    await reopenCapClosedDay(database.db, '2026-09-23', 5);
+
+    await oldCap.gateway.send(MESSAGE);
+    await oldCap.gateway.send(MESSAGE);
+    expect(await sendDayClosedReason(database.db, '2026-09-23')).toBeNull();
+  });
+
+  it('refuses to close a day the raised cap has given room, even after the reservation was refused (VEN-688)', async () => {
+    const day = '2026-09-23';
+    await reserveSend(database.db, day, 2);
+    await reserveSend(database.db, day, 2);
+    // The old instance's third reservation is refused; the redeploy lands before it closes the day.
+    expect(await reserveSend(database.db, day, 2)).toBe(false);
+    expect(await reopenCapClosedDay(database.db, day, 5)).toBe(false);
+
+    expect(await closeSendDay(database.db, day, 'cap', LATE, 2)).toBe(false);
+    expect(await sendDayClosedReason(database.db, day)).toBeNull();
+    expect(await reserveSend(database.db, day, 5)).toBe(true);
+
+    // At its own cap the day still closes, and only once.
+    await reserveSend(database.db, day, 5);
+    await reserveSend(database.db, day, 5);
+    expect(await reserveSend(database.db, day, 5)).toBe(false);
+    expect(await closeSendDay(database.db, day, 'cap', LATE, 5)).toBe(true);
+    expect(await closeSendDay(database.db, day, 'cap', LATE, 5)).toBe(false);
   });
 });

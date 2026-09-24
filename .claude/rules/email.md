@@ -30,4 +30,8 @@ is paged once. Admin mail (step-up codes, alerts, the digest) is marked
 `essential` and may spend 15 slots past the cap, so a flood of ordinary mail
 never locks the admin out of the console. Raising the cap is an env change on
 the API service, never a code change; the redeploy it takes reopens a day the
-old cap closed. A spent Resend quota reopens only at the next UTC day.
+old cap closed and records the raised cap on the day (`email_send_days.cap`), so
+an instance still serving the old cap cannot close it again; lowering the cap
+takes effect the next UTC day. A send a closed day refuses is recorded but is
+not an attempt, so it is retried tomorrow with every attempt it had. A spent
+Resend quota reopens only at the next UTC day.

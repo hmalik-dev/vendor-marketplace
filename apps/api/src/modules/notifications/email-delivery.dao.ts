@@ -203,13 +203,31 @@ export async function applyDeliveryEvent(
   return existing ? 'superseded' : 'unknown';
 }
 
-/** How many attempt rows a notification already has, whatever their outcome, and when the first was made. */
+/**
+ * The `failure_reason` of a row that records a send the daily cap refused
+ * (VEN-688), not one that was tried. Such a row keeps the email findable by the
+ * retry sweep but is not an attempt: `EMAIL_RETRY_MAX_ATTEMPTS` counts around it,
+ * so a day that closes mid-tick cannot spend the attempts of a message that never
+ * reached Resend. The first row still starts the retry window.
+ */
+export const SEND_CLOSED_FAILURE_REASON = 'Email sending was closed for the day; not attempted';
+
+/** `true` for the rows that count towards `EMAIL_RETRY_MAX_ATTEMPTS`: every one but a refusal. */
+const countsAsAttempt = sql`not (${emailDeliveries.outcome} = 'failed' and ${emailDeliveries.providerMessageId} is null and ${emailDeliveries.failureReason} = ${SEND_CLOSED_FAILURE_REASON})`;
+
+/**
+ * How many attempts a notification has made, whatever their outcome and not
+ * counting a send the closed day refused, and when its first row was made.
+ */
 export async function emailAttemptHistory(
   db: AppDatabase,
   notificationId: string,
 ): Promise<{ attempts: number; firstSentAt: Date | null }> {
   const [row] = await db
-    .select({ attempts: count(), firstSentAt: min(emailDeliveries.sentAt) })
+    .select({
+      attempts: count(sql`case when ${countsAsAttempt} then 1 end`),
+      firstSentAt: min(emailDeliveries.sentAt),
+    })
     .from(emailDeliveries)
     .where(eq(emailDeliveries.notificationId, notificationId))
     .limit(1);
@@ -234,10 +252,10 @@ export interface RetryableDeliveryQuery {
  * it an id** (a `failed` a provider event wrote later names a message Resend
  * already holds, and replaying its idempotency key delivers nothing); no attempt
  * for the notification is `sent`, `delivered`, `bounced` or `complained`; fewer
- * than `maxAttempts` attempts exist; the row's backoff has elapsed (`next_attempt_at`
- * is null — a failure recorded before the column, due at once — or not after
- * `now`); and the *first* attempt is inside the
- * window, so retries cannot keep a stale message alive by restarting the clock.
+ * than `maxAttempts` attempts exist (a refusal by a closed day is not one); the
+ * row's backoff has elapsed (`next_attempt_at` is null — a failure recorded before
+ * the column, due at once — or not after `now`); and the *first* attempt is inside
+ * the window, so retries cannot keep a stale message alive by restarting the clock.
  *
  * Only the latest failed row can match, so two sweeps do not lock two rows of
  * one notification. "Latest" is by `sent_at`, which a transaction's `now()`
@@ -273,7 +291,7 @@ export async function lockRetryableDelivery(
               ),
             ),
         ),
-        sql`(select count(*) from email_deliveries a where a.notification_id = ${emailDeliveries.notificationId}) < ${query.maxAttempts}::int`,
+        sql`(select count(*) from email_deliveries a where a.notification_id = ${emailDeliveries.notificationId} and not (a.outcome = 'failed' and a.provider_message_id is null and a.failure_reason = ${SEND_CLOSED_FAILURE_REASON})) < ${query.maxAttempts}::int`,
         sql`(select min(a.sent_at) from email_deliveries a where a.notification_id = ${emailDeliveries.notificationId}) > ${cutoff.toISOString()}::timestamptz`,
       ),
     )
