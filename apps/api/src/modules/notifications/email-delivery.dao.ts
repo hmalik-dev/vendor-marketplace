@@ -1,4 +1,4 @@
-import { emailDeliveries } from '@vendor-marketplace/db';
+import { emailDeliveries, users } from '@vendor-marketplace/db';
 import type { NewEmailDeliveryRow } from '@vendor-marketplace/db';
 import {
   EMAIL_DELIVERY_OUTCOMES,
@@ -75,6 +75,11 @@ export function truncateFailureReason(reason: string | null | undefined): string
  * once, so there is one delivery, and the row already on the table describes
  * it. Raising instead would have been swallowed by the caller's best-effort
  * catch, losing nothing but logging a customer's address on the way past.
+ *
+ * **A recipient closed while the send was in flight is recorded under the
+ * tombstone** (VEN-672): the address was read before the provider call and this
+ * insert runs after it, so closure can commit in between and would otherwise
+ * find no row to scrub. `users.email` of a closed account *is* the tombstone.
  */
 export async function insertEmailDelivery(
   db: AppDatabase,
@@ -82,7 +87,15 @@ export async function insertEmailDelivery(
 ): Promise<void> {
   await db
     .insert(emailDeliveries)
-    .values({ ...values, failureReason: truncateFailureReason(values.failureReason) })
+    .values({
+      ...values,
+      recipientEmail: sql`coalesce(
+        (select ${users.email} from ${users}
+          where ${users.id} = ${values.userId} and ${users.deletedAt} is not null),
+        ${values.recipientEmail}
+      )`,
+      failureReason: truncateFailureReason(values.failureReason),
+    })
     .onConflictDoNothing({
       target: emailDeliveries.providerMessageId,
       // The partial index's own predicate, which a conflict target must repeat

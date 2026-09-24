@@ -33,11 +33,20 @@ and `handAddressToWaiter` gets the pre-scrub address read under `FOR UPDATE`.
 `removeOwnedObjects` cannot reach another owner: S3 `list` appends the `/`,
 and ids are fixed-length uuids. The sweep ignores rows whose owning `users` row
 is closed (`vendor_profiles.user_id` is NOT NULL, so the inner joins drop no
-live row). Residuals, low: no backfill, and the resume branch of `closeAccount`
-does not re-scrub, so pre-VEN-614 closed rows keep name/phone/email (reviews
-still print "Former customer" off `deleted_at`); the object delete lists by the
+live row). Backfill exists after all: migration 0089 tombstones pre-VEN-614
+`users` rows (the earlier "no backfill" note was wrong). Residual, low: the object delete lists by the
 route param, and `z.uuid()` accepts uppercase, so an uppercase id matches no key
 and leaves the sweep to clean up. Fix is `retired.user.id`.
+
+**VEN-672 (audited 2026-09-23, PASS):** retirement also tombstones
+`email_deliveries.recipient_email` (user_id NOT NULL, so all rows reached),
+`support_cases.sender_email` by `sender_user_id`, and nulls
+`vendor_profiles.address`; 0093 backfills them idempotently. Still holding a closed
+person's address, all low: `vendor_invites.email` / `vendor_applications.email`
+(console invite list; scrubbing touches the invite gate, so product call), signed-out
+support cases (`sender_user_id` null, found only by address), and an in-flight
+notification send whose `recordDelivery` inserts the pre-closure address after the
+scrub commits (one Resend round trip).
 
 Related: [[email-uniqueness-is-partial-nothing-joins-by-email]],
 [[closure-refuses-only-the-customer-side]],
