@@ -33,12 +33,28 @@ describe('PublishBlockerBanner', () => {
    * nothing beside this banner would contradict it: it would be the only thing
    * on the screen, telling a vendor who is in search that they are not.
    */
-  it('says nothing to a vendor who is already live, blockers or not', () => {
+  it('says nothing to a vendor who is already live about any blocker but the name', () => {
     const { container } = render(
       <PublishBlockerBanner blockers={['bio', 'responseTime']} isPublished />,
     );
 
     expect(container.innerHTML).toBe('');
+  });
+
+  /*
+   * VEN-652: a storefront that went live before the name became a publish
+   * blocker stays live and bookable, and nothing else asks that vendor for one.
+   * The name alone breaks the silence a live vendor otherwise gets.
+   */
+  it('asks a live vendor with no name to add it, and names nothing else', () => {
+    render(<PublishBlockerBanner blockers={['bio', 'personalName']} isPublished />);
+
+    expect(screen.getByText('Add your name')).toBeTruthy();
+    expect(screen.getByText('Add your first and last name.')).toBeTruthy();
+    expect(screen.queryByText(/thing/)).toBeNull();
+    expect(screen.getByRole('link', { name: 'Add name' }).getAttribute('href')).toBe(
+      '/vendor/profile/edit',
+    );
   });
 
   it('counts the open blockers in the singular', () => {
