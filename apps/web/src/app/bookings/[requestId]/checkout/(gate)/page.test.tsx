@@ -46,6 +46,15 @@ describe('CheckoutPage', () => {
     expect(openCheckout).not.toHaveBeenCalled();
   });
 
+  /* VEN-637: a request that became paid while the page loaded goes to its confirmation. */
+  it('redirects a request that turned paid mid-load to its confirmation', async () => {
+    openCheckout.mockResolvedValue({ state: 'paid' });
+
+    await expect(
+      CheckoutPage({ params: Promise.resolve({ requestId: REQUEST_ID }) }),
+    ).rejects.toThrow(`REDIRECT:/bookings/${REQUEST_ID}/confirmed`);
+  });
+
   /*
    * VEN-555: `vendor-closed` must reach the vendor screen. Left out of the
    * page's mapping it falls through to `closed` — "cancelled, declined or it

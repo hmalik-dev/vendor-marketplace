@@ -137,6 +137,9 @@ export async function getOwnBookingRequest(requestId: string): Promise<WireBooki
   }
 }
 
+/** Stripe's status for a settled intent; the API answers it with no client secret. */
+const STRIPE_INTENT_SUCCEEDED = 'succeeded';
+
 /**
  * Why a checkout could not be opened.
  *
@@ -150,6 +153,13 @@ export async function getOwnBookingRequest(requestId: string): Promise<WireBooki
 export type CheckoutOutcome =
   /** The intent exists and the card form can render. */
   | { state: 'ready'; checkout: WireCheckoutIntent }
+  /**
+   * The payment settled between the page's booking pre-check and this POST
+   * (VEN-637): the intent is already `succeeded` and carries no client secret,
+   * so there is no card form to draw and the customer belongs on their
+   * confirmation.
+   */
+  | { state: 'paid' }
   /** There is nothing here to pay for: no such request, or not this customer's. */
   | { state: 'not-found' }
   /**
@@ -203,14 +213,15 @@ export async function openCheckout(requestId: string): Promise<CheckoutOutcome> 
   const token = await customerToken();
 
   try {
-    return {
-      state: 'ready',
-      checkout: await apiRequest(`/customer/booking-requests/${requestId}/checkout`, {
-        method: 'POST',
-        schema: wireCheckoutIntentSchema,
-        token,
-      }),
-    };
+    const checkout = await apiRequest(`/customer/booking-requests/${requestId}/checkout`, {
+      method: 'POST',
+      schema: wireCheckoutIntentSchema,
+      token,
+    });
+
+    return checkout.status === STRIPE_INTENT_SUCCEEDED
+      ? { state: 'paid' }
+      : { state: 'ready', checkout };
   } catch (error) {
     if (isNavigationSignal(error)) {
       throw error;
