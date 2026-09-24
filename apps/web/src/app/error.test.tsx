@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import GlobalError from './global-error';
 import ErrorBoundary from './error';
 
-vi.mock('./globals.css', () => ({}));
 vi.mock('@sentry/nextjs', () => ({ captureException: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
