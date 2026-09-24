@@ -473,8 +473,13 @@ async function endMintedSession(request: NextRequest, response: Response): Promi
 async function discardMintedSession(request: NextRequest, response: Response): Promise<Response> {
   await endMintedSession(request, response);
 
-  const headers = new Headers(response.headers);
-  headers.delete('set-cookie');
+  // Copied one by one, cookies left out: the product writes no cookie of its own (`no-cookie-consent.test.ts`).
+  const headers = new Headers();
+  for (const [name, value] of response.headers) {
+    if (!/^set-cookie$/i.test(name)) {
+      headers.append(name, value);
+    }
+  }
   headers.delete('content-length');
   headers.delete('content-encoding');
 
