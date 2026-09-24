@@ -120,6 +120,13 @@ export const ROLE_ROUTE_RULES: ReadonlyArray<{
   { pattern: /^\/$/, roles: ['customer', 'admin'] },
   // `app/messages/layout.tsx` — `requireNonAdmin()`: an admin has no inbox (VEN-702).
   { pattern: /^\/messages(?:\/|$)/, roles: ['customer', 'vendor'] },
+  /*
+   * The vendor application screens (VEN-512) serve a session with no account
+   * yet. Each page redirects an account holder of any role to their own home,
+   * so no role renders them and sign-in must not forward there (VEN-629).
+   * `app/sign-up/vendor-details`, `app/waitlist` and `app/vendors/apply`.
+   */
+  { pattern: /^\/(?:waitlist|vendors\/apply|sign-up\/vendor-details)(?:\/|$)/, roles: [] },
   // `/for-vendors` — `redirectVendorToDashboard`: its only ask is sign-up.
   { pattern: /^\/for-vendors\/?$/, roles: ['customer', 'admin'] },
 ];

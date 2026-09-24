@@ -213,6 +213,8 @@ function expectationFor(
     if (path === VENDOR_APPLY_PATH || path === WAITLIST_PATH) {
       return { renders: false, refusal: { to: VENDOR_DETAILS_PATH, returnTo: null } };
     }
+    // The details screen is the one these sessions are sent to: no role renders it, they do (VEN-629).
+    if (path === VENDOR_DETAILS_PATH) return { renders: true, refusal: null };
     /*
      * Every auth screen forwards a live session through `redirectIfSignedIn`, so
      * it is read out of the source rather than listed: `/forgot-password` and
