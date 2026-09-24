@@ -250,7 +250,10 @@ describe('the vendor agreement', () => {
 
       const rows = await agreementRows();
 
-      expect(rows.map((row) => row.version).sort()).toEqual(['v1.0', 'v2.0']);
+      expect(rows.map((row) => row.version).sort()).toEqual([
+        CURRENT_VENDOR_AGREEMENT_VERSION,
+        'v2.0',
+      ]);
     });
 
     /** A tab left open across a release must not record a version nobody read. */

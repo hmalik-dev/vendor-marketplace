@@ -1,6 +1,6 @@
 ---
 title: Vendor agreement
-lastUpdated: 2026-06-04
+lastUpdated: 2026-09-24
 ---
 
 ## Listing and accuracy

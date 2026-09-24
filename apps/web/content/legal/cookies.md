@@ -1,6 +1,6 @@
 ---
 title: Cookie notice
-lastUpdated: 2026-09-22
+lastUpdated: 2026-09-24
 note: The clause on future changes below is an interim, AI-drafted note pending the account holder's own review.
 ---
 
