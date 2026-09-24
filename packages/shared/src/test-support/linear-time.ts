@@ -1,13 +1,17 @@
 import { expect } from 'vitest';
 
-const SMALL = 16 * 1024;
-const GROWTH = 4;
+const SMALL = 8 * 1024;
+const GROWTH = 8;
 const RUNS = 7;
 /** Each timed sample repeats the call until it lasts about this long, so timer and scheduler noise is small against it. */
 const SAMPLE_MS = 20;
 const MAX_REPEATS = 2_000;
-/** Linear growth reads about 4, quadratic about 16; a noisy linear run stays well under this. */
-const MAX_RATIO = 8;
+/**
+ * Linear growth reads about 8 and quadratic about 64. Cache and GC pressure
+ * cost a linear run 2 to 3 times more on the larger input on a CI runner (a
+ * 4x step read 9 there), so the limit sits between the two, at 24.
+ */
+const MAX_RATIO = 24;
 /** A backstop only: a slow runner passes the ratio and the ceiling, a hang fails both. */
 const CEILING_MS = 2_000;
 
