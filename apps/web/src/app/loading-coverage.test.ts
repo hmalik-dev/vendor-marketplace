@@ -53,6 +53,7 @@ const NO_BOUNDARY: Record<string, string> = {
   '': 'the root is an ancestor of every notFound() route',
   'accept-terms': 'redirects',
   'account/settings': 'gates in the page',
+  'account/settings/close': 'notFound() and a session gate',
   'account/settings/name': 'gates in the page',
   'account/settings/password': 'gates in the page',
   'account/settings/sessions': 'gates in the page',
@@ -104,9 +105,14 @@ describe('every route has a loading boundary or a stated reason it cannot', () =
 
   it('has a loader on the static pages that answer no status of their own', () => {
     expect(
-      ['cookies', 'legal/vendor-agreement', 'privacy', 'suspended', 'terms'].filter(
-        (segment) => !hasLoading(segment),
-      ),
+      [
+        'account/closed',
+        'cookies',
+        'legal/vendor-agreement',
+        'privacy',
+        'suspended',
+        'terms',
+      ].filter((segment) => !hasLoading(segment)),
     ).toEqual([]);
   });
 });
