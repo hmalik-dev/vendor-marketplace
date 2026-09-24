@@ -15,7 +15,7 @@ import {
 import { renderAdminEmail, type AdminAlertDeps } from './admin-alerts.service.js';
 
 export interface AdminDigestDeps extends AdminAlertDeps {
-  /** `OPERATOR_TIMEZONE`, validated at boot by `adminLocalTime`. */
+  /** `ADMIN_TIMEZONE`, validated at boot by `adminLocalTime`. */
   timeZone: string;
 }
 
@@ -33,7 +33,7 @@ const MAX_LISTED_UNPAID = 10;
  *
  * `Intl` rather than arithmetic on an offset, because the offset changes twice
  * a year. An unknown zone throws `RangeError`, which is what makes the plugin
- * refuse to boot on a mistyped `OPERATOR_TIMEZONE`.
+ * refuse to boot on a mistyped `ADMIN_TIMEZONE`.
  */
 export function adminLocalTime(now: Date, zone: string): { date: string; hour: number } {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -157,7 +157,7 @@ export async function runAdminDigest(deps: AdminDigestDeps, now: Date): Promise<
   if (deps.to === undefined) {
     deps.log.warn(
       { summary, details },
-      'Admin digest (OPERATOR_ALERT_EMAIL is not set, so it was logged rather than sent)',
+      'Admin digest (ADMIN_ALERT_EMAIL is not set, so it was logged rather than sent)',
     );
     return 'logged';
   }

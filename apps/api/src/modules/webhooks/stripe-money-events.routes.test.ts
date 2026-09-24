@@ -156,7 +156,7 @@ describe('money events after checkout (VEN-645)', () => {
 
   const alertSubjects = () =>
     harness.email.sent
-      .filter((message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL)
+      .filter((message) => message.to === TEST_ENV.ADMIN_ALERT_EMAIL)
       .map((message) => message.subject);
 
   beforeAll(async () => {

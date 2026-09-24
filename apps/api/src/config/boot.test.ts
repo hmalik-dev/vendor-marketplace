@@ -35,7 +35,7 @@ const DEPLOYED: Record<string, string> = {
   STORAGE_REGION: 'us-east-2',
   STORAGE_BUCKET: 'orla-uploads',
   STORAGE_PUBLIC_URL: 'https://cdn.orla.example.invalid',
-  OPERATOR_ALERT_EMAIL: 'ops@orla.example.invalid',
+  ADMIN_ALERT_EMAIL: 'ops@orla.example.invalid',
   SUPPORT_EMAIL_TO: 'help@orla.example.invalid',
   SENTRY_DSN: 'https://abc123@o1.ingest.sentry.io/42',
   WEB_URL: 'http://orla.example.invalid',

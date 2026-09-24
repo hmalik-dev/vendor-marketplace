@@ -16,7 +16,7 @@ describe('Stripe webhook failure alerts', () => {
 
   const subjects = () =>
     harness.email.sent
-      .filter((message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL)
+      .filter((message) => message.to === TEST_ENV.ADMIN_ALERT_EMAIL)
       .map((message) => message.subject);
 
   async function post(headers: Record<string, string>) {

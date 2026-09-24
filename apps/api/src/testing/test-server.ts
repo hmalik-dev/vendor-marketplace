@@ -124,8 +124,8 @@ export const TEST_ENV: ApiEnv = {
   RESEND_WEBHOOK_SECRET: ['whsec', 'not', 'used', 'by', 'the', 'suites'].join('_'),
   EMAIL_FROM: 'noreply@test.invalid',
   SUPPORT_EMAIL_TO: 'support@test.invalid',
-  OPERATOR_ALERT_EMAIL: 'admin@test.invalid',
-  OPERATOR_TIMEZONE: 'America/New_York',
+  ADMIN_ALERT_EMAIL: 'admin@test.invalid',
+  ADMIN_TIMEZONE: 'America/New_York',
 };
 
 /**

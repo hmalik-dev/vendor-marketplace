@@ -845,7 +845,7 @@ export const ENV_REGISTRY = [
      * to start — an alert address that silently defaulted would be a pager
      * wired to nobody.
      */
-    key: 'OPERATOR_ALERT_EMAIL',
+    key: 'ADMIN_ALERT_EMAIL',
     capability: 'email',
     audience: 'server',
     consumers: ['api'],
@@ -859,7 +859,7 @@ export const ENV_REGISTRY = [
   },
   {
     /* The zone whose 07:00 the daily digest waits for. */
-    key: 'OPERATOR_TIMEZONE',
+    key: 'ADMIN_TIMEZONE',
     capability: 'email',
     audience: 'server',
     consumers: ['api'],
