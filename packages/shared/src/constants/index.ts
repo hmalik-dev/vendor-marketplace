@@ -1234,8 +1234,22 @@ export const EXPIRY_HOLD_SPACING_MS = 4 * 60_000;
  */
 export const EMAIL_RETRY_SWEEP_INTERVAL_MS = 5 * 60_000;
 
+/**
+ * How long a failed notification email waits before its next attempt, by how
+ * many attempts it has already made (VEN-608). Exponential, so a Resend outage
+ * of an hour or a night delays the message instead of spending every attempt in
+ * the first ten minutes; the last wait still lands inside `EMAIL_RETRY_WINDOW_MS`.
+ */
+export const EMAIL_RETRY_BACKOFF_MS = [
+  5 * 60_000,
+  30 * 60_000,
+  2 * 60 * 60_000,
+  6 * 60 * 60_000,
+  12 * 60 * 60_000,
+] as const;
+
 /** Total send attempts per email, the first included: a row is re-sent until it has this many. */
-export const EMAIL_RETRY_MAX_ATTEMPTS = 3;
+export const EMAIL_RETRY_MAX_ATTEMPTS = EMAIL_RETRY_BACKOFF_MS.length + 1;
 
 /** A failed email older than this is not re-sent: a quote from yesterday is no longer the message. */
 export const EMAIL_RETRY_WINDOW_MS = 24 * 60 * 60_000;

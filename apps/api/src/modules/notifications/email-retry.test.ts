@@ -5,16 +5,22 @@ import {
   vendorApplications,
   vendorInvites,
 } from '@vendor-marketplace/db/schema';
-import { EMAIL_RETRY_MAX_ATTEMPTS, EMAIL_RETRY_WINDOW_MS } from '@vendor-marketplace/shared';
+import {
+  EMAIL_RETRY_BACKOFF_MS,
+  EMAIL_RETRY_MAX_ATTEMPTS,
+  EMAIL_RETRY_WINDOW_MS,
+} from '@vendor-marketplace/shared';
 import { asc, eq } from 'drizzle-orm';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   bearer,
   createTestHarness,
   signInAs,
   type TestHarness,
 } from '../../testing/test-server.js';
+import type { ErrorReporter } from '../../lib/error-reporting.js';
 import { closeSendDay, sendDay } from '../../lib/email-send-cap.js';
+import { sendNotificationEmail } from './notification-email.js';
 import { retryFailedEmails } from './email-retry.service.js';
 
 /**
@@ -69,7 +75,10 @@ describe('the email retry sweep', () => {
     await harness.close();
   });
 
-  function sweep(): Promise<{
+  function sweep(
+    at?: Date,
+    reporter?: ErrorReporter,
+  ): Promise<{
     notifications: number;
     invites: number;
     applicationConfirmations: number;
@@ -82,9 +91,15 @@ describe('the email retry sweep', () => {
       background: harness.app.background,
     };
 
+    // `at` pins the clock the sweep reads; the rows' own `sent_at` still comes from the database.
+    const now = (): Date => at ?? new Date();
+
     return retryFailedEmails(
-      { notifications: shared, invites: { ...shared, now: () => new Date() } },
-      () => new Date(),
+      {
+        notifications: reporter ? { ...shared, reporter } : shared,
+        invites: { ...shared, now },
+      },
+      now,
     );
   }
 
@@ -169,8 +184,8 @@ describe('the email retry sweep', () => {
       expect(await outcomes(id)).toEqual(['failed']);
     });
 
-    it('tries a failing row once per tick and stops at the attempt cap', async () => {
-      const id = await failedNotification(HOUR_MS);
+    /** Runs `body` with a gateway that refuses every send, counting the attempts. */
+    async function withFailingGateway(body: (attempts: () => number) => Promise<void>) {
       let attempts = 0;
       const send = harness.email.send;
       harness.email.send = async () => {
@@ -179,19 +194,147 @@ describe('the email retry sweep', () => {
       };
 
       try {
-        // One failed row exists; each tick adds exactly one attempt, never two.
-        for (let tick = 1; tick <= EMAIL_RETRY_MAX_ATTEMPTS - 1; tick += 1) {
-          await sweep();
-          expect(attempts).toBe(tick);
-        }
-
-        // The cap is reached: a further tick sends nothing.
-        await sweep();
-        expect(attempts).toBe(EMAIL_RETRY_MAX_ATTEMPTS - 1);
-        expect(await outcomes(id)).toEqual(Array(EMAIL_RETRY_MAX_ATTEMPTS).fill('failed'));
+        await body(() => attempts);
       } finally {
         harness.email.send = send;
       }
+    }
+
+    /** A notification whose first send has not happened yet, and its row. */
+    async function unsentNotification() {
+      const [row] = await harness.database.db
+        .insert(notifications)
+        .values({
+          userId,
+          type: 'booking_confirmed',
+          title: 'Your booking is confirmed',
+          body: 'See you there.',
+          data: { bookingId: '33333333-3333-4333-8333-333333333333' },
+        })
+        .returning();
+
+      return row!;
+    }
+
+    function attemptRows(notificationId: string) {
+      return harness.database.db
+        .select()
+        .from(emailDeliveries)
+        .where(eq(emailDeliveries.notificationId, notificationId))
+        .orderBy(asc(emailDeliveries.sentAt));
+    }
+
+    it('makes one attempt at t = 5m and none at t = 0 or t = 10m after a failed first send (VEN-608)', async () => {
+      const notification = await unsentNotification();
+
+      await withFailingGateway(async (attempts) => {
+        await sendNotificationEmail(
+          {
+            db: harness.database.db,
+            email: harness.email,
+            log: harness.app.log,
+            webOrigin: 'https://web.test',
+            background: harness.app.background,
+          },
+          notification,
+        );
+        expect(attempts()).toBe(1);
+
+        const [first] = await attemptRows(notification.id);
+        const failedAt = first!.sentAt.getTime();
+        // The schedule's first wait, exactly: `next_attempt_at` and `sent_at` share one `now()`.
+        expect(first!.nextAttemptAt?.getTime()).toBe(failedAt + EMAIL_RETRY_BACKOFF_MS[0]);
+
+        await sweep(new Date(failedAt));
+        expect(attempts()).toBe(1);
+
+        await sweep(new Date(failedAt + 5 * 60_000));
+        expect(attempts()).toBe(2);
+
+        // The second wait is thirty minutes, so ten minutes in there is nothing due.
+        await sweep(new Date(failedAt + 10 * 60_000));
+        expect(attempts()).toBe(2);
+
+        const rows = await attemptRows(notification.id);
+        expect(rows.map((row) => row.outcome)).toEqual(['failed', 'failed']);
+        expect(rows[1]!.nextAttemptAt!.getTime() - rows[1]!.sentAt.getTime()).toBe(
+          EMAIL_RETRY_BACKOFF_MS[1],
+        );
+      });
+    });
+
+    it('walks the whole schedule, then reports the lost email once with no address (VEN-608)', async () => {
+      const notification = await unsentNotification();
+      const capture = vi.fn();
+
+      await withFailingGateway(async (attempts) => {
+        await sendNotificationEmail(
+          {
+            db: harness.database.db,
+            email: harness.email,
+            log: harness.app.log,
+            webOrigin: 'https://web.test',
+            background: harness.app.background,
+          },
+          notification,
+        );
+
+        for (const delay of EMAIL_RETRY_BACKOFF_MS) {
+          expect(capture).not.toHaveBeenCalled();
+          const rows = await attemptRows(notification.id);
+          const last = rows[rows.length - 1]!;
+          expect(last.nextAttemptAt!.getTime() - last.sentAt.getTime()).toBe(delay);
+          await sweep(last.nextAttemptAt!, { capture });
+        }
+
+        expect(attempts()).toBe(EMAIL_RETRY_MAX_ATTEMPTS);
+        const rows = await attemptRows(notification.id);
+        expect(rows).toHaveLength(EMAIL_RETRY_MAX_ATTEMPTS);
+        expect(rows[rows.length - 1]!.nextAttemptAt).toBeNull();
+
+        expect(capture).toHaveBeenCalledTimes(1);
+        const [error] = capture.mock.calls[0] as [Error];
+        expect(error.message).toBe(
+          'Transactional email undeliverable after every attempt: booking_confirmed',
+        );
+        expect(JSON.stringify(capture.mock.calls)).not.toContain('reader@example.com');
+
+        // Nothing is left to send, whatever the clock says.
+        await sweep(new Date(Date.now() + EMAIL_RETRY_WINDOW_MS), { capture });
+        expect(attempts()).toBe(EMAIL_RETRY_MAX_ATTEMPTS);
+        expect(capture).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it('reports a failure whose next wait would end after the 24-hour window, with attempts to spare (VEN-608)', async () => {
+      const id = await failedNotification(EMAIL_RETRY_WINDOW_MS - 10 * 60_000);
+      const capture = vi.fn();
+
+      await withFailingGateway(async (attempts) => {
+        await sweep(undefined, { capture });
+        expect(attempts()).toBe(1);
+      });
+
+      // Two attempts of six, and the schedule's thirty-minute wait would outlive the window.
+      const rows = await attemptRows(id);
+      expect(rows).toHaveLength(2);
+      expect(rows[1]!.nextAttemptAt).toBeNull();
+      expect(capture).toHaveBeenCalledTimes(1);
+    });
+
+    it('re-sends a failed row whose next_attempt_at is NULL at once, and holds one dated in the future (VEN-608)', async () => {
+      expect(emailDeliveries.nextAttemptAt.notNull).toBe(false);
+      const legacy = await failedNotification(HOUR_MS);
+      const waiting = await failedNotification(HOUR_MS);
+      await harness.database.db
+        .update(emailDeliveries)
+        .set({ nextAttemptAt: new Date(Date.now() + HOUR_MS) })
+        .where(eq(emailDeliveries.notificationId, waiting));
+
+      expect((await sweep()).notifications).toBe(1);
+
+      expect(await outcomes(legacy)).toEqual(['failed', 'sent']);
+      expect(await outcomes(waiting)).toEqual(['failed']);
     });
 
     it('never re-sends a row that was sent or delivered', async () => {
