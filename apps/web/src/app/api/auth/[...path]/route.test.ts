@@ -6,12 +6,14 @@ const upstreamGet = vi.fn<(request: Request, context: Context) => Promise<Respon
 const afterTasks: Array<() => Promise<void>> = [];
 
 const forgetSessionsFor = vi.fn();
+const markSessionsRevoked = vi.fn();
 const mintedUserIdForCaller = vi.fn<() => Promise<string | undefined>>();
 const getSession = vi.fn();
 const authConfigured = vi.fn<() => boolean>();
 vi.mock('@/lib/auth/server', () => ({
   authConfigured: () => authConfigured(),
   forgetSessionsFor: (userId: string) => forgetSessionsFor(userId),
+  markSessionsRevoked: () => markSessionsRevoked(),
   mintedUserIdForCaller: () => mintedUserIdForCaller(),
   neonAuth: () => ({
     handler: () => ({ POST: upstreamPost, GET: upstreamGet }),
@@ -42,6 +44,7 @@ beforeEach(() => {
   authConfigured.mockReset().mockReturnValue(true);
   mintedUserIdForCaller.mockReset().mockResolvedValue(undefined);
   getSession.mockReset().mockResolvedValue({ data: null });
+  markSessionsRevoked.mockReset();
 });
 
 afterEach(() => {
@@ -902,6 +905,8 @@ describe('changing a password through the auth proxy (VEN-677)', () => {
     await call(CHANGE, PASSWORDS);
 
     expect(forgetSessionsFor).toHaveBeenCalledExactlyOnceWith('user-9');
+    // The surviving device carries a marker so no other instance serves it a pre-revoke token (VEN-713).
+    expect(markSessionsRevoked).toHaveBeenCalledOnce();
   });
 
   it('asks Neon Auth for the caller when nothing is cached for their cookie', async () => {
@@ -941,6 +946,7 @@ describe('changing a password through the auth proxy (VEN-677)', () => {
 
     expect(response.status).toBe(400);
     expect(forgetSessionsFor).not.toHaveBeenCalled();
+    expect(markSessionsRevoked).not.toHaveBeenCalled();
   });
 
   it('charges wrong current passwords to the account, whoever sends them, then throttles', async () => {
@@ -1486,6 +1492,7 @@ describe('the devices an account is signed in on, through the auth proxy (VEN-68
     expect(response.status).toBe(404);
     expect(upstreamPost).not.toHaveBeenCalled();
     expect(forgetSessionsFor).not.toHaveBeenCalled();
+    expect(markSessionsRevoked).not.toHaveBeenCalled();
   });
 
   it('refuses to end the caller’s own session: that is sign-out', async () => {
@@ -1550,6 +1557,7 @@ describe('the devices an account is signed in on, through the auth proxy (VEN-68
       await call(path, body);
 
       expect(forgetSessionsFor).toHaveBeenCalledExactlyOnceWith('user-9');
+      expect(markSessionsRevoked).toHaveBeenCalledOnce();
       const bumps = fetchMock.mock.calls.filter(([url]) =>
         String(url).includes('/internal/session-generation'),
       );
