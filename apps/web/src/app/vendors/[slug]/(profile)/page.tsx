@@ -110,6 +110,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     actually close the gap is to stop reading the profile here at all — a
     title derived from the slug — which is a change to what this page tells
     crawlers, not a change to its timeout behaviour.
+
+    Since VEN-610 the read is shared for a minute in-process (`readShared`), so
+    the two scopes share one entry: the page's read is a hit, not a second API
+    call, and only a cold miss can still spend a deadline here.
   */
   const vendor = await getPublicVendorProfile(slug);
 

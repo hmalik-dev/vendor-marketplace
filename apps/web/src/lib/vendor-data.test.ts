@@ -26,6 +26,8 @@ vi.mock('./api-client', async (importOriginal) => ({
   apiRequest: (path: string, options: unknown) => apiRequest(path, options),
 }));
 
+const { resetStorefrontCache } = await import('./storefront-cache');
+
 const {
   getActiveTags,
   getCategories,
@@ -44,6 +46,10 @@ const upstream500 = new ApiClientError(
 
 /** What a `fetch` to an API that is not answering at all rejects with. */
 const apiUnreachable = new TypeError('fetch failed');
+
+beforeEach(() => {
+  resetStorefrontCache();
+});
 
 describe('reference reads', () => {
   beforeEach(() => {
@@ -424,5 +430,114 @@ describe('readOwnVendorProfileIdForChrome', () => {
     apiRequest.mockRejectedValue(upstream500);
 
     await expect(readOwnVendorProfileIdForChrome()).resolves.toBeNull();
+  });
+});
+
+/*
+ * VEN-610: a shared storefront link is served from a one-minute shared read.
+ * Outside a render `cache()` memoises nothing, so a second call here stands for
+ * the page after `generateMetadata` (a separate scope) or for the next visitor.
+ */
+describe('storefront reads shared between visitors', () => {
+  const profile = { id: 'p1', slug: 'june-harlow' };
+
+  beforeEach(() => {
+    apiRequest.mockReset();
+    session.token = 'session-token';
+  });
+
+  it('reads the profile once for metadata and page together', async () => {
+    apiRequest.mockResolvedValue(profile);
+
+    await getPublicVendorProfile('june-harlow');
+    await getPublicVendorProfile('june-harlow');
+
+    expect(apiRequest).toHaveBeenCalledTimes(1);
+    expect(apiRequest).toHaveBeenCalledWith('/vendors/june-harlow', expect.anything());
+  });
+
+  it('shares the calendar and the featured row too', async () => {
+    apiRequest.mockResolvedValue([]);
+    await getPublicVendorAvailability('june-harlow');
+    await getPublicVendorAvailability('june-harlow');
+
+    apiRequest.mockResolvedValue({ items: [] });
+    await getFeaturedVendors();
+    await getFeaturedVendors();
+
+    expect(apiRequest).toHaveBeenCalledTimes(2);
+  });
+
+  it('shares a signed-out reader’s reviews page', async () => {
+    session.token = null;
+    apiRequest.mockResolvedValue({ items: [] });
+
+    await getPublicVendorReviews('june-harlow');
+    await getPublicVendorReviews('june-harlow');
+
+    expect(apiRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('never shares a signed-in reader’s reviews page, whose viewer block is theirs', async () => {
+    apiRequest.mockResolvedValue({ items: [] });
+
+    await getPublicVendorReviews('june-harlow');
+    await getPublicVendorReviews('june-harlow');
+
+    expect(apiRequest).toHaveBeenCalledTimes(2);
+    expect(apiRequest.mock.calls.map((call) => (call[1] as { token: string }).token)).toEqual([
+      'session-token',
+      'session-token',
+    ]);
+  });
+
+  it('never hands a signed-in reader’s reviews to a signed-out one', async () => {
+    apiRequest.mockResolvedValue({ items: [{ id: 'mine' }], viewer: { canReview: true } });
+    await getPublicVendorReviews('june-harlow');
+
+    session.token = null;
+    apiRequest.mockResolvedValue({ items: [], viewer: { canReview: false } });
+    await expect(getPublicVendorReviews('june-harlow')).resolves.toMatchObject({
+      viewer: { canReview: false },
+    });
+  });
+
+  it('answers a taken-down storefront as missing once the window has passed', async () => {
+    vi.useFakeTimers();
+
+    try {
+      apiRequest.mockResolvedValueOnce(profile);
+      await expect(getPublicVendorProfile('june-harlow')).resolves.toEqual(profile);
+
+      apiRequest.mockRejectedValueOnce(
+        new ApiClientError(404, ERROR_CODES.NOT_FOUND, 'Vendor not found'),
+      );
+      // Inside the window the shared answer is what is served…
+      await expect(getPublicVendorProfile('june-harlow')).resolves.toEqual(profile);
+
+      vi.advanceTimersByTime(60_001);
+
+      // …and past it the API's answer wins outright, with no stale copy served.
+      await expect(getPublicVendorProfile('june-harlow')).resolves.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps a failed read out of the cache, so the next visitor asks again', async () => {
+    apiRequest.mockRejectedValueOnce(upstream500);
+    await expect(getPublicVendorProfile('june-harlow')).rejects.toBe(upstream500);
+
+    apiRequest.mockResolvedValueOnce(profile);
+    await expect(getPublicVendorProfile('june-harlow')).resolves.toEqual(profile);
+  });
+
+  it('keeps the viewer’s own profile read out of the shared cache', async () => {
+    apiRequest.mockResolvedValue({ id: 'p1' });
+
+    await readOwnVendorProfileIdForChrome();
+    await readOwnVendorProfileIdForChrome();
+
+    expect(apiRequest).toHaveBeenCalledTimes(2);
   });
 });
