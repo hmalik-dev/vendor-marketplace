@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type Context = { params: Promise<{ path: string[] }> };
 const upstreamPost = vi.fn<(request: Request, context: Context) => Promise<Response>>();
+const upstreamGet = vi.fn<(request: Request, context: Context) => Promise<Response>>();
 const afterTasks: Array<() => Promise<void>> = [];
 
 const forgetSessionsFor = vi.fn();
@@ -13,7 +14,7 @@ vi.mock('@/lib/auth/server', () => ({
   forgetSessionsFor: (userId: string) => forgetSessionsFor(userId),
   mintedUserIdForCaller: () => mintedUserIdForCaller(),
   neonAuth: () => ({
-    handler: () => ({ POST: upstreamPost, GET: vi.fn() }),
+    handler: () => ({ POST: upstreamPost, GET: upstreamGet }),
     getSession: () => getSession(),
   }),
 }));
@@ -28,7 +29,7 @@ vi.mock('next/server', async (importOriginal) => ({
   after: (task: () => Promise<void>) => afterTasks.push(task),
 }));
 
-const { POST } = await import('./route');
+const { GET, POST } = await import('./route');
 const { PASSWORD_MIN_LENGTH } = await import('@vendor-marketplace/shared');
 const { resetThrottle } = await import('@/lib/auth/proxy-throttle');
 
@@ -1167,5 +1168,271 @@ describe('the password floor and the body cap at the auth proxy (VEN-685)', () =
 
     expect(response.status).toBe(200);
     expect(await upstreamPost.mock.calls[0]?.[0].json()).toEqual({ email: EMAIL, password: 'p' });
+  });
+});
+
+describe('the devices an account is signed in on, through the auth proxy (VEN-681)', () => {
+  const REVOKE_ONE = 'revoke-session';
+  const REVOKE_OTHERS = 'revoke-other-sessions';
+  const SECRET_HERE = 'token-of-this-device';
+  const SECRET_PHONE = 'token-of-the-phone';
+  const PROVIDER_LIST = [
+    {
+      id: 'sess-phone',
+      token: SECRET_PHONE,
+      userAgent: 'Mozilla/5.0 (iPhone) Safari',
+      ipAddress: '203.0.113.7',
+      createdAt: '2026-09-20T10:00:00.000Z',
+      updatedAt: '2026-09-23T10:00:00.000Z',
+      userId: 'user-9',
+    },
+    {
+      id: 'sess-here',
+      token: SECRET_HERE,
+      userAgent: 'Mozilla/5.0 Chrome',
+      ipAddress: '198.51.100.2',
+      createdAt: '2026-09-24T08:00:00.000Z',
+      updatedAt: '2026-09-24T09:00:00.000Z',
+      userId: 'user-9',
+    },
+  ];
+
+  function list(ip = '9.9.9.1'): Promise<Response> {
+    const request = new Request('http://localhost/api/auth/list-sessions', {
+      method: 'GET',
+      headers: { 'x-forwarded-for': ip, cookie: 'session=abc' },
+    });
+
+    return GET(request as never, { params: Promise.resolve({ path: ['list-sessions'] }) });
+  }
+
+  beforeEach(() => {
+    vi.stubEnv('WEB_TIER_KEY', '');
+    resetThrottle();
+    upstreamPost.mockReset().mockResolvedValue(Response.json({ status: true }));
+    upstreamGet.mockReset().mockImplementation(async () => Response.json(PROVIDER_LIST));
+    forgetSessionsFor.mockReset();
+    mintedUserIdForCaller.mockResolvedValue('user-9');
+    getSession.mockResolvedValue({
+      data: { user: { id: 'user-9' }, session: { id: 'sess-here' } },
+    });
+  });
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('lists each device with this one marked, first', async () => {
+    const response = await list();
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      sessions: [
+        {
+          id: 'sess-here',
+          userAgent: 'Mozilla/5.0 Chrome',
+          createdAt: '2026-09-24T08:00:00.000Z',
+          lastActiveAt: '2026-09-24T09:00:00.000Z',
+          current: true,
+        },
+        {
+          id: 'sess-phone',
+          userAgent: 'Mozilla/5.0 (iPhone) Safari',
+          createdAt: '2026-09-20T10:00:00.000Z',
+          lastActiveAt: '2026-09-23T10:00:00.000Z',
+          current: false,
+        },
+      ],
+    });
+  });
+
+  it('answers unavailable rather than a list with no device marked when this session is unknown', async () => {
+    getSession.mockResolvedValue({ data: null });
+
+    const response = await list();
+
+    expect(response.status).toBe(502);
+    expect(await response.text()).not.toContain('sess-');
+  });
+
+  it('still marks this device when the provider’s capped list does not include it', async () => {
+    getSession.mockResolvedValue({
+      data: {
+        user: { id: 'user-9' },
+        session: {
+          id: 'sess-new',
+          token: 'token-of-the-newest',
+          userAgent: 'Mozilla/5.0 Firefox/125.0',
+          createdAt: new Date('2026-09-24T10:00:00.000Z'),
+          updatedAt: '2026-09-24T10:05:00.000Z',
+        },
+      },
+    });
+
+    const body = (await (await list()).json()) as { sessions: Array<Record<string, unknown>> };
+
+    expect(body.sessions.map((row) => [row.id, row.current])).toEqual([
+      ['sess-new', true],
+      ['sess-here', false],
+      ['sess-phone', false],
+    ]);
+    expect(body.sessions[0]).toEqual({
+      id: 'sess-new',
+      userAgent: 'Mozilla/5.0 Firefox/125.0',
+      createdAt: '2026-09-24T10:00:00.000Z',
+      lastActiveAt: '2026-09-24T10:05:00.000Z',
+      current: true,
+    });
+    expect(JSON.stringify(body)).not.toContain('token-of-the-newest');
+  });
+
+  it('never lets a session token, or the address, reach the browser', async () => {
+    const text = await (await list()).text();
+
+    expect(text).not.toContain('token');
+    expect(text).not.toContain(SECRET_HERE);
+    expect(text).not.toContain(SECRET_PHONE);
+    expect(text).not.toContain('203.0.113.7');
+  });
+
+  it('answers a provider failure as unavailable, with nothing of its body', async () => {
+    upstreamGet.mockResolvedValue(Response.json({ message: 'internal secret' }, { status: 500 }));
+
+    const response = await list();
+
+    expect(response.status).toBe(502);
+    expect(await response.text()).not.toContain('internal secret');
+  });
+
+  it('ends one other device by looking its token up in the caller’s own list', async () => {
+    const response = await call(REVOKE_ONE, { id: 'sess-phone' });
+
+    expect(response.status).toBe(200);
+    expect(upstreamPost).toHaveBeenCalledOnce();
+    expect(await upstreamPost.mock.calls[0]?.[0].json()).toEqual({ token: SECRET_PHONE });
+    expect(upstreamPost.mock.calls[0]?.[1]).toEqual({
+      params: expect.any(Promise) as Promise<{ path: string[] }>,
+    });
+    expect(await upstreamPost.mock.calls[0]?.[1].params).toEqual({ path: [REVOKE_ONE] });
+  });
+
+  it('refuses an id that is not in the caller’s list, so another account’s cannot be guessed', async () => {
+    const response = await call(REVOKE_ONE, { id: 'sess-of-someone-else' });
+
+    expect(response.status).toBe(404);
+    expect(upstreamPost).not.toHaveBeenCalled();
+    expect(forgetSessionsFor).not.toHaveBeenCalled();
+  });
+
+  it('refuses to end the caller’s own session: that is sign-out', async () => {
+    const response = await call(REVOKE_ONE, { id: 'sess-here' });
+
+    expect(response.status).toBe(400);
+    expect(upstreamPost).not.toHaveBeenCalled();
+  });
+
+  it.each([{}, { id: '' }, { id: 7 }, 'nope'])(
+    'refuses the body %j without a provider call',
+    async (body) => {
+      const response = await call(REVOKE_ONE, body);
+
+      expect(response.status).toBe(400);
+      expect(upstreamGet).not.toHaveBeenCalled();
+      expect(upstreamPost).not.toHaveBeenCalled();
+    },
+  );
+
+  it('refuses a caller with no session', async () => {
+    mintedUserIdForCaller.mockResolvedValue(undefined);
+    getSession.mockResolvedValue({ data: null });
+
+    expect((await call(REVOKE_ONE, { id: 'sess-phone' })).status).toBe(401);
+    expect((await call(REVOKE_OTHERS, {})).status).toBe(401);
+    expect(upstreamPost).not.toHaveBeenCalled();
+  });
+
+  it('spends nothing of the account’s budget for a cookie the provider no longer knows', async () => {
+    // The id is still cached on this instance; the session itself is gone.
+    getSession.mockResolvedValue({ data: null });
+    for (let i = 0; i < 7; i++) {
+      expect((await call(REVOKE_OTHERS, {}, `8.7.7.${i}`)).status).toBe(401);
+    }
+    getSession.mockResolvedValue({
+      data: { user: { id: 'user-9' }, session: { id: 'sess-here' } },
+    });
+
+    expect((await call(REVOKE_OTHERS, {}, '8.7.8.1')).status).toBe(200);
+  });
+
+  it('ends every other device and keeps this one', async () => {
+    const response = await call(REVOKE_OTHERS, {});
+
+    expect(response.status).toBe(200);
+    expect(upstreamPost).toHaveBeenCalledOnce();
+    expect(await upstreamPost.mock.calls[0]?.[1].params).toEqual({ path: [REVOKE_OTHERS] });
+    expect(await upstreamPost.mock.calls[0]?.[0].json()).toEqual({});
+  });
+
+  it.each([
+    [REVOKE_ONE, { id: 'sess-phone' }],
+    [REVOKE_OTHERS, {}],
+  ])(
+    'after %s, forgets the account’s cached tokens and bumps the API’s bound',
+    async (path, body) => {
+      vi.stubEnv('WEB_TIER_KEY', 'k'.repeat(40));
+      const fetchMock = vi.fn().mockResolvedValue(Response.json({ invalidated: true }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      await call(path, body);
+
+      expect(forgetSessionsFor).toHaveBeenCalledExactlyOnceWith('user-9');
+      const bumps = fetchMock.mock.calls.filter(([url]) =>
+        String(url).includes('/internal/session-generation'),
+      );
+      expect(bumps).toHaveLength(1);
+      expect(bumps[0]?.[1]).toEqual(
+        expect.objectContaining({ body: JSON.stringify({ authUserId: 'user-9' }) }),
+      );
+    },
+  );
+
+  it('bounds and forgets nothing when the provider did not end the session', async () => {
+    upstreamPost.mockResolvedValue(Response.json({ message: 'boom' }, { status: 500 }));
+
+    const response = await call(REVOKE_OTHERS, {});
+
+    expect(response.status).toBe(502);
+    expect(await response.text()).not.toContain('boom');
+    expect(forgetSessionsFor).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [REVOKE_ONE, { id: 'sess-phone' }],
+    [REVOKE_OTHERS, {}],
+  ])('budgets %s per account, whichever address asks', async (path, body) => {
+    const statuses: number[] = [];
+    for (let i = 0; i < 7; i++) {
+      statuses.push((await call(path, body, `8.8.8.${i}`)).status);
+    }
+
+    expect(statuses).toEqual([200, 200, 200, 200, 200, 429, 429]);
+    expect(upstreamPost).toHaveBeenCalledTimes(5);
+  });
+
+  it('charges a guessed id to the budget too', async () => {
+    for (let i = 0; i < 5; i++) {
+      await call(REVOKE_ONE, { id: `guess-${i}` }, `8.9.9.${i}`);
+    }
+
+    expect((await call(REVOKE_ONE, { id: 'sess-phone' }, '8.9.9.9')).status).toBe(429);
+    expect(upstreamPost).not.toHaveBeenCalled();
+  });
+
+  it('budgets repeated list calls per caller address', async () => {
+    const statuses: number[] = [];
+    for (let i = 0; i < 62; i++) {
+      statuses.push((await list('9.9.9.9')).status);
+    }
+
+    expect(statuses.slice(-2)).toEqual([429, 429]);
+    expect(statuses.filter((status) => status === 200)).toHaveLength(60);
   });
 });
