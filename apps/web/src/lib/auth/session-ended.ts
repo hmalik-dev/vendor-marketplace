@@ -16,7 +16,10 @@ const SESSION_CHANNEL_NAME = 'vendor-marketplace:session';
 const SESSION_ENDED_MESSAGE = 'session-ended';
 
 let channel: BroadcastChannel | null | undefined;
-let navigating = false;
+let lastNavigationAt: number | null = null;
+
+/** Calls this close together are one burst of failures, and navigate once. */
+export const NAVIGATION_BURST_MS = 2_000;
 
 /**
  * One channel object for posting and listening alike. A message is never
@@ -57,7 +60,9 @@ export function subscribeSessionEnded(onEnded: () => void): () => void {
 
 /**
  * Drops the cached token, then leaves the page — once, however many callers
- * learn of it together. A full navigation, as `SignOutButton` explains, so
+ * learn of it together (a burst, not a latch: a `beforeunload` prompt the
+ * reader declines cancels the navigation, and the next call must still leave).
+ * A full navigation, as `SignOutButton` explains, so
  * nothing signed-in stays cached. With no `destination` it reloads the current
  * page: a public page comes back signed out and a gated one is redirected to
  * sign-in carrying its own path by the server, which is the one authority on
@@ -67,11 +72,12 @@ export function subscribeSessionEnded(onEnded: () => void): () => void {
 export function endSession(destination?: string): void {
   clearSessionToken();
 
-  if (navigating) {
+  const now = Date.now();
+  if (lastNavigationAt !== null && now - lastNavigationAt < NAVIGATION_BURST_MS) {
     return;
   }
 
-  navigating = true;
+  lastNavigationAt = now;
   window.location.assign(destination ?? `${window.location.pathname}${window.location.search}`);
 }
 
@@ -98,5 +104,5 @@ export async function sessionIsGone(): Promise<boolean> {
 export function resetSessionEndedForTests(): void {
   channel?.close();
   channel = undefined;
-  navigating = false;
+  lastNavigationAt = null;
 }

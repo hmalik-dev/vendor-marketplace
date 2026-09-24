@@ -1,6 +1,6 @@
 import { act, cleanup, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetSessionEndedForTests } from '@/lib/auth/session-ended';
+import { NAVIGATION_BURST_MS, resetSessionEndedForTests } from '@/lib/auth/session-ended';
 import { FakeBroadcastChannel } from '@/testing/fake-broadcast-channel';
 import { SESSION_PROBE_INTERVAL_MS, SessionSync } from './session-sync';
 
@@ -74,6 +74,18 @@ describe('SessionSync and a sign-out announced by another tab', () => {
 
     expect(assign).toHaveBeenCalledExactlyOnceWith(expected);
     expect(clearSessionToken).toHaveBeenCalled();
+  });
+
+  // A declined `beforeunload` prompt cancels the navigation; the next signal must still leave.
+  it('navigates again once the burst has passed, after a navigation that did not happen', () => {
+    stubLocation('/vendor/profile/edit');
+    render(<SessionSync />);
+
+    act(() => signOutInAnotherTab());
+    vi.advanceTimersByTime(NAVIGATION_BURST_MS);
+    act(() => signOutInAnotherTab());
+
+    expect(assign).toHaveBeenCalledTimes(2);
   });
 
   it('ignores a message that is not the sign-out announcement', () => {

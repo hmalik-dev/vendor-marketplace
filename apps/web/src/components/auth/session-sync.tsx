@@ -12,8 +12,9 @@ export const SESSION_PROBE_INTERVAL_MS = 30_000;
  * neither the listener nor the probe.
  *
  * A sign-out in another tab arrives on the channel and ends this one at once.
- * A tab that missed it — throttled in the background, or signed out from
- * another device — asks the server when it is next shown or focused.
+ * A tab that missed it — throttled in the background, offline at the time —
+ * asks the server when it is next shown or focused. A session revoked from
+ * another device shows up here only as fast as the server's own session cache.
  */
 export function SessionSync(): null {
   useEffect(() => {
