@@ -141,9 +141,7 @@ jobs:
   contention:
     name: Test contention
     runs-on: ubuntu-latest
-    # Green runs take 15-17 minutes and one hit the old 20 with `pnpm test` alone
-    # at 15 of them; this is headroom until the suite is sharded.
-    timeout-minutes: 35
+    timeout-minutes: 20
 
     services:
       # The major must track the one Neon runs and the one docker-compose.yml
