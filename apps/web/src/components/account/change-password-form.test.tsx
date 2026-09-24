@@ -29,7 +29,7 @@ afterEach(() => {
 
 async function fill(current: string, next: string, confirm: string): Promise<void> {
   const user = userEvent.setup();
-  render(<ChangePasswordForm />);
+  render(<ChangePasswordForm role="vendor" />);
 
   if (current) await user.type(screen.getByLabelText(AUTH_COPY.currentPasswordLabel), current);
   if (next) await user.type(screen.getByLabelText(AUTH_COPY.resetPasswordLabel), next);
@@ -39,7 +39,7 @@ async function fill(current: string, next: string, confirm: string): Promise<voi
 
 describe('ChangePasswordForm (VEN-677)', () => {
   it('describes the new password with sign-up’s rule', () => {
-    render(<ChangePasswordForm />);
+    render(<ChangePasswordForm role="vendor" />);
 
     const field = screen.getByLabelText(AUTH_COPY.resetPasswordLabel);
 
@@ -84,7 +84,7 @@ describe('ChangePasswordForm (VEN-677)', () => {
     expect(screen.getByText(AUTH_COPY[copy])).toBeDefined();
   });
 
-  it('sends the two passwords, says so, clears the fields and keeps the reader here', async () => {
+  it("sends the two passwords, then takes the reader to their role's home (VEN-698)", async () => {
     await fill('the-old-password', 'a-new-password', 'a-new-password');
 
     expect(fetchMock).toHaveBeenCalledOnce();
@@ -93,9 +93,22 @@ describe('ChangePasswordForm (VEN-677)', () => {
       currentPassword: 'the-old-password',
       newPassword: 'a-new-password',
     });
-    expect(screen.getByText(AUTH_COPY.changeDone)).toBeDefined();
-    expect(screen.getByLabelText<HTMLInputElement>(AUTH_COPY.currentPasswordLabel).value).toBe('');
+    expect(push).toHaveBeenCalledExactlyOnceWith('/vendor/dashboard');
     expect(refresh).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ['customer', '/bookings'],
+    ['admin', '/admin'],
+  ] as const)('takes a %s to %s on success', async (role, home) => {
+    const user = userEvent.setup();
+    render(<ChangePasswordForm role={role} />);
+    await user.type(screen.getByLabelText(AUTH_COPY.currentPasswordLabel), 'the-old-password');
+    await user.type(screen.getByLabelText(AUTH_COPY.resetPasswordLabel), 'a-new-password');
+    await user.type(screen.getByLabelText(AUTH_COPY.confirmPasswordLabel), 'a-new-password');
+    await user.click(screen.getByRole('button', { name: AUTH_COPY.changeSubmit }));
+
+    expect(push).toHaveBeenCalledExactlyOnceWith(home);
   });
 
   it.each([
@@ -119,7 +132,9 @@ describe('ChangePasswordForm (VEN-677)', () => {
 
     await fill('the-old-password', 'a-new-password', 'a-new-password');
 
-    expect(push).toHaveBeenCalledExactlyOnceWith('/sign-in?returnTo=%2Faccount%2Fsettings');
+    expect(push).toHaveBeenCalledExactlyOnceWith(
+      '/sign-in?returnTo=%2Faccount%2Fsettings%2Fpassword',
+    );
     expect(screen.queryByText(AUTH_COPY.changeWrongCurrent)).toBeNull();
   });
 });

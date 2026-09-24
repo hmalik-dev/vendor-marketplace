@@ -3,12 +3,14 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { AUTH_COPY, failureCopy } from '@/app/auth-copy';
-import { ACCOUNT_SETTINGS_PATH } from '@/components/account-menu';
+import type { UserRole } from '@vendor-marketplace/shared';
+import { ACCOUNT_PASSWORD_PATH } from '@/components/account/settings-paths';
 import { AuthField } from '@/components/auth/auth-field';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { changePassword } from '@/lib/auth/auth-requests';
 import { signInPathReturningTo } from '@/lib/return-path';
+import { DASHBOARD_PATH_BY_ROLE } from '@/lib/role-routes';
 
 type Message = { status: 'failed' | 'informational'; text: string };
 
@@ -38,10 +40,10 @@ function refusal(current: string, next: string, confirm: string): string | null 
  * The account settings page's password section (VEN-677): the current
  * password, a new one and its confirmation, in frame `12`'s field and button
  * vocabulary as `/reset-password` uses it. The proxy ends every other session
- * and keeps this one, so success is a banner here rather than a trip through
- * sign-in; `router.refresh()` re-renders the page on the fresh session.
+ * and keeps this one, so success is a trip to the role's home rather than
+ * through sign-in; `router.refresh()` re-renders it on the fresh session.
  */
-export function ChangePasswordForm(): React.ReactElement {
+export function ChangePasswordForm({ role }: { role: UserRole }): React.ReactElement {
   const router = useRouter();
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
@@ -67,16 +69,13 @@ export function ChangePasswordForm(): React.ReactElement {
     setBusy(false);
 
     if (outcome === 'ok') {
-      setCurrent('');
-      setNext('');
-      setConfirm('');
-      setMessage({ status: 'informational', text: AUTH_COPY.changeDone });
+      router.push(DASHBOARD_PATH_BY_ROLE[role]);
       router.refresh();
       return;
     }
 
     if (outcome === 'signedOut') {
-      router.push(signInPathReturningTo(ACCOUNT_SETTINGS_PATH));
+      router.push(signInPathReturningTo(ACCOUNT_PASSWORD_PATH));
       return;
     }
 
