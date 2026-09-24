@@ -133,6 +133,22 @@ export function payoutResidualHeld(): SQL<boolean> {
 }
 
 /**
+ * Chargeback outcomes under which the network is **not** holding the platform's
+ * money: a won dispute returned it, and an inquiry (`warning_*`) never debited
+ * it. Anything else — `lost`, `needs_response`, `under_review`, or no outcome
+ * yet — counts as held, so a status Stripe adds later fails closed.
+ */
+export const DISPUTE_FUNDS_NOT_HELD: readonly string[] = [
+  'won',
+  'warning_closed',
+  'warning_needs_response',
+  'warning_under_review',
+];
+
+/** The outcomes under which an operator may close a chargeback case and release its payout. */
+export const DISPUTE_RESOLVABLE_OUTCOMES: readonly string[] = ['won', 'warning_closed'];
+
+/**
  * A vendor's owner can no longer be paid at all (VEN-569): banned or closed,
  * **and** no working connected Stripe account left to send a transfer to.
  *
@@ -498,10 +514,12 @@ export interface PlatformLiabilities {
  * reconciliation. Composes `payoutOwedClauses` so the figure owed to vendors
  * names exactly the rows the sweep will pay.
  *
- * A booking with an open chargeback is left out altogether. Stripe took the
- * disputed amount out of the balance when the dispute opened, and the row
+ * A booking whose open chargeback the network still holds (no outcome,
+ * `needs_response`, `under_review`, `lost`) is left out altogether. Stripe took
+ * the disputed amount out of the balance when the dispute opened, and the row
  * records no amount for it, so counting the booking would ask the balance to
- * hold that money twice. A won dispute returns the funds with the payout.
+ * hold that money twice. A won dispute returned the funds and an inquiry never
+ * debited them, so those bookings count again.
  */
 export async function readPlatformLiabilities(
   db: AppDatabase,
@@ -534,6 +552,13 @@ export async function readPlatformLiabilities(
           where ${supportCases.bookingId} = ${bookingId}
             and ${supportCases.origin} = 'chargeback'
             and ${supportCases.status} = 'open'
+            and (
+              ${supportCases.networkOutcome} is null
+              or ${supportCases.networkOutcome} not in (${sql.join(
+                DISPUTE_FUNDS_NOT_HELD.map((outcome) => sql`${outcome}`),
+                sql`, `,
+              )})
+            )
         )`,
       ),
     );

@@ -26,8 +26,12 @@ null`, `payout_model = 'separate'`, `vendor_payout_cents > 0`), plus what each
   card networks' chargeback window) its commission. A refund after release
   takes the vendor's share back by reversing the transfer (D31). The
   refundable part is counted net of a 4.4% + 30¢ Stripe fee allowance, because
-  the balance never held the fee (D1). A booking with an open chargeback is
-  left out: Stripe already took that money when the dispute opened.
+  the balance never held the fee (D1). A booking whose open chargeback the
+  network still holds (no outcome yet, `needs_response`, `under_review`,
+  `lost`) is left out: Stripe already took that money when the dispute opened.
+  One the network gave back (`won`, `warning_closed`) or that is only an
+  inquiry (`warning_needs_response`, `warning_under_review`, which Stripe
+  never debits) counts again.
 
 The result is logged each run (`Platform balance covers what it owes`, with
 `balanceCents` and `requiredCents`). When the balance is short, the operator gets

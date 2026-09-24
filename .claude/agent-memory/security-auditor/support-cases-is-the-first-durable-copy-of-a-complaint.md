@@ -55,3 +55,12 @@ refund path. Two soft spots left, both non-blocking: the DAO's `limit(1)` has no
 runs only after the ruling, so the `status='open'` predicate cannot be
 short-circuited from the console; `account-unwind` does not call
 `resolveDispute`, so a chargeback cannot block a closure.
+
+**VEN-683 (audited PASS):** on a `cancelled` booking the open chargeback case
+is the only thing holding the residual (`payoutResidualHeld`), so `resolveCase`
+now 409s unless `network_outcome` is in the **allowlist**
+`DISPUTE_RESOLVABLE_OUTCOMES` (`won`, `warning_closed`). `readPlatformLiabilities`
+excludes the booking only while the outcome is null or outside
+`DISPUTE_FUNDS_NOT_HELD`; the `not in` list is bound constants via `sql.join`.
+The guard's read sits outside the close transaction, which is acceptable because
+`won`/`warning_closed` are terminal Stripe states.

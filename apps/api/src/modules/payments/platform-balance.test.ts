@@ -6,6 +6,7 @@ import {
   users,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
+import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createTestHarness, TEST_ENV, type TestHarness } from '../../testing/test-server.js';
 import { reconcilePlatformBalance } from './platform-balance.service.js';
@@ -225,4 +226,34 @@ describe('the platform balance reconciliation (VEN-644)', () => {
     expect((await reconcile(NEXT_DAY)).alert).toBe('sent');
     expect(harness.email.sent).toHaveLength(2);
   });
+
+  /*
+   * The open chargeback case seeded above sits on a $400 disputed booking that
+   * owes its $352 payout and $30.10 of refundable commission. The network's
+   * outcome decides whether the platform's balance must cover it again.
+   */
+  const CHARGED_BACK_CENTS = 35_200 + 3_010;
+
+  it.each([
+    { outcome: null, counted: false },
+    { outcome: 'needs_response', counted: false },
+    { outcome: 'lost', counted: false },
+    { outcome: 'won', counted: true },
+    { outcome: 'warning_closed', counted: true },
+    { outcome: 'warning_needs_response', counted: true },
+    { outcome: 'warning_under_review', counted: true },
+  ])(
+    'counts a booking with an open chargeback only when the outcome is $outcome → $counted',
+    async ({ outcome, counted }) => {
+      await harness.database.db
+        .update(supportCases)
+        .set({ networkOutcome: outcome })
+        .where(eq(supportCases.reference, 'ORL-CB0001'));
+      harness.stripe.platformBalance = { availableCents: 1_000_000, pendingCents: 0 };
+
+      const result = await reconcile();
+
+      expect(result.requiredCents).toBe(REQUIRED_CENTS + (counted ? CHARGED_BACK_CENTS : 0));
+    },
+  );
 });

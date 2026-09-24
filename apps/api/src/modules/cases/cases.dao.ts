@@ -338,6 +338,8 @@ export interface DisputedBookingProjection {
   /** What the hold wrote — a chargeback's hold carries its own message here. */
   disputeReason: string | null;
   payoutReleasedAt: Date | null;
+  vendorPayoutCents: number;
+  payoutModel: (typeof bookings.$inferSelect)['payoutModel'];
 }
 
 /** The booking a Stripe dispute is about, found by the intent that paid it. */
@@ -355,6 +357,8 @@ export async function findBookingForDispute(
       vendorId: bookings.vendorId,
       disputeReason: bookings.disputeReason,
       payoutReleasedAt: bookings.payoutReleasedAt,
+      vendorPayoutCents: bookings.vendorPayoutCents,
+      payoutModel: bookings.payoutModel,
     })
     .from(bookings)
     .innerJoin(users, eq(users.id, bookings.customerId))
@@ -525,6 +529,16 @@ export async function recordNetworkOutcome(
   return rows[0] ?? null;
 }
 
+export interface CaseResolutionState {
+  bookingStatus: BookingStatus | null;
+  caseStatus: (typeof supportCases.$inferSelect)['status'];
+  origin: (typeof supportCases.$inferSelect)['origin'];
+  networkOutcome: string | null;
+  payoutReleasedAt: Date | null;
+  vendorPayoutCents: number | null;
+  payoutModel: (typeof bookings.$inferSelect)['payoutModel'] | null;
+}
+
 /**
  * What `resolveCase` has to decide on, in **one** query.
  *
@@ -538,14 +552,23 @@ export async function recordNetworkOutcome(
  * it and acting on it would be a check-then-act across two statements, so two
  * operators pressing at once would both pass. `markCaseResolved` matches on
  * `status = 'open'` in the `UPDATE` itself and answers `null` to the loser,
- * which is the same question asked where it cannot race.
+ * which is the same question asked where it cannot race. `caseStatus` is read
+ * only so the payout guard stands aside for a case someone already closed.
  */
 export async function findCaseResolutionState(
   db: AppDatabase,
   caseId: string,
-): Promise<{ bookingStatus: BookingStatus | null } | null> {
+): Promise<CaseResolutionState | null> {
   const rows = await db
-    .select({ bookingStatus: bookings.status })
+    .select({
+      bookingStatus: bookings.status,
+      caseStatus: supportCases.status,
+      origin: supportCases.origin,
+      networkOutcome: supportCases.networkOutcome,
+      payoutReleasedAt: bookings.payoutReleasedAt,
+      vendorPayoutCents: bookings.vendorPayoutCents,
+      payoutModel: bookings.payoutModel,
+    })
     .from(supportCases)
     .leftJoin(bookings, eq(bookings.id, supportCases.bookingId))
     .where(eq(supportCases.id, caseId))

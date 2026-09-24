@@ -621,6 +621,74 @@ describe('the operations case queue (#431)', () => {
     expect(detail.booking?.payoutStatus).toBe('released');
   });
 
+  it('says a cancelled booking’s residual is held by the chargeback case (VEN-683)', async () => {
+    const fixture = await seed();
+    await harness.database.db
+      .update(bookings)
+      .set({ status: 'cancelled' })
+      .where(eq(bookings.id, fixture.bookingId));
+
+    const delivered = await deliverDispute('charge.dispute.created', {
+      id: 'dp_test_cancelled',
+      status: 'needs_response',
+      reason: 'fraudulent',
+      amountCents: TOTAL_CENTS,
+      intentId: fixture.paymentIntentId,
+    });
+    expect(delivered.statusCode).toBe(200);
+
+    const detail = await readCase((await readCases()).items[0]!.id);
+    expect(detail.holdRefusal).toBe(
+      'The booking is cancelled, so the payout was not frozen, but the vendor’s remaining share ' +
+        'is held by this case. It is released only once the card network rules in the platform’s favour.',
+    );
+  });
+
+  it('does not claim a legacy destination charge’s payout is held by the case (VEN-683)', async () => {
+    const fixture = await seed();
+    await harness.database.db
+      .update(bookings)
+      .set({ status: 'cancelled', payoutModel: 'destination' })
+      .where(eq(bookings.id, fixture.bookingId));
+
+    const delivered = await deliverDispute('charge.dispute.created', {
+      id: 'dp_test_destination',
+      status: 'needs_response',
+      reason: 'fraudulent',
+      amountCents: TOTAL_CENTS,
+      intentId: fixture.paymentIntentId,
+    });
+    expect(delivered.statusCode).toBe(200);
+
+    const detail = await readCase((await readCases()).items[0]!.id);
+    expect(detail.holdRefusal).toBe('The payout could not be frozen: the booking is cancelled.');
+
+    const resolved = await harness.app.inject({
+      method: 'PUT',
+      url: `/v1/admin/cases/${detail.id}/resolve`,
+      headers: bearer(ADMIN),
+    });
+    expect(resolved.statusCode).toBe(200);
+  });
+
+  it('records an inquiry as itself, so the balance check does not count it as a debit (VEN-683)', async () => {
+    const fixture = await seed();
+
+    const delivered = await deliverDispute('charge.dispute.created', {
+      id: 'dp_test_inquiry',
+      status: 'warning_needs_response',
+      reason: 'fraudulent',
+      amountCents: TOTAL_CENTS,
+      intentId: fixture.paymentIntentId,
+    });
+    expect(delivered.statusCode).toBe(200);
+    expect(delivered.json().outcome).toBe('dispute-opened');
+
+    const detail = await readCase((await readCases()).items[0]!.id);
+    expect(detail.networkOutcome).toBe('warning_needs_response');
+    expect(detail.status).toBe('open');
+  });
+
   it('records the network outcome on close without resolving the booking', async () => {
     const fixture = await seed();
     const dispute = {
