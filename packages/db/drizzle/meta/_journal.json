@@ -673,6 +673,13 @@
       "when": 1790231072416,
       "tag": "0095_solid_prowler",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1790237203425,
+      "tag": "0096_slippery_patch",
+      "breakpoints": true
     }
   ]
 }
