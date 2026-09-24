@@ -375,6 +375,23 @@ export async function confirmBooking(
   input: ConfirmBookingInput,
 ): Promise<BookingRow | null> {
   return db.transaction(async (tx) => {
+    /*
+     * One delivery per request at a time (VEN-727). `ON CONFLICT (request_id)`
+     * only absorbs a collision that its own pre-check sees. Two intents for one
+     * request that both pass that check before either row exists insert side by
+     * side, and the loser then meets the winner in `bookings_confirmed_date_key`,
+     * which is not the arbiter: Postgres raises 23505 rather than skip, the
+     * webhook answers 500 and the loser's refund waits on Stripe's retry. Behind
+     * this lock the loser's insert starts after the winner commits, sees its
+     * row, and takes the `DO NOTHING` path. An advisory lock rather than a lock
+     * on the request row: a closure holds the user row and then writes the
+     * request, and this insert's foreign key waits on that user row, so a row
+     * lock taken first here would deadlock against it.
+     */
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${input.booking.requestId}, 0))`,
+    );
+
     const inserted = await tx
       .insert(bookings)
       .values(input.booking)

@@ -27,6 +27,12 @@ Confirmed instances:
   money. Ask of any "the other delivery won, return its row" branch: is the
   winner's row funded by _this_ event's money? Both exits now go through
   `answerForHeldBooking`.
+- `ON CONFLICT (target)` arbitrates only its target index: two racers that
+  also collide on a second unique index (`bookings_confirmed_date_key`) raise
+  23505 instead of skipping. VEN-727 serializes `confirmBooking` per request with
+  `pg_advisory_xact_lock(hashtextextended(requestId, 0))` taken first in the tx
+  (no Stripe call inside, so the hold is short; `lock_timeout` 5s turns a wait
+  into a 503 retry). Audited 2026-09-24: PASS.
 
 **Why:** the guard turns a loud partial failure (500, client retries, second row
 created, vendor still notified) into a silent permanent one (200 "sent", vendor
