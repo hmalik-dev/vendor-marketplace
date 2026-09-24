@@ -710,9 +710,10 @@ describe('the footer Browse column and the landing hero name the same categories
     const footer = readFileSync(join(process.cwd(), 'src/components/site-footer.tsx'), 'utf8');
     const helper = readFileSync(join(process.cwd(), 'src/lib/jump-categories.ts'), 'utf8');
 
-    // Both render their chips through the one helper (VEN-401 added the live
-    // taxonomy filter there), and the helper maps from the constant.
-    expect(hero).toMatch(/offeredJumpCategories\(categories\)\.map\(/);
+    // The footer renders its links through the helper (VEN-401 added the live
+    // taxonomy filter there), the helper maps from the constant, and the hero
+    // no longer draws a category row at all (VEN-709).
+    expect(hero).not.toMatch(/offeredJumpCategories/);
     expect(footer).toMatch(/offeredJumpCategories\(categories\)\.map\(/);
     expect(helper).toMatch(/LANDING_JUMP_CATEGORY_SLUGS\.filter\(/);
   });

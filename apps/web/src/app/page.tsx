@@ -22,7 +22,6 @@ import { readRoleForChrome, redirectVendorToDashboard } from '@/lib/current-user
 import { FOR_VENDORS_PATH } from '@/lib/for-vendors';
 import { GENERIC_TRUST_COPY } from '@/lib/landing-status';
 import type { TrustTitle } from '@/lib/landing-status';
-import { offeredJumpCategories } from '@/lib/jump-categories';
 import { getCategories, getFeaturedVendors } from '@/lib/vendor-data';
 
 /**
@@ -445,33 +444,6 @@ export default async function HomePage(): Promise<React.ReactElement> {
 
             <div className="md:col-span-2 md:row-start-2 lg:col-span-1 lg:col-start-1 lg:pr-5.5 min-[90rem]:pr-8.5">
               <HeroSearch categories={categories} />
-
-              {/*
-                The shortcut past the bar for a visitor who already knows what
-                they need. Plain links, so they work before hydration and can
-                be opened in a new tab — the bar is the only part that needs a
-                client boundary.
-
-                `14 Landing tablet` does not draw this row: at 768 the bar has
-                just taken the full width and the category cards are directly
-                beneath it, so a third row of category shortcuts between them
-                repeats the same navigation twice in 120px.
-              */}
-              <div className="mt-3.25 hidden flex-wrap items-center gap-[7px] max-md:flex lg:flex min-[90rem]:mt-4 min-[90rem]:gap-2">
-                {/* Steps with the chips beside it: 11.5px/1px, 12.5px/2px at 1440. */}
-                <span className="mr-px text-[11.5px] text-stone-600 min-[90rem]:mr-0.5 min-[90rem]:text-sm">
-                  Or jump straight to
-                </span>
-                {offeredJumpCategories(categories).map(({ slug, name }) => (
-                  <Link
-                    key={slug}
-                    href={`/search?category=${slug}`}
-                    className="rounded-full border border-stone-300 bg-stone-0 px-2.5 py-1.25 text-[11.5px] font-semibold text-stone-900 transition-colors duration-(--duration-fast) min-[90rem]:px-3 min-[90rem]:py-1.5 min-[90rem]:text-sm hover:border-clay-300 hover:text-clay-600"
-                  >
-                    {name}
-                  </Link>
-                ))}
-              </div>
             </div>
 
             {/*
