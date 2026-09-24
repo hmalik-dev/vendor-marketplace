@@ -1,3 +1,4 @@
+import 'server-only';
 import { getServerSession } from './auth/server';
 import * as Sentry from '@sentry/nextjs';
 import { redirect } from 'next/navigation';

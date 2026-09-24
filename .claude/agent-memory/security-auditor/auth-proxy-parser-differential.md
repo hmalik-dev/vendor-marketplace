@@ -58,6 +58,14 @@ floor and the per-address budget key both miss. `change-password` pins
 'application/json')` on every re-encoded upstream. node_modules reads are
 permission-denied for this agent, so the SDK's forwarding was inferred, not read.
 `readBounded` (VEN-685) counts stream bytes and fails closed on gzip; clean.
+`forwardBudgeted` now pins `application/json` (seen VEN-714).
+
+**Discarding a minted session** (VEN-714 audit, 2026-09-24, PASS): sign-up,
+verify-email and a 200 unverified sign-in are signed out with the cookie from the
+provider's own `Set-Cookie` (caller's `cookie` replaced, `authorization` deleted,
+the `endEverySession` pattern), plain `sign-out` not `forwardSignOut`, so only that
+one session ends; no cross-account lever since minting needed the password or OTP.
+The body (`token`) and any non-cookie header still pass through, owner-only.
 
 Related: the request-reset path hides account existence with a fixed 200 and
 `after()`; its sibling `email-otp/reset-password` returns the upstream status

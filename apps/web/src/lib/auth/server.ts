@@ -1,3 +1,4 @@
+import 'server-only';
 import { createNeonAuth } from '@neondatabase/auth/next/server';
 import * as Sentry from '@sentry/nextjs';
 import { cookies } from 'next/headers';
