@@ -46,6 +46,15 @@ JWTs are refused, and every other instance's cache keeps serving the refused JWT
 until it lapses; `iat` is whole seconds, so a re-mint in the sign-out's own
 second is refused and then cached. Pair a per-user bump with `revoke-sessions`.
 
+**VEN-699 cross-tab sign-out (audited 2026-09-24, PASS):** the focus probe
+reads `/api/session/token`, so it inherits this cache's revocation lag — an
+other-device sign-out shows up only after the entry lapses (correctness, not a
+leak). The `BroadcastChannel` message is a constant string and is same-origin
+and storage-partitioned. Forging it only makes the tab clear its cached token
+and reload. The server still sees the cookie, so the reload is not a logout.
+The `endSession()` destinations are constants or `signInPathReturningTo`. The
+reload uses `location.pathname`, and Next 308s `//` paths before it renders.
+
 **How to apply:** any future cache in front of a session read is judged on its
 key, not its TTL — ask what a caller can put in the key and who else can hold
 the same one. Related: [[neon-auth-cutover-boundaries]],

@@ -33,6 +33,9 @@ const REQUIRE_ROLE = /\brequireRole\(\s*['"](customer|vendor|admin)['"]/g;
 /** `/`'s own gate. It turns a vendor away without naming a role to admit. */
 const VENDOR_BOUNCE = /\bredirectVendorToDashboard\(/;
 
+/** `/messages`' own gate: it turns an admin away without naming a role to admit. */
+const ADMIN_BOUNCE = /\brequireNonAdmin\(/;
+
 /**
  * A stand-in for a dynamic segment. Any concrete value does: the rules match
  * segment shapes, never slugs, and a value that changed the answer would be a
@@ -108,6 +111,10 @@ beforeAll(async () => {
       found.push({ file: file.name, routes, admits: null, denies: 'vendor' });
     }
 
+    if (ADMIN_BOUNCE.test(file.code)) {
+      found.push({ file: file.name, routes, admits: null, denies: 'admin' });
+    }
+
     return found;
   });
 });
@@ -125,6 +132,8 @@ describe('the role-route table against the gates in app/', () => {
     expect(gates.filter((gate) => gate.admits === 'admin').length).toBeGreaterThan(0);
     // `/` and `/for-vendors`, the two `redirectVendorToDashboard` pages.
     expect(gates.filter((gate) => gate.denies === 'vendor').length).toBe(2);
+    // `/messages`, the `requireNonAdmin` page.
+    expect(gates.filter((gate) => gate.denies === 'admin').length).toBe(1);
   });
 
   /*

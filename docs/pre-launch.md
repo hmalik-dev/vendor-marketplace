@@ -214,10 +214,11 @@ storage is reported in the body but does not gate readiness.
 `deploy.numReplicas: 1`, and `apps/api/src/config/railway.test.ts` fails if it
 does not). Above one, these break, because each keeps its state in one process:
 
-- **Stream tickets** (`apps/api/src/lib/stream-tickets.ts`) are issued and
-  redeemed in memory, so a ticket minted by one replica is unknown to the other
-  and the live stream refuses it.
 - **Rate-limit counters** are per process (see below).
+
+Stream tickets are not on this list: since VEN-650 they live in Postgres
+(`apps/api/src/plugins/events.ts`), so a ticket issued by one instance is spent
+by any other.
 
 The payout and expiry timers also run in every process. Their row locks keep an
 overlap correct, and the in-process guard only stops ticks piling up, so a second

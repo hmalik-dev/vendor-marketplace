@@ -11,7 +11,7 @@
 - [A new secret header has three registries](new-secret-header-has-three-registries.md) — pino `redact`, Sentry `CREDENTIAL_HEADER`, a self-failing placeholder
 - [The Resend secret's absence is refusal](resend-webhook-absence-is-refusal.md) — optional everywhere is correct
 - [CSP `'unsafe-inline'` is a recorded trade-off](csp-unsafe-inline-is-a-recorded-tradeoff.md) — never add script-src hosts
-- [Deploy pipeline secret handling](deploy-pipeline-secret-handling.md) — child env/argv redacted; tier fallback; Resend key full-access; VEN-660 clean
+- [Deploy pipeline secret handling](deploy-pipeline-secret-handling.md) — child env/argv redacted; tier fallback; VEN-634 dispatch gate runs inside the sha it gates
 - [CI e2e artifacts are public](ci-e2e-artifacts-are-public.md) — traces carry cookies, stripe-listen.log carries whsec
 - [`.auth/*.json` was outside the secret scan](auth-storage-state-is-outside-the-secret-scan.md) — `FORBIDDEN_PATHS` covers the path only
 - [A storage branch per lane, CI run and PR](neon-storage-branch-per-runner.md) — `NEON_API_KEY` is production-capable; keep it step-scoped
@@ -27,7 +27,7 @@
 - [Email is a label, the auth id is the key](email-uniqueness-is-partial-nothing-joins-by-email.md) — partial `lower(email)` index + lowercase CHECK (VEN-649)
 - [Closing an account releases its address, scrubs the row, deletes uploads](closed-account-address-is-released.md) — VEN-614/672/687 scrubs (0089/0093/0097) clean
 - [The sign-up role is recorded server-side, first write wins](signup-role-is-confirmed-not-narrowed.md) — VEN-662: a squatter fixes the victim's role (Low)
-- [Route handlers do not inherit layout gates](route-handlers-do-not-inherit-layout-gates.md) — `/admin/vendors/export` authorizes itself
+- [Route handlers do not inherit layout gates](route-handlers-do-not-inherit-layout-gates.md) — `/admin/vendors/export` authorizes itself; [layout gates run beside the page](layout-gates-run-concurrently-with-the-page.md) (VEN-715)
 - [Validation runs before preHandler guards](schema-validation-runs-before-prehandler-guards.md) — `requireAuthBeforeValidation`; two enum routes left low
 - [The event stream's auth is hand-rolled on purpose](stream-route-auth-is-hand-rolled.md) — `requireAuth` breaks it; keep the inline ban check
 - [safeReturnPath is FIXED](validate-before-normalize-return-path.md) — parse-then-reserialise; VEN-653 exemption clean
@@ -51,7 +51,7 @@
 - [`canBook` is chrome, not a gate](canbook-is-chrome-not-a-gate.md) — three server checks refuse a vendor
 - [Vendor selection writes are transaction-only](vendor-selection-writes-are-transaction-only.md) — no self-transacting
 - [The `updatedAt` precondition is not a gate](edit-version-precondition-is-not-a-gate.md) — explicit `null` coerces to the epoch
-- [The vendor agreement gate has four definitions](vendor-agreement-gate-has-four-definitions.md) — payout takes any version; EXISTS needs `vendor_profiles` unaliased
+- [The vendor agreement gate has four definitions](vendor-agreement-gate-has-four-definitions.md) — payout takes any version; EXISTS needs `vendor_profiles` unaliased; VEN-708 bump clean
 - [Vendor invite gate checks before the row it creates](vendor-invite-gate-checks-before-the-row-it-creates.md) — an application row diverts `/accept-terms` for ever
 
 ## Money, bookings and background work

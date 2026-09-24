@@ -166,6 +166,28 @@ describe('MessagesScreen', () => {
     await waitFor(() => expect(name().className).toContain('font-bold'));
   });
 
+  /*
+   * VEN-706. The header's `Messages` dot clears off this event, so a read that
+   * the API accepted has to announce itself — and one it refused must not.
+   */
+  it('announces a read the API accepted so the header dot can clear', async () => {
+    const heard = vi.fn();
+    window.addEventListener('conversations-changed', heard);
+    respondWith([]);
+    render(
+      <MessagesScreen
+        initialNextBefore={null}
+        initialConversations={[conversation({ unreadCount: 2 })]}
+        viewerId={VIEWER}
+        initialConversationId={null}
+        listFailed={false}
+      />,
+    );
+
+    await waitFor(() => expect(heard).toHaveBeenCalledTimes(1));
+    window.removeEventListener('conversations-changed', heard);
+  });
+
   /* The line that makes a list of names navigable. */
   it('carries the booking line on every conversation row', async () => {
     respondWith([]);

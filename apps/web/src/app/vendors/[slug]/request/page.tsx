@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { notFound, permanentRedirect } from 'next/navigation';
 import {
   isUniversallyPastDate,
   pageTitle,
@@ -8,13 +7,9 @@ import {
   type AvailabilityStatus,
 } from '@vendor-marketplace/shared';
 import { BookingRequestScreen } from '@/components/booking/booking-request-screen';
-import { requireRole } from '@/lib/current-user';
 import { parseGuestCountParam } from '@/lib/guest-count';
-import {
-  getPublicVendorAvailability,
-  getPublicVendorProfile,
-  getVendorSlugSuccessor,
-} from '@/lib/vendor-data';
+import { gateVendorSlug } from '@/lib/vendor-route';
+import { getPublicVendorAvailability, getPublicVendorProfile } from '@/lib/vendor-data';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -48,42 +43,14 @@ export default async function BookingRequestPage({
   const [{ slug }, query] = await Promise.all([params, searchParams]);
 
   /*
-   * Signing in comes back here, with the package and date the customer already
-   * chose in the rail — losing them meant starting the booking over.
+   * The 404, the 308 for a renamed slug and the customer gate are
+   * `layout.tsx`'s, above the loading boundary (VEN-715); the vendor comes from
+   * the same per-request gate, which raises the layout's own refusal here.
    */
-  const returnQuery = new URLSearchParams();
-  if (query.package) returnQuery.set('package', query.package);
-  if (query.date) returnQuery.set('date', query.date);
-  if (query.guests) returnQuery.set('guests', query.guests);
-  const returnSuffix = returnQuery.toString();
-
-  const vendor = await getPublicVendorProfile(slug);
-  if (!vendor) {
-    // A slug the vendor has since changed, with the customer's choices kept (VEN-648).
-    const current = await getVendorSlugSuccessor(slug);
-
-    if (current !== null) {
-      permanentRedirect(`/vendors/${current}/request${returnSuffix ? `?${returnSuffix}` : ''}`);
-    }
-
-    notFound();
-  }
-
-  /*
-   * The same gate the API applies, rather than a subset of it.
-   *
-   * This bounced `role === 'vendor'` by hand — right about vendors, who cannot
-   * request their own listing and have no customer identity to do it with, but
-   * silent about admins. `POST /booking-requests` is `requireRole('customer')`,
-   * so an admin rendered the two-step form, filled it, and learned on submit
-   * that they were never allowed to send it: a generic 403 after the work
-   * rather than a redirect before it (#401). `requireRole` sends each role to
-   * its own dashboard, so both land somewhere they can act.
-   */
-  await requireRole(
-    'customer',
-    `/vendors/${slug}/request${returnSuffix ? `?${returnSuffix}` : ''}`,
-  );
+  const [vendor, availability] = await Promise.all([
+    gateVendorSlug(slug),
+    getPublicVendorAvailability(slug),
+  ]);
 
   /*
    * The server's UTC day. It is only a seed: `BookingRequestScreen` re-anchors
@@ -91,7 +58,6 @@ export default async function BookingRequestPage({
    * component has no way to know it. #409.
    */
   const serverToday = toDateString(new Date());
-  const availability = await getPublicVendorAvailability(slug);
 
   const calendar: Record<string, AvailabilityStatus> = {};
   for (const entry of availability) {

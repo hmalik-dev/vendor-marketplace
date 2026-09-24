@@ -6,7 +6,7 @@ export const metadata: Metadata = { title: pageTitle('Page not found') };
 
 /**
  * Frame `15` for a stale checkout link — a well-formed uuid for a request that
- * does not exist, which `page.tsx` answers with `notFound()`.
+ * does not exist, which `(gate)/layout.tsx` answers with `notFound()`.
  *
  * It exists because the marketplace header is suppressed on this URL
  * (`public-chrome.tsx`), so without a boundary inside this segment's layout the

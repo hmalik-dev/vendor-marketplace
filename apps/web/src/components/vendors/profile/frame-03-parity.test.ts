@@ -70,7 +70,7 @@ describe('frame 03 — the profile is full-bleed (#103)', () => {
   const [, contentRight, , contentLeft] = pxParts(declaration(contentStyle, 'padding'));
 
   const source = readFileSync(
-    join(process.cwd(), 'src', 'app', 'vendors', '[slug]', 'page.tsx'),
+    join(process.cwd(), 'src', 'app', 'vendors', '[slug]', '(profile)', 'page.tsx'),
     'utf8',
   );
   const headerSource = readFileSync(
@@ -344,7 +344,7 @@ describe('frame 03 — the rail starts level with the identity row (#104)', () =
     'utf8',
   );
   const pageSource = readFileSync(
-    join(process.cwd(), 'src', 'app', 'vendors', '[slug]', 'page.tsx'),
+    join(process.cwd(), 'src', 'app', 'vendors', '[slug]', '(profile)', 'page.tsx'),
     'utf8',
   );
 

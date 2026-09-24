@@ -134,6 +134,34 @@ describe('the vendor agreement', () => {
       expect(response.statusCode).toBe(404);
     });
 
+    /** VEN-708: v1.1 replaces v1.0, so an agreement accepted at v1.0 no longer counts. */
+    it('does not treat an agreement accepted at v1.0 as current, and asks for v1.1', async () => {
+      await seedVendorProfile('vendor_a', 'June Harlow Photography');
+      const [vendor] = await harness.database.db
+        .select({ id: vendorProfiles.id, userId: vendorProfiles.userId })
+        .from(vendorProfiles);
+
+      await harness.database.db.insert(legalAcceptances).values({
+        vendorId: vendor!.id,
+        document: 'vendor_agreement',
+        version: 'v1.0',
+        documentSha256: 'c'.repeat(64),
+        acceptanceMethod: 'clickwrap_checkbox',
+        acceptedByUserId: vendor!.userId,
+        acceptedByName: 'June Harlow',
+        businessName: 'June Harlow Photography',
+      });
+
+      const status = (await read('vendor_a')).json();
+
+      expect(CURRENT_VENDOR_AGREEMENT_VERSION).toBe('v1.1');
+      expect({ current: status.current, isCurrent: status.isCurrent }).toEqual({
+        current: 'v1.1',
+        isCurrent: false,
+      });
+      expect((await accept('vendor_a', 'v1.0')).statusCode).toBe(409);
+    });
+
     it('refuses a customer, an admin and a signed-out caller', async () => {
       await seedVendorProfile('vendor_a', 'June Harlow Photography');
 
@@ -250,7 +278,10 @@ describe('the vendor agreement', () => {
 
       const rows = await agreementRows();
 
-      expect(rows.map((row) => row.version).sort()).toEqual(['v1.0', 'v2.0']);
+      expect(rows.map((row) => row.version).sort()).toEqual([
+        CURRENT_VENDOR_AGREEMENT_VERSION,
+        'v2.0',
+      ]);
     });
 
     /** A tab left open across a release must not record a version nobody read. */

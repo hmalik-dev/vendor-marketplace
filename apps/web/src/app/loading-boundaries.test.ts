@@ -45,7 +45,7 @@ const NOT_FOUND_PAGES = ROUTE_FILES.filter(
 );
 
 /** The two calls a Server Component turns a refused session away with. */
-const SESSION_GATE = /\b(?:requireRole|requireCurrentUser)\(/;
+const SESSION_GATE = /\b(?:requireRole|requireNonAdmin|requireCurrentUser)\(/;
 
 function filesCalling(name: 'page.tsx' | 'layout.tsx', pattern: RegExp): RouteFile[] {
   return ROUTE_FILES.filter(

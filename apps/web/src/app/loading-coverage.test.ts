@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -57,19 +57,13 @@ const NO_BOUNDARY: Record<string, string> = {
   'account/settings/name': 'gates in the page',
   'account/settings/password': 'gates in the page',
   'account/settings/sessions': 'gates in the page',
-  'bookings/[requestId]': 'notFound() and a session gate',
-  'bookings/[requestId]/checkout': 'notFound() and a session gate',
-  'bookings/[requestId]/confirmed': 'notFound() and a session gate',
   'for-vendors': 'redirects a signed-in vendor',
   'forgot-password': 'redirects a signed-in visitor',
   'reset-password': 'redirects a signed-in visitor',
-  search: 'permanentRedirect() canonicalises the query (segment-boundaries.test.tsx)',
   'sign-in': 'redirects a signed-in visitor',
   'sign-up': 'redirects a signed-in visitor',
   'sign-up/customer-details': 'gates in the page',
   'sign-up/vendor-details': 'redirects',
-  'vendors/[slug]': 'notFound() and permanentRedirect()',
-  'vendors/[slug]/request': 'notFound(), permanentRedirect() and a session gate',
   'vendors/apply': 'redirects',
   waitlist: 'redirects',
 };
@@ -80,6 +74,12 @@ const CONSOLE_PAGES = pages(APP_DIR).filter(
 );
 
 const ALL_PAGES = pages(APP_DIR).sort();
+
+/** The public funnel (VEN-715): search, the vendor profile and request, and a booking. */
+const FUNNEL = /^(?:search|vendors\/\[slug\]|bookings\/\[requestId\])(?:\/|$)/;
+
+/** The calls that set a response status or gate a session; none may run under a boundary. */
+const STATUS_CALLS = /\b(?:notFound|redirect|permanentRedirect|requireRole|requireCurrentUser)\(/g;
 
 describe('every route has a loading boundary or a stated reason it cannot', () => {
   it('finds the routes, so it cannot pass vacuously', () => {
@@ -115,4 +115,21 @@ describe('every route has a loading boundary or a stated reason it cannot', () =
       ].filter((segment) => !hasLoading(segment)),
     ).toEqual([]);
   });
+
+  /*
+   * VEN-715. The public funnel keeps its 404, 308 and 307 under a loader because
+   * those decisions were moved out of the pages into layouts (or `middleware.ts`
+   * for `/search`), which render above the boundary. A page beneath a boundary
+   * that calls any of them again would answer 200 and stream the refusal.
+   */
+  it.each(ALL_PAGES.filter((segment) => FUNNEL.test(segment)))(
+    '%j has a boundary and answers no status from inside it',
+    (segment) => {
+      expect(coveredBy(segment)).toBeDefined();
+
+      const source = readFileSync(join(APP_DIR, segment, 'page.tsx'), 'utf8');
+
+      expect(source.match(STATUS_CALLS) ?? []).toEqual([]);
+    },
+  );
 });

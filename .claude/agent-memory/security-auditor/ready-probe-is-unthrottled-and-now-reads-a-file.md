@@ -42,5 +42,8 @@ precedent, not re-reported (healthy tier always says `enforced`). The finding
 was the detector failing open: `t.tableowner = current_user` misses a role that
 inherits the owner, and Postgres's owner exemption goes through
 `has_privs_of_role`; the fix is `pg_has_role(current_user, t.tableowner, 'USAGE')`.
+VEN-634 made `deployedCommit()` read the baked `RELEASE_COMMIT` file with a
+per-request `readFileSync` (cwd-relative, falls back to env); flagged low, the
+fix is a module-load constant like `EXPECTED_MIGRATIONS`.
 Railway's `healthcheckPath` is `/ready`, so a 503 here blocks every deploy.
 The smoke regex `"reason"\s*:\s*"((?:[^"\\]|\\.)*)"` is linear (disjoint branches).

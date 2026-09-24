@@ -58,6 +58,7 @@ const {
   redirectIfSignedIn,
   redirectVendorToDashboard,
   requireCurrentUser,
+  requireNonAdmin,
   requireRole,
 } = await import('./current-user');
 
@@ -212,6 +213,33 @@ describe('requireRole', () => {
 
     await expect(requireRole('customer')).rejects.toThrow('NEXT_REDIRECT:/vendor/dashboard');
     expect(redirect).toHaveBeenCalledWith('/vendor/dashboard');
+  });
+});
+
+describe('requireNonAdmin', () => {
+  beforeEach(() => {
+    getToken.mockReset();
+    apiRequest.mockReset();
+    redirect.mockClear();
+  });
+
+  it.each([
+    ['customer', CUSTOMER],
+    ['vendor', VENDOR],
+  ])('admits a %s', async (_role, user) => {
+    getToken.mockResolvedValue('token');
+    apiRequest.mockResolvedValue(user);
+
+    await expect(requireNonAdmin()).resolves.toEqual(user);
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it('sends an admin to the console', async () => {
+    getToken.mockResolvedValue('token');
+    apiRequest.mockResolvedValue({ ...VENDOR, role: 'admin' });
+
+    await expect(requireNonAdmin()).rejects.toThrow('NEXT_REDIRECT:/admin');
+    expect(redirect).toHaveBeenCalledWith('/admin');
   });
 });
 

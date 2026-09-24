@@ -507,7 +507,7 @@ jobs:
             || echo "::warning::could not delete $STORAGE_BRANCH; it expires on its own within a day"
 
 # Migrations are not CI's job. `deploy.yml` runs them after this workflow
-# succeeds on main, over DATABASE_URL_UNPOOLED, before either service deploys
+# succeeds on a push to `staging` or `production`, over DATABASE_URL_UNPOOLED, before either service deploys
 # (VEN-397). Before that they ran in Railway's `preDeployCommand`, over the
 # runtime's pooled URL; that path was removed with it, so there is one route to
 # production DDL. The migrate-staging and migrate-production jobs that once

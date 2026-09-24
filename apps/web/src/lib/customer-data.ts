@@ -326,10 +326,13 @@ export async function readOwnBookingForSupport(bookingId: string): Promise<WireB
 }
 
 /** What vendors have said about working with this customer. */
-export async function getOwnCustomerReviews(): Promise<WireCustomerReview[]> {
+export async function getOwnCustomerReviews(
+  options: OwnListReadOptions = {},
+): Promise<WireCustomerReview[]> {
   const token = await customerToken();
 
-  return degradeToEmpty(() =>
-    apiRequest('/customers/me/reviews', { schema: wireCustomerReviewListSchema, token }),
+  return degradeToEmpty(
+    () => apiRequest('/customers/me/reviews', { schema: wireCustomerReviewListSchema, token }),
+    options.required,
   );
 }

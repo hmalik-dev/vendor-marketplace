@@ -67,6 +67,7 @@ import { bookingRequestRoutes } from './modules/booking-requests/booking-request
 import { adminRoutes } from './modules/admin/admin.routes.js';
 import { adminCategoryRoutes } from './modules/admin/admin-categories.routes.js';
 import { categoryRoutes } from './modules/categories/categories.routes.js';
+import { platformNoticeRoutes } from './modules/platform-settings/platform-notice.routes.js';
 import { messagingRoutes } from './modules/messaging/messaging.routes.js';
 import { placeRoutes } from './modules/places/places.routes.js';
 import { customerRoutes } from './modules/customers/customers.routes.js';
@@ -615,6 +616,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
       await v1.register(adminVendorInviteRoutes, { webOrigin: canonicalWebOrigin(env) });
       await v1.register(vendorApplicationRoutes, { webOrigin: canonicalWebOrigin(env) });
       await v1.register(categoryRoutes);
+      await v1.register(platformNoticeRoutes);
       await v1.register(tagRoutes);
       await v1.register(placeRoutes);
       await v1.register(userRoutes);

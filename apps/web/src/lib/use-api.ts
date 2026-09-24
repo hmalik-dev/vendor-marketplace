@@ -9,7 +9,8 @@ import {
 import { useRouter } from 'next/navigation';
 import { useCallback } from 'react';
 import { apiBaseUrl } from '@/lib/api-base-url';
-import { clearSessionToken, getSessionToken } from './auth/client';
+import { getSessionToken } from './auth/client';
+import { endSession } from './auth/session-ended';
 import { ApiClientError, apiRequest, type ApiRequestOptions } from './api-client';
 import { isNameGateExemptPath, isNameRequired, nameStepPath } from './name-gate-paths';
 import { signInPathReturningTo } from './return-path';
@@ -82,8 +83,7 @@ export function useRefusalRedirect(): RefusalRedirect {
       if (refusal === 'suspended') {
         router.replace(SUSPENDED_PATH);
       } else {
-        clearSessionToken();
-        window.location.assign(signInPathReturningTo(pathname + search));
+        endSession(signInPathReturningTo(pathname + search));
       }
 
       return true;

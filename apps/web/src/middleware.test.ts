@@ -110,3 +110,37 @@ describe('middleware', () => {
     );
   });
 });
+
+describe('middleware /search canonicalisation (VEN-715)', () => {
+  function respond(url: string): NextResponse {
+    return middleware(new NextRequest(new URL(url)));
+  }
+
+  it('answers 308 for a retired category, carrying every other parameter', () => {
+    const response = respond('https://orla.test/search?city=austin&category=florals&tag=a&tag=b');
+
+    expect(response.status).toBe(308);
+    expect(response.headers.get('location')).toBe(
+      'https://orla.test/search?city=austin&tag=a&tag=b&category=decor',
+    );
+  });
+
+  it('drops the client router’s cache-buster from the destination', () => {
+    const response = respond('https://orla.test/search?category=florals&_rsc=abc123');
+
+    expect(response.headers.get('location')).toBe('https://orla.test/search?category=decor');
+  });
+
+  it.each([
+    'https://orla.test/search?category=decor',
+    'https://orla.test/search',
+    'https://orla.test/search?category=unknown-slug',
+    'https://orla.test/vendors/x?category=florals',
+  ])('lets %s through, still stamping its path', (url) => {
+    const response = respond(url);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('location')).toBeNull();
+    expect(response.headers.get(`x-middleware-request-${REQUEST_PATH_HEADER}`)).not.toBeNull();
+  });
+});

@@ -9,6 +9,7 @@ import { analyticsEnabled } from '@/lib/analytics-enabled';
 import { getServerSession } from '@/lib/auth/server';
 import { ErrorReportingUser } from '@/components/errors/error-reporting-user';
 import { OutsideAdmin, PublicChrome } from '@/components/public-chrome';
+import { SiteNotice } from '@/components/site-notice';
 import { SiteFooter } from '@/components/site-footer';
 import { SearchStatusProvider } from '@/components/search/search-status';
 import { SiteHeader } from '@/components/site-header';
@@ -87,7 +88,7 @@ export default async function RootLayout({
           */}
         <NuqsAdapter>
           {/*
-              First in the tab order, and the only thing before the header.
+              First in the tab order, and the only control before the header.
               Off-screen until focused, then it lands on the cream surface at
               the top-left rather than shifting the layout — `sr-only` alone
               would keep it unreachable to a sighted keyboard user.
@@ -98,6 +99,10 @@ export default async function RootLayout({
           >
             Skip to content
           </a>
+          {/* The admin's incident notice (VEN-616): above the nav, on every page. */}
+          <Suspense fallback={null}>
+            <SiteNotice />
+          </Suspense>
           {/*
               Wraps the header and the page together, because the one thing it
               carries — whether a search is in flight — is set by the results
