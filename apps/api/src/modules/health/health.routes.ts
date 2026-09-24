@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { expectedMigrationCount } from '@vendor-marketplace/db';
-import { releaseIdentifier, type DeployEnv } from '@vendor-marketplace/shared/env';
+import { releaseIdentifier } from '@vendor-marketplace/shared/env';
 import type { AppDatabase } from '../../lib/database.js';
 
 export const healthResponseSchema = z.object({
@@ -91,14 +91,16 @@ const RLS_REASONS = {
 
 /** Reads what the connected role is, straight from the catalog; `pg_roles` and `pg_tables` are readable by every role. */
 async function connectedRolePosture(db: AppDatabase): Promise<'enforced' | 'bypassed' | 'owner'> {
-  const rows = await db.execute<{ bypass: boolean; owns: boolean }>(sql`
-    select (r.rolbypassrls or r.rolsuper) as bypass,
-           exists (
-             select 1 from pg_tables t
-              where t.schemaname = 'public' and pg_has_role(current_user, t.tableowner, 'USAGE')
-           ) as owns
-      from pg_roles r
-     where r.rolname = current_user`);
+  const rows = await db
+    .select({
+      bypass: sql<boolean>`(r.rolbypassrls or r.rolsuper)`,
+      owns: sql<boolean>`exists (
+        select 1 from pg_tables t
+         where t.schemaname = 'public' and pg_has_role(current_user, t.tableowner, 'USAGE')
+      )`,
+    })
+    .from(sql`pg_roles r`)
+    .where(sql`r.rolname = current_user`);
   const role = rows[0];
 
   if (!role) {
@@ -110,7 +112,7 @@ async function connectedRolePosture(db: AppDatabase): Promise<'enforced' | 'bypa
 
 export interface HealthRoutesOptions {
   /** Staging and production must run under a role row-level security binds; `local` is not checked. */
-  deployEnv: DeployEnv;
+  deployEnv: string;
 }
 
 /**

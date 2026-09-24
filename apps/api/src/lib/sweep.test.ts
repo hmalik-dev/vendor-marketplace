@@ -2,13 +2,14 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type * as SentryModule from '@sentry/node';
 import type { ErrorReporter } from './error-reporting.js';
 import { runTick, SWEEP_MAX_RUNTIME_MS, SWEEP_SLUGS, SweepOverrunError } from './sweep.js';
 
 const monitor = vi.hoisted(() => ({ withMonitor: vi.fn() }));
 
 vi.mock('@sentry/node', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@sentry/node')>()),
+  ...(await importOriginal<typeof SentryModule>()),
   withMonitor: monitor.withMonitor,
 }));
 
