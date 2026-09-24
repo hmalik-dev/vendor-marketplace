@@ -16,8 +16,10 @@ import {
 } from '../../lib/stripe.js';
 import {
   openChargebackCase,
+  openFraudWarningCase,
   recordChargebackOutcome,
   type ChargebackOutcome,
+  type FraudWarningOutcome,
 } from '../cases/cases.service.js';
 import {
   createFailureWindow,
@@ -26,10 +28,15 @@ import {
   refundFailedAlert,
   stripeWebhookFailingAlert,
   unmatchedRefundFailedAlert,
+  vendorBankPayoutFailedAlert,
   vendorPayoutsDisabledAlert,
 } from '../operator-alerts/operator-alerts.service.js';
 import { findBookingIdByPaymentIntent } from '../operator-alerts/operator-alerts.dao.js';
-import { bookingContextFor, recordSuccessfulPayment } from '../payments/payments.service.js';
+import {
+  bookingContextFor,
+  recordSuccessfulPayment,
+  recordTransferReversal,
+} from '../payments/payments.service.js';
 import { reconcileRefundedIntent } from '../payments/refund-reconciliation.js';
 import { releaseFailedExternalRefunds } from '../payments/refunds.dao.js';
 import { generateSupportReference } from '../support/support.service.js';
@@ -86,6 +93,15 @@ const refundOutcomeSchema = z.enum([
   'refund-recorded',
 ]);
 
+/** A transfer reversal (VEN-645): the booking's payout state moved, or it already agreed. */
+const transferOutcomeSchema = z.enum(['transfer-reversed', 'transfer-unchanged']);
+
+/** A vendor's bank payout (VEN-645): the failure was alerted, or the payout was not a failed one of ours. */
+const payoutOutcomeSchema = z.enum(['payout-failed', 'payout-unchanged']);
+
+/** An early fraud warning (VEN-645): a case was opened, or one already exists. */
+const fraudWarningOutcomeSchema = z.enum(['fraud-warning-opened', 'fraud-warning-recorded']);
+
 const webhookResponseSchema = z.object({
   received: z.literal(true),
   outcome: z.union([
@@ -93,6 +109,9 @@ const webhookResponseSchema = z.object({
     paymentOutcomeSchema,
     disputeOutcomeSchema,
     refundOutcomeSchema,
+    transferOutcomeSchema,
+    payoutOutcomeSchema,
+    fraudWarningOutcomeSchema,
   ]),
 });
 
@@ -174,6 +193,26 @@ const DISPUTE_CLOSED_EVENTS = new Set(['charge.dispute.closed', 'charge.dispute.
  */
 const REFUND_EVENTS = new Set(['refund.failed', 'refund.updated', 'charge.refund.updated']);
 
+/**
+ * A transfer of ours was reversed at Stripe, from the Dashboard or by our own
+ * cancellation (VEN-645). The row follows what Stripe holds; see
+ * `recordTransferReversal`.
+ */
+const TRANSFER_REVERSED_EVENT = 'transfer.reversed';
+
+/**
+ * A vendor's payout from their connected account to their bank failed (VEN-645).
+ * A Connect event: it arrives with the account id, and the payout is only
+ * readable **on** that account.
+ */
+const PAYOUT_FAILED_EVENT = 'payout.failed';
+
+/**
+ * A card issuer's early fraud warning (VEN-645). Opens a case and pages the
+ * operator; refunds nothing and freezes nothing (D46).
+ */
+const EARLY_FRAUD_WARNING_EVENT = 'radar.early_fraud_warning.created';
+
 function failureKindOf(
   statusCode: number,
   signatureMissing: boolean,
@@ -208,6 +247,9 @@ export const HANDLED_STRIPE_EVENT_TYPES: readonly string[] = [
   DISPUTE_CREATED_EVENT,
   ...DISPUTE_CLOSED_EVENTS,
   ...REFUND_EVENTS,
+  TRANSFER_REVERSED_EVENT,
+  PAYOUT_FAILED_EVENT,
+  EARLY_FRAUD_WARNING_EVENT,
 ];
 
 export interface StripeWebhookRoutesOptions {
@@ -401,6 +443,21 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
           return applyRefundEvent(event.objectId);
         }
 
+        if (event.type === TRANSFER_REVERSED_EVENT && event.objectId) {
+          return recordTransferReversal(
+            { db: app.db, stripe: app.stripe, log: request.log },
+            event.objectId,
+          );
+        }
+
+        if (event.type === PAYOUT_FAILED_EVENT && event.objectId && event.accountId) {
+          return applyPayoutFailed(event.objectId, event.accountId);
+        }
+
+        if (event.type === EARLY_FRAUD_WARNING_EVENT && event.objectId) {
+          return applyFraudWarning(event.objectId);
+        }
+
         if (event.type === CHARGE_REFUNDED_EVENT && event.objectId) {
           /* Re-read from Stripe, like every branch here: the charge names the intent, the refunds name the money. */
           const paymentIntentId = await app.stripe.retrieveChargeIntent(event.objectId);
@@ -542,6 +599,62 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
       }
 
       /**
+       * A vendor's bank refused a payout (VEN-645). Re-read **on the connected
+       * account**, and alerted only when Stripe still says `failed`: the event is
+       * signed, not trusted. A vendor this platform has no row for is not ours to
+       * page anyone about.
+       */
+      async function applyPayoutFailed(
+        payoutId: string,
+        accountId: string,
+      ): Promise<z.infer<typeof payoutOutcomeSchema>> {
+        /*
+         * An event with no `account` reports the object's own id here, which
+         * would make the read below a request on an account that does not exist.
+         */
+        if (!accountId.startsWith('acct_')) {
+          return 'payout-unchanged';
+        }
+
+        const payout = await app.stripe.retrieveConnectedPayout(payoutId, accountId);
+
+        if (payout.status !== 'failed') {
+          return 'payout-unchanged';
+        }
+
+        app.operatorAlerts.dispatch(() => vendorBankPayoutFailedAlert(app.db, accountId, payout));
+
+        return 'payout-failed';
+      }
+
+      /**
+       * An early fraud warning, re-read from Stripe: the warning names a charge,
+       * the charge names the intent, and the platform keys everything on the intent.
+       */
+      async function applyFraudWarning(warningId: string): Promise<FraudWarningOutcome> {
+        const warning = await app.stripe.retrieveEarlyFraudWarning(warningId);
+        const paymentIntentId = warning.chargeId
+          ? await app.stripe.retrieveChargeIntent(warning.chargeId)
+          : null;
+
+        if (!paymentIntentId) {
+          return 'ignored';
+        }
+
+        return openFraudWarningCase(
+          {
+            db: app.db,
+            log: request.log,
+            bookings: bookingContextFor(app, request.log, options.webOrigin),
+            alerts: app.operatorAlerts,
+            deployEnv: options.deployEnv,
+          },
+          { warningId: warning.warningId, fraudType: warning.fraudType, paymentIntentId },
+          generateSupportReference(),
+        );
+      }
+
+      /**
        * A chargeback, re-read from Stripe and handed to the case queue.
        *
        * **The hold is not placed here.** `openChargebackCase` calls
@@ -560,7 +673,11 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
       ): Promise<ChargebackOutcome> {
         if (DISPUTE_CLOSED_EVENTS.has(type)) {
           return recordChargebackOutcome(
-            { db: app.db, log: request.log },
+            {
+              db: app.db,
+              log: request.log,
+              bookings: bookingContextFor(app, request.log, options.webOrigin),
+            },
             await app.stripe.retrieveDispute(disputeId),
             app.clock(),
           );

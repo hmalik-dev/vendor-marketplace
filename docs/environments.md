@@ -155,12 +155,14 @@ secret keys may match while both use the same sandbox account.
 Each of staging and production has two endpoints at
 `https://<api host>/webhooks/stripe`, each with its own signing secret:
 
-- **Your account**: the Charge, Payment intent and Refund event groups. The API
-  handles `payment_intent.succeeded`, `charge.refunded`, `charge.dispute.created`,
-  `charge.dispute.closed`, `charge.dispute.funds_reinstated`, `refund.failed`,
-  `refund.updated` and `charge.refund.updated`, and answers `200` to the rest.
-- **Connected accounts** (not Accounts v2): `account.updated` and
-  `capability.updated`.
+- **Your account**: the Charge, Payment intent, Refund, Transfer and Radar event
+  groups. The API handles `payment_intent.succeeded`, `charge.refunded`,
+  `charge.dispute.created`, `charge.dispute.closed`,
+  `charge.dispute.funds_reinstated`, `refund.failed`, `refund.updated`,
+  `charge.refund.updated`, `transfer.reversed` and
+  `radar.early_fraud_warning.created`, and answers `200` to the rest.
+- **Connected accounts** (not Accounts v2): `account.updated`,
+  `capability.updated` and `payout.failed`.
 
 ## Regions and replicas
 

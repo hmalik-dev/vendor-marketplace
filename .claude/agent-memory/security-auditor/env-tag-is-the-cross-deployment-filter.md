@@ -37,6 +37,16 @@ deployment is.
 - The fake gateway tags with `TEST_ENV.DEPLOY_ENV` (`'local'`), not the harness's
   `env` override — a suite created with `DEPLOY_ENV: 'staging'` that runs a real
   checkout silently takes the foreign branch.
+- VEN-645 (audited PASS 2026-09-24): the EFW branch filters env **before** the
+  booking lookup (right shape). `transfer.reversed` and `payout.failed` carry no
+  env tag (transfers have only `bookingId` metadata; payouts none): the reversal
+  is gated on our own `stripe_transfer_id` and only lowers toward Stripe's truth;
+  the bank-payout alert fires on both tiers for a shared vendor row (sink-bound
+  noise). `payout.failed`'s `stripeAccount` header is the signed `event.account`,
+  `acct_`-prefixed, never caller input. A lost chargeback now cancels the
+  branched staging copy of a production booking (DB-only, no Stripe call).
+  EFW case dedupe is read-then-insert: `insertSupportCase`'s conflict target is
+  `stripe_dispute_id` (NULL here), so two concurrent deliveries write two cases.
 - VEN-644's daily balance reconciliation compares the **shared** account's
   balance with **one** tier's liabilities, so pre-live it is noise or masking
   across tiers (correctness, not a trust boundary). Audited PASS 2026-09-23:

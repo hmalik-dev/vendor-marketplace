@@ -273,6 +273,11 @@ export default async function AdminCasePage({
                     {PAYOUT_PRESENTATION[booking.payoutStatus].label}
                   </StatusPill>
                 </KeyValue>
+                {booking.vendorOwedCents > 0 ? (
+                  <KeyValue label="Owed by vendor" kind="mono">
+                    {formatPrice(booking.vendorOwedCents)}
+                  </KeyValue>
+                ) : null}
                 <KeyValue label="Paid at" kind="mono">
                   {booking.paidAt ? `${FILED.format(booking.paidAt)} UTC` : <Absent />}
                 </KeyValue>

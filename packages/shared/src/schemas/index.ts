@@ -3852,6 +3852,8 @@ export const adminCaseBookingSchema = z.object({
   totalAmountCents: z.int(),
   platformFeeCents: z.int(),
   vendorPayoutCents: z.int(),
+  /** What the vendor owes after a chargeback the platform lost on a released payout (VEN-645). */
+  vendorOwedCents: z.int(),
   refundAmountCents: z.int().nullable(),
   paidAt: z.date().nullable(),
   payoutReleasedAt: z.date().nullable(),
