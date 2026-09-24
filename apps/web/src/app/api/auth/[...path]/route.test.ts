@@ -154,18 +154,70 @@ describe('password reset through the auth proxy', () => {
     }
     await drain();
 
-    expect(statuses).toEqual([200, 200, 200, 200, 200, 200]);
-    expect(upstreamPost).toHaveBeenCalledTimes(5);
+    // Three mails a minute per address (VEN-719): the rest are told to wait, and none is sent.
+    expect(statuses).toEqual([200, 200, 200, 429, 429, 429]);
+    expect(upstreamPost).toHaveBeenCalledTimes(3);
   });
 
-  it("does not let a stranger's five requests stop the owner's first from another caller (VEN-718)", async () => {
+  it("does not let a stranger's burst use up the provider's mail for the owner (VEN-719)", async () => {
     upstreamPost.mockResolvedValue(Response.json({ success: true }));
 
     for (let i = 0; i < 6; i++) await call(REQUEST, { email: 'known@example.com' }, '9.9.9.9');
-    await call(REQUEST, { email: 'known@example.com' }, '2.2.2.2');
+    const owner = await call(REQUEST, { email: 'known@example.com' }, '2.2.2.2');
     await drain();
 
-    expect(upstreamPost).toHaveBeenCalledTimes(6);
+    // The provider saw three sends, fewer than it takes before it goes quiet, and the owner is told to wait.
+    expect(upstreamPost).toHaveBeenCalledTimes(3);
+    expect([owner.status, owner.headers.get('retry-after'), await owner.json()]).toEqual([
+      429,
+      '60',
+      { code: 'RESET_MAIL_PACED' },
+    ]);
+  });
+
+  it("mails the owner's retry after a stranger's burst: being told to wait spends none of the request budgets (VEN-719)", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      upstreamPost.mockResolvedValue(Response.json({ success: true }));
+
+      for (let i = 0; i < 6; i++) await call(REQUEST, { email: 'known@example.com' }, '9.9.9.9');
+      expect((await call(REQUEST, { email: 'known@example.com' }, '2.2.2.2')).status).toBe(429);
+      vi.advanceTimersByTime(61_000);
+      const retry = await call(REQUEST, { email: 'known@example.com' }, '2.2.2.2');
+      await drain();
+
+      expect(retry.status).toBe(200);
+      expect(upstreamPost).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('sends again once the minute has passed, and a refused request does not hold it shut (VEN-719)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      upstreamPost.mockResolvedValue(Response.json({ success: true }));
+
+      for (let i = 0; i < 3; i++) await call(REQUEST, { email: 'known@example.com' }, `7.7.7.${i}`);
+      vi.advanceTimersByTime(40_000);
+      expect((await call(REQUEST, { email: 'known@example.com' }, '2.2.2.2')).status).toBe(429);
+      vi.advanceTimersByTime(21_000);
+      expect((await call(REQUEST, { email: 'known@example.com' }, '2.2.2.2')).status).toBe(200);
+      await drain();
+
+      expect(upstreamPost).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not pace one address's mail against another's (VEN-719)", async () => {
+    upstreamPost.mockResolvedValue(Response.json({ success: true }));
+
+    for (let i = 0; i < 3; i++) await call(REQUEST, { email: 'known@example.com' }, `7.7.7.${i}`);
+    const other = await call(REQUEST, { email: 'other@example.com' }, '2.2.2.2');
+
+    expect(other.status).toBe(200);
   });
 
   it('throttles requests per caller: the eleventh in a minute is a 429', async () => {

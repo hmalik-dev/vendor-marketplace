@@ -56,6 +56,8 @@ export const AUTH_COPY = {
   sessionsEnded: 'Every other device is signed out.',
   sessionEndFailed: 'We could not sign that device out. Try again in a moment.',
   throttled: "This isn't going through right now. Wait a few minutes and try again.",
+  resetMailPaced:
+    'Too many reset codes were requested for this address just now. Wait a minute, then try again.',
   signInThrottled:
     'Too many sign-in attempts from this device. Wait a few minutes and try again, or reset your password.',
   unreachable: 'We could not reach the sign-in service. Try again in a moment.',
@@ -73,6 +75,10 @@ export function failureCopy(outcome: Exclude<AuthOutcome, 'ok'>, fallback: strin
 
   if (outcome === 'throttled') {
     return AUTH_COPY.throttled;
+  }
+
+  if (outcome === 'mailPaced') {
+    return AUTH_COPY.resetMailPaced;
   }
 
   return fallback;

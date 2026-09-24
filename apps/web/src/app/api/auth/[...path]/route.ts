@@ -21,6 +21,7 @@ import {
   callerAddress,
   chargeAddress,
   chargeRequest,
+  isMailPaced,
   chargeCaller,
   isSignInRefused,
   recordSignInFailure,
@@ -681,8 +682,17 @@ async function forwardReset(
     return NextResponse.json({ message: 'Bad request' }, { status: 400 });
   }
 
-  const overBudget = await chargeRequest(email, callerAddress(request.headers), path);
   const isRequest = path.join('/') === REQUEST_RESET;
+
+  // Asked before any budget is charged: a request told to wait spends none, so its retry is not refused for it.
+  if (isRequest && (await isMailPaced(email, Date.now(), false))) {
+    return NextResponse.json(
+      { code: 'RESET_MAIL_PACED' },
+      { status: 429, headers: { 'Retry-After': '60' } },
+    );
+  }
+
+  const overBudget = await chargeRequest(email, callerAddress(request.headers), path);
 
   if (overBudget && !isRequest) {
     return NextResponse.json(
@@ -715,6 +725,13 @@ async function forwardReset(
     return response.status >= 400 && response.status < 500
       ? NextResponse.json({ message: 'Invalid' }, { status: 400 })
       : response;
+  }
+
+  if (!overBudget && (await isMailPaced(email))) {
+    return NextResponse.json(
+      { code: 'RESET_MAIL_PACED' },
+      { status: 429, headers: { 'Retry-After': '60' } },
+    );
   }
 
   if (!overBudget) {
