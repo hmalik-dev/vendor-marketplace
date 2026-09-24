@@ -260,6 +260,7 @@ export interface CaseBookingProjection {
   totalAmountCents: number;
   platformFeeCents: number;
   vendorPayoutCents: number;
+  vendorOwedCents: number;
   payoutModel: PayoutModel;
   refundAmountCents: number | null;
   paidAt: Date | null;
@@ -293,6 +294,7 @@ export async function findCaseBooking(
       totalAmountCents: bookings.totalAmountCents,
       platformFeeCents: bookings.platformFeeCents,
       vendorPayoutCents: bookings.vendorPayoutCents,
+      vendorOwedCents: bookings.vendorOwedCents,
       payoutModel: bookings.payoutModel,
       refundAmountCents: bookings.refundAmountCents,
       paidAt: bookings.paidAt,
@@ -486,19 +488,61 @@ export async function findOpenChargebackCase(
  *
  * The id alone, because every caller uses this as a boolean — and it is the
  * first thing the webhook asks, ahead of the round trip to Stripe, so it must
- * be as small as the unique index can make it.
+ * be as small as the unique index can make it. The booking and the recorded
+ * network outcome ride along (VEN-645) so a redelivered `created` for a lost
+ * dispute can finish a settlement that failed after the case was written.
  */
 export async function findCaseByStripeDisputeId(
   db: AppDatabase,
   stripeDisputeId: string,
-): Promise<{ id: string } | null> {
+): Promise<{ id: string; bookingId: string | null; networkOutcome: string | null } | null> {
   const rows = await db
-    .select({ id: supportCases.id })
+    .select({
+      id: supportCases.id,
+      bookingId: supportCases.bookingId,
+      networkOutcome: supportCases.networkOutcome,
+    })
     .from(supportCases)
     .where(eq(supportCases.stripeDisputeId, stripeDisputeId))
     .limit(1);
 
   return rows[0] ?? null;
+}
+
+/**
+ * Writes the early fraud warning case for a booking, or answers `null` because
+ * one already exists (VEN-645).
+ *
+ * The uniqueness is a transaction-scoped advisory lock on the booking rather
+ * than an index: a partial unique index on `origin = 'fraud_warning'` cannot be
+ * created in the migration that adds that enum member, and Stripe does redeliver
+ * while a slow first attempt is still running.
+ */
+export async function insertFraudWarningCase(
+  db: AppDatabase,
+  values: NewSupportCaseRow & { bookingId: string },
+): Promise<SupportCaseRow | null> {
+  return db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${`fraud_warning:${values.bookingId}`}))`,
+    );
+
+    const existing = await tx
+      .select({ id: supportCases.id })
+      .from(supportCases)
+      .where(
+        and(eq(supportCases.bookingId, values.bookingId), eq(supportCases.origin, 'fraud_warning')),
+      )
+      .limit(1);
+
+    if (existing[0]) {
+      return null;
+    }
+
+    const rows = await tx.insert(supportCases).values(values).returning();
+
+    return rows[0] ?? null;
+  });
 }
 
 /** Records that the report never reached the inbox. See `email_failed_at`. */

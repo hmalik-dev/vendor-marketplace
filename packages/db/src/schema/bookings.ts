@@ -293,6 +293,16 @@ export const bookings = pgTable(
     /** Why the last transfer attempt failed. Cleared when one succeeds. */
     payoutFailureReason: text('payout_failure_reason'),
     /**
+     * What the vendor owes the platform after a chargeback the platform lost on
+     * a payout that had already been released (VEN-645).
+     *
+     * Orla is the loss collector, so the network debits the platform for money
+     * the vendor already holds. Zero for every other booking. Recorded only: the
+     * recovery — netting it off the next transfers — is VEN-658's, and this is
+     * the figure it reads.
+     */
+    vendorOwedCents: integer('vendor_owed_cents').notNull().default(0),
+    /**
      * The customer's own words about the problem they reported, kept while the
      * complaint is open and cleared when it is resolved.
      *
@@ -439,6 +449,7 @@ export const bookings = pgTable(
     check('bookings_total_amount_cents_positive', sql`${table.totalAmountCents} > 0`),
     check('bookings_platform_fee_cents_non_negative', sql`${table.platformFeeCents} >= 0`),
     check('bookings_vendor_payout_cents_non_negative', sql`${table.vendorPayoutCents} >= 0`),
+    check('bookings_vendor_owed_cents_non_negative', sql`${table.vendorOwedCents} >= 0`),
     check(
       'bookings_refund_amount_cents_range',
       sql`${table.refundAmountCents} IS NULL OR (${table.refundAmountCents} >= 0 AND ${table.refundAmountCents} <= ${table.totalAmountCents})`,

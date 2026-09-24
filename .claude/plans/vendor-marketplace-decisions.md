@@ -2392,3 +2392,20 @@ customer's money.
    already guard. It would cost a stored charge id (`latest_charge`) the booking
    does not keep, and Stripe overwrites the transfer's `transfer_group` with the
    charge's, which `findTransfer` keys on. Rejected, not deferred.
+
+### D46: An early fraud warning opens a case and pages the operator; it never refunds or freezes — *2026-09-24*
+
+`radar.early_fraud_warning.created` (VEN-645) is an issuer's signal that a charge
+may be fraudulent, usually days before a chargeback. Auto-refunding on it would
+refund customers whose charge was only flagged and cancel a vendor's booking with
+nobody having looked; freezing the payout would hold vendors on a signal that
+most warnings never turn into a dispute.
+
+1. **A case (`origin = 'fraud_warning'`) and an `early_fraud_warning` alert.** One
+   case per booking; a redelivery changes nothing.
+2. **No refund, no hold.** The operator rules on the case. A chargeback that
+   follows takes the existing hold path, and a lost one ends the booking (below).
+3. **A lost chargeback ends the booking's money.** Unreleased: payout zero and the
+   booking cancelled, nothing refunded (the network already repaid the customer).
+   Released: `bookings.vendor_owed_cents` records what the vendor holds. Recovery
+   from the vendor is VEN-658's.

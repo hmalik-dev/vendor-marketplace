@@ -577,6 +577,9 @@ describe('the Stripe webhook subscription', () => {
         'refund.failed',
         'refund.updated',
         'charge.refund.updated',
+        'transfer.reversed',
+        'payout.failed',
+        'radar.early_fraud_warning.created',
       ]);
 
       // Mutation: a type added to the route's set is one the check now demands.

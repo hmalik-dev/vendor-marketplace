@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, isNull, lt, ne, notExists, sql } from 'drizzle-orm';
+import { and, eq, gt, gte, inArray, isNotNull, isNull, lt, ne, notExists, sql } from 'drizzle-orm';
 import {
   availability,
   bookingRequests,
@@ -662,4 +662,62 @@ export async function cancelBookingAndFreeDate(
 
     return row;
   });
+}
+
+/** The booking a transfer paid, or `null` for a transfer this platform's rows do not name. */
+export async function findBookingIdByTransferId(
+  db: AppDatabase,
+  transferId: string,
+): Promise<string | null> {
+  const rows = await db
+    .select({ id: bookings.id })
+    .from(bookings)
+    .where(eq(bookings.stripeTransferId, transferId))
+    .limit(1);
+
+  return rows[0]?.id ?? null;
+}
+
+/**
+ * Lowers what the vendor was paid to what is left after a reversal Stripe holds
+ * (VEN-645). Written only downward: a cancellation rewrites the same figure
+ * itself, so its echo matches nothing here, and neither does a replay of this
+ * one. A released booking that was cancelled is followed too, since the sweep
+ * pays a cancelled booking's leftover share.
+ */
+export async function lowerReleasedVendorPayout(
+  db: AppDatabase,
+  transferId: string,
+  netCents: number,
+): Promise<string | null> {
+  const rows = await db
+    .update(bookings)
+    .set({
+      vendorPayoutCents: netCents,
+      /* Money taken back from the vendor is money they no longer owe. */
+      vendorOwedCents: sql`greatest(${bookings.vendorOwedCents} - (${bookings.vendorPayoutCents} - ${netCents}), 0)`,
+      updatedAt: sql`now()`,
+    })
+    .where(
+      and(
+        eq(bookings.stripeTransferId, transferId),
+        isNotNull(bookings.payoutReleasedAt),
+        gt(bookings.vendorPayoutCents, netCents),
+      ),
+    )
+    .returning({ id: bookings.id });
+
+  return rows[0]?.id ?? null;
+}
+
+/** Records what a vendor owes after a lost chargeback on a payout that had already left. */
+export async function recordVendorOwed(
+  db: AppDatabase,
+  bookingId: string,
+  cents: number,
+): Promise<void> {
+  await db
+    .update(bookings)
+    .set({ vendorOwedCents: cents, updatedAt: sql`now()` })
+    .where(eq(bookings.id, bookingId));
 }
