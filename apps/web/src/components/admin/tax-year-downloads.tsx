@@ -52,7 +52,15 @@ export function TaxYearDownloads({ years }: TaxYearDownloadsProps): React.ReactE
       }
 
       if (!response.ok) {
-        const parsed = apiErrorSchema.safeParse(await response.json().catch(() => null));
+        let body: unknown = null;
+
+        try {
+          body = await response.json();
+        } catch {
+          // Not an API error body (a gateway page): the generic sentence below covers it.
+        }
+
+        const parsed = apiErrorSchema.safeParse(body);
 
         if (parsed.success && parsed.data.error === ERROR_CODES.STEP_UP_REQUIRED) {
           setStepUpYear(year);
