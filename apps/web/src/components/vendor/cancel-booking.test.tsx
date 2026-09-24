@@ -59,6 +59,7 @@ describe('CancelBooking', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Cancel booking' }));
 
     expect(requestMock).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(screen.getByLabelText('Reason for the customer'));
     expect(
       screen.getByText(
         'The customer is refunded $1,200 in full and you are not paid for this booking. This cannot be undone.',

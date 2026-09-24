@@ -50,6 +50,7 @@ export function CancelBooking({ booking }: CancelBookingProps): React.ReactEleme
 
   const refund = formatPrice(vendorCancellationRefundCents(booking.totalAmountCents));
   const reasonId = `cancel-reason-${booking.id}`;
+  const consequenceId = `cancel-consequence-${booking.id}`;
 
   async function cancel(): Promise<void> {
     setBusy(true);
@@ -84,12 +85,15 @@ export function CancelBooking({ booking }: CancelBookingProps): React.ReactEleme
       <Label htmlFor={reasonId}>Reason for the customer</Label>
       <Textarea
         id={reasonId}
+        aria-required="true"
+        aria-describedby={consequenceId}
+        autoFocus
         value={reason}
         maxLength={1_000}
         disabled={busy}
         onChange={(event) => setReason(event.target.value)}
       />
-      <p className="text-xs text-stone-600">
+      <p id={consequenceId} className="text-xs text-stone-600">
         The customer is refunded {refund} in full and you are not paid for this booking. This cannot
         be undone.
       </p>
