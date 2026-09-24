@@ -23,7 +23,7 @@ or Docker is not running. When there is no `.env` it creates one from
 `docker-compose.yml` and `DATABASE_URL_UNPOOLED`, `NEON_BRANCH`,
 `RESEND_WEBHOOK_SECRET` and `OPERATOR_ALERT_EMAIL` left empty. Their
 placeholders are not empty to the apps: the migrator would prefer the unpooled
-placeholder, and the API refuses to boot on `operator@...`. An existing `.env` is
+placeholder, and the API refuses to boot on `admin@...`. An existing `.env` is
 only ever read. It then lists every key the apps refuse to boot without that
 still holds its placeholder (Neon Auth, Stripe, Resend) and exits non-zero before
 `pnpm install`. The key lists are held against the env registry by

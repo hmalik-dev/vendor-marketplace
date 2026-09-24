@@ -61,7 +61,7 @@ describe('ConfirmAction with a typed confirmation', () => {
 
 /**
  * VEN-500: the API refuses an irreversible action with `STEP_UP_REQUIRED` until
- * the operator has entered an emailed code. The screen's browser steps cannot be
+ * the admin has entered an emailed code. The screen's browser steps cannot be
  * driven in a background lane, so this is the screen's coverage.
  */
 describe('ConfirmAction when the API asks for a step-up', () => {

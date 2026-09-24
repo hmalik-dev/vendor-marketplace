@@ -29,7 +29,7 @@ import {
  * and the row never moved — so these two queries were right by accident. They
  * are not any more.
  *
- * `admin.dao.ts`'s `PAID_AND_KEPT` says the same thing for the operator's
+ * `admin.dao.ts`'s `PAID_AND_KEPT` says the same thing for the admin's
  * revenue figure, and `owedPayout` below filters for the same reason.
  * The vendor's own two numbers were the pair left unguarded.
  */

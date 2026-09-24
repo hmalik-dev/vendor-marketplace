@@ -96,7 +96,7 @@ describe('CheckoutUnavailable', () => {
     expect(screen.queryByRole('link', { name: 'Try this payment again' })).toBeNull();
   });
 
-  /* VEN-404: the operator paused checkout. The notice, and a retry that works once it lifts. */
+  /* VEN-404: the admin paused checkout. The notice, and a retry that works once it lifts. */
   it('tells a customer checkout is paused and that nothing was charged', () => {
     render(<CheckoutUnavailable reason="paused" requestId={REQUEST_ID} vendorName={null} />);
 

@@ -44,7 +44,7 @@ test('a missing secret before the gate is switched on skips with a warning namin
 });
 
 // The first CI run reported `STRIPE_SECRET_KEY`, the job's variable, where the
-// operator has to add the secret `E2E_STRIPE_SECRET_KEY`.
+// admin has to add the secret `E2E_STRIPE_SECRET_KEY`.
 test('a missing value is reported under the repository secret someone must add', () => {
   const verdict = secretsVerdict({ ...ALL_SECRETS, STRIPE_SECRET_KEY: '' });
   assert.deepEqual(verdict.missing, ['E2E_STRIPE_SECRET_KEY']);
@@ -158,7 +158,7 @@ test('a diff touching only admin routes selects the admin specs, not customer or
       'admin-detail-patterns.spec.ts',
       'admin-filters.spec.ts',
       'admin-lists.spec.ts',
-      'admin-operator-closure.spec.ts',
+      'admin-account-closure.spec.ts',
       // /admin/settings toggles both switches below, so an admin change pulls
       // them in too — that is still "the admin specs", not the customer or
       // vendor journeys.

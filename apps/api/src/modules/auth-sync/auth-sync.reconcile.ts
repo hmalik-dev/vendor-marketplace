@@ -30,7 +30,7 @@ export interface ReconcileSummary {
   deleted: number;
   /**
    * Rows whose identity is confirmed gone but which hold confirmed bookings
-   * (VEN-480). Not closed: the operator was alerted and closes them.
+   * (VEN-480). Not closed: the admin was alerted and closes them.
    */
   flagged: number;
   /** Rows already agreeing with Neon Auth. On a second run this is all of them. */

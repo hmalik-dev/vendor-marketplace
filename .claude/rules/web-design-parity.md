@@ -181,7 +181,7 @@ twice. All three of these are decisions, not drift:
   D=17 → 25, D=20 → 32 — so no single one satisfies them. `WORDMARK_SIZES`
   exists since VEN-388 but holds only the corroborated D=15 → 23 (the desktop
   header, including the admin header); measuring D=17 is **#118's**.
-- **The admin header's operator line renders `stone-480`** (`#d8d0c2`), where
+- **The admin header's admin line renders `stone-480`** (`#d8d0c2`), where
   frame `13` draws `#D5CEC2` — which is `stone-400`'s hex. That is the frame
   naming a colour rather than a role: `stone-400` is a **border** value, drawn
   on a light ground at thirty-nine sites and as text on ink at none. The two

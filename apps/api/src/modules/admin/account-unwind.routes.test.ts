@@ -41,11 +41,11 @@ const SETTLED_EVENT_DATE = toDateString(addDays(START, 30));
 let clockNow = START;
 
 /**
- * 20:00 US Eastern on Oct 7 is 00:00 UTC on Oct 8, so an operator at that hour
+ * 20:00 US Eastern on Oct 7 is 00:00 UTC on Oct 8, so an admin at that hour
  * is already "on" the day of an Oct 8 event by the process's own UTC clock.
  */
 const SAME_UTC_DAY_EVENT = '2026-10-08';
-const OPERATOR_EVENING = new Date('2026-10-08T01:00:00Z');
+const ADMIN_EVENING = new Date('2026-10-08T01:00:00Z');
 
 /**
  * #444: an unwind must not rewrite the history of a booking that already
@@ -377,7 +377,7 @@ describe('an account unwind and the requests behind settled bookings', () => {
   });
 
   /**
-   * VEN-423. The unwind's day bound was the operator's UTC date, so a booking on
+   * VEN-423. The unwind's day bound was the admin's UTC date, so a booking on
    * the next local day fell outside it for anyone west of UTC: at 01:00 UTC on
    * Oct 8 an event dated Oct 8 was neither cancelled, refunded nor notified.
    *
@@ -387,7 +387,7 @@ describe('an account unwind and the requests behind settled bookings', () => {
    * this path never makes.
    */
   it.each(['vendor', 'customer'] as const)(
-    'refunds a booking dated the UTC day of the operator, banning the %s first',
+    'refunds a booking dated the UTC day of the admin, banning the %s first',
     async (banned) => {
       vendorActor = `user_vendor_${banned}`;
       customerActor = `user_customer_${banned}`;
@@ -417,7 +417,7 @@ describe('an account unwind and the requests behind settled bookings', () => {
       ).toBe(200);
       await payFor(requestId);
 
-      clockNow = OPERATOR_EVENING;
+      clockNow = ADMIN_EVENING;
       const targetId = banned === 'vendor' ? vendorUserId : customerUserId;
       const bannedAtRefund: boolean[] = [];
       const createRefund = harness.stripe.createRefund;

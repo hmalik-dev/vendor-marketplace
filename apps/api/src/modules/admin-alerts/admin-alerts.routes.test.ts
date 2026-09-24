@@ -4,7 +4,7 @@ import {
   bookings,
   categories,
   notifications,
-  operatorAlerts,
+  adminAlerts,
   supportCases,
   users,
   vendorCategories,
@@ -39,14 +39,14 @@ interface Fixture {
 }
 
 /**
- * VEN-405: the events that need a person arrive in the operator's inbox, once,
+ * VEN-405: the events that need a person arrive in the admin's inbox, once,
  * and carry ids and console links rather than customer PII.
  */
-describe('operator alerts', () => {
+describe('admin alerts', () => {
   let harness: TestHarness;
   let photographyId: string;
 
-  function operatorMail(): EmailMessage[] {
+  function adminMail(): EmailMessage[] {
     return harness.email.sent.filter((message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL);
   }
 
@@ -199,7 +199,7 @@ describe('operator alerts', () => {
 
   afterEach(async () => {
     await harness.flushEmail();
-    await harness.database.db.delete(operatorAlerts);
+    await harness.database.db.delete(adminAlerts);
     await harness.database.db.delete(notifications);
     await harness.database.db.delete(supportCases);
     await harness.database.db.delete(bookings);
@@ -218,7 +218,7 @@ describe('operator alerts', () => {
     await harness.close();
   });
 
-  it('emails the operator once for a chargeback, and not again on redelivery', async () => {
+  it('emails the admin once for a chargeback, and not again on redelivery', async () => {
     const fixture = await seed();
 
     const first = await deliverDispute('dp_alert_1', fixture.paymentIntentId);
@@ -229,7 +229,7 @@ describe('operator alerts', () => {
     expect(cases).toHaveLength(1);
     const caseId = cases[0]!.id;
 
-    const sent = operatorMail();
+    const sent = adminMail();
     expect(sent).toHaveLength(1);
     expect(sent[0]!.subject).toBe(`[Orla ops] Chargeback opened on booking ${fixture.bookingId}`);
     expect(sent[0]!.text).toContain(`Booking: ${fixture.bookingId}`);
@@ -240,15 +240,15 @@ describe('operator alerts', () => {
     const replay = await deliverDispute('dp_alert_1', fixture.paymentIntentId);
     expect(replay.statusCode).toBe(200);
     expect(replay.json().outcome).toBe('already-recorded');
-    expect(operatorMail()).toHaveLength(1);
+    expect(adminMail()).toHaveLength(1);
 
     const recorded = await harness.database.db
       .select({
-        kind: operatorAlerts.kind,
-        subjectId: operatorAlerts.subjectId,
-        outcome: operatorAlerts.outcome,
+        kind: adminAlerts.kind,
+        subjectId: adminAlerts.subjectId,
+        outcome: adminAlerts.outcome,
       })
-      .from(operatorAlerts);
+      .from(adminAlerts);
     expect(recorded).toEqual([{ kind: 'dispute_opened', subjectId: caseId, outcome: 'sent' }]);
   });
 
@@ -257,7 +257,7 @@ describe('operator alerts', () => {
       expect((await postStripe('forged-signature')).statusCode).toBe(401);
     }
     await harness.flushEmail();
-    expect(operatorMail().map((message) => message.subject)).toEqual([
+    expect(adminMail().map((message) => message.subject)).toEqual([
       '[Orla ops] Stripe webhook refused 3 times in 10 minutes',
     ]);
 
@@ -274,7 +274,7 @@ describe('operator alerts', () => {
       expect((await postStripe()).statusCode).toBe(500);
     }
     await harness.flushEmail();
-    expect(operatorMail().map((message) => message.subject)).toEqual([
+    expect(adminMail().map((message) => message.subject)).toEqual([
       '[Orla ops] Stripe webhook refused 3 times in 10 minutes',
       '[Orla ops] Stripe webhook failed 3 times in 10 minutes',
     ]);
@@ -284,7 +284,7 @@ describe('operator alerts', () => {
       expect((await postStripe('forged-signature')).statusCode).toBe(401);
     }
     await harness.flushEmail();
-    expect(operatorMail()).toHaveLength(2);
+    expect(adminMail()).toHaveLength(2);
   });
 
   it('retries a failed alert send, because a chargeback is never redelivered to alert again', async () => {
@@ -295,11 +295,11 @@ describe('operator alerts', () => {
       'dispute-opened',
     );
 
-    const sent = operatorMail();
+    const sent = adminMail();
     expect(sent).toHaveLength(1);
     expect(sent[0]!.subject).toBe(`[Orla ops] Chargeback opened on booking ${fixture.bookingId}`);
     expect(
-      await harness.database.db.select({ outcome: operatorAlerts.outcome }).from(operatorAlerts),
+      await harness.database.db.select({ outcome: adminAlerts.outcome }).from(adminAlerts),
     ).toEqual([{ outcome: 'sent' }]);
   });
 
@@ -311,7 +311,7 @@ describe('operator alerts', () => {
     }
     await harness.flushEmail();
 
-    expect(operatorMail()).toEqual([]);
+    expect(adminMail()).toEqual([]);
   });
 
   it('emails once when a payout fails its third attempt, and not on the fourth', async () => {
@@ -321,19 +321,19 @@ describe('operator alerts', () => {
       db: harness.database.db,
       stripe: harness.stripe,
       log: harness.app.log,
-      alerts: harness.app.operatorAlerts,
+      alerts: harness.app.adminAlerts,
     };
 
     for (let sweep = 1; sweep <= 2; sweep += 1) {
       expect((await releaseDuePayouts(context, new Date())).failed).toBe(1);
       await harness.flushEmail();
     }
-    expect(operatorMail()).toEqual([]);
+    expect(adminMail()).toEqual([]);
 
     expect((await releaseDuePayouts(context, new Date())).failed).toBe(1);
     await harness.flushEmail();
 
-    const sent = operatorMail();
+    const sent = adminMail();
     expect(sent).toHaveLength(1);
     expect(sent[0]!.subject).toBe(
       `[Orla ops] Payout failed 3 times on booking ${fixture.bookingId}`,
@@ -343,7 +343,7 @@ describe('operator alerts', () => {
 
     expect((await releaseDuePayouts(context, new Date())).failed).toBe(1);
     await harness.flushEmail();
-    expect(operatorMail()).toHaveLength(1);
+    expect(adminMail()).toHaveLength(1);
   });
 
   it('emails when Stripe disables a vendor who could be paid', async () => {
@@ -372,7 +372,7 @@ describe('operator alerts', () => {
     expect(response.json().outcome).toBe('not-onboarded');
     await harness.flushEmail();
 
-    const sent = operatorMail();
+    const sent = adminMail();
     expect(sent).toHaveLength(1);
     expect(sent[0]!.subject).toBe('[Orla ops] Sunlit Studio can no longer be paid out');
     expect(sent[0]!.text).toContain('Stripe reason: requirements.past_due');
@@ -381,7 +381,7 @@ describe('operator alerts', () => {
     // The same state redelivered is `unchanged`, and nobody is paged for it.
     expect((await postStripe()).json().outcome).toBe('unchanged');
     await harness.flushEmail();
-    expect(operatorMail()).toHaveLength(1);
+    expect(adminMail()).toHaveLength(1);
   });
 
   it('emails when a safety report is filed, without the reporter or their words', async () => {
@@ -404,7 +404,7 @@ describe('operator alerts', () => {
     const caseId = (
       await harness.database.db.select({ id: supportCases.id }).from(supportCases)
     )[0]!.id;
-    const sent = operatorMail();
+    const sent = adminMail();
     expect(sent).toHaveLength(1);
     expect(sent[0]!.subject).toBe('[Orla ops] Report filed: Harassment or abuse');
     expect(sent[0]!.text).toContain(`Case: ${filed.json().reference} (${caseId})`);
@@ -424,7 +424,7 @@ describe('operator alerts', () => {
     expect(cancelled.statusCode).toBe(500);
     await harness.flushEmail();
 
-    const sent = operatorMail();
+    const sent = adminMail();
     expect(sent).toHaveLength(1);
     expect(sent[0]!.subject).toBe(`[Orla ops] Refund failed on booking ${fixture.bookingId}`);
     expect(sent[0]!.text).toContain('A refund attempted during a cancellation did not go through');
@@ -450,7 +450,7 @@ describe('operator alerts', () => {
         .from(bookings)
     )[0]!;
     expect(row).toEqual({ refund: null, status: 'confirmed' });
-    expect(operatorMail().map((message) => message.subject)).toEqual([
+    expect(adminMail().map((message) => message.subject)).toEqual([
       `[Orla ops] Refund failed on booking ${fixture.bookingId}`,
     ]);
   });
@@ -474,7 +474,7 @@ describe('operator alerts', () => {
     };
     expect((await postStripe()).json().outcome).toBe('refund-unchanged');
     await harness.flushEmail();
-    expect(operatorMail()).toEqual([]);
+    expect(adminMail()).toEqual([]);
 
     harness.stripe.refunds[0]!.status = 'failed';
     for (const type of ['charge.refund.updated', 'refund.failed', 'charge.refund.updated']) {
@@ -483,7 +483,7 @@ describe('operator alerts', () => {
     }
     await harness.flushEmail();
 
-    expect(operatorMail().map((message) => message.subject)).toEqual([
+    expect(adminMail().map((message) => message.subject)).toEqual([
       `[Orla ops] Refund failed on booking ${fixture.bookingId}`,
     ]);
   });
@@ -510,7 +510,7 @@ describe('operator alerts', () => {
     expect((await postStripe()).json().outcome).toBe('refund-failed');
     await harness.flushEmail();
 
-    const sent = operatorMail();
+    const sent = adminMail();
     expect(sent.map((message) => message.subject)).toEqual([
       '[Orla ops] Refund re_test_1 on pi_declined_request failed',
     ]);
@@ -531,7 +531,7 @@ describe('operator alerts', () => {
     expect(await harness.database.db.select({ id: supportCases.id }).from(supportCases)).toEqual(
       [],
     );
-    const sent = operatorMail();
+    const sent = adminMail();
     expect(sent.map((message) => message.subject)).toEqual([
       '[Orla ops] Chargeback on pi_no_booking matches no booking',
     ]);
@@ -559,7 +559,7 @@ describe('operator alerts', () => {
     expect(banned.json().refundsFailed).toBe(1);
     await harness.flushEmail();
 
-    expect(operatorMail().map((message) => message.subject)).toEqual([
+    expect(adminMail().map((message) => message.subject)).toEqual([
       `[Orla ops] Refund failed on booking ${fixture.bookingId}`,
     ]);
   });
@@ -581,7 +581,7 @@ describe('operator alerts', () => {
     });
     await harness.flushEmail();
 
-    const sent = operatorMail();
+    const sent = adminMail();
     expect(sent.map((message) => message.subject.split(':')[0])).toEqual([
       '[Orla ops] Chargeback opened on booking ' + fixture.bookingId,
       '[Orla ops] Report filed',

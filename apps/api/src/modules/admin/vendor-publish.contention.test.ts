@@ -153,7 +153,7 @@ describe('two moderation writers on one vendor, against a real Postgres', () => 
 
     /*
      * 200 and 409, in whichever order the two connections won. Two 200s would
-     * mean both operators were told they had taken the storefront down, and
+     * mean both admins were told they had taken the storefront down, and
      * both appended an audit row where one is owed a conflict.
      */
     expect([first.statusCode, second.statusCode].sort()).toEqual([200, 409]);
@@ -197,16 +197,16 @@ describe('two moderation writers on one vendor, against a real Postgres', () => 
   });
 
   /**
-   * **The vendor's own publish against the operator's takedown (#457).**
+   * **The vendor's own publish against the admin's takedown (#457).**
    *
    * The vendor's editor reads its row, decides, and writes several statements
    * later without taking a lock — so `moderation_hold` being false when it read
    * says nothing about the moment it writes. If that write does not carry the
-   * hold in its own `WHERE`, an operator's takedown committing inside the window
+   * hold in its own `WHERE`, an admin's takedown committing inside the window
    * is simply overwritten, and the row lands on the one state neither party can
    * get out of: `is_published = true` beside `moderation_hold = true`. The
    * storefront is back on search, the console labels the row `Held`, and the
-   * operator's republish answers 409 because it is already published.
+   * admin's republish answers 409 because it is already published.
    *
    * **The assertion is order-independent, and the race is entered rather than
    * forced.** Whichever of the two commits first, the pair has to agree —
@@ -221,7 +221,7 @@ describe('two moderation writers on one vendor, against a real Postgres', () => 
    * `updateVendorProfile`, this failed **three runs out of three** on
    * `is_published && moderation_hold`, and passed three out of three with it
    * back. The window is wide because the vendor's read is the first statement
-   * of its request and the operator's whole transaction is shorter than the
+   * of its request and the admin's whole transaction is shorter than the
    * four reads that follow it.
    */
   it('never leaves a storefront published and held at once', async () => {
@@ -241,7 +241,7 @@ describe('two moderation writers on one vendor, against a real Postgres', () => 
     });
     expect(paused.statusCode).toBe(200);
 
-    const [vendorPublish, operatorHold] = await Promise.all([
+    const [vendorPublish, adminHold] = await Promise.all([
       /* A whole-profile save, because that is the long pre-write path: slug
        * resolution, category and tag reads and two counts all sit between the
        * read that checks the hold and the write that acts on it. */
@@ -275,7 +275,7 @@ describe('two moderation writers on one vendor, against a real Postgres', () => 
       .where(eq(vendorProfiles.id, vendorId))
       .limit(1);
 
-    expect(operatorHold.statusCode).toBe(200);
+    expect(adminHold.statusCode).toBe(200);
     expect(row!.moderationHold).toBe(true);
 
     /* The invariant, both halves. */

@@ -28,7 +28,7 @@ function setupHint(variable: EnvVariable, target: Target): string {
  * A credential whose prefix names an environment fails its shape for two very
  * different reasons: it is malformed, or it is a perfectly good key from the
  * other environment. Only the second one is about to spend real money, and
- * printing a regex at the operator holding it invites them to paste it back.
+ * printing a regex at the admin holding it invites them to paste it back.
  */
 function modeMismatch(variable: EnvVariable, value: string, target: Target): string | undefined {
   if (variable.modes === undefined) {

@@ -124,7 +124,7 @@ export async function updatePackage(
 
   /*
    * The hold rides in the `WHERE`, not only in the check above (#457). `existing`
-   * was read before this statement and nothing locks the row, so an operator's
+   * was read before this statement and nothing locks the row, so an admin's
    * deactivation committing in between would otherwise be overwritten by a
    * reactivation that had already passed.
    *

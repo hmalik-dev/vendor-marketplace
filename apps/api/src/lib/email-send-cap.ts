@@ -29,7 +29,7 @@ export class EmailSendingClosedError extends Error {
 
 /**
  * Slots past the cap that only `essential` mail may take: 80 + 15 stays under
- * Resend's 100 a day, and the operator's step-up codes and alerts still go out
+ * Resend's 100 a day, and the admin's step-up codes and alerts still go out
  * on a day ordinary mail has spent.
  */
 export const ESSENTIAL_SEND_HEADROOM = 15;
@@ -95,7 +95,7 @@ export async function closeSendDay(
 
 /**
  * Reopens `day` when it was closed by a cap lower than `cap` — the boot after the
- * operator raised `EMAIL_DAILY_SEND_CAP`, which is a redeploy. A `quota` closure
+ * admin raised `EMAIL_DAILY_SEND_CAP`, which is a redeploy. A `quota` closure
  * stays: only Resend can lift that.
  */
 export async function reopenCapClosedDay(
@@ -180,7 +180,7 @@ export function withDailySendCap(
         reserved = await reserveSend(db, day, cap, essential);
       } catch (error) {
         /*
-         * The database is down — the likeliest moment for an operator alert —
+         * The database is down — the likeliest moment for an admin alert —
          * and `alertNow` already sends unrecorded then (VEN-430). Essential mail
          * goes out uncounted; everything else fails as it would have anyway.
          */

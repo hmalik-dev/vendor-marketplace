@@ -6,7 +6,7 @@ import { scrubAnalyticsEvent } from './analytics-scrub';
 import { isAdminRoute } from './public-chrome';
 
 /**
- * Vercel Web Analytics, minus the operator console.
+ * Vercel Web Analytics, minus the admin console.
  *
  * A client component only to read the pathname. `isAdminRoute` rather than
  * `OutsideAdmin`, because the latter also hides checkout, whose page views are

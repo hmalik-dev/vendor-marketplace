@@ -13,7 +13,7 @@ export interface CommandOutcome {
 /**
  * Runs a command without a shell and never throws. The `missing` status matters:
  * "Docker is not installed" and "Docker is installed but not running" need
- * different fixes, and collapsing them into one failure sends the operator down
+ * different fixes, and collapsing them into one failure sends the admin down
  * the wrong path.
  */
 export async function runCommand(

@@ -7,7 +7,7 @@ import type { WireBookingRequest } from '@/lib/wire-schemas';
  * A cancelled request used to render one neutral sentence — "This request was
  * cancelled." — over three different events, on a row where money had moved
  * and come back. The sentence before it was worse: "You withdrew this
- * request.", told to a customer an operator had just refunded.
+ * request.", told to a customer an admin had just refunded.
  *
  * The three are told apart structurally, not by reading copy back out of the
  * database:
@@ -17,7 +17,7 @@ import type { WireBookingRequest } from '@/lib/wire-schemas';
  * | Withdrawn before acceptance   | no settlement — no booking was made  |
  * | Cancelled after payment       | `cancelledBy: 'customer'`            |
  * | Cancelled by the vendor       | `cancelledBy: 'vendor'` (VEN-659)    |
- * | Unwound by an admin           | `cancelledBy: 'admin'`               |
+ * | Unwound by an admin        | `cancelledBy: 'admin'`               |
  *
  * A fourth shape exists and is not a case: a booking cancelled before those
  * columns were written carries `cancelledBy: null`. It gets a sentence that

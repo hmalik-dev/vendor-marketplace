@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AppDatabase } from '../../lib/database.js';
 import type { EmailMessage } from '../../lib/email.js';
 import { EmailSendingClosedError } from '../../lib/email-send-cap.js';
-import { alertNow, refundFailedAlert, type OperatorAlertDeps } from './operator-alerts.service.js';
+import { alertNow, refundFailedAlert, type AdminAlertDeps } from './admin-alerts.service.js';
 
 /** A database whose every write throws — the outage these alerts exist for. */
 const brokenDb = {
@@ -14,10 +14,10 @@ const brokenDb = {
   },
 } as unknown as AppDatabase;
 
-function deps(email?: OperatorAlertDeps['email']) {
+function deps(email?: AdminAlertDeps['email']) {
   const sent: (EmailMessage & { idempotencyKey?: string })[] = [];
   const log = { error: vi.fn(), warn: vi.fn() };
-  const all: OperatorAlertDeps = {
+  const all: AdminAlertDeps = {
     db: brokenDb,
     email:
       email ??
@@ -26,9 +26,9 @@ function deps(email?: OperatorAlertDeps['email']) {
           sent.push(message);
           return { providerMessageId: null };
         },
-      } as OperatorAlertDeps['email']),
-    log: log as unknown as OperatorAlertDeps['log'],
-    background: { run: vi.fn() } as unknown as OperatorAlertDeps['background'],
+      } as AdminAlertDeps['email']),
+    log: log as unknown as AdminAlertDeps['log'],
+    background: { run: vi.fn() } as unknown as AdminAlertDeps['background'],
     clock: () => new Date('2026-09-19T12:00:00Z'),
     to: 'ops@example.com',
     webOrigin: 'https://orla.test',
@@ -49,7 +49,7 @@ describe('alertNow', () => {
     expect(sent[0]!.to).toBe('ops@example.com');
     expect(sent[0]!.subject).toBe('[Orla ops] Refund failed on booking b1');
     expect(sent[0]!.idempotencyKey).toMatch(/^[0-9a-f-]{36}$/);
-    // Operator mail may spend the headroom past the daily cap (VEN-661).
+    // Admin mail may spend the headroom past the daily cap (VEN-661).
     expect(sent[0]!.essential).toBe(true);
     expect(log.error).toHaveBeenCalledTimes(1);
   });
@@ -84,7 +84,7 @@ describe('alertNow', () => {
       send: async () => {
         throw new Error('resend down');
       },
-    } as unknown as OperatorAlertDeps['email']);
+    } as unknown as AdminAlertDeps['email']);
 
     const result = await alertNow(all, refundFailedAlert({ bookingId: 'b2', during: 'a test' }));
 
@@ -99,7 +99,7 @@ describe('alertNow', () => {
       send: async () => {
         throw new Error('resend down');
       },
-    } as unknown as OperatorAlertDeps['email']);
+    } as unknown as AdminAlertDeps['email']);
 
     const result = await alertNow(
       { ...all, reporter: { capture } },
@@ -109,7 +109,7 @@ describe('alertNow', () => {
     expect(result).toBe('failed');
     expect(capture).toHaveBeenCalledTimes(1);
     const [error] = capture.mock.calls[0] as [Error];
-    expect(error.message).toBe('Operator alert could not be sent: refund_failed');
+    expect(error.message).toBe('Admin alert could not be sent: refund_failed');
   });
 
   it('does not page the error reporter when the alert is sent', async () => {
@@ -131,7 +131,7 @@ describe('alertNow', () => {
         attempts += 1;
         throw new EmailSendingClosedError('quota', '2026-09-19');
       },
-    } as unknown as OperatorAlertDeps['email']);
+    } as unknown as AdminAlertDeps['email']);
     const wait = vi.fn(async () => undefined);
 
     const result = await alertNow(

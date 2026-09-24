@@ -78,7 +78,7 @@ describe('CaseConversation', () => {
     );
     /* The frame's line, with the straight apostrophe `31-content-voice.md` rules. */
     expect(card.textContent).toContain(
-      "Read-only, and scoped to the event date. Operators see the messages the case is about, not the relationship's whole history.",
+      "Read-only, and scoped to the event date. Admins see the messages the case is about, not the relationship's whole history.",
     );
   });
 

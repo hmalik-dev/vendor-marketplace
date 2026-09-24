@@ -29,7 +29,7 @@ import {
  * reason `admin.activity.routes.test.ts` gives: that file is 1,500 lines and
  * three lanes are appending to it this week. The subject here is also
  * orthogonal to what it asserts — not "does the list paginate" but "does the
- * console tell an operator that money stopped moving, and can they do anything
+ * console tell an admin that money stopped moving, and can they do anything
  * about it".
  *
  * The payout columns are written directly rather than driven through checkout
@@ -252,7 +252,7 @@ describe('admin payout health', () => {
     await harness.database.db.delete(vendorProfiles);
     /*
      * `admin_actions` is append-only by trigger: it refuses a direct DELETE
-     * while the operator it names still exists, and lets the `actor_id` cascade
+     * while the admin it names still exists, and lets the `actor_id` cascade
      * through when the account itself is erased (#434). Deleting `users` is
      * therefore what clears it, and clearing it first would be the tampering
      * the trigger exists to refuse.
@@ -491,7 +491,7 @@ describe('admin payout health', () => {
      * The flag is on the row, not only inside the filter.
      *
      * The failure #415 fixed was precisely a state you had to already know
-     * about in order to find it, so an operator scanning the unfiltered table
+     * about in order to find it, so an admin scanning the unfiltered table
      * has to see this without knowing the filter exists.
      */
     it('flags a failing payout on the unfiltered list', async () => {
@@ -530,7 +530,7 @@ describe('admin payout health', () => {
      *
      * A full refund rewrites `vendor_payout_cents` to `0` (D37) and leaves the
      * release null, so a flag reading `payout_attempts > 0 and not released`
-     * would hold that row in the operator's failing list for ever — under an
+     * would hold that row in the admin's failing list for ever — under an
      * alert promising that the scheduled release keeps trying, about a booking
      * it has permanently dropped, behind a Retry button answered 409.
      */
@@ -584,7 +584,7 @@ describe('admin payout health', () => {
      * The first attempt is refused and the double caches that refusal under its
      * key, exactly as Stripe does for 24 hours. A retry that reused
      * `payout_<bookingId>_0` would be answered from that cache with the same
-     * error, and the operator would press the button and learn nothing.
+     * error, and the admin would press the button and learn nothing.
      */
     it('mints a key versioned by the attempt and releases the payout', async () => {
       const bookingId = await paidBooking({
@@ -674,8 +674,8 @@ describe('admin payout health', () => {
       expect(harness.stripe.transfers).toEqual([]);
     });
 
-    /* #434: every mutating console route names the operator who made it. */
-    it('records which operator retried it, with the outcome and the attempt', async () => {
+    /* #434: every mutating console route names the admin who made it. */
+    it('records which admin retried it, with the outcome and the attempt', async () => {
       const bookingId = await paidBooking({ payoutAttempts: 1 });
 
       expect((await retry(bookingId)).statusCode).toBe(200);
@@ -788,7 +788,7 @@ describe('admin payout health', () => {
       expect(harness.stripe.transfers).toHaveLength(1);
     });
 
-    it('holds it for the sweep too, which the operator retry shares its claim with', async () => {
+    it('holds it for the sweep too, which the admin retry shares its claim with', async () => {
       await unagreedVendor();
       const bookingId = await paidBooking();
 
@@ -871,7 +871,7 @@ describe('admin payout health', () => {
      *
      * The count is "money we cannot send", not "accounts that have not finished
      * onboarding" — most of the latter have never taken a booking, and a card
-     * that led an operator to them every morning would be noise.
+     * that led an admin to them every morning would be noise.
      */
     it('ignores a blocked vendor with no outstanding payout', async () => {
       await paidBooking({ payoutReleasedAt: new Date('2026-06-05T00:00:00Z') });

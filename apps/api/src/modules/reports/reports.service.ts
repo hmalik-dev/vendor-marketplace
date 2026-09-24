@@ -12,10 +12,7 @@ import type { EmailGateway } from '../../lib/email.js';
 import { AppError, notFound, unauthorized } from '../../lib/errors.js';
 import { openReportCase, recordCaseSendFailure } from '../cases/cases.service.js';
 import { findUserEmail } from '../notifications/notification-email.dao.js';
-import {
-  reportFiledAlert,
-  type OperatorAlerts,
-} from '../operator-alerts/operator-alerts.service.js';
+import { reportFiledAlert, type AdminAlerts } from '../admin-alerts/admin-alerts.service.js';
 import { renderReportNotice } from '../support/support-email.js';
 import type { AuthenticatedUser } from '../../plugins/neon-auth.js';
 import { findReportSubject, type ReportSubjectProjection } from './reports.dao.js';
@@ -26,7 +23,7 @@ import { findReportSubject, type ReportSubjectProjection } from './reports.dao.j
  * **A report is not a second inbox.** It writes a `support_cases` row with
  * `origin = 'user_report'`, lands in `/admin/cases` beside the typed support
  * messages and the card networks' chargebacks, and is worked with the same two
- * controls. An operator working three queues works none of them.
+ * controls. An admin working three queues works none of them.
  *
  * **And it moves no money.** The other two doors freeze a vendor's payout, and
  * #431's own finding was that one of them announced the freeze to the vendor
@@ -47,7 +44,7 @@ import { findReportSubject, type ReportSubjectProjection } from './reports.dao.j
  * whose row is written **has arrived**, whatever the mail service did, and
  * telling its author otherwise is false twice over — it invites a retry that
  * files a duplicate case and spends one of their six an hour, while the
- * operator's queue quietly fills with the same complaint.
+ * admin's queue quietly fills with the same complaint.
  *
  * Found by driving it: an unverified `EMAIL_FROM` sender made every report 502
  * while every one of them was sitting in the queue. So the halves swap. The row
@@ -62,19 +59,19 @@ export interface ReportDeps {
   log: FastifyBaseLogger;
   /** `SUPPORT_EMAIL_TO`. Never a literal — see the registry row. */
   to: string;
-  /** The operator's own pager (VEN-405), separate from the support inbox. */
-  alerts: Pick<OperatorAlerts, 'dispatch'>;
+  /** The admin's own pager (VEN-405), separate from the support inbox. */
+  alerts: Pick<AdminAlerts, 'dispatch'>;
 }
 
 /**
- * The sentence an operator reads, composed by the platform from the two enums
+ * The sentence an admin reads, composed by the platform from the two enums
  * the reporter picked and the row their subject resolved to.
  *
  * **The reporter's own words are a separate paragraph and are labelled.** The
  * chargeback path states the same rule in its own message — *"Nobody typed this
  * message"* — and it matters more here: everything above the label is the
  * platform's account of what was reported, and everything below is one side of
- * a dispute. An operator ruling on a case has to be able to tell those apart at
+ * a dispute. An admin ruling on a case has to be able to tell those apart at
  * a glance.
  */
 function composeReportMessage(input: CreateReportInput, subject: ReportSubjectProjection): string {
@@ -208,10 +205,10 @@ export async function createReport(
     });
   } catch (error) {
     /*
-     * **Recorded, not raised.** The case is already in the queue an operator
+     * **Recorded, not raised.** The case is already in the queue an admin
      * works, so the report has arrived; what failed is the nudge telling them
      * to look. `email_failed_at` is exactly the column for that, and the case
-     * detail already renders it as the one state an operator has to chase
+     * detail already renders it as the one state an admin has to chase
      * rather than work.
      *
      * The reference and the failure, never the address and never the detail —

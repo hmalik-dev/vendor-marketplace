@@ -44,7 +44,7 @@ export const vendorInvites = pgTable(
       .primaryKey()
       .default(sql`gen_random_uuid()`),
     email: varchar('email', { length: MAX_EMAIL_LENGTH }).notNull(),
-    /** The operator who sent it; null once that account is gone, or for a seeded invite. */
+    /** The admin who sent it; null once that account is gone, or for a seeded invite. */
     invitedBy: uuid('invited_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     /** When the invited address opened its vendor account. */

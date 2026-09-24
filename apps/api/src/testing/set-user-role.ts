@@ -7,10 +7,10 @@ type UserRole = (typeof users.$inferSelect)['role'];
 /**
  * Sets a fixture account's role the way the database now demands.
  *
- * `users.role` changes only inside a transaction that sets the operator-grant
+ * `users.role` changes only inside a transaction that sets the admin-grant
  * setting (VEN-533), and no sign-in produces an admin, so a suite that needs
  * one has to take that path. It is a test helper on purpose: it stands in for
- * the operator grant (VEN-506) and nothing outside a test may call it.
+ * the admin grant (VEN-506) and nothing outside a test may call it.
  */
 export async function setUserRole(
   db: PgDatabase<PgQueryResultHKT, Record<string, unknown>>,

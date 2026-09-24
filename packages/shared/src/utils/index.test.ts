@@ -747,7 +747,7 @@ describe('isPayoutFailing', () => {
 
   /*
    * A dispute filed after a failed attempt is `held`, and that is a different
-   * thing to tell an operator — the distinction `payoutStatusOf` exists for.
+   * thing to tell an admin — the distinction `payoutStatusOf` exists for.
    */
   it('is false while a reported problem holds the payout', () => {
     expect(isPayoutFailing({ ...FAILING, status: 'disputed' })).toBe(false);
@@ -758,7 +758,7 @@ describe('isPayoutFailing', () => {
    *
    * A full refund rewrites `vendor_payout_cents` to `0` (D37) and leaves the
    * release null, so the sweep drops the row for ever. A flag reading the
-   * attempt count alone would keep it in the operator's failing list
+   * attempt count alone would keep it in the admin's failing list
    * permanently, under an alert saying the scheduled release keeps trying.
    */
   it('is false for a failed transfer that was then fully refunded', () => {
@@ -854,7 +854,7 @@ describe('payoutStatusOf when the payout amount is known (VEN-423)', () => {
 });
 
 describe('unwindFloorDate', () => {
-  it("is yesterday in UTC, so the operator's tomorrow is still ahead", () => {
+  it("is yesterday in UTC, so the admin's tomorrow is still ahead", () => {
     expect(unwindFloorDate(new Date('2026-10-08T01:00:00Z'))).toBe('2026-10-07');
   });
 

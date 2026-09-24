@@ -84,7 +84,7 @@ function copyFor(
   }
 
   /*
-   * The operator paused checkout (VEN-404). The ticket's sentence verbatim, and
+   * The admin paused checkout (VEN-404). The ticket's sentence verbatim, and
    * the retry is the same link as `failed`'s: the page re-opens checkout as it
    * renders, so it works again the moment the switch is off.
    */

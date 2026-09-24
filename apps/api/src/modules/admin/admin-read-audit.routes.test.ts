@@ -65,7 +65,7 @@ describe('admin export and read auditing', () => {
 
   afterEach(async () => {
     now = START;
-    // Audit rows go with their operator; the table refuses a direct DELETE.
+    // Audit rows go with their admin; the table refuses a direct DELETE.
     await harness.database.db.delete(users);
   });
 
@@ -147,7 +147,7 @@ describe('admin export and read auditing', () => {
     expect(await rows()).toHaveLength(2);
   });
 
-  it('counts each operator and each subject on its own', async () => {
+  it('counts each admin and each subject on its own', async () => {
     await signInAs(harness, ADMIN, true);
     await signInAs(harness, OTHER_ADMIN, true);
     const customerId = await signInAs(harness, CUSTOMER);
@@ -156,11 +156,11 @@ describe('admin export and read auditing', () => {
     await read(`/v1/admin/customers/${customerId}`, OTHER_ADMIN);
     await read(`/v1/admin/customers/${MISSING_ID}`, ADMIN);
 
-    // The missing customer 404s and leaves no row; the two operators each have one.
+    // The missing customer 404s and leaves no row; the two admins each have one.
     expect(await rows()).toHaveLength(2);
   });
 
-  it('writes one payments row per operator per hour', async () => {
+  it('writes one payments row per admin per hour', async () => {
     const adminId = await signInAs(harness, ADMIN, true);
 
     expect((await read('/v1/admin/payments')).statusCode).toBe(200);

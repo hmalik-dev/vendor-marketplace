@@ -174,7 +174,7 @@ export function siteOrigin(
  * *It is also what leaves one authority.* `WEB_URL` and the announced origin
  * can disagree, and letting both speak needs a rule about which wins — which is
  * the scheme being decided twice and agreeing by luck. The platform's answer is
- * the only one, and an operator who declares `DEPLOYMENT_ORIGIN=http://…` is
+ * the only one, and an admin who declares `DEPLOYMENT_ORIGIN=http://…` is
  * believed: a proxy-terminated deployment's public origin is `https://`, and
  * declaring it is how it says so.
  *

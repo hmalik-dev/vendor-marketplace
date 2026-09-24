@@ -79,7 +79,7 @@ const INVITES: WireAdminVendorInviteRow[] = [
   {
     id: '33333333-3333-4333-8333-333333333333',
     email: 'old@example.com',
-    invitedByName: 'Ada Operator',
+    invitedByName: 'Ada Admin',
     createdAt: new Date('2026-09-11T09:00:00.000Z'),
     acceptedAt: null,
     emailStatus: 'failed',

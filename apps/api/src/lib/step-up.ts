@@ -14,7 +14,7 @@ import { AppError } from './errors.js';
 import { authenticated } from './guards.js';
 
 export interface IssuedChallenge {
-  /** Emailed to the operator and never stored, logged or returned. */
+  /** Emailed to the admin and never stored, logged or returned. */
   readonly code: string;
   readonly expiresAt: Date;
 }
@@ -22,11 +22,11 @@ export interface IssuedChallenge {
 /**
  * A fresh re-authentication for irreversible admin routes (VEN-500).
  *
- * The operator proves control of their **mailbox** again: a code is emailed,
+ * The admin proves control of their **mailbox** again: a code is emailed,
  * entered, and a grant is held for {@link STEP_UP_GRANT_TTL_MS}. A stolen
  * session token alone cannot mint one, and it needs no provider capability —
  * Neon Auth has no second factor. Reused by every irreversible route, and by
- * VEN-506's operator grant and revoke, through {@link requireStepUp}.
+ * VEN-506's admin grant and revoke, through {@link requireStepUp}.
  *
  * **In Postgres, so every instance agrees** (VEN-650): a code issued through
  * one replica is spent through another, and a grant minted on one is honoured
@@ -39,7 +39,7 @@ export class StepUpStore {
     this.#db = db;
   }
 
-  /** Replaces any earlier challenge for this operator, so only the newest code works. */
+  /** Replaces any earlier challenge for this admin, so only the newest code works. */
   async issue(adminId: string, now: Date): Promise<IssuedChallenge> {
     const code = String(randomInt(10 ** STEP_UP_CODE_LENGTH)).padStart(STEP_UP_CODE_LENGTH, '0');
     const expiresAt = new Date(now.getTime() + STEP_UP_CODE_TTL_MS);

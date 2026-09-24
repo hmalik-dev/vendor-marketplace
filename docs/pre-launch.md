@@ -12,7 +12,7 @@ configured, and prints one line per item: `PASS`, `FAIL` or `MANUAL` (no provide
 non-zero while anything is `FAIL`. It is read-only — every provider call is a
 `GET`, the database session is `READ ONLY` — and it prints no secret beyond its
 prefix and last four characters. It needs production credentials, so it is run
-by the operator before a release and never in CI.
+by the admin before a release and never in CI.
 
 Launch readiness is a run with no `FAIL`, every `MANUAL` line confirmed by hand,
 and every item below done.
@@ -133,7 +133,7 @@ first. Both branches were empty of user rows and both held 0000–0009.
       the upgrade: protect the `production` branch and widen its history
       retention.
 - [ ] **Production admin account** (VEN-502): sign up on production, then grant
-      the role with the transaction under _First operator grant_ below. A plain
+      the role with the transaction under _First admin grant_ below. A plain
       `UPDATE users SET role` is refused by the database (VEN-533).
 - [ ] **Image licensing.** Confirm the licence of every shipped marketing image
       and the landing-page category photography.
@@ -150,7 +150,7 @@ first. Both branches were empty of user rows and both held 0000–0009.
       host's previous image before the first real release.
 - [ ] **Rotate every credential touched during setup**.
 
-### First operator grant
+### First admin grant
 
 Once, from a `psql` session on the owner URL (`DATABASE_URL_UNPOOLED`, read from
 your env, never pasted), after the account has signed up. Run exactly this, with
@@ -164,14 +164,14 @@ COMMIT;
 ```
 
 It must report `UPDATE 1`; roll back on anything else. The setting is
-transaction-local and reserved for this step and the in-app operator grant
+transaction-local and reserved for this step and the in-app admin grant
 (VEN-506): nothing else sets it, and the fixture seeds never do.
 
-**This is the single pre-launch exception, not a routine.** Every later operator
-is granted and revoked in the console at `/admin/operators` (step-up, audit row,
-never the last live operator). An operator created by the transaction above has
+**This is the single pre-launch exception, not a routine.** Every later admin
+is granted and revoked in the console at `/admin/admins` (step-up, audit row,
+never the last live admin). An admin created by the transaction above has
 no recorded earlier role, so the console will not revoke them: that is
-deliberate, and it is why the first operator is the founder who keeps the
+deliberate, and it is why the first admin is the founder who keeps the
 account.
 
 ## Scheduled-job monitors (VEN-671)

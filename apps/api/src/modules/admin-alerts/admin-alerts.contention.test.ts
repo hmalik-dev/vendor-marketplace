@@ -6,8 +6,8 @@ import {
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { EmailGateway, EmailMessage } from '../../lib/email.js';
 import { createTestHarness, TEST_ENV, type TestHarness } from '../../testing/test-server.js';
-import { alertNow, type OperatorAlertDeps } from './operator-alerts.service.js';
-import { runOperatorDigest } from './operator-digest.service.js';
+import { alertNow, type AdminAlertDeps } from './admin-alerts.service.js';
+import { runAdminDigest } from './admin-digest.service.js';
 
 /** 08:00 in New York, so each day's digest is due. */
 const FIRST_MORNING = new Date('2026-09-14T12:00:00Z');
@@ -20,13 +20,13 @@ const DAYS = 8;
  * the first one's claim and the test would pass with the unique index deleted.
  * Here every API instance's run has its own pooled connection and they overlap.
  */
-describe('operator alerts on two real connections', () => {
+describe('admin alerts on two real connections', () => {
   let database: PostgresTestDatabase | undefined;
   let harness: TestHarness<PostgresTestDatabase> | undefined;
 
   /** One instance: its own mail gateway, the shared database. */
   function instance(now: Date): {
-    deps: OperatorAlertDeps & { timeZone: string };
+    deps: AdminAlertDeps & { timeZone: string };
     sent: EmailMessage[];
   } {
     const sent: EmailMessage[] = [];
@@ -86,8 +86,8 @@ describe('operator alerts on two real connections', () => {
       const [left, right] = [instance(now), instance(now)];
 
       const results = await Promise.all([
-        runOperatorDigest(left.deps, now),
-        runOperatorDigest(right.deps, now),
+        runAdminDigest(left.deps, now),
+        runAdminDigest(right.deps, now),
       ]);
 
       expect(results.filter((result) => result === 'sent')).toHaveLength(1);

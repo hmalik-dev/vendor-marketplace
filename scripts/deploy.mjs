@@ -93,7 +93,7 @@ export const API_HOSTS = {
 };
 
 /**
- * What the deploy needs, by the name an operator sets. Every one is set on the
+ * What the deploy needs, by the name an admin sets. Every one is set on the
  * GitHub **environment** it belongs to (`staging`, `production`), never at the
  * repository level: an environment's name is the same on both tiers, and GitHub
  * falls back from an environment to the repository, so a repository-level value
@@ -822,7 +822,7 @@ export const PHASES = {
   /*
    * VEN-609. The sending domain must be verified in Resend before anything
    * moves: an unverified one is refused on every send and the API only logs
-   * it, so booking email, the admin step-up code and the operator pager would
+   * it, so booking email, the admin step-up code and the admin pager would
    * all go quiet behind a green release. The check is launch:check's own
    * probe (`packages/preflight/src/launch/sender.ts`), where a key that cannot
    * list domains fails rather than asking a person to look.

@@ -446,7 +446,7 @@ export const bookings = pgTable(
      * above: a failing payout is a handful of rows against every booking the
      * platform has ever taken, and both queries run on every view of the
      * Payments screen. Without it each is a sequential scan plus a sort of the
-     * whole table, on the one screen an operator opens *because* money is
+     * whole table, on the one screen an admin opens *because* money is
      * stuck.
      *
      * **`nullsFirst` is not a preference, it is what makes the sort usable.**

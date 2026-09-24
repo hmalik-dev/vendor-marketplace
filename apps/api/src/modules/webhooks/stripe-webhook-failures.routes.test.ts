@@ -1,13 +1,13 @@
-import { operatorAlerts, stripeWebhookFailures } from '@vendor-marketplace/db/schema';
+import { adminAlerts, stripeWebhookFailures } from '@vendor-marketplace/db/schema';
 import {
-  OPERATOR_ALERT_DEDUPE_MS,
+  ADMIN_ALERT_DEDUPE_MS,
   STRIPE_WEBHOOK_FAILURE_WINDOW_MS,
 } from '@vendor-marketplace/shared';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createTestHarness, TEST_ENV, type TestHarness } from '../../testing/test-server.js';
 
 /**
- * VEN-430: the webhook's own failures reach the operator even when they are
+ * VEN-430: the webhook's own failures reach the admin even when they are
  * spaced out or drowned in junk traffic.
  */
 describe('Stripe webhook failure alerts', () => {
@@ -35,7 +35,7 @@ describe('Stripe webhook failure alerts', () => {
   });
 
   afterEach(async () => {
-    await harness.database.db.delete(operatorAlerts);
+    await harness.database.db.delete(adminAlerts);
     await harness.database.db.delete(stripeWebhookFailures);
     harness.email.sent.length = 0;
     harness.stripe.nextEvent = { type: 'v2.core.account.updated', accountId: null, objectId: null };
@@ -71,7 +71,7 @@ describe('Stripe webhook failure alerts', () => {
       '[Orla ops] Stripe webhook refused without a signature 3 times in 10 minutes',
     ]);
 
-    now = new Date(now.getTime() + OPERATOR_ALERT_DEDUPE_MS / 2);
+    now = new Date(now.getTime() + ADMIN_ALERT_DEDUPE_MS / 2);
     for (let attempt = 0; attempt < 3; attempt += 1) {
       expect((await post({ 'stripe-signature': 'forged-signature' })).statusCode).toBe(401);
     }

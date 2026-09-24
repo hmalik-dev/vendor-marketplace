@@ -14,7 +14,7 @@ const PRIVATE_PATHS = [
   // The operations console. Every URL under it already 403s or redirects for a
   // stranger, and the layout sets `robots: { index: false }` — this is the
   // crawl-budget half, and the rule above says "everything a signed-in person
-  // sees", which includes an operator.
+  // sees", which includes an admin.
   '/admin',
   '/vendor/',
   '/customer/',

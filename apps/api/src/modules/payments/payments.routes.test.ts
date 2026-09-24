@@ -6,7 +6,7 @@ import {
   categories,
   conversations,
   notifications,
-  operatorAlerts,
+  adminAlerts,
   users,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
@@ -272,7 +272,7 @@ describe('payments', () => {
     harness.stripe.cancelRequests.length = 0;
     harness.stripe.refundsToRefuse.clear();
     harness.email.sent.length = 0;
-    await harness.database.db.delete(operatorAlerts);
+    await harness.database.db.delete(adminAlerts);
     await harness.database.db.delete(bookings);
     await harness.database.db.delete(conversations);
     await harness.database.db.delete(notifications);
@@ -475,7 +475,7 @@ describe('payments', () => {
 
       const alertsFor = async (requestId: string): Promise<{ kind: string }[]> => {
         await harness.app.background.drain();
-        return (await harness.database.db.select().from(operatorAlerts)).filter((alert) =>
+        return (await harness.database.db.select().from(adminAlerts)).filter((alert) =>
           alert.subjectId.startsWith(requestId),
         );
       };
@@ -1077,7 +1077,7 @@ describe('payments', () => {
      * The platform refused the request (an account unwind declined it) while the
      * customer's tab still held a live client secret and confirmed against
      * Stripe.js. The money moved; booking it would sell a date the vendor no
-     * longer offers, so the webhook refunds the charge and tells the operator.
+     * longer offers, so the webhook refunds the charge and tells the admin.
      */
     it('refunds a payment on a declined request instead of booking it', async () => {
       const requestId = await acceptedRequest();
@@ -1709,7 +1709,7 @@ describe('payments', () => {
     /*
      * #415. The screens on both sides have to say who ended the booking and
      * what came back, and neither survived on the row: `cancellation_reason`
-     * is the customer's free text here and an operator's sentence on the ban
+     * is the customer's free text here and an admin's sentence on the ban
      * path, so telling them apart meant matching a string that is one copy
      * edit from being wrong — and the refund figure existed only in this
      * response, which nothing stores.
@@ -1769,9 +1769,9 @@ describe('payments', () => {
     /*
      * VEN-472. The refund is out and a payout sweep commits before the row is
      * written: the customer is refunded and the vendor paid, which is a person's
-     * problem, so the operator is told before the 409.
+     * problem, so the admin is told before the 409.
      */
-    it('alerts the operator and answers 409 when a payout release beats a cancel that refunded', async () => {
+    it('alerts the admin and answers 409 when a payout release beats a cancel that refunded', async () => {
       const requestId = await acceptedRequest();
       await payFor(requestId);
       const [booking] = await harness.database.db.select().from(bookings);
@@ -1805,10 +1805,10 @@ describe('payments', () => {
     /*
      * VEN-607. The row write waits on a lock the payout sweep holds across its
      * Stripe calls and the session's `lock_timeout` ends the wait. The refund is
-     * out, so this is the same state as a lost predicate: the operator is told,
+     * out, so this is the same state as a lost predicate: the admin is told,
      * and the customer is asked to try again.
      */
-    it('alerts the operator and answers 503 when the row write times out on a lock after the refund', async () => {
+    it('alerts the admin and answers 503 when the row write times out on a lock after the refund', async () => {
       const requestId = await acceptedRequest();
       await payFor(requestId);
       const [booking] = await harness.database.db.select().from(bookings);

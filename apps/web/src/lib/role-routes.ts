@@ -39,7 +39,7 @@ export const DASHBOARD_PATH_BY_ROLE: Record<UserRole, string> = {
  * nowhere in the UI"* — a customer has no dashboard and never did.
  *
  * A vendor keeps `Dashboard`, because that is the word frame `08` puts on the
- * first row of their own rail for the same destination, and an operator gets
+ * first row of their own rail for the same destination, and an admin gets
  * the console's name. Each label names where the reader actually lands.
  */
 export const DASHBOARD_LABEL_BY_ROLE: Record<UserRole, string> = {
@@ -59,7 +59,7 @@ export const POST_SIGN_IN_PATH_BY_ROLE: Record<UserRole, string> = {
   customer: '/',
   vendor: DASHBOARD_PATH_BY_ROLE.vendor,
   /*
-   * An operator signs in to operate. Like a vendor, they have no use for a
+   * An admin signs in to operate. Like a vendor, they have no use for a
    * catalogue of vendors as a *starting* place, so this matches their dashboard
    * rather than the marketplace home.
    */

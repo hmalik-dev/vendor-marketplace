@@ -29,7 +29,7 @@ import { bearer, createTestHarness, type TestHarness } from '../../testing/test-
  *
  * Both guards are money-adjacent. A double-opened chargeback is two cases and
  * two holds for one dispute; a case closed twice overwrites the record of which
- * operator ruled on somebody's payout.
+ * admin ruled on somebody's payout.
  */
 describe('the case queue under contention, against a real Postgres', () => {
   const VENDOR = 'user_vendor';
@@ -261,11 +261,11 @@ describe('the case queue under contention, against a real Postgres', () => {
     expect(afterRetry).toHaveLength(1);
   });
 
-  it('lets exactly one of two operators close the same case', async () => {
+  it('lets exactly one of two admins close the same case', async () => {
     /*
      * The other guard. `markCaseResolved`'s `UPDATE … WHERE status = 'open'` is
      * what makes the loser's `returning()` empty, so `resolveCase` answers 409
-     * rather than overwriting the first operator's name and timestamp with the
+     * rather than overwriting the first admin's name and timestamp with the
      * second's. Read-then-act in the service would let both through here.
      *
      * A case with no booking, so neither press is refused for holding a payout.
@@ -276,7 +276,7 @@ describe('the case queue under contention, against a real Postgres', () => {
         reference: 'ORL-RACE-99',
         origin: 'support_message',
         topic: 'something-else',
-        message: 'Two operators are about to press this at the same moment.',
+        message: 'Two admins are about to press this at the same moment.',
         senderUserId: customerId,
         senderEmail: `${CUSTOMER}@example.com`,
       })

@@ -150,7 +150,7 @@ async function pnpmInLane(worktreePath: string, args: readonly string[]): Promis
  * `pnpm lane:up` is the first command a fresh worktree runs, and nothing has
  * loaded the repository `.env` by then: pnpm does not source it, and the lane
  * CLI runs before any app boots. Reading only `process.env` therefore failed
- * every lane whose operator had not exported `DATABASE_URL` by hand. The
+ * every lane whose admin had not exported `DATABASE_URL` by hand. The
  * inherited value still wins, so a shell that did export one keeps control.
  */
 export function baseDatabaseUrl(worktreePath: string): string {

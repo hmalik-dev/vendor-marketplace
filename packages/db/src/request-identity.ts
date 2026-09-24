@@ -10,11 +10,11 @@ export interface RequestIdentity {
   userId: string;
   role: UserRole;
   /**
-   * Set only by the operator console's own paths. A participant path never sets
+   * Set only by the admin console's own paths. A participant path never sets
    * it, so an admin account using `/messages` is bound to its own threads and
    * the API's ownership check keeps its backstop for every role.
    */
-  operator?: boolean;
+  admin?: boolean;
 }
 
 type IdentityDatabase = PgDatabase<PgQueryResultHKT, typeof schema>;
@@ -54,7 +54,7 @@ export async function withRequestIdentity<T>(
 
   return db.transaction(async (tx) => {
     await tx.execute(
-      sql`select set_config('app.user_id', ${identity.userId}, true), set_config('app.role', ${identity.role}, true), set_config('app.operator', ${identity.operator === true ? 'true' : ''}, true)`,
+      sql`select set_config('app.user_id', ${identity.userId}, true), set_config('app.role', ${identity.role}, true), set_config('app.operator', ${identity.admin === true ? 'true' : ''}, true)`,
     );
 
     const result = await fn(tx);

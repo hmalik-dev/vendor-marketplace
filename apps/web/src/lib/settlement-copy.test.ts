@@ -19,7 +19,7 @@ function settlement(overrides: Partial<Settlement> = {}): Settlement {
 /*
  * The three ways a request reaches `cancelled` read identically on the request
  * row, and one sentence covered all of them: first "You withdrew this
- * request." — false for a paid booking an operator unwound — and then "This
+ * request." — false for a paid booking an admin unwound — and then "This
  * request was cancelled.", which is never false and never says what happened
  * to the money (#415).
  */
@@ -45,7 +45,7 @@ describe('cancellationNarrative', () => {
      * whichever party it banned. A reinstated account reading its own booking
      * would otherwise be told the counterparty was suspended.
      */
-    it('names the operator without claiming which account was suspended', () => {
+    it('names the admin without claiming which account was suspended', () => {
       const unwound = settlement({ cancelledBy: 'admin' });
       const sentence = `${BRAND_NAME} cancelled this booking on June 1, 2026, because an account involved is no longer active.`;
 

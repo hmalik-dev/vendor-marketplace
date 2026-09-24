@@ -13,7 +13,7 @@ const { CaseResolution } = await import('./case-resolution');
  * This is the one screen on the console where the copy *is* the safeguard, so
  * the assertions are about words and weight rather than about the call the
  * button makes — that call is unchanged and already covered. What is new is
- * that an operator is told what the **other** party gets, on which **date**,
+ * that an admin is told what the **other** party gets, on which **date**,
  * and which **field** is written, before they press.
  */
 
@@ -77,7 +77,7 @@ describe('the two resolve positions', () => {
    * Equal weight, and this is the assertion that fails if one of them becomes
    * the recommendation.
    *
-   * The delta is explicit about why: the operator's job is to judge, and a
+   * The delta is explicit about why: the admin's job is to judge, and a
    * filled clay button on one side would be the product voting on somebody
    * else's money. `data-variant` is what the `Button` primitive stamps, so a
    * change back to `primary` or to the red *fill* fails here rather than in a
@@ -107,7 +107,7 @@ describe('the two resolve positions', () => {
    * Each position names its own figure **and the other party's**.
    *
    * Asserted on both halves of both cards, because the half that goes missing
-   * is always the counterparty's: it is the second question an operator is
+   * is always the counterparty's: it is the second question an admin is
    * asked afterwards and the first one the copy drops.
    */
   it('names what each party gets, on both positions', () => {
@@ -137,7 +137,7 @@ describe('the two resolve positions', () => {
    *
    * D35 releases `PAYOUT_RELEASE_HOURS` after the event day; this fixture's
    * event is long past, so the release instant has gone and the sweep an
-   * operator is promised is the next tick — today. Asserted as a weekday-plus-
+   * admin is promised is the next tick — today. Asserted as a weekday-plus-
    * date shape rather than a literal, because the fixture is read against the
    * real clock and a pinned string would go stale tomorrow.
    */
@@ -173,7 +173,7 @@ describe('the two confirms', () => {
    * written.
    *
    * The requirement is that both confirms name the field, and naming it in the
-   * negative is the honest form here: nothing is cancelled, and an operator who
+   * negative is the honest form here: nothing is cancelled, and an admin who
    * has just read the other card needs to be told which of the two writes it.
    */
   it('names cancelled_by on the vendor position as the field that stays unwritten', () => {
@@ -205,7 +205,7 @@ describe('the two confirms', () => {
    * "Cancel" on this screen is a verb about money.
    *
    * The dismiss reads `Keep the case open` — it names the state you return to,
-   * which is what stops an operator reading the escape as the action.
+   * which is what stops an admin reading the escape as the action.
    */
   it.each([[/^Refund and cancel$/], [/^Resolve for the vendor$/]])(
     'dismisses with "Keep the case open"',
@@ -218,7 +218,7 @@ describe('the two confirms', () => {
   );
 
   /**
-   * The thing operators get wrong, in the gold panel the frame draws.
+   * The thing admins get wrong, in the gold panel the frame draws.
    *
    * The refund half only belongs on the position that refunds — putting it on
    * the vendor confirm would describe money that is not moving — but the

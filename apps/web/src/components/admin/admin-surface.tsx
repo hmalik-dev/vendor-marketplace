@@ -19,7 +19,7 @@ export interface AdminSurfaceProps {
    * Filters that were in the URL and could not be used.
    *
    * `web-route-boundaries.md` asks for a bad value to be dropped **and said** —
-   * rendering the unfiltered list in silence tells an operator the platform
+   * rendering the unfiltered list in silence tells an admin the platform
    * holds data it does not.
    */
   dropped?: readonly string[];

@@ -30,8 +30,8 @@ import {
   unmatchedRefundFailedAlert,
   vendorBankPayoutFailedAlert,
   vendorPayoutsDisabledAlert,
-} from '../operator-alerts/operator-alerts.service.js';
-import { findBookingIdByPaymentIntent } from '../operator-alerts/operator-alerts.dao.js';
+} from '../admin-alerts/admin-alerts.service.js';
+import { findBookingIdByPaymentIntent } from '../admin-alerts/admin-alerts.dao.js';
 import {
   bookingContextFor,
   recordSuccessfulPayment,
@@ -64,7 +64,7 @@ const paymentOutcomeSchema = z.enum(['booked', 'already-booked', 'refunded']);
  * network's answer written onto a case that already exists; `already-recorded`
  * is a replay that changed nothing. All three are successes and Stripe must
  * stop retrying on every one of them — telling them apart is for the log line
- * an operator reads when a hold appears and nobody knows why.
+ * an admin reads when a hold appears and nobody knows why.
  */
 const disputeOutcomeSchema = z.enum([
   'dispute-opened',
@@ -155,7 +155,7 @@ const SNAPSHOT_ACCOUNT_EVENTS = new Set(['account.updated', 'capability.updated'
  * describe a state the customer can already see and is about to leave.
  *
  * `charge.refunded` used to be absent on the premise that refunds are only ever
- * started by our own cancellation route. An operator can refund from the Stripe
+ * started by our own cancellation route. An admin can refund from the Stripe
  * Dashboard, which leaves the booking `confirmed` and its payout releasable, so
  * it is handled (VEN-469) — and what it compares is what Stripe holds against
  * what the row records, which is what makes our own echo change nothing.
@@ -180,7 +180,7 @@ const DISPUTE_CREATED_EVENT = 'charge.dispute.created';
  * `funds_reinstated` is the platform winning after the money was already
  * pulled, and `closed` covers every other ending. Both write Stripe's own word
  * for what happened onto the case and stop there: the network's outcome and
- * the platform's disposition are different facts, and an operator reconciles
+ * the platform's disposition are different facts, and an admin reconciles
  * them. Auto-resolving here would settle a dispute on a card network's
  * evidence rules.
  */
@@ -209,7 +209,7 @@ const PAYOUT_FAILED_EVENT = 'payout.failed';
 
 /**
  * A card issuer's early fraud warning (VEN-645). Opens a case and pages the
- * operator; refunds nothing and freezes nothing (D46).
+ * admin; refunds nothing and freezes nothing (D46).
  */
 const EARLY_FRAUD_WARNING_EVENT = 'radar.early_fraud_warning.created';
 
@@ -311,7 +311,7 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
     const crossed = failures[failure].record();
 
     if (crossed !== null) {
-      app.operatorAlerts.dispatch(stripeWebhookFailingAlert(failure, crossed));
+      app.adminAlerts.dispatch(stripeWebhookFailingAlert(failure, crossed));
       return;
     }
 
@@ -325,7 +325,7 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
       return;
     }
 
-    app.operatorAlerts.dispatch(async () => {
+    app.adminAlerts.dispatch(async () => {
       try {
         const persisted = await recordPersistedWebhookFailure(app.db, app.clock, failure);
 
@@ -397,7 +397,7 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
          * reverse direction loses nothing real and stays quiet.
          */
         if (event.livemode) {
-          app.operatorAlerts.dispatch({
+          app.adminAlerts.dispatch({
             kind: 'stripe_webhook_failing',
             subjectId: 'stripe:livemode-mismatch',
             summary: 'Live Stripe events are being ignored by a test-mode API key',
@@ -464,7 +464,7 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
 
           return paymentIntentId
             ? reconcileRefundedIntent(
-                { db: app.db, stripe: app.stripe, alerts: app.operatorAlerts },
+                { db: app.db, stripe: app.stripe, alerts: app.adminAlerts },
                 paymentIntentId,
               )
             : 'refund-unchanged';
@@ -518,7 +518,7 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
             stripe: app.stripe,
             hub: app.events,
             log: request.log,
-            alerts: app.operatorAlerts,
+            alerts: app.adminAlerts,
             mail: {
               db: app.db,
               email: app.email,
@@ -563,7 +563,7 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
         const bookingId = await findBookingIdByPaymentIntent(app.db, refund.paymentIntentId);
 
         if (!bookingId) {
-          app.operatorAlerts.dispatch(
+          app.adminAlerts.dispatch(
             unmatchedRefundFailedAlert({
               refundId: refund.refundId,
               paymentIntentId: refund.paymentIntentId,
@@ -574,7 +574,7 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
           return 'refund-failed';
         }
 
-        app.operatorAlerts.dispatch(
+        app.adminAlerts.dispatch(
           refundFailedAlert({ bookingId, during: `a refund Stripe later marked ${refund.status}` }),
         );
 
@@ -622,7 +622,7 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
           return 'payout-unchanged';
         }
 
-        app.operatorAlerts.dispatch(() => vendorBankPayoutFailedAlert(app.db, accountId, payout));
+        app.adminAlerts.dispatch(() => vendorBankPayoutFailedAlert(app.db, accountId, payout));
 
         return 'payout-failed';
       }
@@ -646,7 +646,7 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
             db: app.db,
             log: request.log,
             bookings: bookingContextFor(app, request.log, options.webOrigin),
-            alerts: app.operatorAlerts,
+            alerts: app.adminAlerts,
             deployEnv: options.deployEnv,
           },
           { warningId: warning.warningId, fraudType: warning.fraudType, paymentIntentId },
@@ -694,7 +694,7 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
             db: app.db,
             log: request.log,
             bookings: bookingContextFor(app, request.log, options.webOrigin),
-            alerts: app.operatorAlerts,
+            alerts: app.adminAlerts,
             deployEnv: options.deployEnv,
           },
           disputeId,
@@ -711,9 +711,9 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<StripeWebhookRoutesOptio
       const { accountId, objectId } = event;
 
       if (outcome === 'dispute-opened' && objectId) {
-        app.operatorAlerts.dispatch(() => disputeOpenedAlert(app.db, objectId));
+        app.adminAlerts.dispatch(() => disputeOpenedAlert(app.db, objectId));
       } else if (outcome === 'not-onboarded' && accountId) {
-        app.operatorAlerts.dispatch(() => vendorPayoutsDisabledAlert(app.db, accountId));
+        app.adminAlerts.dispatch(() => vendorPayoutsDisabledAlert(app.db, accountId));
       }
 
       request.log.info({ stripeEvent: event.type, outcome }, 'Applied a Stripe webhook');

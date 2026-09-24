@@ -3,9 +3,9 @@
 import { useRouter } from 'next/navigation';
 import { useId, useState } from 'react';
 import {
-  adminOperatorChangeResultSchema,
+  adminAccountChangeResultSchema,
   emailSchema,
-  type AdminOperatorRow,
+  type AdminAccountRow,
 } from '@vendor-marketplace/shared';
 import { ConfirmAction } from '@/components/admin/confirm-action';
 import { DataTable } from '@/components/admin/data-table';
@@ -33,12 +33,12 @@ const WHEN = new Intl.DateTimeFormat('en-US', {
  * Both go through `ConfirmAction`, so the step-up the API asks for arrives as
  * the code prompt every other irreversible action shows. Granting is by the
  * address the person signed up with: there is no invite and no sign-up path to
- * operator, so an account has to exist first.
+ * admin, so an account has to exist first.
  */
-export function OperatorsPanel({
-  operators,
+export function AdminsPanel({
+  admins,
 }: {
-  operators: readonly AdminOperatorRow[];
+  admins: readonly AdminAccountRow[];
 }): React.ReactElement {
   const router = useRouter();
   const call = useApi();
@@ -47,19 +47,19 @@ export function OperatorsPanel({
   const valid = emailSchema.safeParse(email.trim()).success;
 
   async function grant(): Promise<void> {
-    await call('/admin/operators', {
+    await call('/admin/admins', {
       method: 'POST',
       body: { email: email.trim() },
-      schema: adminOperatorChangeResultSchema,
+      schema: adminAccountChangeResultSchema,
     });
     setEmail('');
     router.refresh();
   }
 
-  async function revoke(operator: AdminOperatorRow): Promise<void> {
-    await call(`/admin/operators/${operator.userId}`, {
+  async function revoke(admin: AdminAccountRow): Promise<void> {
+    await call(`/admin/admins/${admin.userId}`, {
       method: 'DELETE',
-      schema: adminOperatorChangeResultSchema,
+      schema: adminAccountChangeResultSchema,
     });
     router.refresh();
   }
@@ -68,7 +68,7 @@ export function OperatorsPanel({
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5 rounded-panel border border-stone-300 bg-stone-0 p-4">
         <label htmlFor={emailId} className="text-sm font-medium text-stone-900">
-          Give operator access to an existing account
+          Give admin access to an existing account
         </label>
         <div className="flex gap-2">
           <Input
@@ -83,14 +83,14 @@ export function OperatorsPanel({
           <ConfirmAction
             trigger={
               <Button type="button" size="sm" disabled={!valid}>
-                Grant operator access
+                Grant admin access
               </Button>
             }
-            title="Make this account an operator?"
+            title="Make this account an admin?"
             description={
               <>
                 <strong className="font-semibold">{email.trim()}</strong> will be able to sign in to
-                this console and take every action an operator can, from their next request.
+                this console and take every action an admin can, from their next request.
               </>
             }
             confirmLabel="Grant access"
@@ -99,8 +99,8 @@ export function OperatorsPanel({
         </div>
       </div>
       <DataTable
-        rows={operators}
-        rowKey={(operator) => operator.userId}
+        rows={admins}
+        rowKey={(admin) => admin.userId}
         empty={null}
         columns={[
           {
@@ -108,27 +108,27 @@ export function OperatorsPanel({
             width: '1.4fr',
             header: 'Name',
             className: 'font-semibold text-stone-900',
-            cell: (operator) => `${operator.firstName} ${operator.lastName}`.trim(),
+            cell: (admin) => `${admin.firstName} ${admin.lastName}`.trim(),
           },
-          { key: 'email', width: '1.8fr', header: 'Email', cell: (operator) => operator.email },
+          { key: 'email', width: '1.8fr', header: 'Email', cell: (admin) => admin.email },
           {
             key: 'since',
             width: '1.4fr',
             header: 'Since',
-            cell: (operator) => WHEN.format(new Date(operator.since)),
+            cell: (admin) => WHEN.format(new Date(admin.since)),
           },
           {
             key: 'grantedBy',
             width: '1.2fr',
             header: 'Granted by',
-            cell: (operator) => operator.grantedByName ?? 'Set up before launch',
+            cell: (admin) => admin.grantedByName ?? 'Set up before launch',
           },
           {
             key: 'state',
             width: '.8fr',
             header: 'State',
-            cell: (operator) =>
-              operator.isBanned ? (
+            cell: (admin) =>
+              admin.isBanned ? (
                 <StatusPill tone="inert">Suspended</StatusPill>
               ) : (
                 <StatusPill tone="confirmed">Active</StatusPill>
@@ -139,8 +139,8 @@ export function OperatorsPanel({
             width: '140px',
             header: '',
             className: 'flex justify-end',
-            cell: (operator) =>
-              operator.revocable ? (
+            cell: (admin) =>
+              admin.revocable ? (
                 <ConfirmAction
                   destructive
                   trigger={
@@ -148,15 +148,15 @@ export function OperatorsPanel({
                       type="button"
                       size="sm"
                       variant="secondary"
-                      aria-label={`Remove operator access from ${operator.email}`}
+                      aria-label={`Remove admin access from ${admin.email}`}
                     >
                       Revoke
                     </Button>
                   }
-                  title={`Remove ${operator.firstName} ${operator.lastName}'s operator access?`}
-                  description="They go back to the role they had before, and can no longer sign in to this console. The last operator who can sign in cannot be removed."
+                  title={`Remove ${admin.firstName} ${admin.lastName}'s admin access?`}
+                  description="They go back to the role they had before, and can no longer sign in to this console. The last admin who can sign in cannot be removed."
                   confirmLabel="Revoke access"
-                  onConfirm={() => revoke(operator)}
+                  onConfirm={() => revoke(admin)}
                 />
               ) : null,
           },

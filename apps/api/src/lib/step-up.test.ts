@@ -35,7 +35,7 @@ describe('the step-up store across instances', () => {
       .insert(users)
       .values({
         authUserId: 'user_step_up_store',
-        email: 'operator@example.com',
+        email: 'admin@example.com',
         role: 'admin',
         firstName: 'Op',
         lastName: 'Erator',

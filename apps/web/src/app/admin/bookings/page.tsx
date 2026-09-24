@@ -50,7 +50,7 @@ export default async function AdminBookingsPage({
    * status returns nothing by construction, and that pairing is two clicks
    * away because each select carries the other. Branching on the flag alone
    * answered it with "Every booking on a suspended account has been unwound."
-   * — told to an operator with stuck refunds one click away.
+   * — told to an admin with stuck refunds one click away.
    */
   const empty =
     flag && status
@@ -78,7 +78,7 @@ export default async function AdminBookingsPage({
    * nothing by construction — `refund-stuck` is always `confirmed`, so any
    * other status with it returns zero — is exactly where a counted widening
    * earns itself: dropping the status is the route that pays, and the number
-   * says so before the operator clicks.
+   * says so before the admin clicks.
    */
   const filtered = Boolean(status ?? flag);
   // Rows exist, this page is just past them: not "no bookings", and not filtered-empty.
@@ -208,7 +208,7 @@ export default async function AdminBookingsPage({
             header: 'Needs attention',
             /*
               Marked on every row rather than only inside the filter, so an
-              operator scanning the table finds these without having to already
+              admin scanning the table finds these without having to already
               know the filter exists — which is the whole failure this replaces.
             */
             cell: (row) =>

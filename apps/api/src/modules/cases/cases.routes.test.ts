@@ -613,7 +613,7 @@ describe('the operations case queue (#431)', () => {
 
     const detail = await readCase((await readCases()).items[0]!.id);
     // The money had already left, so there was nothing to freeze — and the
-    // operator is told that rather than left looking at a case with no hold.
+    // admin is told that rather than left looking at a case with no hold.
     expect(detail.holdRefusal).toContain('already been released');
     // The platform's own words, never `placeDisputeHold`'s customer-facing copy.
     expect(detail.holdRefusal).not.toContain('Contact support');
@@ -708,7 +708,7 @@ describe('the operations case queue (#431)', () => {
     expect(detail.networkOutcome).toBe('lost');
     /*
      * Stripe's outcome and the platform's disposition are different facts, so the
-     * case stays open for an operator. A `lost` ruling does end the booking's
+     * case stays open for an admin. A `lost` ruling does end the booking's
      * money (VEN-645): the network already repaid the customer, so the booking is
      * cancelled with nothing left for the vendor.
      */
@@ -1070,7 +1070,7 @@ describe('the operations case queue (#431)', () => {
       ).toHaveLength(1);
     });
 
-    it("still records that a customer's report placed the hold, as the operator's sentence", async () => {
+    it("still records that a customer's report placed the hold, as the admin's sentence", async () => {
       const fixture = await seed();
       expect((await report({ bookingId: fixture.bookingId })).statusCode).toBe(200);
 
@@ -1156,7 +1156,7 @@ describe('the operations case queue (#431)', () => {
     /*
      * `NOT_DISPUTABLE.disputed` is *"You have already reported a problem with
      * this booking"* — second-person copy written for the customer's report
-     * form. Printed here it would tell an operator, on the screen where they
+     * form. Printed here it would tell an admin, on the screen where they
      * decide who keeps the money, that the payout is loose while it is frozen.
      */
     expect(detail.holdRefusal).not.toContain('You have already reported');

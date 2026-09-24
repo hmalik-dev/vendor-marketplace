@@ -35,7 +35,7 @@ interface PendingNavigation {
  *
  * `FilterSelect` used to track this per instance, which is only safe for a
  * bar with exactly one dropdown. `/admin/activity` and `/admin/vendors` both
- * have several, and an operator who chooses two before the first round trip
+ * have several, and an admin who chooses two before the first round trip
  * finishes is the ordinary case, not an edge case — the Refine bar exists so
  * a choice takes one click. Sharing one `latest` ref and one timer across
  * every `FilterSelect` in the bar means a newer choice always invalidates an
@@ -43,7 +43,7 @@ interface PendingNavigation {
  * bumped and `latest` overwritten the instant a push starts, so a heal that
  * fires for an `attempt` that is no longer `latest.current?.attempt` — because
  * a sibling has since pushed — is a no-op instead of a hard navigation back
- * over the operator's later choice.
+ * over the admin's later choice.
  */
 interface FilterNavigation {
   latest: { current: PendingNavigation | null };
@@ -69,7 +69,7 @@ const PAGE_PARAM = 'page';
  * `pending` settles as if nothing were wrong. 3s is generous next to the
  * lane's RSC round trip — generous enough that a merely slow-but-succeeding
  * navigation is not forced into a redundant hard reload on top of its own
- * soft landing — and still short enough that an operator who really is stuck
+ * soft landing — and still short enough that an admin who really is stuck
  * is not left looking at a dead control.
  */
 const HEAL_TIMEOUT_MS = 3000;
@@ -114,7 +114,7 @@ export interface FilterSelectProps {
  *
  * Choosing navigates rather than submitting a form: the filters live in the URL,
  * so a choice *is* a URL, and `page` is dropped so a narrower filter cannot land
- * the operator on a page that no longer exists.
+ * the admin on a page that no longer exists.
  *
  * **The other filters come from the enclosing `FilterBar`'s `params`**, never
  * from the call site (VEN-395). Each call site used to list its siblings by
@@ -154,7 +154,7 @@ export function FilterSelect({
    * `FilterSelect`s in the same bar chosen back to back can settle their
    * transitions in the same commit, and the second choice's URL is a perfectly
    * good landing for the first's push. Falling back there would hard-navigate
-   * the operator's later choice away in favour of the earlier one.
+   * the admin's later choice away in favour of the earlier one.
    *
    * `heal` runs from two independent triggers (VEN-591): this effect, keyed to
    * `pending`, and a bounded timer started alongside the push — `pending` is
@@ -282,7 +282,7 @@ export interface FilterBarProps {
 /**
  * The Refine bar, above the table and never a modal.
  *
- * `method="get"`, so every filter is a URL the operator can paste into a
+ * `method="get"`, so every filter is a URL the admin can paste into a
  * support thread and the server can render without a round trip. A dropdown
  * navigates on change; the search field submits on Enter, and `Apply filters`
  * submits whatever `params` holds.

@@ -7,22 +7,22 @@ import {
 } from '@vendor-marketplace/db/testing/postgres';
 import { createTestHarness, signInAs, type TestHarness } from '../../testing/test-server.js';
 import type { BookingContext } from '../payments/payments.service.js';
-import { OPERATOR_RETIREMENT_LOCK } from '../users/users.dao.js';
-import { LAST_OPERATOR_BAN_REFUSAL, setUserBanned } from './admin.service.js';
+import { ADMIN_RETIREMENT_LOCK } from '../users/users.dao.js';
+import { LAST_ADMIN_BAN_REFUSAL, setUserBanned } from './admin.service.js';
 
 /**
- * A ban racing another way out of the live operator set (VEN-417).
+ * A ban racing another way out of the live admin set (VEN-417).
  *
- * Exactly two operators. One bans the other while that one closes, or bans,
+ * Exactly two admins. One bans the other while that one closes, or bans,
  * the first. Each request's read still counts its own actor as live, so without
- * `OPERATOR_RETIREMENT_LOCK` on the ban both commit and nobody can reach the
+ * `ADMIN_RETIREMENT_LOCK` on the ban both commit and nobody can reach the
  * console. The competing write is held open by hand under the lock — two
  * requests fired together overlap only when the scheduler agrees — and the ban
  * is driven through the service, below the route whose session read would
  * otherwise be the waiter observed. Real Postgres, because PGlite is one
  * connection and passes with the lock deleted.
  */
-describe('banning an operator while the other operator leaves the live set', () => {
+describe('banning an admin while the other admin leaves the live set', () => {
   const ADMIN_ONE = 'user_banning_admin_one';
   const ADMIN_TWO = 'user_banning_admin_two';
 
@@ -49,7 +49,7 @@ describe('banning an operator while the other operator leaves the live set', () 
     };
   }
 
-  /** Operator two's write against operator one, under the shared lock, held open until `release`. */
+  /** Admin two's write against admin one, under the shared lock, held open until `release`. */
   function holdUnderLock(change: { deletedAt: ReturnType<typeof sql> } | { isBanned: true }) {
     let release!: () => void;
     const released = new Promise<void>((resolve) => (release = resolve));
@@ -57,7 +57,7 @@ describe('banning an operator while the other operator leaves the live set', () 
     const written = new Promise<void>((resolve) => (markWritten = resolve));
 
     const settled = harness!.database.db.transaction(async (tx) => {
-      await tx.execute(OPERATOR_RETIREMENT_LOCK);
+      await tx.execute(ADMIN_RETIREMENT_LOCK);
       await tx.update(users).set(change).where(eq(users.id, adminOneId));
       markWritten();
       await released;
@@ -87,7 +87,7 @@ describe('banning an operator while the other operator leaves the live set', () 
     throw new Error('The ban never blocked on the held write');
   }
 
-  /** Operator one bans operator two; resolves to the outcome rather than throwing. */
+  /** Admin one bans admin two; resolves to the outcome rather than throwing. */
   async function banTwo(): Promise<{ status: number; message: string } | 'banned'> {
     try {
       await setUserBanned(
@@ -104,7 +104,7 @@ describe('banning an operator while the other operator leaves the live set', () 
     }
   }
 
-  async function liveOperators() {
+  async function liveAdmins() {
     return harness!.database.db
       .select({ id: users.id })
       .from(users)
@@ -120,7 +120,7 @@ describe('banning an operator while the other operator leaves the live set', () 
         authUserId,
         email: `${authUserId}@example.com`,
         firstName: 'Test',
-        lastName: 'Operator',
+        lastName: 'Admin',
         roleHint: 'customer',
         avatarUrl: null,
       });
@@ -161,8 +161,8 @@ describe('banning an operator while the other operator leaves the live set', () 
     closure.release();
     await closure.settled;
 
-    expect(await ban).toEqual({ status: 409, message: LAST_OPERATOR_BAN_REFUSAL });
-    expect(await liveOperators()).toEqual([{ id: adminTwoId }]);
+    expect(await ban).toEqual({ status: 409, message: LAST_ADMIN_BAN_REFUSAL });
+    expect(await liveAdmins()).toEqual([{ id: adminTwoId }]);
   });
 
   it('makes a ban wait for a ban of its actor, then refuses it with a 409', async () => {
@@ -177,12 +177,12 @@ describe('banning an operator while the other operator leaves the live set', () 
     otherBan.release();
     await otherBan.settled;
 
-    expect(await ban).toEqual({ status: 409, message: LAST_OPERATOR_BAN_REFUSAL });
-    expect(await liveOperators()).toEqual([{ id: adminTwoId }]);
+    expect(await ban).toEqual({ status: 409, message: LAST_ADMIN_BAN_REFUSAL });
+    expect(await liveAdmins()).toEqual([{ id: adminTwoId }]);
   });
 
-  it('still bans an operator while another operator stays live', async () => {
+  it('still bans an admin while another admin stays live', async () => {
     expect(await banTwo()).toBe('banned');
-    expect(await liveOperators()).toEqual([{ id: adminOneId }]);
+    expect(await liveAdmins()).toEqual([{ id: adminOneId }]);
   });
 });

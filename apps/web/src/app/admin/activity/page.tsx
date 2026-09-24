@@ -26,9 +26,9 @@ const RANGE_LABELS: Record<AdminActivityRange, string> = {
 /**
  * The console's own record — #434.
  *
- * Every mutation an operator makes writes an `admin_actions` row, and this is
+ * Every mutation an admin makes writes an `admin_actions` row, and this is
  * where those are read. It is the answer to two questions and it is built
- * around both: "what has this operator been doing" (`?actor=`) and "what did
+ * around both: "what has this admin been doing" (`?actor=`) and "what did
  * the console do to this account" (`?subject=`). Without the second it would be
  * a firehose rather than a record.
  *
@@ -65,13 +65,13 @@ export default async function AdminActivityPage({
   /*
    * The active filters, each paired with the words that drop it (#454).
    *
-   * The two identity filters are uuids an operator arrived at by clicking a
-   * row, so the widening reads `Any operator` / `Any subject` rather than
+   * The two identity filters are uuids an admin arrived at by clicking a
+   * row, so the widening reads `Any admin` / `Any subject` rather than
    * naming the id: nobody recognises `33333333`, and repeating it on the button
    * would say less than the word does.
    */
   const active: ActiveFilter[] = [
-    { key: 'actor', widening: 'Any operator' },
+    { key: 'actor', widening: 'Any admin' },
     { key: 'subjectType', widening: 'Any subject type' },
     { key: 'range', widening: 'All time' },
     { key: 'action', widening: 'Any action' },
@@ -81,7 +81,7 @@ export default async function AdminActivityPage({
     .map((filter) => ({ ...filter, carried: { ...params, [filter.key]: undefined } }));
 
   /*
-   * The heading recites what is narrowing the view, in the operator's words.
+   * The heading recites what is narrowing the view, in the admin's words.
    * `ACTION_LABELS` is the sentence the filter bar and the row already print,
    * so the state names the filter the way it was set rather than by its
    * parameter name.
@@ -106,7 +106,7 @@ export default async function AdminActivityPage({
             in the order it names them (VEN-388), then `Action`, which predates
             the pattern and narrows the firehose for nothing.
 
-            `Actor` lists only the operators the log names, so every choice
+            `Actor` lists only the admins the log names, so every choice
             narrows to something; a row's own actor cell still sets the same
             parameter.
           */}

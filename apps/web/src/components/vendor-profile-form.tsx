@@ -372,7 +372,7 @@ export function VendorProfileForm({
   const request = useApi();
   const router = useRouter();
   const [form, setForm] = useState<FormState>(() => initialState(profile, personalName));
-  // A tag the vendor holds but an operator has since deactivated is not in the
+  // A tag the vendor holds but an admin has since deactivated is not in the
   // active list; without it the picker draws no pill and no Remove control, and
   // the vendor cannot see what they are saving.
   const pickerTags = useMemo(

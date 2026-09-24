@@ -205,7 +205,7 @@ describe('AdminVendorDetailPage', () => {
     const stripe = cardTitled(container, 'Stripe');
     expect(within(stripe).getByText('acct_1PqR3xKz9LmN4dTv').dataset.kind).toBe('mono');
     expect(within(stripe).getByText('company.verification.document')).toBeDefined();
-    expect(within(stripe).getByText('Held by an operator')).toBeDefined();
+    expect(within(stripe).getByText('Held by an admin')).toBeDefined();
   });
 
   it('shows what the vendor still owes for a lost chargeback, and nothing when they owe nothing (VEN-658)', async () => {

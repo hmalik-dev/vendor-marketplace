@@ -240,7 +240,7 @@ describe('withdrawing a dispute hold, against a real Postgres', () => {
       'customer',
     );
 
-    /* The operator settles it, and the customer reports again. */
+    /* The admin settles it, and the customer reports again. */
     expect(await liftDisputeHold(context(), first)).not.toBeNull();
     const second = await placeDisputeHold(
       context(),

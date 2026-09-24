@@ -20,7 +20,7 @@ import { users } from './users.js';
 export const platformNoticeToneEnum = pgEnum('platform_notice_tone', PLATFORM_NOTICE_TONES);
 
 /**
- * The operator's launch switches (VEN-404), as **one row**.
+ * The admin's launch switches (VEN-404), as **one row**.
  *
  * A database row rather than environment variables because a switch that needs
  * a redeploy is useless in the incident it exists for. A singleton rather than
@@ -49,7 +49,7 @@ export const platformSettings = pgTable(
     /** The site-wide banner (VEN-616): plain text, or null when nothing is posted. */
     noticeMessage: text('notice_message'),
     noticeTone: platformNoticeToneEnum('notice_tone').notNull().default('info'),
-    /** The operator who last changed a value; null until the first change. */
+    /** The admin who last changed a value; null until the first change. */
     updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

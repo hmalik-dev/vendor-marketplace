@@ -2,22 +2,19 @@ import fp from 'fastify-plugin';
 import type { ErrorReporter } from '../lib/error-reporting.js';
 import { runTick } from '../lib/sweep.js';
 import {
-  createOperatorAlerts,
-  type OperatorAlertDeps,
-  type OperatorAlerts,
-} from '../modules/operator-alerts/operator-alerts.service.js';
-import {
-  operatorLocalTime,
-  runOperatorDigest,
-} from '../modules/operator-alerts/operator-digest.service.js';
+  createAdminAlerts,
+  type AdminAlertDeps,
+  type AdminAlerts,
+} from '../modules/admin-alerts/admin-alerts.service.js';
+import { adminLocalTime, runAdminDigest } from '../modules/admin-alerts/admin-digest.service.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
-    operatorAlerts: OperatorAlerts;
+    adminAlerts: AdminAlerts;
   }
 }
 
-export interface OperatorAlertsPluginOptions {
+export interface AdminAlertsPluginOptions {
   /** `OPERATOR_ALERT_EMAIL`; undefined in development, where alerts are logged. */
   to: string | undefined;
   webOrigin: string;
@@ -26,7 +23,7 @@ export interface OperatorAlertsPluginOptions {
   /**
    * How often to ask whether the digest is due. **`0` disables the timer**, which
    * every suite uses for `payoutReleasePlugin`'s reason; they call
-   * `runOperatorDigest` directly instead.
+   * `runAdminDigest` directly instead.
    */
   digestIntervalMs: number;
   /** Where a digest tick that overruns its deadline is reported. */
@@ -36,17 +33,17 @@ export interface OperatorAlertsPluginOptions {
 }
 
 /**
- * Decorates the instance with the operator alert sender (VEN-405), and runs the
+ * Decorates the instance with the admin alert sender (VEN-405), and runs the
  * morning digest on the same in-process timer shape as `payoutReleasePlugin` —
  * whose doc comment carries the argument for a timer over a cron service.
- * `runOperatorDigest`'s claim is what makes every instance ticking safe.
+ * `runAdminDigest`'s claim is what makes every instance ticking safe.
  */
-export const operatorAlertsPlugin = fp<OperatorAlertsPluginOptions>(
+export const adminAlertsPlugin = fp<AdminAlertsPluginOptions>(
   async (app, options) => {
     // Refuses to boot on a zone `Intl` does not know, rather than failing at 07:00.
-    operatorLocalTime(app.clock(), options.timeZone);
+    adminLocalTime(app.clock(), options.timeZone);
 
-    const deps: OperatorAlertDeps = {
+    const deps: AdminAlertDeps = {
       db: app.db,
       email: app.email,
       log: app.log,
@@ -58,7 +55,7 @@ export const operatorAlertsPlugin = fp<OperatorAlertsPluginOptions>(
       wait: options.wait ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
     };
 
-    app.decorate('operatorAlerts', createOperatorAlerts(deps));
+    app.decorate('adminAlerts', createAdminAlerts(deps));
 
     if (options.digestIntervalMs <= 0) {
       return;
@@ -77,13 +74,13 @@ export const operatorAlertsPlugin = fp<OperatorAlertsPluginOptions>(
         await runTick(
           'admin-digest',
           async () => {
-            await runOperatorDigest({ ...deps, timeZone: options.timeZone }, app.clock());
+            await runAdminDigest({ ...deps, timeZone: options.timeZone }, app.clock());
           },
           { intervalMs: options.digestIntervalMs, reporter: options.reporter, log: app.log },
         );
       } catch (error) {
         // Logged and swallowed: the next tick retries an unclaimed day.
-        app.log.error({ err: error }, 'Operator digest run failed');
+        app.log.error({ err: error }, 'Admin digest run failed');
       } finally {
         running = false;
       }
@@ -97,7 +94,7 @@ export const operatorAlertsPlugin = fp<OperatorAlertsPluginOptions>(
     });
   },
   {
-    name: 'operator-alerts',
+    name: 'admin-alerts',
     dependencies: ['clock', 'database', 'email', 'background'],
   },
 );

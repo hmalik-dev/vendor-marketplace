@@ -189,7 +189,7 @@ export interface E2eSeedInput {
    * Whether the vendor invite gate (VEN-406) is on in the seeded lane.
    *
    * Undefined by default and left untouched: `platform_settings` is a
-   * singleton every operator switch shares (VEN-584), so the fixture must
+   * singleton every admin switch shares (VEN-584), so the fixture must
    * only ever narrow the one column it owns an opinion about, never stamp the
    * row over another switch a lane already set. `true`/`false` upsert the
    * row and set `vendor_invite_only` explicitly, following the same
@@ -290,7 +290,7 @@ export async function seedE2eFixtures<
       .onConflictDoNothing({ target: vendorInvites.email });
 
     /*
-     * An invite whose email failed (VEN-465), for the operator's resend control.
+     * An invite whose email failed (VEN-465), for the admin's resend control.
      * Already at the attempt cap, so the retry sweep leaves it failed for the
      * browser pass; a re-seed puts it back after a resend has healed it.
      */
@@ -390,13 +390,13 @@ const E2E_AUDIT_SUBJECT_ID = '00000000-0000-4000-8000-0000000e2e02';
 
 /**
  * One row for each console list that would otherwise read empty after the seed
- * (VEN-460): an open support case, an application waiting on an operator, and
+ * (VEN-460): an open support case, an application waiting on an admin, and
  * one audit entry. A list that draws nothing renders its empty state cleanly,
  * so a browser pass over it proves nothing about the rows a real list draws.
  *
- * The audit row needs an operator to have taken the action, so it exists only
+ * The audit row needs an admin to have taken the action, so it exists only
  * when the fixture has an admin account. All three insert-if-absent: the audit
- * log is immutable by trigger, and the other two are the operator's to work on,
+ * log is immutable by trigger, and the other two are the admin's to work on,
  * so a re-run must not put back what a pass has since changed.
  */
 async function ensureConsoleListRows(
@@ -501,7 +501,7 @@ async function adoptUnbackedRow(tx: Tx, account: E2eAccount): Promise<void> {
  *
  * The role is written on insert and never on conflict. It comes from the
  * sign-up choice at first acceptance, and the database refuses to change it
- * outside the operator-grant path (VEN-533), whose setting this seed must not
+ * outside the admin-grant path (VEN-533), whose setting this seed must not
  * set: a re-run of a fixture seed that could promote an existing account to
  * admin is the hole that trigger closes. An existing row holding another role
  * therefore fails loudly, naming the account, rather than seeding a fixture
@@ -541,7 +541,7 @@ async function upsertAccount(
 
   if (row.role !== role) {
     throw new Error(
-      `seedE2eFixtures: ${account.email} already exists with role ${row.role}, not ${role}, and the database only changes a role through the operator grant path. Delete that row (a lane database: pnpm lane:down then lane:up) and seed again.`,
+      `seedE2eFixtures: ${account.email} already exists with role ${row.role}, not ${role}, and the database only changes a role through the admin grant path. Delete that row (a lane database: pnpm lane:down then lane:up) and seed again.`,
     );
   }
 

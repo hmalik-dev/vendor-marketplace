@@ -81,7 +81,7 @@ import {
   unpublishForMissingPackages,
 } from '../vendors/vendors.service.js';
 import { normalizeTagName } from '../tags/tags.service.js';
-import { banOperatorById, hasAnotherLiveOperator } from '../users/users.dao.js';
+import { banAdminById, hasAnotherLiveAdmin } from '../users/users.dao.js';
 import { resolveDispute } from '../payments/payments.service.js';
 import { retryPayoutRelease } from '../payments/payouts.service.js';
 import {
@@ -179,7 +179,7 @@ function offsetOf(query: { page: number; pageSize: number }): number {
  * Every other writer — the unban, the review deletion, the three tag paths —
  * hands its own transaction to `insertAdminAction`, so the row and the change
  * it describes commit or roll back together and a failed log write leaves an
- * operation the operator can simply repeat.
+ * operation the admin can simply repeat.
  *
  * Built **on** `bestEffortNotice` rather than beside it. The two started as the
  * same try/catch-and-log body forty lines apart, which is precisely how #408's
@@ -225,9 +225,9 @@ export async function recordAdminExport(
 }
 
 /**
- * A read of customer data, logged at most once per operator per subject per
+ * A read of customer data, logged at most once per admin per subject per
  * hour (VEN-475). A list read has no subject of its own, so it is named by the
- * operator, which makes the hour's window per operator per surface.
+ * admin, which makes the hour's window per admin per surface.
  */
 export async function auditAdminRead(
   db: AppDatabase,
@@ -256,7 +256,7 @@ export async function auditAdminRead(
  * The activity feed — "who did what, to whom, and when".
  *
  * Filtered by actor and by subject, which are the two questions it exists to
- * answer: "what has this operator been doing" and "what did the console do to
+ * answer: "what has this admin been doing" and "what did the console do to
  * this account". Without the second it is a firehose rather than a record.
  */
 export async function listActivity(
@@ -301,7 +301,7 @@ export async function listActivity(
   };
 }
 
-/** The `Actor ▾` facet: every operator the log names, by name (VEN-388). */
+/** The `Actor ▾` facet: every admin the log names, by name (VEN-388). */
 export async function listActivityActors(db: AppDatabase): Promise<AdminActivityActorList> {
   const actors = await findAdminActionActors(db);
 
@@ -323,7 +323,7 @@ export async function listActivityActors(db: AppDatabase): Promise<AdminActivity
  * suspension on a retired row is history, not a lever.
  *
  * A banned vendor is then `flagged` whatever their publish flag says, because
- * the ban is the next fact an operator needs to see.
+ * the ban is the next fact an admin needs to see.
  */
 export function deriveVendorStatus(row: {
   isRetired: boolean;
@@ -377,7 +377,7 @@ export function toVendorRow(row: AdminVendorProjection): AdminVendorRow {
      * Passed through, never decided here (#432). The console has no writer for
      * any of these three: `stripeOnboarded` is derived from Stripe's capability
      * read by the account webhook and constrained by D29, and the other two are
-     * Stripe's own words for why. An operator who could set them by hand would
+     * Stripe's own words for why. An admin who could set them by hand would
      * be recording a guess in the column the payout gate reads.
      */
     stripeAccountId: row.stripeAccountId,
@@ -428,9 +428,9 @@ export async function listVendors(
   };
 }
 
-/** The last-operator refusal on the ban path — the unlocked read and the locked write. */
-export const LAST_OPERATOR_BAN_REFUSAL =
-  'This is the last operator account that can still sign in. Banning it would leave nobody able to reach the console, and only a database change could restore one.';
+/** The last-admin refusal on the ban path — the unlocked read and the locked write. */
+export const LAST_ADMIN_BAN_REFUSAL =
+  'This is the last admin account that can still sign in. Banning it would leave nobody able to reach the console, and only a database change could restore one.';
 
 /**
  * Bans or unbans an account.
@@ -461,7 +461,7 @@ export async function setUserBanned(
     /*
      * 403 rather than 400: this is a refusal about who the caller is, not about
      * the shape of what they sent. An admin who could ban themselves could lock
-     * the platform's only operator out of it, and nothing else could undo it.
+     * the platform's only admin out of it, and nothing else could undo it.
      */
     throw forbidden('You cannot ban your own account');
   }
@@ -476,7 +476,7 @@ export async function setUserBanned(
    * A ban re-run on an account that is already banned is the **resume**
    * (VEN-478), not a conflict: an unwind the API was killed in the middle of
    * leaves the flag committed and confirmed bookings standing, and this is how
-   * an operator finishes it. It skips the flag and its intent row and re-runs
+   * an admin finishes it. It skips the flag and its intent row and re-runs
    * the unwind, whose every step is idempotent (the refund key, the `confirmed`
    * selection); on a finished ban it changes nothing.
    */
@@ -491,9 +491,9 @@ export async function setUserBanned(
    *
    * It used to be the whole record, and the comment here said so — "a log line
    * is not an audit table". It is one now (#434): the row this function writes
-   * before it returns is what answers "which operator suspended this account",
+   * before it returns is what answers "which admin suspended this account",
    * queryably and for ever. This stays because the two answer different
-   * questions — the row is the record, and this is what an operator greps while
+   * questions — the row is the record, and this is what an admin greps while
    * a ban is still in flight, before any of the work below has committed.
    */
   context.log.info({ actorId, targetId, isBanned }, "Admin changed an account's ban state");
@@ -503,7 +503,7 @@ export async function setUserBanned(
   if (!isBanned) {
     /*
      * Unban is only the flag. The vendor republishes themselves — reinstating an
-     * account is not the same as reinstating a listing, and the operator does not
+     * account is not the same as reinstating a listing, and the admin does not
      * decide when a vendor is ready to trade again.
      */
     /*
@@ -513,7 +513,7 @@ export async function setUserBanned(
      * cancellation, only the flag — so it does not meet the best-effort rule
      * above, and it should not use it. `setBanned` opens a transaction of its
      * own; passing this one in makes that a savepoint inside it, so a failed
-     * audit write rolls the reinstatement back to a state the operator can
+     * audit write rolls the reinstatement back to a state the admin can
      * simply repeat, rather than leaving an account quietly unbanned with no
      * record of who did it.
      */
@@ -543,17 +543,13 @@ export async function setUserBanned(
   }
 
   /*
-   * An operator's ban obeys closure's last-operator rule, under closure's lock
+   * An admin's ban obeys closure's last-admin rule, under closure's lock
    * (VEN-417). The read answers the common case before anything moves; the
    * locked write answers the race, where a closure or a second ban committed
    * between the two.
    */
-  if (
-    !resuming &&
-    target.role === 'admin' &&
-    !(await hasAnotherLiveOperator(context.db, targetId))
-  ) {
-    throw conflict(LAST_OPERATOR_BAN_REFUSAL);
+  if (!resuming && target.role === 'admin' && !(await hasAnotherLiveAdmin(context.db, targetId))) {
+    throw conflict(LAST_ADMIN_BAN_REFUSAL);
   }
 
   /*
@@ -565,22 +561,22 @@ export async function setUserBanned(
    * **The intent row commits with the flag** (VEN-478), so the trail starts with
    * the attempt: a kill mid-unwind leaves a ban that is recorded, banned, and
    * resumable, instead of an account suspended with no row at all. Nothing
-   * un-bans on a failed unwind any more — the operator finishes it instead.
+   * un-bans on a failed unwind any more — the admin finishes it instead.
    */
   let profileUnpublished = false;
 
   if (!resuming) {
     ({ profileUnpublished } = await context.db.transaction(async (tx) => {
-      let result: { profileUnpublished: boolean } | 'last-operator' | null;
+      let result: { profileUnpublished: boolean } | 'last-admin' | null;
 
       if (target.role === 'admin') {
-        result = await banOperatorById(tx, targetId, now);
+        result = await banAdminById(tx, targetId, now);
       } else {
         result = await setBanned(tx, targetId, profile?.id ?? null, true, now);
       }
 
-      if (result === 'last-operator') {
-        throw conflict(LAST_OPERATOR_BAN_REFUSAL);
+      if (result === 'last-admin') {
+        throw conflict(LAST_ADMIN_BAN_REFUSAL);
       }
 
       if (!result) {
@@ -602,7 +598,7 @@ export async function setUserBanned(
   /*
    * A refund Stripe refuses is counted, not thrown; anything else the unwind
    * throws (a database error mid-loop) surfaces as it is, with the ban standing.
-   * The operator's retry re-runs this same endpoint and finishes it.
+   * The admin's retry re-runs this same endpoint and finishes it.
    */
   const unwound = await unwindAccountBookings(
     context,
@@ -654,15 +650,15 @@ export async function setUserBanned(
 }
 
 /**
- * An operator settles a reported problem, and the console records that they did.
+ * An admin settles a reported problem, and the console records that they did.
  *
  * A thin wrapper over `payments.service.ts`'s `resolveDispute` rather than an
  * `actorId` parameter threaded into it, and the direction of the dependency is
  * the whole reason. The money is the payments module's to move and this is the
  * admin module's log; teaching `resolveDispute` to write an `admin_actions` row
  * would make `payments` import the admin DAO, which is backwards — a customer
- * cancelling a booking runs most of that same code and has no operator to
- * record. The actor stops here, where every caller is an operator by
+ * cancelling a booking runs most of that same code and has no admin to
+ * record. The actor stops here, where every caller is an admin by
  * construction.
  *
  * Best-effort logging, and this is the case that most needs it: by the time it
@@ -685,7 +681,7 @@ export async function resolveBookingDispute(
     subjectId: bookingId,
     /*
      * Which way it went, and the money that moved with it. `refundAmountCents`
-     * is what an operator asks the log for later — "was this one refunded, and
+     * is what an admin asks the log for later — "was this one refunded, and
      * how much" — and it is a figure the platform computed, not content a user
      * wrote.
      */
@@ -762,7 +758,7 @@ export async function listCustomers(
  * `First Last`, collapsed — the same shape every other admin surface prints.
  *
  * Exported since #431: the case console prints the same three names (the
- * sender, the operator who ruled, the customer on the booking) and a private
+ * sender, the admin who ruled, the customer on the booking) and a private
  * copy here meant `/admin/cases` and `/admin/bookings` could come to print one
  * person differently.
  */
@@ -876,7 +872,7 @@ export async function listPayments(
 }
 
 /**
- * Retries one stuck payout and records that an operator did it (#432).
+ * Retries one stuck payout and records that an admin did it (#432).
  *
  * The transfer itself is `retryPayoutRelease` — the sweep's own path — so this
  * function is only the two things that make it an *admin* action: the audit row
@@ -886,7 +882,7 @@ export async function listPayments(
  * `recordAdminActionBestEffort` rather than a judgement made here: by the time
  * it runs, money has either moved at Stripe or a refusal has been written
  * against the booking, and failing the request over an unwritten log row would
- * ask the operator to repeat work that has already happened.
+ * ask the admin to repeat work that has already happened.
  */
 export async function retryBookingPayout(
   context: AdminContext,
@@ -896,7 +892,7 @@ export async function retryBookingPayout(
 ): Promise<AdminPayoutRetryResult> {
   /*
    * Without `alerts`: `PayoutContext` documents the pager as the sweep's alone,
-   * because the operator pressing Retry is already looking at the result. The
+   * because the admin pressing Retry is already looking at the result. The
    * admin context carries it for the actions that do page (a refused refund),
    * so it is left behind here rather than trusted to be ignored downstream.
    */
@@ -992,7 +988,7 @@ export async function deleteReview(
    * apply — and this is the path where riding the transaction is worth the
    * most. A row deleted with no record of who deleted it is unrecoverable in
    * both directions: the review is gone and so is the reason. Rolling both back
-   * leaves the operator a button that still works.
+   * leaves the admin a button that still works.
    *
    * `deleteReviewAndRecalculate` opens a transaction of its own to re-derive
    * the rating; passing this one in nests it as a savepoint, so the rating and
@@ -1029,7 +1025,7 @@ export async function deleteReview(
  * **None of these is a ban, and the difference is the point of them.** A ban
  * declines every open request, cancels and fully refunds every confirmed
  * booking, and unpublishes the storefront — an irreversible response to a
- * reversible problem, which is what an operator was left with when a vendor had
+ * reversible problem, which is what an admin was left with when a vendor had
  * one bad photo or an unverified claim in a bio. Everything in this section
  * changes what the public can see and **nothing else**: no request is declined,
  * no booking is cancelled, no money moves.
@@ -1043,7 +1039,7 @@ export async function deleteReview(
  * Takes a storefront off the marketplace, or puts it back.
  *
  * Republishing runs the **same `publishBlockers` the vendor's own editor runs**.
- * An operator reinstating a listing is undoing their own earlier decision, not
+ * An admin reinstating a listing is undoing their own earlier decision, not
  * overriding the rule that a profile without a category or a bookable package
  * cannot be public — and a storefront republished past that rule is one a
  * customer can reach and cannot book.
@@ -1068,7 +1064,7 @@ export async function setVendorPublished(
      * this one reads one active package and republishes while the other commits
      * the deactivation of that package and finds `is_published` still false, so
      * `unpublishForMissingPackages` declines — leaving a live storefront with
-     * nothing bookable on it. Two operators unpublishing at once would likewise
+     * nothing bookable on it. Two admins unpublishing at once would likewise
      * both pass the state check and both append an audit row where one is owed
      * a 409.
      */
@@ -1088,7 +1084,7 @@ export async function setVendorPublished(
      * It used to read `is_published` alone, which made the hold settable only
      * on a storefront that was live at that instant — and the vendor decides
      * that. Pausing their own storefront, or having the last-package cascade or
-     * a lifted ban leave it down, made the operator's only lever answer 409 and
+     * a lifted ban leave it down, made the admin's only lever answer 409 and
      * write nothing; the vendor then published again whenever they liked. So
      * the lever worked on exactly the vendors who had not thought to take
      * themselves down first, which is the wrong half.
@@ -1146,7 +1142,7 @@ export async function setVendorPublished(
        * put one back (#457). Left as it is deliberately: the alternative is a
        * second control that clears the hold without publishing, which is a
        * surface no frame draws. The blockers rule itself is #435's and
-       * unchanged — an operator reinstating a listing does not get to overrule
+       * unchanged — an admin reinstating a listing does not get to overrule
        * it — and the vendor holds the key to the one state that traps it.
        */
       if (blockers.length > 0) {
@@ -1286,7 +1282,7 @@ export async function setReviewVisibility(
  * through the same `unpublishForMissingPackages` the vendor's own editor calls:
  * publishing requires a package, so a live profile with none sends customers to
  * a storefront they cannot book. The result says whether that happened, because
- * an operator who removed one service and took a business off the marketplace
+ * an admin who removed one service and took a business off the marketplace
  * has to be told which of those two things they did.
  */
 export async function setPackageActive(
@@ -1308,7 +1304,7 @@ export async function setPackageActive(
      * of active packages, so the two writers have to serialise on something,
      * and the vendor is the only row they share. The package is then **re-read
      * under that lock** — an unlocked first read is only how the vendor is
-     * found, and two operators deactivating the same package would otherwise
+     * found, and two admins deactivating the same package would otherwise
      * both see it active.
      */
     await lockVendorProfile(tx, owning.vendorId);
@@ -1371,11 +1367,11 @@ export async function setPackageActive(
  * The only irreversible action in this section, and deliberately so: an image
  * that must not be on the platform must leave the bucket as well as the page.
  * It reuses the vendor-side delete whole — the row commits first and the objects
- * are reaped after, never inside the transaction — so an operator's removal
+ * are reaped after, never inside the transaction — so an admin's removal
  * promotes the next cover and reaps exactly what a vendor's own removal would.
  *
- * `reapObjects` is given the **vendor's** user id, not the operator's: it
- * refuses any key whose owner segment does not match, and an operator's id would
+ * `reapObjects` is given the **vendor's** user id, not the admin's: it
+ * refuses any key whose owner segment does not match, and an admin's id would
  * fail that check on every object and silently leave the photo in the bucket.
  */
 export async function removePortfolioItemAsAdmin(
@@ -1563,7 +1559,7 @@ async function notifyVendorOfTag(
  *
  * **Concurrency is settled by the write, not by the read.** The `status =
  * 'pending'` predicate lives on the UPDATE in `resolveTagSuggestionRow`, so two
- * operators acting on the same suggestion cannot both succeed however the reads
+ * admins acting on the same suggestion cannot both succeed however the reads
  * interleave — the second gets a 409 rather than overwriting the first's
  * decision. Checking the status here first only makes that failure legible; it
  * is not what makes it correct.
@@ -1599,7 +1595,7 @@ export async function resolveTagSuggestion(
 
       if (!resolved) {
         /*
-         * Another operator got there first. Throwing inside the transaction is
+         * Another admin got there first. Throwing inside the transaction is
          * what keeps the audit row from recording a decision that did not
          * happen — the same reason the approve path below throws inside its own.
          */
@@ -1612,7 +1608,7 @@ export async function resolveTagSuggestion(
         subjectType: 'tag_suggestion',
         subjectId: suggestionId,
         /*
-         * The disposition, never the note. `adminNote` is free text an operator
+         * The disposition, never the note. `adminNote` is free text an admin
          * typed and it is already stored on the suggestion itself; copying it
          * here would put user-supplied prose into the audit table for no reader
          * who cannot follow `subjectId` to the original.
@@ -1701,7 +1697,7 @@ export async function resolveTagSuggestion(
    * every exact duplicate that step 3 says to merge, and step 3 would be
    * unreachable. Same-name is therefore treated as the merge it is; a slug
    * collision that survives this check is a *different* name that slugifies the
-   * same ("Gluten Free" vs "gluten-free"), which is the case the operator has to
+   * same ("Gluten Free" vs "gluten-free"), which is the case the admin has to
    * rule on rather than the machine.
    */
   const sameName = await findTagByCategoryAndName(context.db, suggestion.category, normalized);
@@ -1714,7 +1710,7 @@ export async function resolveTagSuggestion(
       suggestionId,
       /*
        * The note travels. Approving a duplicate is still a decision, and the
-       * reasoning the operator typed is the only record of why it was made —
+       * reasoning the admin typed is the only record of why it was made —
        * dropping it left the queue reading the machine's "Merged with X" and
        * nothing else.
        */
@@ -1751,7 +1747,7 @@ export async function resolveTagSuggestion(
 
     if (!resolved) {
       /*
-       * Another operator resolved it between the read and this write. Throwing
+       * Another admin resolved it between the read and this write. Throwing
        * inside the transaction rolls the new tag back, which is the point: a
        * tag created for a decision that did not happen is orphaned vocabulary.
        */
@@ -1872,7 +1868,7 @@ export async function updateTag(
      * `name` identical to the one on the row, which is the only field that
      * self-excludes. Recording it would file a `tag_updated` row whose detail is
      * empty
-     * and whose meaning is "an operator opened the rename box and pressed
+     * and whose meaning is "an admin opened the rename box and pressed
      * save", which is noise in the one table whose value is that every row in
      * it means something happened.
      */
@@ -1884,7 +1880,7 @@ export async function updateTag(
    *
    * This one can afford the transaction where the ban and the dispute cannot:
    * nothing outside Postgres has moved, so a failed log write rolls the rename
-   * back to a state the operator can simply retry — which is strictly better
+   * back to a state the admin can simply retry — which is strictly better
    * than a renamed tag nobody is recorded as having renamed.
    *
    * The payload names what changed rather than restating the whole tag: `patch`
