@@ -50,6 +50,24 @@ describe('roleCanReach', () => {
   );
 
   /*
+   * The vendor-application screens serve only a session that has no account
+   * yet: each page redirects any role to its own home (VEN-629). The rule says
+   * so up front, so sign-in never forwards to a page that would bounce.
+   */
+  it.each(['/waitlist', '/vendors/apply', '/sign-up/vendor-details'])(
+    'turns every role away from %s',
+    (path) => {
+      expect(roleCanReach('customer', path)).toBe(false);
+      expect(roleCanReach('vendor', path)).toBe(false);
+      expect(roleCanReach('admin', path)).toBe(false);
+    },
+  );
+
+  it('leaves a vendor storefront whose slug starts with apply reachable', () => {
+    expect(roleCanReach('customer', '/vendors/apply-studio')).toBe(true);
+  });
+
+  /*
    * The gate is `/vendors/<slug>/request`, not the storefront around it. A
    * prefix match on `/vendor` would have swallowed the whole public catalogue
    * and bounced every customer off every vendor's page.

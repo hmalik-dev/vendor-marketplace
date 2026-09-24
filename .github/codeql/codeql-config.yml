@@ -1,0 +1,5 @@
+# design/ holds the HTML design contract (mockups), never built or served, so
+# its findings only bury real ones. Every design re-import would re-raise them.
+name: Orla CodeQL
+paths-ignore:
+  - design/**

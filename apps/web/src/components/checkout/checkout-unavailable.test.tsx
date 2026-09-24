@@ -1,6 +1,12 @@
 import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
-import { CheckoutUnavailable } from './checkout-unavailable';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+  usePathname: () => '/bookings/1af86d43-0000-4000-8000-000000000000/checkout',
+}));
+
+const { CheckoutUnavailable } = await import('./checkout-unavailable');
 
 const REQUEST_ID = '1af86d43-0000-4000-8000-000000000000';
 
