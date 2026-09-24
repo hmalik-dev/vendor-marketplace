@@ -458,6 +458,15 @@ export function storedImageRef(ref: string | null, publicBaseUrl: string): strin
 }
 
 /**
+ * The AWS SDK waits for ever on a stalled request and tries three times, so a
+ * storage brownout would hold an image job slot (two run at once) for good
+ * (VEN-607). Bounded here, the upload fails and the caller is told.
+ */
+export const STORAGE_CONNECTION_TIMEOUT_MS = 3_000;
+export const STORAGE_REQUEST_TIMEOUT_MS = 15_000;
+export const STORAGE_MAX_ATTEMPTS = 2;
+
+/**
  * The production storage adapter. Neon Object Storage and the local S3
  * emulator both speak the S3 API, so the only difference between them is
  * configuration.
@@ -469,6 +478,13 @@ export function createS3Storage(env: ApiEnv): ObjectStorage {
     region: env.STORAGE_REGION,
     endpoint: env.STORAGE_ENDPOINT,
     forcePathStyle: env.STORAGE_FORCE_PATH_STYLE,
+    maxAttempts: STORAGE_MAX_ATTEMPTS,
+    requestHandler: {
+      connectionTimeout: STORAGE_CONNECTION_TIMEOUT_MS,
+      requestTimeout: STORAGE_REQUEST_TIMEOUT_MS,
+      // Without it the handler only logs a warning at the deadline and waits on.
+      throwOnRequestTimeout: true,
+    },
     credentials: {
       accessKeyId: env.STORAGE_ACCESS_KEY_ID,
       secretAccessKey: env.STORAGE_SECRET_ACCESS_KEY,
