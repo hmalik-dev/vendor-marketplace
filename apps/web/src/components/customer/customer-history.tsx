@@ -7,6 +7,7 @@ import {
 } from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { HistoryLoadError } from '@/components/customer/history-load-error';
 import { EmptyState } from '@/components/ui/empty-state';
 import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
 import { formatEventDate } from '@/lib/booking-entries';
@@ -90,8 +91,9 @@ function HistoryRow({ href, title, subline, meta, tone, status }: HistoryRowProp
 }
 
 export interface CustomerHistoryProps {
-  requests: readonly WireBookingRequest[];
-  bookings: readonly WireBooking[];
+  /** `null` is a failed read, which is not the same claim as an empty list. */
+  requests: readonly WireBookingRequest[] | null;
+  bookings: readonly WireBooking[] | null;
   /** `active` is what is still in play; `past` is everything settled. */
   scope: 'active' | 'past';
 }
@@ -108,6 +110,10 @@ export function CustomerHistory({
   bookings,
   scope,
 }: CustomerHistoryProps): React.ReactElement {
+  if (requests === null || bookings === null) {
+    return <HistoryLoadError subject="your bookings" />;
+  }
+
   const paidRequestIds = new Set(bookings.map((booking) => booking.requestId));
 
   const visibleRequests = requests
@@ -178,11 +184,16 @@ export function CustomerHistory({
 }
 
 export interface CustomerReviewsProps {
-  reviews: readonly WireCustomerReview[];
+  /** `null` is a failed read, which is not the same claim as no reviews. */
+  reviews: readonly WireCustomerReview[] | null;
 }
 
 /** What vendors said about working with this customer. */
 export function CustomerReviews({ reviews }: CustomerReviewsProps): React.ReactElement {
+  if (reviews === null) {
+    return <HistoryLoadError subject="your reviews" />;
+  }
+
   if (reviews.length === 0) {
     return (
       <EmptyState

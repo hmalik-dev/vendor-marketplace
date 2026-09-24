@@ -15,6 +15,8 @@ import { cn } from '@/lib/utils';
 import { toEntries } from '@/lib/booking-entries';
 import { getOwnBookingRequests, getOwnBookings, getOwnCustomerReviews } from '@/lib/customer-data';
 import { requireRole } from '@/lib/current-user';
+import { isNavigationSignal } from '@/lib/navigation-signal';
+import { reportSwallowedError } from '@/lib/report-error';
 
 export const metadata: Metadata = {
   title: pageTitle('Your profile'),
@@ -33,6 +35,25 @@ const TAB_LABELS: Record<Tab, string> = {
 
 function isTab(value: string | undefined): value is Tab {
   return (TABS as readonly string[]).includes(value ?? '');
+}
+
+/**
+ * A required read that reports failure as `null`. The history tabs draw an error
+ * with a retry for it, never the empty state: a customer with a paid booking must
+ * not read that it is gone. 401 and `TERMS_REQUIRED` redirect inside the read, and
+ * those signals pass through untouched.
+ */
+async function readOrNull<T>(context: string, read: () => Promise<T[]>): Promise<T[] | null> {
+  try {
+    return await read();
+  } catch (error) {
+    if (isNavigationSignal(error)) {
+      throw error;
+    }
+    reportSwallowedError(`customer profile: loading ${context} failed`, error);
+
+    return null;
+  }
 }
 
 interface PageProps {
@@ -56,9 +77,9 @@ export default async function CustomerProfilePage({
   const tab: Tab = isTab(query.tab) ? query.tab : 'profile';
 
   const [requests, bookings, reviews, band] = await Promise.all([
-    getOwnBookingRequests(),
-    getOwnBookings(),
-    getOwnCustomerReviews(),
+    readOrNull('booking requests', () => getOwnBookingRequests({ required: true })),
+    readOrNull('bookings', () => getOwnBookings({ required: true })),
+    readOrNull('reviews', () => getOwnCustomerReviews({ required: true })),
     /*
       For the sidebar's unread dot, which is shared with `/bookings` and must not
       say different things on the two pages that draw it. `getOwnConversationBand`
@@ -76,7 +97,8 @@ export default async function CustomerProfilePage({
    * is what drops the paid request in favour of its booking, and it is the only
    * place that rule may live.
    */
-  const bookingCount = toEntries(requests, bookings).length;
+  const bookingCount =
+    requests === null || bookings === null ? null : toEntries(requests, bookings).length;
 
   const settledRate = completionRate(user.completedBookingsCount, user.cancelledBookingsCount);
   const budget = user.budgetTier ? BUDGET_TIER_LABELS[user.budgetTier as BudgetTier] : null;

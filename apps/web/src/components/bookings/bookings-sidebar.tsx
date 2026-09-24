@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
 export interface BookingsSidebarProps {
-  bookingCount: number;
+  /** `null` when the read that counts them failed: no badge beats a wrong one. */
+  bookingCount: number | null;
   /**
    * Whether any thread has messages the customer has not read. Frame `07` draws
    * a clay dot on the `Messages` row and nothing else — no count — so this is a
