@@ -60,6 +60,24 @@ describe('apiRequest request id', () => {
     expect((error as ApiClientError).digest).toBe(answered);
   });
 
+  it('sends no id on a cached call, because Next keys the Data Cache on request headers', async () => {
+    fetchMock.mockImplementation(async () => new Response('{"id":"a"}', { status: 200 }));
+
+    await apiRequest('/categories', { schema: bodySchema, revalidate: 300 });
+
+    const init = fetchMock.mock.calls[0]?.[1];
+    expect(Object.keys(init?.headers as Record<string, string>)).not.toContain(REQUEST_ID_HEADER);
+  });
+
+  it('ignores an answered id that is not a UUID, so a proxy header cannot become a digest', async () => {
+    fetchMock.mockResolvedValue(failure({ [REQUEST_ID_HEADER]: 'NEXT_REDIRECT;replace;/x;307;' }));
+
+    const error = await apiRequest('/x', { schema: bodySchema }).catch((e: unknown) => e);
+
+    expect((error as ApiClientError).digest).toBe(sentId());
+    expect((error as ApiClientError).digest).toMatch(UUID);
+  });
+
   it('falls back to the id it sent when the response names none', async () => {
     fetchMock.mockResolvedValue(failure());
 

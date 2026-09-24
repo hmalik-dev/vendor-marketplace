@@ -1,6 +1,7 @@
 import {
   apiErrorSchema,
   ERROR_CODES,
+  isRequestId,
   REQUEST_ID_HEADER,
   VISITOR_IP_HEADER,
   WEB_TIER_KEY_HEADER,
@@ -58,7 +59,8 @@ export class ApiTimeoutError extends Error {
   /**
    * The id this call went out under. Named `digest` because Next keeps an
    * error's own `digest` rather than hashing one, so the error page's
-   * "Reference" is this id and the API's log line carries the same value.
+   * "Reference" is this id. The API logs the request under it only when it
+   * honoured it (the tier key was sent); the `[api-timeout]` line always names it.
    */
   readonly digest?: string;
 
@@ -214,8 +216,14 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions<T>)
   if (body !== undefined) {
     headers['content-type'] = 'application/json';
   }
-  // Server side only: a browser call would need the header in the API's CORS allow-list.
-  const sentRequestId = typeof window === 'undefined' ? crypto.randomUUID() : undefined;
+  /*
+    Server side only: a browser call would need the header in the API's CORS
+    allow-list. And never on a cached call: Next keys the Data Cache on the
+    request headers, so a per-call id would make every public read a miss. Its
+    failure carries the id the API answered with instead.
+  */
+  const sentRequestId =
+    typeof window === 'undefined' && revalidate === undefined ? crypto.randomUUID() : undefined;
   if (sentRequestId) {
     headers[REQUEST_ID_HEADER] = sentRequestId;
   }
@@ -313,7 +321,9 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions<T>)
   );
 
   // What the API answered under is what its log line says, whoever chose it.
-  const requestId = response.headers.get(REQUEST_ID_HEADER) ?? sentRequestId;
+  // Shape-checked: Next reads a `digest` to spot redirects and not-found, so a header some proxy wrote must not become one.
+  const answeredId = response.headers.get(REQUEST_ID_HEADER);
+  const requestId = answeredId !== null && isRequestId(answeredId) ? answeredId : sentRequestId;
 
   if (!response.ok) {
     /*

@@ -1,7 +1,5 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
-import { REQUEST_ID_HEADER, WEB_TIER_KEY_HEADER } from '@vendor-marketplace/shared';
-
-const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { isRequestId, REQUEST_ID_HEADER, WEB_TIER_KEY_HEADER } from '@vendor-marketplace/shared';
 
 /**
  * The id a request is logged, reported and answered under.
@@ -21,7 +19,7 @@ export function requestIdFor(
   if (
     webTierKey !== undefined &&
     typeof inbound === 'string' &&
-    UUID_SHAPE.test(inbound) &&
+    isRequestId(inbound) &&
     typeof presented === 'string'
   ) {
     const expected = Buffer.from(webTierKey);

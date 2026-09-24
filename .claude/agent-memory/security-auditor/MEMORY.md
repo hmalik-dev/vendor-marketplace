@@ -112,6 +112,7 @@
 - [Legal claims rest on two under-matching scans](no-cookie-consent-claim-rests-on-a-source-scan.md) — `TRACKERS` is a vendor list; VEN-596 closed the prose denials; "not tied to your account" rests on `analytics-scrub.ts`
 - [Rate limiting: hop-0 proxy, pre-auth hook, per-account keys](rate-limit-key-is-the-proxy-not-the-caller.md) — one `rateLimitRan` symbol can silently disable a route's own limit; VEN-649's once-per-process tier-key report is spendable by any probe
 - [`request.ip` is one hop, never IP-validated](request-ip-is-one-hop-trusted-not-validated.md) — unbounded text against `varchar(45)` when persisted as evidence
+- [Next's fetch cache key includes headers](next-fetch-cache-key-includes-headers.md) — a per-call header on a `revalidate` read defeats the Data Cache; VEN-690 request id
 - [`/ready` is unthrottled by design](ready-probe-is-unthrottled-and-now-reads-a-file.md) — VEN-495 sync read on the unlimited route; presence booleans (VEN-632) and RLS posture (VEN-671) accepted; the owner check must follow role membership
 - [Operator alert dedupe is attacker-armable](operator-alert-dedupe-is-attacker-armable.md) — a shed 429 costs a DB write; the email cap drops on a DB outage
 - [The daily send cap's closure is sticky](email-send-cap-closure-is-sticky.md) — VEN-661: a closed day blocks step-up codes till UTC midnight; raising the cap does not reopen it

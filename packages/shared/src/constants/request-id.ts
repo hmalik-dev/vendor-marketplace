@@ -7,3 +7,10 @@
  * actually used, in this same header, on every response.
  */
 export const REQUEST_ID_HEADER = 'x-request-id';
+
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** A request id is a UUID; anything else in the header is not one this system minted. */
+export function isRequestId(value: string): boolean {
+  return UUID_SHAPE.test(value);
+}
