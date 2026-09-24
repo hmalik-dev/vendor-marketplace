@@ -174,6 +174,40 @@ no recorded earlier role, so the console will not revoke them: that is
 deliberate, and it is why the first operator is the founder who keeps the
 account.
 
+## Scheduled-job monitors (VEN-671)
+
+Every in-process sweep checks in to a Sentry Cron Monitor through `runTick`
+(`apps/api/src/lib/sweep.ts`), which also abandons a tick that outlives its
+deadline and reports it. The monitors create themselves on the first check-in
+from each environment, with the schedule and margin the code sends. Beside the
+alert rules of VEN-567, route each monitor's **missed** and **failed** issues to
+the same alert as an API error, and alert on `payout-release` first: a stopped
+payout sweep means vendors are not paid.
+
+| Monitor slug       | Job                                         | Runs every | Deadline |
+| ------------------ | ------------------------------------------- | ---------- | -------- |
+| `payout-release`   | vendor payout release                       | 15 min     | 10 min   |
+| `expiry-sweep`     | booking request expiry, stream tickets      | 5 min      | 4 min    |
+| `email-retry`      | failed email retry                          | 5 min      | 4 min    |
+| `auth-reconcile`   | Neon Auth account reconcile                 | 24 h       | 60 min   |
+| `platform-balance` | platform balance reconcile                  | 24 h       | 30 min   |
+| `upload-sweep`     | orphaned upload sweep                       | 60 min     | 30 min   |
+| `admin-digest`     | poll for the daily digest (sends every day) | 5 min      | 4 min    |
+
+The daily digest is sent on quiet days too, so **no digest email by mid-morning
+is itself an alarm**: the API is down or its timers have stopped. It also
+reports how many payouts were due more than one sweep interval ago and are still
+unreleased.
+
+`/ready` reports `rowLevelSecurity` and, on staging and production, answers 503
+with a `reason` while the API's `DATABASE_URL` is a role that owns the tables or
+has `BYPASSRLS` (see [app-api-role.md](app-api-role.md)). Railway's healthcheck is `/ready`, so
+the new container is never promoted and the previous release keeps serving; the
+API logs the reason at error level (read it in the Railway deploy log), and the
+release's smoke check prints it whenever it reads that 503 directly. Move both
+tiers to `app_api` before the first release that carries this check. Object
+storage is reported in the body but does not gate readiness.
+
 ## Deploy constraints
 
 **The API runs as exactly one replica** (`railway.json` sets

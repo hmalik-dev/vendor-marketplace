@@ -71,21 +71,27 @@ describe('GET /ready', () => {
     expect(response.json().commit).toBeNull();
   });
 
-  it('answers 503 naming storage when the bucket is unreachable', async () => {
+  it('stays ready and names storage down when only the bucket is unreachable (VEN-671)', async () => {
     harness.setStorageAvailable(false);
 
     try {
       const response = await harness.app.inject({ method: 'GET', url: '/ready' });
 
-      expect(response.statusCode).toBe(503);
+      expect(response.statusCode).toBe(200);
       expect(response.json()).toMatchObject({
-        status: 'not_ready',
+        status: 'ready',
         database: 'up',
         storage: 'down',
       });
     } finally {
       harness.setStorageAvailable(true);
     }
+  });
+
+  it('does not check the database role on a local API', async () => {
+    const response = await harness.app.inject({ method: 'GET', url: '/ready' });
+
+    expect(response.json()).toMatchObject({ rowLevelSecurity: 'not_checked', reason: null });
   });
 });
 

@@ -1,4 +1,6 @@
 import fp from 'fastify-plugin';
+import type { ErrorReporter } from '../lib/error-reporting.js';
+import { runTick } from '../lib/sweep.js';
 import {
   createOperatorAlerts,
   type OperatorAlertDeps,
@@ -27,6 +29,8 @@ export interface OperatorAlertsPluginOptions {
    * `runOperatorDigest` directly instead.
    */
   digestIntervalMs: number;
+  /** Where a digest tick that overruns its deadline is reported. */
+  reporter: ErrorReporter;
   /** Pause between alert send retries; the suites pass one that resolves at once. */
   wait?: (ms: number) => Promise<void>;
 }
@@ -69,7 +73,13 @@ export const operatorAlertsPlugin = fp<OperatorAlertsPluginOptions>(
       running = true;
 
       try {
-        await runOperatorDigest({ ...deps, timeZone: options.timeZone }, app.clock());
+        await runTick(
+          'admin-digest',
+          async () => {
+            await runOperatorDigest({ ...deps, timeZone: options.timeZone }, app.clock());
+          },
+          { intervalMs: options.digestIntervalMs, reporter: options.reporter, log: app.log },
+        );
       } catch (error) {
         // Logged and swallowed: the next tick retries an unclaimed day.
         app.log.error({ err: error }, 'Operator digest run failed');

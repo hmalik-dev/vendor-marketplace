@@ -1,4 +1,5 @@
 import fp from 'fastify-plugin';
+import { runTick } from '../lib/sweep.js';
 import type { ErrorReporter } from '../lib/error-reporting.js';
 import { sweepOrphanedUploads } from '../modules/uploads/upload-sweep.service.js';
 
@@ -33,10 +34,16 @@ export const uploadSweepPlugin = fp<UploadSweepPluginOptions>(
       running = true;
 
       try {
-        await sweepOrphanedUploads(
-          { db: app.db, storage: app.storage, log: app.log },
-          app.clock(),
-          { dryRun: options.dryRun },
+        await runTick(
+          'upload-sweep',
+          async () => {
+            await sweepOrphanedUploads(
+              { db: app.db, storage: app.storage, log: app.log },
+              app.clock(),
+              { dryRun: options.dryRun },
+            );
+          },
+          { intervalMs: options.intervalMs, reporter: options.reporter, log: app.log },
         );
       } catch (error) {
         // Logged and swallowed: the next tick repairs it, and a rejection here would end the process.
