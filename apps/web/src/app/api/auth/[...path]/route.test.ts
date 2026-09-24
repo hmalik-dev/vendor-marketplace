@@ -144,19 +144,38 @@ describe('password reset through the auth proxy', () => {
     );
   });
 
-  it('throttles requests per address and caller: the sixth from one caller looks the same but is not sent', async () => {
+  it('sends one reset mail a minute per address: the rest are told to wait and none is sent (VEN-719)', async () => {
     upstreamPost.mockResolvedValue(Response.json({ success: true }));
 
     const statuses: number[] = [];
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 4; i++) {
       const response = await call(REQUEST, { email: 'Known@Example.com' }, '9.9.9.9');
       statuses.push(response.status);
     }
     await drain();
 
-    // Three mails a minute per address (VEN-719): the rest are told to wait, and none is sent.
-    expect(statuses).toEqual([200, 200, 200, 429, 429, 429]);
-    expect(upstreamPost).toHaveBeenCalledTimes(3);
+    expect(statuses).toEqual([200, 429, 429, 429]);
+    expect(upstreamPost).toHaveBeenCalledTimes(1);
+  });
+
+  it('throttles requests per address and caller: the sixth from one caller looks the same but is not sent', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      upstreamPost.mockResolvedValue(Response.json({ success: true }));
+
+      const statuses: number[] = [];
+      for (let i = 0; i < 6; i++) {
+        const response = await call(REQUEST, { email: 'Known@Example.com' }, '9.9.9.9');
+        statuses.push(response.status);
+        vi.advanceTimersByTime(61_000);
+      }
+      await drain();
+
+      expect(statuses).toEqual([200, 200, 200, 200, 200, 200]);
+      expect(upstreamPost).toHaveBeenCalledTimes(5);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not let a stranger's burst use up the provider's mail for the owner (VEN-719)", async () => {
@@ -166,8 +185,8 @@ describe('password reset through the auth proxy', () => {
     const owner = await call(REQUEST, { email: 'known@example.com' }, '2.2.2.2');
     await drain();
 
-    // The provider saw three sends, fewer than it takes before it goes quiet, and the owner is told to wait.
-    expect(upstreamPost).toHaveBeenCalledTimes(3);
+    // The provider saw one send, and the owner is told to wait rather than shown a mail that will not come.
+    expect(upstreamPost).toHaveBeenCalledTimes(1);
     expect([owner.status, owner.headers.get('retry-after'), await owner.json()]).toEqual([
       429,
       '60',
@@ -187,7 +206,7 @@ describe('password reset through the auth proxy', () => {
       await drain();
 
       expect(retry.status).toBe(200);
-      expect(upstreamPost).toHaveBeenCalledTimes(4);
+      expect(upstreamPost).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();
     }
@@ -198,14 +217,14 @@ describe('password reset through the auth proxy', () => {
     try {
       upstreamPost.mockResolvedValue(Response.json({ success: true }));
 
-      for (let i = 0; i < 3; i++) await call(REQUEST, { email: 'known@example.com' }, `7.7.7.${i}`);
+      await call(REQUEST, { email: 'known@example.com' }, '7.7.7.7');
       vi.advanceTimersByTime(40_000);
       expect((await call(REQUEST, { email: 'known@example.com' }, '2.2.2.2')).status).toBe(429);
       vi.advanceTimersByTime(21_000);
       expect((await call(REQUEST, { email: 'known@example.com' }, '2.2.2.2')).status).toBe(200);
       await drain();
 
-      expect(upstreamPost).toHaveBeenCalledTimes(4);
+      expect(upstreamPost).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();
     }
@@ -214,7 +233,7 @@ describe('password reset through the auth proxy', () => {
   it("does not pace one address's mail against another's (VEN-719)", async () => {
     upstreamPost.mockResolvedValue(Response.json({ success: true }));
 
-    for (let i = 0; i < 3; i++) await call(REQUEST, { email: 'known@example.com' }, `7.7.7.${i}`);
+    await call(REQUEST, { email: 'known@example.com' }, '7.7.7.7');
     const other = await call(REQUEST, { email: 'other@example.com' }, '2.2.2.2');
 
     expect(other.status).toBe(200);

@@ -446,16 +446,15 @@ describe('reset mail per account address, per minute (VEN-719)', () => {
     vi.unstubAllEnvs();
   });
 
-  it('lets three through a minute for one address, whatever the case, and paces the fourth', async () => {
+  it('lets one through a minute for one address, whatever the case, and paces the rest', async () => {
     expect(await isMailPaced('owner@x.test', 1_000)).toBe(false);
-    expect(await isMailPaced('Owner@X.test', 2_000)).toBe(false);
-    expect(await isMailPaced(' owner@x.test ', 3_000)).toBe(false);
-    expect(await isMailPaced('owner@x.test', 4_000)).toBe(true);
-    expect(await isMailPaced('other@x.test', 4_000)).toBe(false);
+    expect(await isMailPaced('Owner@X.test', 2_000)).toBe(true);
+    expect(await isMailPaced(' owner@x.test ', 3_000)).toBe(true);
+    expect(await isMailPaced('other@x.test', 3_000)).toBe(false);
   });
 
-  it('records nothing for a paced request, and frees a send when the oldest leaves the minute', async () => {
-    for (const at of [1_000, 2_000, 3_000]) await isMailPaced('owner@x.test', at);
+  it('records nothing for a paced request, and frees the send when the minute is up', async () => {
+    await isMailPaced('owner@x.test', 1_000);
     for (const at of [30_000, 50_000]) expect(await isMailPaced('owner@x.test', at)).toBe(true);
 
     expect(await isMailPaced('owner@x.test', 61_001)).toBe(false);
@@ -469,6 +468,6 @@ describe('reset mail per account address, per minute (VEN-719)', () => {
     await isMailPaced('Someone@Example.com');
 
     expect(seen.calls[0]?.bucket).toMatch(/^mail\|[0-9a-f]{64}$/);
-    expect(seen.calls[0]?.limit).toBe(3);
+    expect(seen.calls[0]?.limit).toBe(1);
   });
 });

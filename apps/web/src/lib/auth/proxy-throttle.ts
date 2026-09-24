@@ -385,8 +385,12 @@ export async function chargeRequest(
 }
 
 const MAIL_PACE_WINDOW_MS = 60_000;
-/** Under what the provider took before it stopped mailing an address (five in a burst, VEN-718). */
-const MAIL_PACE_LIMIT = 3;
+/**
+ * One send per address per window. The provider drops mail after a burst without a word, and not
+ * on a clean clock: after three sends inside a second, two owner requests 75s and 150s later went
+ * unmailed, while ten requests after a single earlier send (62s and 75s apart) all arrived.
+ */
+const MAIL_PACE_LIMIT = 1;
 const paceHits = new Map<string, number[]>();
 
 /**
@@ -394,8 +398,8 @@ const paceHits = new Map<string, number[]>();
  * minute, whoever asked (VEN-719). The provider limits mail per address itself
  * and drops the rest without a word, so a stranger's burst used up its allowance
  * and the owner's next request was answered "sent" and never arrived. Sending
- * fewer per minute than the provider allows keeps the owner's mail deliverable;
- * past that the caller is told to wait. A refused request records nothing, so
+ * one per minute keeps the owner's mail deliverable; past that the caller is
+ * told to wait. A refused request records nothing, so
  * polling cannot hold the window shut. The same for every address, so it says
  * nothing about whether an account exists. `record = false` only reads: asked
  * before the request budgets are charged, so a request told to wait spends none
