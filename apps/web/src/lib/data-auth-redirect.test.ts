@@ -249,13 +249,23 @@ describe('a conversation list that could not be read', () => {
   it('says the read failed rather than that there is nothing there', async () => {
     apiRequest.mockRejectedValue(new Error('ECONNREFUSED'));
 
-    await expect(loadOwnConversations()).resolves.toEqual({ conversations: [], failed: true });
+    await expect(loadOwnConversations()).resolves.toEqual({
+      conversations: [],
+      nextBefore: null,
+      hasUnread: false,
+      failed: true,
+    });
   });
 
   it('says nothing failed when the inbox is genuinely empty', async () => {
-    apiRequest.mockResolvedValue([]);
+    apiRequest.mockResolvedValue({ items: [], nextBefore: null, hasUnread: false });
 
-    await expect(loadOwnConversations()).resolves.toEqual({ conversations: [], failed: false });
+    await expect(loadOwnConversations()).resolves.toEqual({
+      conversations: [],
+      nextBefore: null,
+      hasUnread: false,
+      failed: false,
+    });
   });
 
   /* The supplementary surfaces keep the shape they had. */

@@ -9,15 +9,16 @@ export interface Keyed<T> {
 }
 
 /**
- * The cursor for a row, rendered by Postgres so it keeps the microseconds a
- * JS `Date` would drop: `2026-09-23T12:00:00.123456Z,<id>`.
+ * The cursor for a row (the sort key may be an expression, not only a column),
+ * rendered by Postgres so it keeps the microseconds a JS `Date` would drop:
+ * `2026-09-23T12:00:00.123456Z,<id>`.
  */
-export function cursorOf(createdAt: PgColumn, id: PgColumn): SQL<string> {
+export function cursorOf(createdAt: PgColumn | SQL, id: PgColumn): SQL<string> {
   return sql<string>`to_char(${createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') || ',' || ${id}::text`;
 }
 
 /** Rows strictly older than the cursor, in `(created_at, id)` order — the order the pages are read in. */
-export function olderThan(createdAt: PgColumn, id: PgColumn, cursor: KeysetCursor): SQL {
+export function olderThan(createdAt: PgColumn | SQL, id: PgColumn, cursor: KeysetCursor): SQL {
   return sql`(${createdAt}, ${id}) < (${cursor.createdAt}::timestamptz, ${cursor.id}::uuid)`;
 }
 

@@ -1,6 +1,7 @@
 import {
   EVENT_TYPE_LABELS,
   VENDOR_PAYMENTS_PATH,
+  type ConversationPage,
   type ConversationSummary,
   type EventType,
   type NotificationItem,
@@ -22,6 +23,7 @@ import {
   countUnreadPerConversation,
   findConversationById,
   findConversationsFor,
+  hasUnreadMessages,
   findLastMessagePreviews,
   findMessagesBefore,
   findNotifications,
@@ -192,22 +194,25 @@ function sideOf(
 export async function listConversations(
   db: AppDatabase,
   user: AuthenticatedUser,
-): Promise<ConversationSummary[]> {
-  const rows = await findConversationsFor(db, user.id);
+  before: KeysetCursor | undefined,
+  pageSize: number,
+): Promise<ConversationPage> {
+  const { items: rows, nextBefore } = await findConversationsFor(db, user.id, pageSize, before);
 
   if (rows.length === 0) {
-    return [];
+    return { items: [], nextBefore: null, hasUnread: false };
   }
 
   const conversationIds = rows.map((row) => row.id);
-  const [previews, unread] = await withRequestIdentity(db, identityOf(user), (tx) =>
+  const [previews, unread, hasUnread] = await withRequestIdentity(db, identityOf(user), (tx) =>
     Promise.all([
       findLastMessagePreviews(tx, conversationIds, PREVIEW_LENGTH),
       countUnreadPerConversation(tx, user.id, conversationIds),
+      hasUnreadMessages(tx, user.id),
     ]),
   );
 
-  return rows.map((row) => {
+  const items = rows.map((row) => {
     const side = sideOf(row, user.id);
 
     // Each party sees the other, named by `nameOfSide`.
@@ -224,6 +229,8 @@ export async function listConversations(
       vendorSlug: row.vendorSlug,
     };
   });
+
+  return { items, nextBefore, hasUnread };
 }
 
 /**

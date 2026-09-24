@@ -169,6 +169,8 @@ export interface TestHarnessOptions<TDatabase extends HarnessDatabase = TestData
   requestTimeoutMs?: number;
   /** A short stream heartbeat, for the suites that watch a ban end an open stream. */
   streamHeartbeatMs?: number;
+  /** A short re-read interval, for the suites that watch that interval bound a ban. */
+  streamSubjectRecheckMs?: number;
   /** Sees every route the server registers, for the suite that walks the route table. */
   onRoute?: (route: RouteOptions) => void;
   /**
@@ -1226,6 +1228,9 @@ export async function createTestHarness(
     ...(options.clock ? { clock: options.clock } : {}),
     ...(options.requestTimeoutMs ? { requestTimeoutMs: options.requestTimeoutMs } : {}),
     ...(options.streamHeartbeatMs ? { streamHeartbeatMs: options.streamHeartbeatMs } : {}),
+    ...(options.streamSubjectRecheckMs
+      ? { streamSubjectRecheckMs: options.streamSubjectRecheckMs }
+      : {}),
     ...(options.onRoute ? { onRoute: options.onRoute } : {}),
     ...(options.errorReporter ? { errorReporter: options.errorReporter } : {}),
     auth: {

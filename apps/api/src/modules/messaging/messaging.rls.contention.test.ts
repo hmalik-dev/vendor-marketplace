@@ -80,7 +80,7 @@ afterAll(async () => {
 
 describe('the messaging service as app_api', () => {
   it('lists the thread, with its preview and unread count, for a participant', async () => {
-    const list = await listConversations(api, customer);
+    const { items: list } = await listConversations(api, customer, undefined, 20);
 
     expect(list).toHaveLength(1);
     expect(list[0]).toMatchObject({
@@ -100,7 +100,9 @@ describe('the messaging service as app_api', () => {
   it('marks the counterparty messages read', async () => {
     await readConversation(api, customer, conversationId);
 
-    const [list] = await listConversations(api, customer);
+    const {
+      items: [list],
+    } = await listConversations(api, customer, undefined, 20);
 
     expect(list?.unreadCount).toBe(0);
   });
