@@ -201,4 +201,16 @@ describe('AdminUserDataRightsPage', () => {
         ?.getAttribute('href'),
     ).toBe('/admin/vendors');
   });
+
+  it.each(['not-a-uuid', 'a'.repeat(1000)])(
+    'answers %s with notFound() and never calls the API',
+    async (userId) => {
+      getAdminUserDataRights.mockClear();
+
+      await expect(
+        AdminUserDataRightsPage({ params: Promise.resolve({ userId }) }),
+      ).rejects.toThrow('notFound');
+      expect(getAdminUserDataRights).not.toHaveBeenCalled();
+    },
+  );
 });

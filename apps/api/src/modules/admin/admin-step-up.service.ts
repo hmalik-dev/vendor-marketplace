@@ -107,7 +107,7 @@ export interface CeilingDeps {
 }
 
 /**
- * Runs a ban or closure only while the operator is under the hourly ceiling
+ * Runs a ban, closure or export only while the operator is under the hourly ceiling
  * (VEN-500), and tells the operator when it is not.
  *
  * The audit row lands **last** on a ban, after the refunds (a closure's rides its
@@ -146,10 +146,10 @@ export async function withinDestructiveCeiling<T>(
       kind: 'launch_switch_flipped',
       // Once per operator per dedupe window, however hard they keep pressing.
       subjectId: `ceiling:${adminId}`,
-      summary: 'An operator reached the hourly ban and closure ceiling',
+      summary: 'An operator reached the hourly ban, closure and export ceiling',
       details: [
         `Operator: ${adminId}`,
-        `Limit: ${ADMIN_DESTRUCTIVE_ACTIONS_PER_HOUR} bans and closures per hour`,
+        `Limit: ${ADMIN_DESTRUCTIVE_ACTIONS_PER_HOUR} bans, closures and exports per hour`,
         'The next one was refused. If this was not them, their session is stolen.',
       ],
       adminPath: ADMIN_ACTIVITY_PATH,
@@ -158,7 +158,7 @@ export async function withinDestructiveCeiling<T>(
     throw new AppError(
       429,
       ERROR_CODES.ADMIN_CEILING_REACHED,
-      'You have reached the hourly limit for bans and closures. Try again later.',
+      'You have reached the hourly limit for bans, closures and data exports. Try again later.',
     );
   }
 

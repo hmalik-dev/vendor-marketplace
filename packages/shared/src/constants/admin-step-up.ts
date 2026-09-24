@@ -23,7 +23,7 @@ export const STEP_UP_CODE_LENGTH = 6;
 /** Challenges one admin may request per hour, so the mailbox is not a flood target. */
 export const STEP_UP_CHALLENGES_PER_HOUR = 6;
 
-/** Bans plus account closures one admin may complete per rolling hour. */
+/** Bans, account closures and data exports one admin may complete per rolling hour. */
 export const ADMIN_DESTRUCTIVE_ACTIONS_PER_HOUR = 10;
 
 /** The audit actions that count against {@link ADMIN_DESTRUCTIVE_ACTIONS_PER_HOUR}. */
@@ -31,4 +31,5 @@ export const ADMIN_CEILING_ACTIONS = [
   'user_banned',
   'user_closed',
   'operator_account_closed',
+  'user_data_exported',
 ] as const;

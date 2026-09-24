@@ -14,7 +14,13 @@ import { REQUEST_DID_NOT_ARRIVE, userFacingError } from '@/lib/user-facing-error
 export interface StepUpPanelProps {
   /** Runs once the code is accepted — the confirm the operator was interrupted in. */
   onVerified: () => Promise<void>;
+  /** The sentence that says why a code is asked for; defaults to the irreversible-action one. */
+  lead?: string;
+  /** Adds a Cancel control that backs out of the action without running it. */
+  onCancel?: () => void;
 }
+
+const IRREVERSIBLE_LEAD = 'This cannot be undone, so confirm it is you first.';
 
 /**
  * The second step of an irreversible console action (VEN-500): the API refused
@@ -25,7 +31,11 @@ export interface StepUpPanelProps {
  * destructive control gets it and none has to know it exists. The code goes to
  * the address on the operator's own account; nothing here says which.
  */
-export function StepUpPanel({ onVerified }: StepUpPanelProps): React.ReactElement {
+export function StepUpPanel({
+  onVerified,
+  lead = IRREVERSIBLE_LEAD,
+  onCancel,
+}: StepUpPanelProps): React.ReactElement {
   const call = useApi();
   const [sent, setSent] = useState(false);
   const [code, setCode] = useState('');
@@ -50,8 +60,7 @@ export function StepUpPanel({ onVerified }: StepUpPanelProps): React.ReactElemen
   return (
     <div className="mt-4 flex flex-col gap-2 rounded-lg bg-gold-50 px-3 py-2.5">
       <p className="text-sm leading-prose text-stone-700">
-        This cannot be undone, so confirm it is you first. We email a six-digit code to the address
-        on your account.
+        {lead} We email a six-digit code to the address on your account.
       </p>
       {sent ? (
         <div className="flex flex-col gap-1.5">
@@ -111,6 +120,11 @@ export function StepUpPanel({ onVerified }: StepUpPanelProps): React.ReactElemen
             }
           >
             Confirm code
+          </Button>
+        ) : null}
+        {onCancel ? (
+          <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onCancel}>
+            Cancel
           </Button>
         ) : null}
       </div>
