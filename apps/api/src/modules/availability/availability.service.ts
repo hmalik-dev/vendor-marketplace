@@ -220,6 +220,34 @@ export async function setOwnAvailability(
       );
     }
 
+    const blockDates = [...byDate.values()]
+      .filter((entry) => entry.status === 'blocked')
+      .map((entry) => entry.date)
+      .sort();
+
+    if (blockDates.length > 0) {
+      // The same live set `readCalendar` overlays as `pending`, so the two never disagree.
+      const live = new Set(
+        await findLiveRequestDates(
+          db,
+          vendor.id,
+          blockDates[0]!,
+          blockDates[blockDates.length - 1]!,
+          now,
+        ),
+      );
+      const pending = blockDates.filter((date) => live.has(date));
+
+      if (pending.length > 0) {
+        throw conflict(
+          pending.length === 1
+            ? `${pending[0]} has a request waiting on your answer, so it cannot be blocked. Reply to the request first.`
+            : `${pending.length} of those dates have a request waiting on your answer, so they cannot be blocked. Reply to those requests first.`,
+          { pendingDates: pending },
+        );
+      }
+    }
+
     const clearedDates: string[] = [];
     const blocked: NewAvailabilityRow[] = [];
 

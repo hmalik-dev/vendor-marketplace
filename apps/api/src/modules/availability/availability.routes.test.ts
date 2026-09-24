@@ -25,6 +25,7 @@ const CUSTOMER = 'user_customer';
 
 const NOW = new Date();
 const TOMORROW = toDateString(addDays(NOW, 1));
+const AFTER_TOMORROW = toDateString(addDays(NOW, 2));
 const NEXT_WEEK = toDateString(addDays(NOW, 7));
 const YESTERDAY = toDateString(addDays(NOW, -1));
 /**
@@ -285,6 +286,30 @@ describe('/vendor/availability', () => {
       ).toEqual([{ date: TOMORROW, status: 'blocked' }]);
     });
 
+    it('refuses to block a date a pending request holds, and writes nothing', async () => {
+      const requestId = await requestOn(TOMORROW);
+
+      const response = await put(VENDOR, [
+        { date: TOMORROW, status: 'blocked' },
+        { date: AFTER_TOMORROW, status: 'blocked' },
+      ]);
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().details.pendingDates).toEqual([TOMORROW]);
+      expect(await calendar()).toEqual([{ date: TOMORROW, status: 'pending' }]);
+
+      const declined = await harness.app.inject({
+        method: 'POST',
+        url: `/v1/booking-requests/${requestId}/decline`,
+        headers: bearer(VENDOR),
+      });
+      expect(declined.statusCode).toBe(200);
+
+      const released = await put(VENDOR, [{ date: TOMORROW, status: 'blocked' }]);
+      expect(released.statusCode).toBe(200);
+      expect(await calendar()).toEqual([{ date: TOMORROW, status: 'blocked' }]);
+    });
+
     async function calendar(): Promise<{ date: string; status: string }[]> {
       const response = await harness.app.inject({
         method: 'GET',
@@ -348,10 +373,19 @@ describe('/vendor/availability', () => {
       expect(await calendar()).toEqual([]);
     });
 
-    /* The vendor's own decision outranks somebody else's hope for the date. */
+    /*
+     * The vendor's own decision outranks somebody else's hope for the date. The
+     * API no longer lets a block land on a pending date (VEN-695), so the row
+     * this pins is one stored before the request arrived.
+     */
     it('keeps a date the vendor blocked reading blocked, not pending', async () => {
       await requestOn(TOMORROW);
-      await put(VENDOR, [{ date: TOMORROW, status: 'blocked' }]);
+      const [profile] = await harness.database.db
+        .select({ id: vendorProfiles.id })
+        .from(vendorProfiles);
+      await harness.database.db
+        .insert(availability)
+        .values({ vendorId: profile!.id, date: TOMORROW, status: 'blocked' });
 
       expect(await calendar()).toEqual([{ date: TOMORROW, status: 'blocked' }]);
     });
