@@ -1,4 +1,5 @@
 import fp from 'fastify-plugin';
+import { runTick } from '../lib/sweep.js';
 import type { ErrorReporter } from '../lib/error-reporting.js';
 import { retryFailedEmails } from '../modules/notifications/email-retry.service.js';
 
@@ -36,17 +37,23 @@ export const emailRetryPlugin = fp<EmailRetryPluginOptions>(
       running = true;
 
       try {
-        const shared = {
-          db: app.db,
-          email: app.email,
-          log: app.log,
-          webOrigin: options.webOrigin,
-          background: app.background,
-        };
+        await runTick(
+          'email-retry',
+          async () => {
+            const shared = {
+              db: app.db,
+              email: app.email,
+              log: app.log,
+              webOrigin: options.webOrigin,
+              background: app.background,
+            };
 
-        await retryFailedEmails(
-          { notifications: shared, invites: { ...shared, now: app.clock } },
-          app.clock,
+            await retryFailedEmails(
+              { notifications: shared, invites: { ...shared, now: app.clock } },
+              app.clock,
+            );
+          },
+          { intervalMs: options.intervalMs, reporter: options.reporter, log: app.log },
         );
       } catch (error) {
         // Logged and swallowed: the next tick repairs it, and a rejection here would end the process.

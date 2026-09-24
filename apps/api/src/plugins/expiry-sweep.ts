@@ -1,4 +1,5 @@
 import fp from 'fastify-plugin';
+import { runTick } from '../lib/sweep.js';
 import type { ErrorReporter } from '../lib/error-reporting.js';
 import { purgeThrottleHits } from '../lib/throttle.js';
 import { expireLapsedRequests } from '../modules/booking-requests/booking-requests.service.js';
@@ -39,20 +40,26 @@ export const expirySweepPlugin = fp<ExpirySweepPluginOptions>(
       running = true;
 
       try {
-        try {
-          await app.streamTickets.sweep();
-          await purgeThrottleHits(app.db, app.clock());
-        } catch (error) {
-          app.log.error({ err: error }, 'Stream ticket and throttle sweep failed');
-          options.reporter.capture(error);
-        }
+        await runTick(
+          'expiry-sweep',
+          async () => {
+            try {
+              await app.streamTickets.sweep();
+              await purgeThrottleHits(app.db, app.clock());
+            } catch (error) {
+              app.log.error({ err: error }, 'Stream ticket and throttle sweep failed');
+              options.reporter.capture(error);
+            }
 
-        const context = {
-          ...bookingContextFor(app, app.log, options.webOrigin),
-          platformFeeRate: options.platformFeeRate,
-        };
+            const context = {
+              ...bookingContextFor(app, app.log, options.webOrigin),
+              platformFeeRate: options.platformFeeRate,
+            };
 
-        await expireLapsedRequests(app.db, app.clock(), context.mail, expiryGuardFor(context));
+            await expireLapsedRequests(app.db, app.clock(), context.mail, expiryGuardFor(context));
+          },
+          { intervalMs: options.intervalMs, reporter: options.reporter, log: app.log },
+        );
       } catch (error) {
         // Logged and swallowed: the next tick repairs it, and a rejection here would end the process.
         app.log.error({ err: error }, 'Booking request expiry sweep failed');
