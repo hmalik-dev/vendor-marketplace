@@ -315,11 +315,25 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
   app.post(
     '/admin/users/:userId/export',
     {
-      onRequest: adminOnly,
+      onRequest: irreversible,
       schema: { params: userParamsSchema, response: { 200: adminUserExportSchema } },
     },
-    async (request) =>
-      exportUserData(context(), assertRole(request.auth, ['admin']).id, request.params.userId),
+    async (request) => {
+      const adminId = assertRole(request.auth, ['admin']).id;
+      const ctx = context();
+
+      /*
+       * A step-up and the hourly ceiling (VEN-684): a file cannot be taken
+       * back once it has left, so a stolen session gets neither an unbounded
+       * run of them nor one without the emailed code.
+       */
+      return withinDestructiveCeiling(
+        { db: app.db, log: ctx.log, alerts: ctx.alerts },
+        adminId,
+        app.clock(),
+        () => exportUserData(ctx, adminId, request.params.userId),
+      );
+    },
   );
 
   /**
