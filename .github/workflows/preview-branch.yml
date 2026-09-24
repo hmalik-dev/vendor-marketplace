@@ -21,6 +21,11 @@ on:
   pull_request:
     types: [opened, reopened, synchronize, closed]
 
+# Least privilege (VEN-675): nothing here calls the GitHub API with the token
+# beyond checking out the repository.
+permissions:
+  contents: read
+
 concurrency:
   group: neon-preview-${{ github.event.pull_request.number }}
   cancel-in-progress: false
@@ -55,11 +60,11 @@ jobs:
           expires_at: ${{ steps.expiry.outputs.at }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version-file: .nvmrc
           cache: pnpm
