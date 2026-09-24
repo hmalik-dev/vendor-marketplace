@@ -7,6 +7,10 @@
  * `change-password` is the one signed-in account call (VEN-677): the proxy
  * forwards it only as `forwardChangePassword` shapes it, budgeted per account
  * and always ending the account's other sessions.
+ * The session list and the two revokes are the devices setting (VEN-681): the
+ * proxy answers the list without any token and revokes by an opaque id it
+ * resolves against the caller's own list. `revoke-sessions` (every session, this
+ * one included) stays refused; sign-out is how this device ends.
  * `token` is here for the session-token route's client cousin and `get-session`
  * for the SDK's own reads.
  */
@@ -21,6 +25,9 @@ const ALLOWED: ReadonlyMap<string, AllowedMethod> = new Map([
   ['email-otp/request-password-reset', 'POST'],
   ['email-otp/reset-password', 'POST'],
   ['change-password', 'POST'],
+  ['list-sessions', 'GET'],
+  ['revoke-session', 'POST'],
+  ['revoke-other-sessions', 'POST'],
   ['get-session', 'GET'],
   ['token', 'GET'],
 ]);

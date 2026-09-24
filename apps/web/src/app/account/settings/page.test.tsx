@@ -18,7 +18,7 @@ describe('AccountSettingsPage (VEN-703)', () => {
   });
 
   it.each(['customer', 'vendor', 'admin'] as const)(
-    'lists exactly the name and password rows for a %s, opening their own pages',
+    'lists exactly the name, password and sessions rows for a %s, opening their own pages',
     async (role) => {
       requireCurrentUser.mockResolvedValue({ role, firstName: 'Ada', lastName: 'Lovelace' });
 
@@ -29,10 +29,12 @@ describe('AccountSettingsPage (VEN-703)', () => {
       expect(rows.map((row) => row.getAttribute('href'))).toEqual([
         '/account/settings/name',
         '/account/settings/password',
+        '/account/settings/sessions',
       ]);
       expect(within(rows[0]!).getByText('Your name')).toBeDefined();
       expect(within(rows[0]!).getByText('Ada Lovelace')).toBeDefined();
       expect(within(rows[1]!).getByText('Password')).toBeDefined();
+      expect(within(rows[2]!).getByText("Where you're signed in")).toBeDefined();
     },
   );
 
