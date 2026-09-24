@@ -1,7 +1,10 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/lib/auth/client', () => ({ getSessionToken: async () => 'token-abc' }));
+vi.mock('@/lib/auth/client', () => ({
+  getSessionToken: async () => 'token-abc',
+  refreshRefusedSessionToken: async () => 'token-fresh',
+}));
 vi.mock('@/lib/use-api', () => ({ useApi: () => async () => ({}) }));
 
 const { TaxYearDownloads } = await import('./tax-year-downloads');
@@ -45,6 +48,19 @@ describe('TaxYearDownloads', () => {
 
     expect(String(url)).toMatch(/\/admin\/tax\/1099-k\.csv\?year=2026$/);
     expect(init?.headers).toEqual({ authorization: 'Bearer token-abc' });
+  });
+
+  it('retries once with a re-minted token when the API refuses the cached one', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response('', { status: 401 }))
+      .mockResolvedValueOnce(new Response('a,b\n', { status: 200 }));
+    render(<TaxYearDownloads years={[2026]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '1099-K figures, 2026' }));
+
+    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalledTimes(1));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1]![1]?.headers).toEqual({ authorization: 'Bearer token-fresh' });
   });
 
   it('asks for the emailed code when the API demands a step-up, and downloads nothing', async () => {

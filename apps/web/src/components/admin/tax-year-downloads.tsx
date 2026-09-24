@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { StepUpPanel } from '@/components/admin/step-up-panel';
 import { Button } from '@/components/ui/button';
 import { apiBaseUrl } from '@/lib/api-base-url';
-import { getSessionToken } from '@/lib/auth/client';
+import { getSessionToken, refreshRefusedSessionToken } from '@/lib/auth/client';
 import { REQUEST_DID_NOT_ARRIVE } from '@/lib/user-facing-error';
 
 export interface TaxYearDownloadsProps {
@@ -35,10 +35,21 @@ export function TaxYearDownloads({ years }: TaxYearDownloadsProps): React.ReactE
 
     try {
       const token = await getSessionToken();
-      const response = await fetch(`${apiBaseUrl()}/admin/tax/1099-k.csv?year=${year}`, {
-        headers: token ? { authorization: `Bearer ${token}` } : {},
-        cache: 'no-store',
-      });
+      const request = (bearer: string | null): Promise<Response> =>
+        fetch(`${apiBaseUrl()}/admin/tax/1099-k.csv?year=${year}`, {
+          headers: bearer ? { authorization: `Bearer ${bearer}` } : {},
+          cache: 'no-store',
+        });
+      let response = await request(token);
+
+      // A token the API refused is re-minted once (VEN-717), as `apiRequest` does for JSON calls.
+      if (response.status === 401 && token) {
+        const fresh = await refreshRefusedSessionToken(token);
+
+        if (fresh && fresh !== token) {
+          response = await request(fresh);
+        }
+      }
 
       if (!response.ok) {
         const parsed = apiErrorSchema.safeParse(await response.json().catch(() => null));

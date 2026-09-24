@@ -95,6 +95,8 @@ describe('GET /admin/tax/1099-k.csv', () => {
       refundCents?: number;
       debtNettedCents?: number;
       payoutModel?: 'destination' | 'separate';
+      /** Defaults to `paidAt` for `separate` rows; `null` is charged but not yet transferred. */
+      releasedAt?: string | null;
     },
   ): Promise<void> {
     seq += 1;
@@ -125,6 +127,15 @@ describe('GET /admin/tax/1099-k.csv', () => {
       stripePaymentIntentId: `pi_tax_${seq}`,
       stripeTransferId: values.vendorPayoutCents > 0 ? `tr_tax_${seq}` : null,
       paidAt: values.paidAt ? new Date(values.paidAt) : null,
+      // The sweep writes the release with the transfer id; `destination` rows never have one.
+      payoutReleasedAt:
+        values.releasedAt === undefined
+          ? (values.payoutModel ?? 'separate') === 'separate' && values.paidAt
+            ? new Date(values.paidAt)
+            : null
+          : values.releasedAt
+            ? new Date(values.releasedAt)
+            : null,
     });
   }
 
@@ -170,6 +181,20 @@ describe('GET /admin/tax/1099-k.csv', () => {
       totalCents: usd(900),
       vendorPayoutCents: usd(800),
       paidAt: '2027-01-02T09:00:00Z',
+    });
+
+    // F: charged in December 2026, transferred in February 2027 (2027's figure). G: charged, not yet transferred (nobody's).
+    await booking(customerId, vendor.id, {
+      totalCents: usd(400),
+      vendorPayoutCents: usd(350),
+      paidAt: '2026-12-20T10:00:00Z',
+      releasedAt: '2027-02-15T10:00:00Z',
+    });
+    await booking(customerId, vendor.id, {
+      totalCents: usd(300),
+      vendorPayoutCents: usd(260),
+      paidAt: '2026-12-22T10:00:00Z',
+      releasedAt: null,
     });
 
     const refunded = await vendorProfile(REFUNDED_VENDOR, 'acct_tax_refunded');
@@ -354,7 +379,7 @@ describe('GET /admin/tax/1099-k.csv', () => {
     });
 
     expect(closed.statusCode).toBe(200);
-    expect(await harness.database.db.select().from(bookings)).toHaveLength(6);
+    expect(await harness.database.db.select().from(bookings)).toHaveLength(8);
 
     const [profile] = await harness.database.db
       .select({ stripeAccountId: vendorProfiles.stripeAccountId })
@@ -375,13 +400,13 @@ describe('foldTaxYearFigures', () => {
         vendorId: 'v1',
         stripeAccountId: 'acct_1',
         totalAmountCents: 200_000,
-        paidAt: new Date('2026-12-31T23:59:59Z'),
+        settledAt: new Date('2026-12-31T23:59:59Z'),
       },
       {
         vendorId: 'v1',
         stripeAccountId: 'acct_1',
         totalAmountCents: 100_000,
-        paidAt: new Date('2026-01-01T00:00:00Z'),
+        settledAt: new Date('2026-01-01T00:00:00Z'),
       },
     ]);
 

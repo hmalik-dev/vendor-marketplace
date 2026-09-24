@@ -34,3 +34,8 @@ non-Stripe ids on purpose (`acct_demo_<key>`, `acct_e2e_fixture_not_a_real_accou
 thing keeping that out of production is `assertSafeTarget` on the seeds
 ([[fabricating-seeds-share-one-declared-branch-guard]]). Do not propose a format
 check as the remedy — name the seed guard instead.
+
+**CSV cells.** Because no request input reaches the column, the VEN-722 1099-K
+export (`GET /admin/tax/1099-k.csv`) emits it unquoted with no formula
+neutralising, and that was judged safe (PASS). Reopen only if a write path from
+request input or an admin form appears.
