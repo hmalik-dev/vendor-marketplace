@@ -36,7 +36,6 @@ import {
   bookingContextFor,
   recordSuccessfulPayment,
   recordTransferReversal,
-  type TransferReversalOutcome,
 } from '../payments/payments.service.js';
 import { reconcileRefundedIntent } from '../payments/refund-reconciliation.js';
 import { releaseFailedExternalRefunds } from '../payments/refunds.dao.js';
