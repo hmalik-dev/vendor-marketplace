@@ -2444,3 +2444,270 @@ The self-serve route for what went through support (VEN-659). Its two open rulin
 3. **Question: does a vendor cancellation inside N days of the event count against the vendor? Chose: no strike and no visible cancellation rate in this ticket.** Rejected: an automatic strike. It needs a threshold and an appeal path nobody has ruled on, and a wrong automatic penalty on a vendor is harder to undo than a missing one. `cancelled_by = vendor` and `cancelled_at` are recorded on every cancellation, so the rate is computable for whoever rules.
 4. **Refused after the event and once a payout is released**, as for the customer: a vendor who cannot deliver a past date goes to support, where a person decides. A customer's report (`disputed`) blocks it.
 5. **No status-history row.** VEN-647 has not landed a history table; the cancellation is on the booking row (`cancelled_by`, `cancelled_at`, `cancellation_reason`) and both sides get an in-app and an email notice.
+
+### D49: Orla files a 1099-K for every vendor it paid, Stripe collects the vendor's tax ID, and sales tax starts in the home state — *2026-09-24*
+
+**Question:** what tax and information-reporting duties does Orla have toward vendors, and for each step, does the vendor deal with Stripe or with Orla?
+
+No tax advisor was consulted. Every threshold, date, rate and fee below was read on **2026-09-24** from the primary source cited next to it. Where the sources leave a question open, the more conservative reading was taken, and it is recorded under *Ambiguities*.
+
+Labels:
+- **[F]** fact: quoted from a statute, the IRS or a state revenue department.
+- **[S]** Stripe's documented behaviour.
+- **[J]** judgment: our reading, never presented as fact.
+
+The research notes that carry the full quotes are not committed. The URLs below are the record.
+
+#### Chose
+
+1. **Orla files Form 1099-K** as a third-party settlement organization (TPSO). It files one for **every vendor it made a payment to in the year**, whatever the amount, using `REQUIRED_EVEN_IF_BELOW_THRESHOLD`. The totals come from Orla's own records (VEN-722), not from Stripe's defaults.
+2. **Stripe collects each vendor's name, tax ID and address and checks the TIN against the IRS**, through the `tax_reporting_us_1099_k` capability (VEN-723). Orla never stores an SSN or EIN. The forms go out through Stripe's Express e-delivery, with postal fallback.
+3. **Backup withholding is Orla's job, not Stripe's.** The admin switches it on from an IRS notice, and the payout sweep withholds 24% (VEN-723).
+4. **Sales tax: Orla collects as a marketplace facilitator, starting in its home state from the first live booking.** Other states are added when the threshold report flags them. The work is VEN-724, with registration in VEN-657.
+5. **Records are kept for 7 years** after the end of the tax year they belong to. The Privacy Policy sentence is VEN-378 (h)4.
+6. **A yearly vendor statement ships as a product feature, not a legal duty.** It reconciles the gross figure on the 1099-K with what the vendor was actually paid (VEN-725).
+
+#### Rejected
+
+- **1099-NEC/MISC**, the reading in which Orla pays its own subcontractors. Our Terms say Orla is "not a party to the booking itself" and does "not supply the service". Under that contract Orla is a TPSO, not an "in-house accounts payable department" (ambiguity 1).
+- **Filing only above the federal threshold.** Nine jurisdictions set lower or different state thresholds (question 1). Filing every vendor satisfies all of them at once and costs $2.99 a form.
+- **Filing Stripe's generated totals.** Our transfers carry no `source_transaction` (D45), so Stripe computes a net figure, and the IRS requires the gross.
+- **Orla collecting SSNs itself.** It would put the most sensitive PII this product could hold into our own database, when Stripe collects it already.
+- **Deferring sales tax until an economic threshold is crossed.** Nexus in the home state exists from the first sale, and the categories we sell include food and rentals, which are taxable in most states (question 4).
+- **Tax-inclusive pricing**, where the published price absorbs the tax. That would change the vendor's share or Orla's commission on every booking. The tax would also not be stated separately on the receipt.
+- **Revisiting D45** to add `source_transaction`. VEN-722's CSV overwrites the totals, so D45 stands unchanged.
+
+#### Answers
+
+**1. Which information return applies.**
+
+[F] The IRS defines a TPSO as "the central organization that has the contractual obligation to make payments to participating payees of third party network transactions" (Treas. Reg. §1.6050W-1(c)(2), https://www.law.cornell.edu/cfr/text/26/1.6050W-1). The same regulation's Example 20 treats a hotel that takes the customer's card itself and then "settles the hotel kiosk transactions with the unrelated sellers" as a TPSO. The IRS 1099-K instructions exclude "in-house accounts payable departments" (https://www.irs.gov/instructions/i1099k). They also describe the aggregator case: "If you receive payments from a PSE on behalf of one or more participating payees and you distribute such payments … you are … The PSE with respect to the participating payees to whom you distribute the payments." Payments reportable under §6050W "are reported under section 6050W and not section 6041 or 6041A" (same page).
+
+[J] Orla takes the card as merchant of record, holds the money and settles with unrelated vendors under the vendor agreement. That is Example 20's shape, so the form is the 1099-K.
+
+**Federal thresholds:**
+
+| Tax year | 1099-K (TPSO) | 1099-NEC / MISC |
+|---|---|---|
+| 2025 | more than $20,000 **and** more than 200 transactions | $600 |
+| 2026 | more than $20,000 **and** more than 200 transactions | $2,000 |
+| 2027 onward | unchanged | $2,000, indexed for inflation |
+
+Sources:
+- 1099-K: §6050W(e) (https://www.law.cornell.edu/uscode/text/26/6050W). IR-2025-107 says "retroactively reinstated the reporting threshold … exceeds $20,000 and the number of transactions exceeds 200" (https://www.irs.gov/newsroom/irs-issues-faqs-on-form-1099-k-threshold-under-the-one-big-beautiful-bill-dollar-limit-reverts-to-20000).
+- 1099-NEC/MISC: §6041(a) and (h) (https://www.law.cornell.edu/uscode/text/26/6041). Pub 1099 (2026) says "increased to $2,000 and will be adjusted for inflation beginning in calendar year 2027" (https://www.irs.gov/publications/p1099).
+- The *General Instructions for Certain Information Returns* page still says "$600 in calendar year 2026". That is stale Notice 2024-85 text, superseded by the sources above.
+- Filing below the threshold is allowed. A marketplace "may send you a Form 1099-K with lower amounts and/or transactions" (https://www.irs.gov/businesses/understanding-your-form-1099-k).
+
+**States whose thresholds differ from federal [F]:**
+
+| State | Rule | Source |
+|---|---|---|
+| Massachusetts | 1099-K at $600 or more, "even if the TPSO does not have a federal reporting obligation" | 830 CMR 62C.8.1 via https://www.law.cornell.edu/regulations/massachusetts/830-CMR-62C-8-1 (mass.gov returned 403) |
+| Virginia | 1099-K at $600 | https://www.tax.virginia.gov/news/did-you-receive-1099-k-what-you-need-know |
+| Vermont | 1099-K at the §6041(a) amount, $2,000 for 2026 | https://legislature.vermont.gov/statutes/section/32/151/05862d |
+| Maryland | 1099-K at the §6041(a) amount, $2,000 for 2026 | https://mgaleg.maryland.gov/mgawebsite/Laws/StatuteText?article=gtg&section=10-825 |
+| Illinois | 1099-K "four or more separate transactions, and the cumulative total exceeds $1,000" | PUB-110, https://tax.illinois.gov/content/dam/soi/en/web/tax/research/publications/pubs/documents/pub-110.pdf |
+| Arkansas | $2,500 | https://www.dfa.arkansas.gov/wp-content/uploads/2025_Mag_Media.pdf |
+| New Jersey | $1,000 | https://www.nj.gov/treasury/taxation/pdf/current/njwt.pdf |
+| DC | $600 | https://otr.cfo.dc.gov/sites/default/files/dc/sites/otr/publication/attachments/2025%20MyTax%201099_W2G%20instructions%20v1.0_Final.pdf |
+| Missouri | $1,200 | https://dor.mo.gov/taxation/business/tax-types/withholding/reporting-misc-income.html |
+
+Several states require direct filing rather than the IRS forwarding program. MD, DC, NC, GA, IL, NY, MI and VA are quoted in the research. [S] Stripe files the no-withholding states: "Stripe supports e-filing in all states but won't transmit forms to states on your behalf that have backup or state withholding amounts" (https://docs.stripe.com/connect/tax-forms-state-requirements). Stripe's 1099-K state list covers each state above except Missouri, which no Stripe table lists (https://docs.stripe.com/connect/1099-k).
+
+**2. Does Stripe's 1099 product support this account shape?**
+
+[S] Whether Stripe covers Orla's accounts depends on who pays the fees, not on the API version: "Transactions on accounts where `controller.fees.payer` equals `application` … are included" (https://docs.stripe.com/connect/calculation-methods). Our `fees_collector: 'application'` is that field in v2 (https://docs.stripe.com/connect/accounts-v2/connected-account-configuration). Stripe will not file on its own: "the platform is responsible for filing any relevant 1099 forms" (https://docs.stripe.com/connect/tax-reporting).
+
+Three limits apply to our setup:
+- [S] The reported amount comes "from the transfer, not the charge". Transfers without `source_transaction` are "card not present" transactions (calculation-methods), which makes Stripe's figure the net share. Hence VEN-722.
+- [S] Neither `tax_reporting_us_1099_k` nor `_misc` appears on `v2_supported_v1_capabilities` (https://docs.stripe.com/_endpoint/get-v2-supported-v1-capabilities). Stripe does say a v2 id can be passed to v1 endpoints (https://docs.stripe.com/connect/accounts-v2). **VEN-723 tests this before relying on it.**
+- [S] Express e-delivery requires the connected account to survive. Deleted or rejected accounts "are ineligible to login to Stripe Express" (https://docs.stripe.com/connect/platform-express-dashboard-taxes-faqs).
+
+**Cost** [S] (https://stripe.com/connect/pricing): "$2.99 per 1099 e-filed with IRS", "$1.49 per 1099 e-filed with states", and "$2.99 per 1099 mailed". Digital delivery is "No fee".
+
+**Who does what** [S] (https://docs.stripe.com/connect/get-started-tax-reporting):
+- Stripe generates the forms, applies state thresholds, syncs vendor edits until February 12, e-files and delivers.
+- Orla configures each year's settings, chooses the form type, clears `Needs attention` forms, and presses **File**. Filing requires accepting "a standard IRS penalty of perjury statement".
+
+**Calendar for tax year 2026** [S] (same page):
+
+| Date | What happens |
+|---|---|
+| November 3 | Stripe outreach to vendors begins |
+| January 4 | Last recommended day to enable outreach |
+| January 12 (tentative) | E-filing opens |
+| January 22, 2027 | Latest recommended filing date |
+| February 1, 2027 | IRS postmark deadline for vendor copies |
+| February 12 | Vendor identity edits stop syncing onto the form |
+
+[F] The IRS due date for a 1099-K is "January 31 [to recipient]" and March 31 if e-filed (Pub 1099). That falls on Monday, February 1, 2027 for recipients under Pub 1099's weekend rule. E-filing is mandatory at "10 or more information returns".
+
+**3. Who the vendor deals with.**
+
+| Step | Vendor deals with | What Orla builds or publishes | Source |
+|---|---|---|---|
+| TIN, legal name, address | **Stripe** (hosted onboarding, once the 1099 capability is on; otherwise Stripe's November outreach) | VEN-723: request the capability; show the admin the TIN state, never the number | [S] required-verification-information-taxes; express-dashboard-taxes |
+| IRS TIN verification | **Stripe** ("TIN is verified against the IRS database if: You have applied the 1099-K … capabilities") | nothing | [S] https://docs.stripe.com/connect/express-dashboard-taxes |
+| Payouts paused for missing tax info | **Stripe** pauses them; **Orla** tells the vendor | the existing `payouts_paused` path (VEN-525) | [S] "Payouts become disabled if the required information isn't collected and verified by 600 USD in charges" |
+| E-delivery consent | **Stripe** (Express claim flow and outreach emails) | enable outreach (VEN-657) | [F] consent must be affirmative (Pub 1099); [S] deliver-tax-forms |
+| Form delivery | **Stripe** (Express dashboard, or post) | a dashboard login link on `/vendor/payments` (VEN-725) | [S] https://docs.stripe.com/connect/deliver-tax-forms |
+| Corrections | **Both.** The vendor edits their details in Express; **Orla** files the correction | the Dashboard **Correct** action (VEN-657) | [S] https://docs.stripe.com/connect/correct-tax-forms: "You have 60 days from the initial submission" |
+| TIN mismatch, B-notice | **Orla** | a B notice within 15 business days; withholding from 30 business days (VEN-657, VEN-723) | [F] Pub 1281, https://www.irs.gov/pub/irs-pdf/p1281.pdf; i1099gi |
+| Backup withholding | **Orla**. Stripe only reports what the platform enters | the VEN-723 sweep withholds 24%; Form 945 (VEN-657) | [F] https://www.irs.gov/businesses/small-businesses-self-employed/backup-withholding; [S] CSV `federal_income_tax_withheld` |
+| "Where is my 1099?" | **Stripe** first ("direct users to https://support.stripe.com/express"), then **Orla** ("please reach out to [Platform_Name] to get a copy") | the dashboard link and yearly statement (VEN-725); the admin can download any form | [S] express-dashboard-taxes; platform-express-dashboard-taxes-faqs |
+| "Why is it higher than I was paid?" | **Orla** | the yearly statement (VEN-725) | [F] the 1099-K gross is "without regard to … fees, refunded amounts" |
+
+**Backup withholding rules** [F]:
+- The rate is "24 percent" (https://www.irs.gov/businesses/small-businesses-self-employed/backup-withholding).
+- It applies when the payee fails to furnish a TIN, or on an IRS incorrect-TIN notice (CP2100/2100A, https://www.irs.gov/businesses/small-businesses-self-employed/backup-withholding-b-program).
+- A TPSO must withhold only "Over $20,000 … and Over 200" transactions, or if the payee was reportable the prior year (Pub 1099).
+- It is reported on Form 945 under the same EIN that files the 1099s.
+- TIN Matching is closed to Orla until it has filed returns: payers must be "listed in the IRS Payer Account File … if they filed Forms 1099 within the last 2 years" (https://www.irs.gov/tax-professionals/taxpayer-identification-number-tin-matching).
+
+**4. Sales tax and marketplace facilitator law.**
+
+The plan names no launch state: "a local market" (plan:14), and D32 accepts any US city. [J] So the analysis covers the most populous states plus the states that tax services broadly.
+
+**Facilitator statutes limited to tangible goods** [F]:
+- **California** §6041: a marketplace sells "tangible personal property" (https://cdtfa.ca.gov/lawguides/vol1/sutl/6041.html).
+- **Florida** §212.05965 (https://www.flsenate.gov/Laws/Statutes/2024/212.05965).
+- **New York**: "not required to collect sales tax on … services … restaurant food … admissions to a place of amusement" (TSB-M-19(2.1)S, https://www.tax.ny.gov/pdf/memos/sales/m19-2-1s.pdf).
+- **Illinois** (https://tax.illinois.gov/research/taxinformation/sales/sales-and-use-tax-definitions.html).
+
+**Facilitator statutes that reach services** [F]:
+- **Texas**: "taxable item" means "tangible personal property and taxable services" (§151.010 with §151.0242, https://texas.public.law/statutes/tex._tax_code_section_151.0242).
+- **Hawaii**: facilitators are deemed "retail level sellers of … services", expressly including "In-person service and task-based service platforms" (TIR 2019-03, https://files.hawaii.gov/tax/legal/tir/tir19-03_rev2.pdf).
+- **New Mexico**: "services … on behalf of marketplace sellers, or on their own behalf" (FYI-206).
+- **South Dakota**: SDCL 10-65-2 (https://sdlegislature.gov/api/Statutes/10-65-2.html).
+- **Washington**: RCW 82.08.010 (https://app.leg.wa.gov/rcw/default.aspx?cite=82.08.010).
+- **Iowa, New Jersey, Connecticut** (quoted in the research).
+- **Pennsylvania**: guidance says "goods and services", but the statute could not be fetched. [J] Treated as covering services.
+
+**Taxability by category.** [J] The categories split into goods, food and services:
+
+| Category | Treatment | Evidence |
+|---|---|---|
+| Catering and Carts | Prepared food, taxable in most states | CA: "Tax applies to the entire charge made by caterers" (https://cdtfa.ca.gov/industry/event-planners/industry-topics.htm) [F]; NY: https://www.tax.ny.gov/pubs_and_bulls/tg_bulletins/st/caterers_and_catering_services.htm [F]; PA [F] |
+| Rentals | Leases of tangible goods, taxable | CA [F]; IL since 1/1/2025 [F]; WA RCW 82.04.050 [F] |
+| Decor | Florals are fabricated goods | CA [F] |
+| Photography | Tangible prints taxable; electronic-only delivery generally not (CA) | https://cdtfa.ca.gov/industry/photography/industry-topics.htm [F] |
+| Entertainment | Not taxable in CA | CA [F]; TX amusement services unresolved [J] |
+| Beauty | Taxable in NYC at 4.5% | [F] |
+| Venues | Real property, outside most sales taxes | [J] |
+| Planning | Taxable in CA only when tied to a sale of goods | [F] |
+| All categories | Taxable in HI, NM and SD, which tax services broadly | [F] |
+
+**Orla's commission** (charged to the vendor):
+- Texas taxes it as data processing on 80% of the charge [F] (https://comptroller.texas.gov/economy/fiscal-notes/government/2024/data-process-ftd/).
+- New Mexico includes it in the facilitator's gross receipts [F].
+- Washington subjects it to B&O tax [F].
+- South Dakota exempts it (SDCL 10-45-12.5) [F].
+- None of these applies until Orla has nexus in that state.
+
+**Nexus** [F]:
+
+| Threshold | States |
+|---|---|
+| $100,000 | FL, PA, IL (the transaction count was removed on 1/1/2026), SD, WA, NM |
+| $500,000 | CA (tangible goods only), TX |
+| $500,000 **and** more than 100 sales | NY |
+| $250,000 **and** 200 sales | CT |
+| $100,000 or 200 transactions | HI (2019 text) |
+
+A facilitator with physical presence "is generally required to register in that state regardless of the amount of sales" (https://www.streamlinedsalestax.org/for-businesses/marketplace-facilitator).
+
+**What Stripe Tax does** [S]:
+- **Calculates and collects** only where registered: "Without a registration in the customer's location, the calculation returns zero tax" (https://docs.stripe.com/tax/tax-codes).
+- **Registers you** only on Tax Complete, and not in your home state (https://docs.stripe.com/tax/use-stripe-to-register).
+- **Files** through TaxJar, on Tax Complete only (https://docs.stripe.com/tax/file-with-stripe).
+- **Monitors thresholds** with limits: it "assume[s] that all sales are taxable at the destination", does not monitor "your home US state", and does not monitor "amusement taxes" (https://docs.stripe.com/tax/monitoring).
+- **Tax codes:** the list has no code for photography services, DJs, catering as such, rentals or venue hire (https://docs.stripe.com/tax/tax-codes).
+- **Marketplace flow:** "transfer … excluding … the total tax amount" (https://docs.stripe.com/tax/tax-for-marketplaces).
+- **Price** (https://stripe.com/tax/pricing): Basic via the API costs "50¢ per transaction, where you're registered". Complete costs "$90 … $430 … $1,000 … $1,500" per month on a 1-year contract.
+
+**Decision.** Collect from the first live booking in the home state. Map categories to codes as VEN-724 lists: food, tangible goods, personal care, and General - Services for the rest. Taxing services where a state taxes them is the conservative choice. Build Orla's own threshold report, because Stripe's monitoring skips the home state. File by hand on Basic until volume justifies Tax Complete.
+
+**5. Other obligations.**
+
+| Obligation | Status | Source |
+|---|---|---|
+| Keep copies of filed information returns for "at least 3 years … 4 years if … backup withholding was imposed" | **Required** | [F] Pub 1099 |
+| Keep general records 3 years, or 6 years if income is underreported by more than 25%, or 7 years for bad debts | **Required** | [F] https://www.irs.gov/businesses/small-businesses-self-employed/how-long-should-i-keep-records |
+| One 7-year period for payment, booking and tax records | **Chosen** (covers the longest of the above) | [J] |
+| W-9 or other certified TIN | **Recommended, not required.** For non-interest payments "the payee may furnish/provide the TIN in any manner"; Stripe's collection suffices | [F] Pub 1281 |
+| Vendor terms naming the 1099-K and backup withholding | **Recommended** | VEN-378 (h)2 |
+| Customer receipts stating sales tax separately | **Required wherever tax is collected** | VEN-724 |
+| Refunds and cancellations on the 1099-K | **Required rule:** gross "without regard to … refunded amounts", and the transaction count excludes "refund transactions" | [F] i1099k. A booking never settled to the vendor is not reported ([J] ambiguity 3) |
+| Refunds on sales tax | Reverse the tax transaction | [S] tax-for-marketplaces |
+| DAC7 | **Not applicable.** It reaches platforms with "Reportable Sellers resident in the EU" or "rental of an immovable property located in a Member State" | [F] https://taxation-customs.ec.europa.eu/taxation/tax-transparency-cooperation/administrative-co-operation-and-mutual-assistance/dac7_en |
+| VAT | **Not applicable** [J], because Orla has no EU supply. No VAT source was fetched; this rests on DAC7's scope and the US-only product | [J] |
+
+**6. Vendor-facing earnings.**
+
+- **Legal duty:** none beyond the payee copy of the 1099-K. Nothing fetched requires a separate statement. [J]
+- **Product:** a yearly CSV (VEN-725) is worth building, because the 1099-K gross always exceeds deposits (commission, refunds and D47 netting are not deducted from it). Stripe's FAQ also routes that question to the platform.
+- **Data already held:** `bookings.total_amount_cents`, `platform_fee_cents`, `vendor_payout_cents`, `refund_amount_cents`, `debt_netted_cents`, `stripe_transfer_id` and `paid_at`. `sumPayoutsBetween` (`apps/api/src/modules/vendors/dashboard.dao.ts:72`) already sums net payouts by `paid_at`.
+- **Not duplicated:** the earnings chart and payout history stay Post-MVP (`16-vendor-dashboard.md`).
+
+#### Ambiguities
+
+1. **Is Orla a TPSO or a payer to subcontractors?**
+   - **Reading chosen:** TPSO; file the 1099-K.
+   - **Source text:** Terms, "We are not a party to the booking itself"; Reg. §1.6050W-1 Example 20 (the hotel kiosk that takes the card); i1099k's aggregated-payee paragraph.
+   - **What would change it:** Terms that make Orla the seller of the service, or IRS guidance excluding merchant-of-record marketplaces. Either switches the form to 1099-NEC/MISC at $2,000, exempts corporations, and splits rents onto MISC box 1.
+2. **Aggregated payee of card transactions (no threshold) vs TPSO ($20k/200)?**
+   - **Reading chosen:** file every vendor, which satisfies both readings. The forms are marked TPSO / third party network.
+   - **Source text:** Pub 1099, "Payment card transactions. All amounts"; §6050W(e).
+   - **What would change it:** nothing in what we file. Only the box checked would change.
+3. **Which year does a transaction belong to, and does a never-settled booking count?**
+   - **Reading chosen:** the calendar year of the transfer (the "payment in settlement"), at the full customer charge. A booking with no transfer is excluded.
+   - **Source text:** i1099k, "for payments made in settlement of reportable payment transactions for each calendar year" and "The dollar amount of each transaction is determined on the date of the transaction".
+   - **What would change it:** IRS guidance assigning the year by charge date. That would move bookings charged in December and settled in January.
+4. **Can a 1099 capability be requested on a v2 account?**
+   - **Reading chosen:** unknown. VEN-723 tests it first, with Stripe's outreach as the fallback.
+   - **Source text:** the v2-supported capability list omits it; accounts-v2 says v1 endpoints accept v2 ids.
+   - **What would change it:** the sandbox result, or the capability appearing on the v2 list.
+5. **Is Orla the retailer (merchant of record) or only a facilitator for sales tax?**
+   - **Reading chosen:** facilitator, consistent with the Terms and with answer 1, but collecting on every taxable item, services included, wherever the state taxes them. That is conservative under both readings.
+   - **Source text:** CDTFA Annotation 550.0827, an intermediary "contracting with the customer … owes sales tax measured by the entire charge", whose facts differ from our Terms; HI TIR 2019-03, "retail level seller".
+   - **What would change it:** a state ruling or audit treating Orla as the retailer. In CA or NY that would add tax on currently untaxed service lines only if they are taxable when sold by a retailer.
+6. **Is photography a service or goods?**
+   - **Reading chosen:** General - Services.
+   - **Source text:** CA taxes photos "sold in tangible form" but not those transferred only electronically.
+   - **What would change it:** packages that include prints or albums. Those need a per-package goods flag.
+7. **Home state.**
+   - **Reading chosen:** unnamed. VEN-657 asks the account holder.
+   - **Source text:** plan:14, "a local market"; VEN-378's entity is still a placeholder.
+   - **What would change it:** the named state. Its taxability rules then override the category defaults.
+8. **Is a private-event DJ a taxable Texas "amusement service"?**
+   - **Reading chosen:** taxed as General - Services if Orla registers in TX.
+   - **Source text:** Pub 96-259 lists "Amusement Services" with "live and recorded performances".
+   - **What would change it:** a Comptroller STAR letter ruling.
+
+#### Re-check list (every January, before VEN-657 Part 3)
+
+| Fact | Value read 2026-09-24 | Re-read |
+|---|---|---|
+| 1099-K TPSO threshold | >$20,000 **and** >200 | https://www.irs.gov/instructions/i1099k · https://www.irs.gov/publications/p1099 |
+| 1099-NEC/MISC threshold (indexed from 2027) | $2,000 | https://www.irs.gov/instructions/i1099mec |
+| Backup withholding rate | 24% | https://www.irs.gov/businesses/small-businesses-self-employed/backup-withholding |
+| Retention of filed returns | 3 years, or 4 with withholding | https://www.irs.gov/publications/p1099 |
+| Stripe tax-season calendar | Nov 3, Jan 4, Jan 12, Jan 22, Feb 1, Feb 12 | https://docs.stripe.com/connect/get-started-tax-reporting |
+| Stripe form thresholds and state tables | as quoted above | https://docs.stripe.com/connect/tax-reporting · https://docs.stripe.com/connect/1099-k |
+| 1099 pricing | $2.99 IRS / $1.49 state / $2.99 mail | https://stripe.com/connect/pricing |
+| Whether the 1099 capability is supported on v2 | not listed | https://docs.stripe.com/_endpoint/get-v2-supported-v1-capabilities |
+| Stripe Tax pricing | 50¢ per API transaction; Complete from $90 a month | https://stripe.com/tax/pricing |
+| Stripe tax codes used in VEN-724 | txcd_40060003, 99999999, 20040002, 20030000 | https://docs.stripe.com/tax/tax-codes |
+| MA 1099-K threshold | $600 | https://www.law.cornell.edu/regulations/massachusetts/830-CMR-62C-8-1 |
+| VA 1099-K threshold | $600 | https://www.tax.virginia.gov/news/did-you-receive-1099-k-what-you-need-know |
+| VT and MD 1099-K threshold | the §6041(a) amount | the VT and MD statute URLs above |
+| IL 1099-K threshold | >$1,000 and ≥4 transactions | the PUB-110 URL above |
+| AR / NJ / DC / MO thresholds | $2,500 / $1,000 / $600 / $1,200 | the URLs in the state table above |
+| Nexus thresholds | the table in question 4 | CA https://cdtfa.ca.gov/industry/MPFAct.htm · TX https://comptroller.texas.gov/taxes/sales/remote-sellers-marketplace-faq.php · NY https://www.tax.ny.gov/pubs_and_bulls/publications/sales/marketplace.htm · IL https://tax.illinois.gov/research/publications/bulletins/fy-2026-12.html · WA https://dor.wa.gov/taxes-rates/retail-sales-tax/marketplace-fairness-leveling-playing-field/remote-sellers |
+| States whose facilitator law reaches services | HI, NM, SD, WA, IA, NJ, CT, TX (PA assumed) | the statute URLs in question 4 |
+| DAC7 scope | EU-resident sellers or EU property | the Commission URL above |
+
+**Not fetched, so not relied on:** mass.gov (403); the EUR-Lex DAC7 text; Texas's caterer text and its DJ question; Florida's catering, rental and commercial-rent repeal text (search snippets only); Pennsylvania §7213; whether Hawaii's 200-transaction test is still current; the Iowa and New Jersey nexus thresholds; any VAT source.
+
+**Tickets:** VEN-657 (the account holder: Stripe setup, home-state registration, the January filing) · VEN-722 (1099-K figures and the audit trail) · VEN-723 (tax ID gate and backup withholding) · VEN-724 (sales tax) · VEN-725 (the vendor's dashboard link and yearly statement) · VEN-378 (h) (tax wording and retention copy). VEN-595 is blocked by all five.
