@@ -7,11 +7,8 @@ import {
   vendorProfiles,
   type UserRow,
 } from '@vendor-marketplace/db/schema';
-import type { PageWindow } from '@vendor-marketplace/shared';
+import { disclosesCustomerContact, type PageWindow } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
-
-/** Booking-request statuses that mean the vendor agreed to the work. */
-const ACCEPTED_REQUEST_STATUSES = ['accepted'] as const;
 
 /** Booking statuses that mean the vendor agreed to the work. */
 const ACCEPTED_BOOKING_STATUSES = ['confirmed', 'completed', 'disputed'] as const;
@@ -61,9 +58,7 @@ export async function findRelationship(
   ]);
 
   const accepted =
-    requestRows.some((row) =>
-      (ACCEPTED_REQUEST_STATUSES as readonly string[]).includes(row.status),
-    ) ||
+    requestRows.some((row) => disclosesCustomerContact(row.status)) ||
     bookingRows.some((row) =>
       (ACCEPTED_BOOKING_STATUSES as readonly string[]).includes(row.status),
     );
