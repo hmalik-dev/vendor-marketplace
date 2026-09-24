@@ -19,15 +19,15 @@ Stripe message only.
 under the admin who last set withholding (`findBackupWithholdingSetter`), because
 the sweep has no actor; a missing setter row fails the payout before money moves.
 
-**Open at audit time:** `reverseOutstanding` (payments.service) caps a post-release
-clawback at what the transfer holds and re-owes the shortfall only up to
-`debt_netted_cents`; it never touches `backup_withheld_cents`. A full refund after
-release leaves the 24% counted as withheld on Form 945 / 1099-K box 4 while the
-platform refunded it. The `existing`-transfer retry path recomputes `backupCents`
-from today's flag, so a toggle between a landed transfer and its commit books the
-gap as debt netting.
+**Found at audit time, fixed in the same PR:** `reverseOutstanding` capped a
+post-release clawback at what the transfer holds and never touched
+`backup_withheld_cents`, and the `existing`-transfer retry recomputed the withholding
+from today's flag. Now `owePayoutRecoveredByNetting` lowers `backup_withheld_cents` by
+the shortfall left after the debt part, `settleLostChargeback` bills only what reached
+the vendor, and the transfer carries `backupWithheldCents` in its metadata so a retry
+records what its own attempt withheld.
 
 **How to apply:** any new reader of "what the vendor was sent" must subtract
-`debt_netted_cents` AND `backup_withheld_cents` (only `lowerReleasedVendorPayout`
-does). Related: [[payout-sweep-is-a-second-money-mover]],
+`debt_netted_cents` AND `backup_withheld_cents` (`lowerReleasedVendorPayout`,
+`owePayoutRecoveredByNetting` and `settleLostChargeback` do). Related: [[payout-sweep-is-a-second-money-mover]],
 [[settlement-is-a-third-money-projection]], [[legacy-destination-rows-guarded-in-one-place]].
