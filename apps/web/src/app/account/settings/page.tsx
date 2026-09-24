@@ -54,7 +54,7 @@ export default async function AccountSettingsPage({
     { id: 'password', label: 'Password', value: '••••••••••', href: ACCOUNT_PASSWORD_PATH },
   ];
 
-  // An operator's account is closed from the console, which keeps its own guards.
+  // An admin account is closed from the console, which keeps its own guards.
   if (user.role !== 'admin') {
     rows.push({
       id: 'close',

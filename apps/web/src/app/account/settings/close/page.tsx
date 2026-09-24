@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 
 /**
  * The Close account row's page (VEN-680). Customers and vendors only: an
- * operator's account is closed from the console, and the API refuses it here
+ * admin account is closed from the console, and the API refuses it here
  * too, so the page is a 404 for them rather than a form that cannot work.
  * The blockers are read on the server, so a person holding an upcoming
  * booking is told which before they are asked for a code.

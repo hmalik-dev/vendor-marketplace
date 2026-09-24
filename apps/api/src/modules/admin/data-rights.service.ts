@@ -624,7 +624,7 @@ export async function closeAccount(
 
 /**
  * The closure itself, past the checks that are about **who is asking**: the
- * operator route's last-operator and self-closure refusals stay in
+ * admin route's last-admin and self-closure refusals stay in
  * `closeAccount`, and a person closing their own account reaches this through
  * `closeOwnAccount` with its own confirmation. One core, so both leave the
  * marketplace in the same state.
@@ -822,8 +822,8 @@ async function runClosure(
   };
 }
 
-/** Refused for an operator account: the console is the only door, and it keeps its own guards. */
-export const OPERATOR_SELF_CLOSURE_REFUSAL =
+/** Refused for an admin account: the console is the only door, and it keeps its own guards. */
+export const ADMIN_SELF_CLOSURE_REFUSAL =
   'Admin accounts cannot be closed from account settings. Ask another admin to close it from the console.';
 
 /** The address typed back is compared the way sign-in compares it. */
@@ -839,7 +839,7 @@ async function readOwnCloser(db: AppDatabase, userId: string): Promise<UserRow> 
   }
 
   if (user.role === 'admin') {
-    throw forbidden(OPERATOR_SELF_CLOSURE_REFUSAL);
+    throw forbidden(ADMIN_SELF_CLOSURE_REFUSAL);
   }
 
   return user;
@@ -861,14 +861,14 @@ export async function readOwnCloseReadiness(
 
 /**
  * A customer or vendor closes **their own** account (VEN-680): the closure an
- * operator performs, run for the caller after a fresh proof — the address typed
+ * admin performs, run for the caller after a fresh proof — the address typed
  * back and the emailed code — so a stolen session alone cannot do it.
  *
  * Order matters. The typed address and the D39 refusal are checked **before**
  * the code is spent, so a mistyped address or a standing booking costs the
  * person nothing; the core re-reads the blockers under the row lock, which is
  * the check that holds. The audit row names the person as its actor: a retired
- * row keeps its id, so the foreign key holds. An operator account is refused
+ * row keeps its id, so the foreign key holds. An admin account is refused
  * here and keeps its own guards on the console route.
  *
  * A closed account answers 409 through the core; one whose unwind was

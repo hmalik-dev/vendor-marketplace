@@ -11,7 +11,7 @@ import { authenticated, requireAuthBeforeValidation } from '../../lib/guards.js'
 import { perAccountRateLimit } from '../../lib/rate-limit.js';
 import { startStepUp } from '../admin/admin-step-up.service.js';
 import {
-  OPERATOR_SELF_CLOSURE_REFUSAL,
+  ADMIN_SELF_CLOSURE_REFUSAL,
   closeOwnAccount,
   readOwnCloseReadiness,
 } from '../admin/data-rights.service.js';
@@ -27,7 +27,7 @@ export interface OwnClosureRoutesOptions {
  *
  * Three routes, none of which names a user id: the caller is the subject, so
  * nobody can close another account through them. All three are refused for an
- * operator with copy that points at the console, whose guards stay as they
+ * admin with copy that points at the console, whose guards stay as they
  * were. The `preParsing`-stage limiter is the route's own, keyed on the
  * account, and the code's attempt cap is the step-up store's.
  */
@@ -47,7 +47,7 @@ export const ownClosureRoutes: FastifyPluginAsyncZod<OwnClosureRoutesOptions> = 
   app.post(
     '/users/me/close/challenge',
     {
-      onRequest: requireAuthBeforeValidation,
+      preParsing: requireAuthBeforeValidation,
       config: { rateLimit: perAccountRateLimit(STEP_UP_CHALLENGES_PER_HOUR, '1 hour') },
       schema: { response: { 200: adminStepUpResultSchema } },
     },
@@ -55,7 +55,7 @@ export const ownClosureRoutes: FastifyPluginAsyncZod<OwnClosureRoutesOptions> = 
       const user = authenticated(request.auth);
 
       if (user.role === 'admin') {
-        throw forbidden(OPERATOR_SELF_CLOSURE_REFUSAL);
+        throw forbidden(ADMIN_SELF_CLOSURE_REFUSAL);
       }
 
       return startStepUp(
@@ -70,7 +70,7 @@ export const ownClosureRoutes: FastifyPluginAsyncZod<OwnClosureRoutesOptions> = 
   app.post(
     '/users/me/close',
     {
-      onRequest: requireAuthBeforeValidation,
+      preParsing: requireAuthBeforeValidation,
       config: { rateLimit: perAccountRateLimit(STEP_UP_CHALLENGES_PER_HOUR * 5, '1 hour') },
       schema: { body: closeOwnAccountSchema, response: { 200: closeOwnAccountResultSchema } },
     },

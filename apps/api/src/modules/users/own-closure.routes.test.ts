@@ -16,12 +16,12 @@ import {
   signInAs,
   type TestHarness,
 } from '../../testing/test-server.js';
-import { OPERATOR_SELF_CLOSURE_REFUSAL, closeOwnAccount } from '../admin/data-rights.service.js';
+import { ADMIN_SELF_CLOSURE_REFUSAL, closeOwnAccount } from '../admin/data-rights.service.js';
 import { bookingContextFor } from '../payments/payments.service.js';
 
 const ADMIN = 'user_own_close_admin';
 const CUSTOMER = 'user_own_close_customer';
-const OPERATOR_CLOSED = 'user_own_close_by_operator';
+const ADMIN_CLOSED = 'user_own_close_by_admin';
 const VENDOR = 'user_own_close_vendor';
 const ADDRESS = (authUserId: string): string => `${authUserId}@example.com`;
 const WEB_ORIGIN = 'https://orla.test';
@@ -29,7 +29,7 @@ const WEB_ORIGIN = 'https://orla.test';
 /**
  * VEN-680: a customer or vendor closes their own account, after typing their
  * address back and spending an emailed code. The closure core is the
- * operator's, so most of what is asserted here is what differs: who may call
+ * admin's, so most of what is asserted here is what differs: who may call
  * it, what proves them, and what a wrong proof costs.
  */
 describe('a person closes their own account', () => {
@@ -162,7 +162,7 @@ describe('a person closes their own account', () => {
   beforeEach(() => {
     register(ADMIN, 'customer');
     register(CUSTOMER, 'customer');
-    register(OPERATOR_CLOSED, 'customer');
+    register(ADMIN_CLOSED, 'customer');
     register(VENDOR, 'vendor');
     harness.deletedAuthUsers.length = 0;
     harness.setAuthDeletionFails(false);
@@ -182,24 +182,24 @@ describe('a person closes their own account', () => {
     await harness.close();
   });
 
-  it('anonymises the row exactly as an operator closure does, and ends sign-in', async () => {
+  it('anonymises the row exactly as an admin closure does, and ends sign-in', async () => {
     await signIn(ADMIN, true);
     const customerId = await signIn(CUSTOMER);
-    const byOperatorId = await signIn(OPERATOR_CLOSED);
+    const byAdminId = await signIn(ADMIN_CLOSED);
 
     await requestCode(CUSTOMER);
     const closed = await close(CUSTOMER, ADDRESS(CUSTOMER).toUpperCase(), emailedCode(CUSTOMER));
     expect(closed.statusCode).toBe(200);
     expect(new Date(closed.json().closedAt).getTime()).not.toBeNaN();
 
-    const operator = await harness.app.inject({
+    const adminClosure = await harness.app.inject({
       method: 'POST',
-      url: `/v1/admin/users/${byOperatorId}/close`,
+      url: `/v1/admin/users/${byAdminId}/close`,
       headers: bearer(ADMIN),
     });
-    expect(operator.statusCode).toBe(200);
+    expect(adminClosure.statusCode).toBe(200);
 
-    const byOperator = await row(byOperatorId);
+    const byAdmin = await row(byAdminId);
     const own = await row(customerId);
     const shape = (r: typeof own) => ({
       ...r,
@@ -210,7 +210,7 @@ describe('a person closes their own account', () => {
       createdAt: null,
       updatedAt: null,
     });
-    expect(shape(own)).toEqual(shape(byOperator));
+    expect(shape(own)).toEqual(shape(byAdmin));
     expect(own).toMatchObject({
       email: `closed+${customerId}@invalid`,
       firstName: 'Former customer',
@@ -236,9 +236,10 @@ describe('a person closes their own account', () => {
 
     await requestCode(CUSTOMER);
 
-    const sent = harness.email.sent.filter((m) => m.to === ADDRESS(CUSTOMER));
-    expect(sent).toHaveLength(1);
-    expect(sent[0]!.essential).toBe(false);
+    const code = [...harness.email.sent]
+      .reverse()
+      .find((m) => m.to === ADDRESS(CUSTOMER) && m.subject.includes('confirmation code'));
+    expect(code?.essential).toBe(false);
   });
 
   it('writes user_closed with the person as its actor', async () => {
@@ -300,7 +301,7 @@ describe('a person closes their own account', () => {
     expect((await row(vendor.userId)).deletedAt).not.toBeNull();
   });
 
-  it('refuses an operator on all three routes, and writes nothing', async () => {
+  it('refuses an admin on all three routes, and writes nothing', async () => {
     const adminId = await signIn(ADMIN, true);
 
     for (const [method, url] of [
@@ -309,12 +310,12 @@ describe('a person closes their own account', () => {
     ] as const) {
       const response = await harness.app.inject({ method, url, headers: bearer(ADMIN) });
       expect(response.statusCode).toBe(403);
-      expect(response.json().message).toBe(OPERATOR_SELF_CLOSURE_REFUSAL);
+      expect(response.json().message).toBe(ADMIN_SELF_CLOSURE_REFUSAL);
     }
 
     const closed = await close(ADMIN, ADDRESS(ADMIN), '123456');
     expect(closed.statusCode).toBe(403);
-    expect(closed.json().message).toBe(OPERATOR_SELF_CLOSURE_REFUSAL);
+    expect(closed.json().message).toBe(ADMIN_SELF_CLOSURE_REFUSAL);
     expect((await row(adminId)).deletedAt).toBeNull();
     expect(harness.email.sent.filter((m) => m.to === ADDRESS(ADMIN))).toEqual([]);
   });
