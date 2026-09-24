@@ -269,7 +269,7 @@ export function AcceptedRequest({ request, booking }: AcceptedRequestProps): Rea
             </>
           ) : pulled === null ? (
             <Button asChild variant="primary" disabled={price === null}>
-              <Link href={`/bookings/${request.id}/checkout`}>
+              <Link href={`/bookings/${request.id}/checkout`} prefetch={false}>
                 Pay {price === null ? 'now' : formatPrice(price)}
               </Link>
             </Button>

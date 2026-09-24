@@ -517,26 +517,30 @@ describe('the one report control the storefront still offers its own vendor', ()
 });
 
 /*
- * VEN-648: a storefront URL leaves the app, so a slug the vendor has changed
- * must keep leading to them — permanently, so a crawler moves its index too.
+ * VEN-648 / VEN-715: the 404 and the 308 for a changed slug are `layout.tsx`'s
+ * (`lib/vendor-route.test.ts`), above the loading boundary, where they can still
+ * be a status. The page draws a vendor it is given and answers nothing itself.
  */
-describe('a slug the vendor has since changed', () => {
-  it('redirects permanently to the current slug', async () => {
+describe('a vendor the layout refuses', () => {
+  /*
+   * Next renders the page beside its layout, so the page sees the same refusal
+   * — the 404 signal, not a plain error the server would report.
+   */
+  it('raises the gate’s not-found, not an error of its own', async () => {
+    getPublicVendorProfile.mockResolvedValue(null);
+
+    await expect(
+      VendorProfilePage({ params: Promise.resolve({ slug: 'hostile-studio' }) }),
+    ).rejects.toThrow('NEXT_NOT_FOUND');
+  });
+
+  it('raises the gate’s 308 for a slug the vendor gave up', async () => {
     getPublicVendorProfile.mockResolvedValue(null);
     getVendorSlugSuccessor.mockResolvedValue('moonlit-studio');
 
     await expect(
       VendorProfilePage({ params: Promise.resolve({ slug: 'hostile-studio' }) }),
     ).rejects.toThrow('NEXT_REDIRECT 308 /vendors/moonlit-studio');
-    expect(getVendorSlugSuccessor).toHaveBeenCalledWith('hostile-studio');
-  });
-
-  it('is the ordinary 404 when no vendor ever gave the slug up', async () => {
-    getPublicVendorProfile.mockResolvedValue(null);
-
-    await expect(
-      VendorProfilePage({ params: Promise.resolve({ slug: 'hostile-studio' }) }),
-    ).rejects.toThrow('NEXT_NOT_FOUND');
   });
 
   it('costs a live storefront no successor read', async () => {

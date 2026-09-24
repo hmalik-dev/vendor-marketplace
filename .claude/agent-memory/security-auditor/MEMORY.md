@@ -27,7 +27,7 @@
 - [Email is a label, the auth id is the key](email-uniqueness-is-partial-nothing-joins-by-email.md) — partial `lower(email)` index + lowercase CHECK (VEN-649)
 - [Closing an account releases its address, scrubs the row, deletes uploads](closed-account-address-is-released.md) — VEN-614/672/687 scrubs (0089/0093/0097) clean
 - [The sign-up role is recorded server-side, first write wins](signup-role-is-confirmed-not-narrowed.md) — VEN-662: a squatter fixes the victim's role (Low)
-- [Route handlers do not inherit layout gates](route-handlers-do-not-inherit-layout-gates.md) — `/admin/vendors/export` authorizes itself
+- [Route handlers do not inherit layout gates](route-handlers-do-not-inherit-layout-gates.md) — `/admin/vendors/export` authorizes itself; [layout gates run beside the page](layout-gates-run-concurrently-with-the-page.md) (VEN-715)
 - [Validation runs before preHandler guards](schema-validation-runs-before-prehandler-guards.md) — `requireAuthBeforeValidation`; two enum routes left low
 - [The event stream's auth is hand-rolled on purpose](stream-route-auth-is-hand-rolled.md) — `requireAuth` breaks it; keep the inline ban check
 - [safeReturnPath is FIXED](validate-before-normalize-return-path.md) — parse-then-reserialise; VEN-653 exemption clean

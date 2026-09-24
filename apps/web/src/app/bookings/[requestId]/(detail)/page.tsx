@@ -1,12 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
-import { pageTitle, uuidSchema } from '@vendor-marketplace/shared';
+import { pageTitle } from '@vendor-marketplace/shared';
 import { AcceptedRequest } from '@/components/bookings/accepted-request';
 import { QuoteReview } from '@/components/bookings/quote-review';
 import { ReportProblem } from '@/components/bookings/report-problem';
-import { getBookingForRequest, getOwnBookingRequest } from '@/lib/customer-data';
-import { requireRole } from '@/lib/current-user';
+import { gateBookingRequest, readBookingForRequest } from '@/lib/booking-route';
 
 export const metadata: Metadata = {
   title: pageTitle('Your request'),
@@ -37,31 +35,12 @@ interface PageProps {
 export default async function BookingRequestPage({
   params,
 }: PageProps): Promise<React.ReactElement> {
-  await requireRole('customer');
-  const { requestId } = await params;
-
   /*
-   * Parsed before it reaches a query. `requestId` is attacker-controlled — this
-   * URL is the kind people paste to each other — and an id that is not a UUID
-   * makes the API answer 400, which is "an identifier that cannot exist" and so
-   * `notFound()` rather than the error boundary. Handling it here means the
-   * malformed case never reaches the network at all.
+   * The customer gate and the 404 for a malformed, missing or not-yours id are
+   * `layout.tsx`'s, above the loading boundary (VEN-715). This awaits the same
+   * per-request gate, so nothing below runs for a visitor it refuses.
    */
-  const parsed = uuidSchema.safeParse(requestId);
-  if (!parsed.success) {
-    notFound();
-  }
-
-  const request = await getOwnBookingRequest(parsed.data);
-
-  /*
-   * Missing and not-yours arrive here identically, because the API answers a
-   * stranger with a 404 rather than a 403 — whether a row exists is not
-   * something a stranger gets to learn.
-   */
-  if (!request) {
-    notFound();
-  }
+  const { requestId, request } = await gateBookingRequest({ params });
 
   /*
    * Only for a request that has been accepted: every other status has nothing
@@ -69,7 +48,7 @@ export default async function BookingRequestPage({
    * `null`. Reading it here rather than inside the component keeps the page the
    * one place that fetches.
    */
-  const booking = request.status === 'accepted' ? await getBookingForRequest(parsed.data) : null;
+  const booking = request.status === 'accepted' ? await readBookingForRequest(requestId) : null;
 
   return (
     /*

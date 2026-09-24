@@ -21,12 +21,6 @@ const NO_PAYMENT_CLAIM = 'No payment was taken';
 /*
  * VEN-476: a failed read on these routes fell to the root boundary by accident;
  * each now owns a boundary file.
- *
- * Two routes deliberately have no `loading.tsx`. `/vendors/[slug]` and
- * `/bookings/[requestId]` call `notFound()`, and `/search` answers a retired
- * category with `permanentRedirect()`; a loading boundary above either streams
- * a 200 shell and turns the 404 / 308 into a status the browser and crawlers
- * never see (`loading-boundaries.test.ts`).
  */
 const ERROR_BOUNDARIES = [
   ['search', SearchError],
@@ -81,10 +75,19 @@ describe('segment error boundaries', () => {
     );
   });
 
-  it.each(['search', 'vendors/[slug]', 'bookings/[requestId]'])(
-    '%s has no loading boundary, so its 404 or 308 stays a real status',
-    (segment) => {
-      expect(existsSync(join(APP_DIR, segment, 'loading.tsx'))).toBe(false);
-    },
-  );
+  /*
+   * VEN-715: these routes answer 404, 308 and 307, and now also draw a loader.
+   * Each boundary sits beside a layout (or, for `/search`, behind the middleware)
+   * that makes the status decision first, so the two do not fight.
+   */
+  it.each([
+    'search',
+    'vendors/[slug]/(profile)',
+    'vendors/[slug]/request',
+    'bookings/[requestId]/(detail)',
+    'bookings/[requestId]/confirmed/(gate)',
+    'bookings/[requestId]/checkout/(gate)',
+  ])('%s has a loading boundary', (segment) => {
+    expect(existsSync(join(APP_DIR, segment, 'loading.tsx'))).toBe(true);
+  });
 });

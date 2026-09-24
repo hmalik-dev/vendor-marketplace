@@ -31,6 +31,18 @@ function first(value: RawParam): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
+/** A URL's query in the shape Next hands a page: a repeated key is an array. */
+export function searchParamsFrom(query: URLSearchParams): SearchParams {
+  const params: SearchParams = {};
+
+  for (const key of new Set(query.keys())) {
+    const values = query.getAll(key);
+    params[key] = values.length === 1 ? values[0] : values;
+  }
+
+  return params;
+}
+
 /**
  * Where a link to a category the taxonomy has retired should land, or `null`
  * when there is nothing to move — the category is live, unknown, or absent.
