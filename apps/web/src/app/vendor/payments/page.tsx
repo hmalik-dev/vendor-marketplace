@@ -79,12 +79,23 @@ export default async function VendorPaymentsPage({
     >
       <div className="max-w-[620px]">
         {status.stripeOnboarded ? (
-          <Banner status="settled" title="Payouts connected">
-            {BRAND_NAME} holds each payment and pays it out to you {PAYOUT_RELEASE_HOURS} hours
-            after the event date.
-            <StripeDashboardLink />
-            <TaxStatementDownloads years={statementYears} />
-          </Banner>
+          <>
+            <Banner status="settled" title="Payouts connected">
+              {BRAND_NAME} holds each payment and pays it out to you {PAYOUT_RELEASE_HOURS} hours
+              after the event date.
+            </Banner>
+            {/*
+              Beside the banner, not inside it: `Banner` wraps its sentence in a
+              `<p>`, and the statement list is a `<div>`. A block inside a
+              paragraph is invalid HTML, so the browser closes the `<p>` early
+              while parsing the server markup and React refuses to hydrate it
+              (error 418).
+            */}
+            <div className="mt-3 flex flex-col items-start">
+              <StripeDashboardLink />
+              <TaxStatementDownloads years={statementYears} />
+            </div>
+          </>
         ) : (
           <>
             {/*
