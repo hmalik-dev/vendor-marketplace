@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MARKETING_LINK_CLASS } from '@/components/marketing-link';
 import { reportSwallowedError } from '@/lib/report-error';
-import { isHeaderReadSuppressed } from '@/lib/terms-gate-paths';
+import { isHeaderReadSuppressed, isTermsRequired } from '@/lib/terms-gate-paths';
 import { useApi } from '@/lib/use-api';
 import { wireConversationPageSchema } from '@/lib/wire-schemas';
 
@@ -60,6 +60,17 @@ function UnreadMessagesLink(): React.ReactElement {
         setUnread(page.hasUnread);
       }
     } catch (error: unknown) {
+      /*
+       * The Terms gate is an answer, not a failure: `useApi` has already sent the
+       * reader to accept them (or the page is one the gate exempts), so there is
+       * nothing to report. Logging it printed a console error on `/suspended` and
+       * `/account/closed`, the two screens a session with no account row reaches
+       * (`e2e/route-landing.spec.ts`). The bell, which asks the same gate, stays silent too.
+       */
+      if (isTermsRequired(error)) {
+        return;
+      }
+
       // The dot keeps its last known value: dropping it would read as "all read"
       // when it means "could not ask".
       reportSwallowedError('header: reading the unread state failed', error);
