@@ -1,5 +1,6 @@
 import {
   BRAND_NAME,
+  EMAIL_RETRY_BACKOFF_MS,
   uuidSchema,
   type EmailDeliveryEntity,
   type EmailDeliveryOutcome,
@@ -12,7 +13,8 @@ import { notificationHref } from '../messaging/messaging.service.js';
 import type { EmailGateway, EmailSendResult } from '../../lib/email.js';
 import { escapeHtml } from '../../lib/html-escape.js';
 import type { BackgroundWork } from '../../lib/background.js';
-import { insertEmailDelivery } from './email-delivery.dao.js';
+import type { ErrorReporter } from '../../lib/error-reporting.js';
+import { countEmailAttempts, insertEmailDelivery } from './email-delivery.dao.js';
 import { findNotificationRecipient } from './notification-email.dao.js';
 
 /**
@@ -131,6 +133,12 @@ export interface NotificationEmailDeps {
   webOrigin: string;
   /** Where the send runs, so no request waits on Resend. See `queueNotificationEmail`. */
   background: BackgroundWork;
+  /**
+   * Where a delivery that has spent its last attempt is reported (VEN-608).
+   * Only the retry sweep sets it: the final attempt is never the first, so no
+   * request-path caller needs one.
+   */
+  reporter?: ErrorReporter;
 }
 
 /**
@@ -231,11 +239,7 @@ export async function sendNotificationEmail(
        * is #439's first half: a send that never happened used to leave nothing
        * behind but a log line on a process that may have rotated.
        */
-      await recordDelivery(deps, row, recipient.email, {
-        outcome: 'failed',
-        providerMessageId: null,
-        failureReason: reasonFor(error),
-      });
+      await recordFailedAttempt(deps, row, recipient.email, reasonFor(error));
       throw error;
     }
 
@@ -257,11 +261,60 @@ export async function sendNotificationEmail(
   }
 }
 
+/**
+ * Records a failed attempt with the wait before the next one or, when that was
+ * the last attempt the schedule allows, reports the lost email (VEN-608).
+ *
+ * The report names the notification type and nothing else: never the address,
+ * which nothing scrubs from a free-form message. The notification id rides on
+ * the log line beside it.
+ */
+async function recordFailedAttempt(
+  deps: NotificationEmailDeps,
+  row: NotificationEmailRow,
+  recipientEmail: string,
+  failureReason: string,
+): Promise<void> {
+  let retryDelayMs: number | null;
+
+  try {
+    // Attempts made before this one, which is also this attempt's index in the schedule.
+    retryDelayMs = EMAIL_RETRY_BACKOFF_MS[await countEmailAttempts(deps.db, row.id)] ?? null;
+  } catch (error) {
+    // Unknown count: the row is written due, so the next sweep decides from what it can see.
+    deps.log.error(
+      { notificationId: row.id, reason: error instanceof Error ? error.name : 'unknown' },
+      'Could not count the attempts of a failed email',
+    );
+    retryDelayMs = 0;
+  }
+
+  await recordDelivery(deps, row, recipientEmail, {
+    outcome: 'failed',
+    providerMessageId: null,
+    failureReason,
+    retryDelayMs,
+  });
+
+  if (retryDelayMs === null) {
+    deps.log.error(
+      { notificationId: row.id, type: row.type },
+      'A transactional email used its last attempt and was not delivered',
+    );
+    deps.reporter?.capture(
+      new Error(`Transactional email undeliverable after every attempt: ${row.type}`),
+      {},
+    );
+  }
+}
+
 /** The outcome half of a delivery record, as the send knows it. */
 interface AttemptRecord {
   outcome: Extract<EmailDeliveryOutcome, 'sent' | 'failed'>;
   providerMessageId: string | null;
   failureReason: string | null;
+  /** Wait before the sweep may try again; null when none is due. */
+  retryDelayMs?: number | null;
 }
 
 /**
@@ -295,6 +348,7 @@ async function recordDelivery(
       providerMessageId: attempt.providerMessageId,
       // Cut to the column's width by the DAO, on both write paths.
       failureReason: attempt.failureReason,
+      retryDelayMs: attempt.retryDelayMs ?? null,
     });
   } catch (error) {
     /*

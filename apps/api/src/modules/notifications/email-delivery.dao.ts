@@ -6,7 +6,20 @@ import {
   MAX_EMAIL_FAILURE_REASON_LENGTH,
   type EmailDeliveryOutcome,
 } from '@vendor-marketplace/shared';
-import { and, eq, gt, inArray, isNull, ne, notExists, notInArray, or, sql } from 'drizzle-orm';
+import {
+  and,
+  count,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lte,
+  ne,
+  notExists,
+  notInArray,
+  or,
+  sql,
+} from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { AppDatabase } from '../../lib/database.js';
 
@@ -83,12 +96,17 @@ export function truncateFailureReason(reason: string | null | undefined): string
  */
 export async function insertEmailDelivery(
   db: AppDatabase,
-  values: NewEmailDeliveryRow,
+  { retryDelayMs, ...values }: NewEmailDeliveryRow & { retryDelayMs?: number | null },
 ): Promise<void> {
   await db
     .insert(emailDeliveries)
     .values({
       ...values,
+      // From the database's clock, like `sent_at`, so the two cannot disagree about "now".
+      nextAttemptAt:
+        retryDelayMs === undefined || retryDelayMs === null
+          ? null
+          : sql`now() + ${retryDelayMs}::int * interval '1 millisecond'`,
       recipientEmail: sql`coalesce(
         (select ${users.email} from ${users}
           where ${users.id} = ${values.userId} and ${users.deletedAt} is not null),
@@ -184,6 +202,17 @@ export async function applyDeliveryEvent(
   return existing ? 'superseded' : 'unknown';
 }
 
+/** How many attempt rows a notification already has, whatever their outcome. */
+export async function countEmailAttempts(db: AppDatabase, notificationId: string): Promise<number> {
+  const [row] = await db
+    .select({ attempts: count() })
+    .from(emailDeliveries)
+    .where(eq(emailDeliveries.notificationId, notificationId))
+    .limit(1);
+
+  return row?.attempts ?? 0;
+}
+
 export interface RetryableDeliveryQuery {
   now: Date;
   maxAttempts: number;
@@ -201,7 +230,9 @@ export interface RetryableDeliveryQuery {
  * it an id** (a `failed` a provider event wrote later names a message Resend
  * already holds, and replaying its idempotency key delivers nothing); no attempt
  * for the notification is `sent`, `delivered`, `bounced` or `complained`; fewer
- * than `maxAttempts` attempts exist; and the *first* attempt is inside the
+ * than `maxAttempts` attempts exist; the row's backoff has elapsed (`next_attempt_at`
+ * is null — a failure recorded before the column, due at once — or not after
+ * `now`); and the *first* attempt is inside the
  * window, so retries cannot keep a stale message alive by restarting the clock.
  *
  * Only the latest failed row can match, so two sweeps do not lock two rows of
@@ -223,6 +254,7 @@ export async function lockRetryableDelivery(
       and(
         eq(emailDeliveries.outcome, 'failed'),
         isNull(emailDeliveries.providerMessageId),
+        or(isNull(emailDeliveries.nextAttemptAt), lte(emailDeliveries.nextAttemptAt, query.now)),
         query.exclude.length > 0
           ? notInArray(emailDeliveries.notificationId, [...query.exclude])
           : undefined,
