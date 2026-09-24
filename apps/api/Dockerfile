@@ -54,6 +54,16 @@ ENV HOST=0.0.0.0
 ENV PORT=4000
 WORKDIR /app
 COPY --from=build --chown=node:node /app ./
+# VEN-634. The commit this image was built from, written into the image so
+# `/ready` names what is running rather than a service variable, which a
+# redeploy of an older image or a failed `railway up` leaves pointing at a
+# release that is not serving. Railway passes the service variable of the same
+# name as this build arg (`deploy.mjs` sets it before `up`); empty when built
+# by hand, where `/ready` falls back to the variables. A file rather than `ENV`
+# so a runtime variable cannot override it. Last before `USER`, so a new commit
+# only invalidates this layer.
+ARG RELEASE_COMMIT=""
+RUN printf '%s' "$RELEASE_COMMIT" > RELEASE_COMMIT
 USER node
 EXPOSE 4000
 

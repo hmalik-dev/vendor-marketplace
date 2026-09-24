@@ -21,6 +21,7 @@ import {
   PHASES,
   PhaseError,
   REQUIRED_INPUTS,
+  SKEW_RUNBOOK_STEP,
   gateVerdict,
   missingInputs,
   presenceFlag,
@@ -128,6 +129,9 @@ function coreFlowsFetch({ commit = SHA, runtimeEnv = RUNTIME_ENV_PRESENT } = {})
   };
 }
 
+/** The deployment URL `vercel deploy` prints as its last line (`web-deploy` reads it). */
+const DEPLOY_URL = 'https://orla-abc123-team.vercel.app';
+
 function recordingIo() {
   const calls = [];
   const lines = [];
@@ -137,6 +141,9 @@ function recordingIo() {
     io: {
       run: async (command, args, options) => {
         calls.push({ command, args, env: options.env });
+        if (command === 'npx' && args[2] === 'deploy') {
+          options.write?.(`${DEPLOY_URL}\n`);
+        }
       },
       write: (text) => lines.push(text),
       error: (text) => lines.push(text),
@@ -502,7 +509,7 @@ test('api: deploys through the named host adapter with its credential and the re
   assert.deepEqual(
     calls.map(({ args }) => args.slice(2).join(' ')),
     [
-      `variables --service orla-api --set SENTRY_RELEASE=${SHA} --set NEON_AUTH_BASE_URL=${NEON_AUTH.production} --skip-deploys`,
+      `variables --service orla-api --set SENTRY_RELEASE=${SHA} --set RELEASE_COMMIT=${SHA} --set NEON_AUTH_BASE_URL=${NEON_AUTH.production} --skip-deploys`,
       'up --ci --service orla-api',
     ],
   );
@@ -591,7 +598,7 @@ test('web-deploy: deploys the prebuilt bundle without the upload or build-only c
 
   assert.deepEqual(
     calls.map(({ args }) => args[2]),
-    ['deploy'],
+    ['deploy', 'promote'],
   );
   assert.equal(calls[0].env.SENTRY_AUTH_TOKEN, undefined);
   assert.ok(calls[0].args.includes(`SENTRY_RELEASE=${SHA}`));
@@ -793,34 +800,35 @@ test('release: a superseded gate verdict stops before preflight, and does not th
 
 test('workflow: runs after CI completes on staging or production only, never on main', () => {
   assert.equal(CI.name, 'CI');
-  assert.deepEqual(WORKFLOW.on, {
-    workflow_run: {
-      workflows: ['CI'],
-      types: ['completed'],
-      branches: ['staging', 'production'],
-    },
+  assert.deepEqual(WORKFLOW.on.workflow_run, {
+    workflows: ['CI'],
+    types: ['completed'],
+    branches: ['staging', 'production'],
   });
+  assert.deepEqual(Object.keys(WORKFLOW.on).sort(), ['workflow_dispatch', 'workflow_run']);
   assert.ok(!JSON.stringify(WORKFLOW.on).includes('main'));
   // CI must run on the branches the deploy waits for, or it never fires.
   for (const branch of ['staging', 'production']) {
     assert.ok(CI.on.push.branches.includes(branch), branch);
   }
+  // A CI run deploys only when it succeeded on a push to an environment branch; the manual path is the other arm.
   assert.equal(
     JOB.if,
-    "github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && (github.event.workflow_run.head_branch == 'staging' || github.event.workflow_run.head_branch == 'production')",
+    "github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && (github.event.workflow_run.head_branch == 'staging' || github.event.workflow_run.head_branch == 'production'))",
   );
 });
 
 test('workflow: the branch is the environment, so each has its own secrets and variables', () => {
-  assert.equal(JOB.environment, '${{ github.event.workflow_run.head_branch }}');
-  assert.equal(JOB.env.DEPLOY_TARGET, '${{ github.event.workflow_run.head_branch }}');
+  const target = '${{ github.event.workflow_run.head_branch || inputs.environment }}';
+  assert.equal(JOB.environment, target);
+  assert.equal(JOB.env.DEPLOY_TARGET, target);
 });
 
 test('workflow: serialises deploys per environment and never cancels one in flight', () => {
   assert.deepEqual(WORKFLOW.concurrency, {
     // The head repository is in the key so a fork's branch of the same name cannot queue in front of a real deploy.
     group:
-      'deploy-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}',
+      'deploy-${{ github.event.workflow_run.head_repository.full_name || github.repository }}-${{ github.event.workflow_run.head_branch || inputs.environment }}',
     'cancel-in-progress': false,
   });
   assert.equal(JOB.concurrency, undefined);
@@ -853,7 +861,7 @@ test('workflow: the checkout step names the commit CI tested, before anything el
   const [checkout, ...rest] = JOB.steps;
 
   assert.match(checkout.uses, /^actions\/checkout@[0-9a-f]{40}$/);
-  assert.equal(checkout.with.ref, '${{ github.event.workflow_run.head_sha }}');
+  assert.equal(checkout.with.ref, '${{ github.event.workflow_run.head_sha || inputs.sha }}');
   assert.ok(rest.length > 0);
 });
 
@@ -926,8 +934,9 @@ test('workflow: only the release step is handed the two build secrets', () => {
 });
 
 test('workflow: the release the SDKs report is the commit CI tested', () => {
-  assert.equal(JOB.env.SENTRY_RELEASE, '${{ github.event.workflow_run.head_sha }}');
-  assert.equal(JOB.steps[0].with.ref, '${{ github.event.workflow_run.head_sha }}');
+  const sha = '${{ github.event.workflow_run.head_sha || inputs.sha }}';
+  assert.equal(JOB.env.SENTRY_RELEASE, sha);
+  assert.equal(JOB.steps[0].with.ref, sha);
 });
 
 // --- dry run ------------------------------------------------------------------
@@ -949,6 +958,7 @@ here=$(dirname "$0")
 call="$(basename "$0") $*"
 printf '%s\\n' "$call" >> "$here/invocations.log"
 case "$call" in
+  "gh run list"*) cat "$here/ci" ;;
   "git ls-remote"*)
     # Answers only for the ref of the branch under test, so a gate that asks for any other sees no tip.
     [ "$3" = "refs/heads/$(cat "$here/branch")" ] && printf '%s\\t%s\\n' "$(cat "$here/tip")" "$3" ;;
@@ -966,6 +976,14 @@ exit 0
 /** GitHub's expression syntax, for exactly the forms this workflow uses; anything else throws. */
 function expand(value, context) {
   return String(value).replace(/\$\{\{\s*(.+?)\s*\}\}/g, (_, expression) => {
+    if (expression.includes(' || ')) {
+      return (
+        expression
+          .split(' || ')
+          .map((term) => operand(term, context))
+          .find((value) => value !== '') ?? ''
+      );
+    }
     const presence = /^(secrets|vars)\.([A-Z_]+) != ''$/.exec(expression);
     if (presence) {
       return String(context[presence[1]][presence[2]] !== undefined);
@@ -974,15 +992,41 @@ function expand(value, context) {
     if (lookup) {
       return context[lookup[1]][lookup[2]] ?? '';
     }
-    if (expression.startsWith('github.event.workflow_run.')) {
-      return context.workflowRun[expression.slice('github.event.workflow_run.'.length)];
-    }
-    throw new Error(`unsupported expression: ${expression}`);
+    return operand(expression, context);
   });
 }
 
+/** One operand of an `a || b` expression; empty when unset, as in Actions. */
+function operand(term, context) {
+  if (term.startsWith('github.event.workflow_run.')) {
+    return context.workflowRun?.[term.slice('github.event.workflow_run.'.length)] ?? '';
+  }
+  if (term.startsWith('inputs.')) {
+    return context.inputs?.[term.slice('inputs.'.length)] ?? '';
+  }
+  const known = {
+    'github.event_name': context.eventName,
+    'github.token': 'dry-run-github-token',
+    'github.repository': 'orla/dry-run',
+  };
+  if (Object.hasOwn(known, term)) {
+    return known[term];
+  }
+  throw new Error(`unsupported expression: ${term}`);
+}
+
 /** Executes the job's `run` steps as Actions does: in order, stopping at the first failure. */
-function dryRun({ secrets, vars, branch = 'production', tip = SHA, fail = '', webCommit = SHA }) {
+function dryRun({
+  secrets,
+  vars,
+  branch = 'production',
+  tip = SHA,
+  fail = '',
+  webCommit = SHA,
+  // A manual release: the inputs the dispatch was given, and what CI concluded for that commit.
+  dispatch = null,
+  ci = 'success',
+}) {
   const dir = mkdtempSync(path.join(tmpdir(), 'deploy-dry-run-'));
   try {
     // The web's answers, for the two children that fetch it: node itself is not stubbed.
@@ -1014,7 +1058,7 @@ globalThis.fetch = async (url, init) => {
   return new Response('ok', { status: 200 });
 };\n`,
     );
-    for (const tool of ['git', 'pnpm', 'npx']) {
+    for (const tool of ['git', 'pnpm', 'npx', 'gh']) {
       writeFileSync(path.join(dir, tool), STUB);
       chmodSync(path.join(dir, tool), 0o755);
     }
@@ -1025,11 +1069,16 @@ globalThis.fetch = async (url, init) => {
     writeFileSync(path.join(dir, 'tip'), tip);
     writeFileSync(path.join(dir, 'branch'), branch);
     writeFileSync(path.join(dir, 'fail'), fail);
+    writeFileSync(path.join(dir, 'ci'), ci);
 
     const context = {
       secrets,
       vars,
-      workflowRun: { conclusion: 'success', event: 'push', head_sha: SHA, head_branch: branch },
+      eventName: dispatch ? 'workflow_dispatch' : 'workflow_run',
+      inputs: dispatch ?? undefined,
+      workflowRun: dispatch
+        ? undefined
+        : { conclusion: 'success', event: 'push', head_sha: SHA, head_branch: branch },
     };
     const printed = [];
     const ran = [];
@@ -1057,6 +1106,7 @@ globalThis.fetch = async (url, init) => {
           PATH: `${dir}:${path.dirname(process.execPath)}:/usr/bin:/bin`,
           HOME: dir,
           GITHUB_OUTPUT: output,
+          GITHUB_REPOSITORY: 'orla/dry-run',
         },
         encoding: 'utf8',
       });
@@ -1139,6 +1189,7 @@ test('dry run: a configured release runs sender → web-build → migrate → ap
     'npx --yes @railway/cli@5.57.2',
     'npx --yes @railway/cli@5.57.2',
     'npx --yes vercel@59.17.0', // web-deploy: deploy
+    'npx --yes vercel@59.17.0', // web-deploy: promote (VEN-634)
     'pnpm smoke',
   ]);
   assertNoSecretPrinted(result.printed);
@@ -1616,7 +1667,7 @@ test('web-build: staging refuses to alias a host that is not its own, before bui
   assert.equal(calls.length, 0);
 });
 
-test('web-build then web-deploy: production stays a production deployment and is not aliased', async () => {
+test('web-build then web-deploy: production stays a production deployment, promoted and not aliased', async () => {
   const { io, calls } = recordingIo();
   const env = {
     PATH: '/bin',
@@ -1641,6 +1692,7 @@ test('web-build then web-deploy: production stays a production deployment and is
       'pull --yes --environment=production',
       'build --prod',
       `deploy --prebuilt --prod --env SENTRY_RELEASE=${SHA} --env NEON_AUTH_BASE_URL=${NEON_AUTH.production}`,
+      `promote ${DEPLOY_URL}`,
     ],
   );
   assert.ok(
@@ -1812,3 +1864,212 @@ test('dry run: the build secrets reach vercel build and never the log or the oth
     assert.ok(!result.printed.includes(value), 'printed a build secret');
   }
 });
+
+// --- VEN-634: rollback, redeploy and the release that stops partway ------------------
+
+/*
+ * AC1. A rolled-back production project has auto-assign off: `deploy --prod`
+ * creates the deployment but leaves the domain where it was, and only
+ * `promote` moves it. This fake Vercel says exactly that, so the phase can only
+ * pass by promoting.
+ */
+test('web-deploy: after a rollback turned auto-assign off, the production domain still ends up on the new deployment', async () => {
+  const domain = { target: 'https://orla-rolled-back.vercel.app' };
+  const io = {
+    run: async (command, args, options) => {
+      const verb = args[2];
+      if (verb === 'deploy') {
+        options.write(`Production: ${DEPLOY_URL} [3s]\n${DEPLOY_URL}\n`);
+      }
+      if (verb === 'promote') {
+        domain.target = args[3];
+      }
+    },
+    write: () => {},
+  };
+
+  await PHASES['web-deploy'](
+    {
+      PATH: '/bin',
+      DEPLOY_TARGET: 'production',
+      VERCEL_TOKEN: fake('vercel'),
+      VERCEL_ORG_ID: 'org',
+      VERCEL_PROJECT_ID: 'prj',
+      SENTRY_RELEASE: SHA,
+      WEB_URL: 'https://orla.test',
+      NEON_AUTH_BASE_URL: NEON_AUTH.production,
+    },
+    io,
+  );
+
+  assert.equal(domain.target, DEPLOY_URL);
+});
+
+test('web-deploy: production without a printed deployment URL fails naming what it could not promote', async () => {
+  const io = { run: async () => {}, write: () => {} };
+
+  await assert.rejects(
+    PHASES['web-deploy'](
+      {
+        PATH: '/bin',
+        DEPLOY_TARGET: 'production',
+        VERCEL_TOKEN: fake('vercel'),
+        VERCEL_ORG_ID: 'org',
+        VERCEL_PROJECT_ID: 'prj',
+        SENTRY_RELEASE: SHA,
+        WEB_URL: 'https://orla.test',
+        NEON_AUTH_BASE_URL: NEON_AUTH.production,
+      },
+      io,
+    ),
+    /did not print a deployment URL to promote/,
+  );
+});
+
+test('gate: a manual release of a commit that is not the tip fails, where a superseded CI run only warns', () => {
+  const base = { conclusion: 'success', event: 'push', branch: 'staging', headSha: SHA };
+  const tipSha = 'f'.repeat(40);
+
+  assert.deepEqual(gateVerdict({ ...base, tipSha, manual: false }).fail, false);
+  const manual = gateVerdict({ ...base, tipSha, manual: true });
+  assert.equal(manual.deploy, false);
+  assert.equal(manual.fail, true);
+  assert.match(manual.message, /a1b2c3d is not staging's tip \(fffffff\)/);
+});
+
+test('release: a web deploy that fails after the API succeeded names both commits and the runbook step, and never polls ready', async () => {
+  const NEW = SHA;
+  const OLD = '0123456789abcdef0123456789abcdef01234567';
+  const order = [];
+
+  await withStubbedPhases(
+    RELEASE_PHASES,
+    (name) => async () => {
+      order.push(name);
+      if (name === 'gate') {
+        return { deploy: true };
+      }
+      if (name === 'web-deploy') {
+        throw new PhaseError('npx vercel deploy exited with 1');
+      }
+    },
+    async () => {
+      const { io } = recordingIo();
+      io.fetch = coreFlowsFetch({ commit: OLD });
+
+      await assert.rejects(
+        PHASES.release({ SENTRY_RELEASE: NEW, WEB_URL: 'https://orla.test' }, io),
+        (error) => {
+          assert.ok(error instanceof PhaseError);
+          assert.match(error.message, /npx vercel deploy exited with 1/);
+          assert.ok(error.message.includes(`API is already live on ${NEW.slice(0, 7)}`));
+          assert.ok(error.message.includes(`web still serves ${OLD.slice(0, 7)}`));
+          assert.ok(error.message.includes(`"${SKEW_RUNBOOK_STEP}" in docs/runbook-rollback.md`));
+          return true;
+        },
+      );
+    },
+  );
+
+  assert.equal(order.at(-1), 'web-deploy');
+  assert.ok(!order.includes('ready'));
+});
+
+test('release: a web that answers nothing is still named as the unknown side of the skew', async () => {
+  await withStubbedPhases(
+    RELEASE_PHASES,
+    (name) => async () => {
+      if (name === 'gate') {
+        return { deploy: true };
+      }
+      if (name === 'web-deploy') {
+        throw new Error('boom with a value that must not be printed');
+      }
+    },
+    async () => {
+      const { io } = recordingIo();
+      io.fetch = async () => {
+        throw new Error('offline');
+      };
+
+      await assert.rejects(
+        PHASES.release({ SENTRY_RELEASE: SHA, WEB_URL: 'https://orla.test' }, io),
+        (error) => {
+          assert.match(error.message, /^web-deploy failed unexpectedly\./);
+          assert.ok(!error.message.includes('must not be printed'));
+          assert.match(error.message, /web still serves a commit its \/api\/ready did not name/);
+          return true;
+        },
+      );
+    },
+  );
+});
+
+test('runbook: has the step a partial release sends a person to, the staging rollback, and the redeploy', () => {
+  const runbook = readFileSync(path.join(ROOT, 'docs/runbook-rollback.md'), 'utf8');
+
+  assert.match(runbook, new RegExp(`^## .*${SKEW_RUNBOOK_STEP}`, 'm'));
+  assert.match(runbook, /vercel alias set <previous-deployment-url> <staging-host>/);
+  assert.match(runbook, /vercel promote <deployment-url>/);
+  assert.match(runbook, /^## .*[Rr]edeploy the same commit/m);
+});
+
+test('workflow: a manual release takes an environment and a sha, and nothing else', () => {
+  const { inputs } = WORKFLOW.on.workflow_dispatch;
+
+  assert.deepEqual(Object.keys(inputs).sort(), ['environment', 'sha']);
+  assert.equal(inputs.environment.type, 'choice');
+  assert.deepEqual(inputs.environment.options, ['staging', 'production']);
+  assert.equal(inputs.environment.required, true);
+  assert.equal(inputs.sha.required, true);
+  // Reading CI's conclusion is the only thing the token gains over read-only contents.
+  assert.deepEqual(WORKFLOW.permissions, { contents: 'read', actions: 'read' });
+});
+
+test('dry run: a manual release of the production tip asks CI, then deploys and promotes', () => {
+  const result = dryRun({
+    secrets: SECRETS,
+    vars: VARS,
+    dispatch: { environment: 'production', sha: SHA },
+  });
+
+  assert.equal(result.failedAt, null, result.printed);
+  assert.deepEqual(result.invocations.slice(0, 5), [
+    'pnpm install --frozen-lockfile',
+    'pnpm turbo run',
+    'git ls-remote origin',
+    'gh run list',
+    'pnpm release:sender',
+  ]);
+  assert.equal(result.invocations.at(-1), 'pnpm smoke');
+  assert.match(result.printed, /Deploying a1b2c3d to production/);
+});
+
+test('dry run: a manual release still refuses a sha that is not the branch tip, before anything else runs', () => {
+  const result = dryRun({
+    secrets: SECRETS,
+    vars: VARS,
+    tip: 'f'.repeat(40),
+    dispatch: { environment: 'production', sha: SHA },
+  });
+
+  assert.equal(result.failedAt, 'Release');
+  assert.match(result.printed, /a1b2c3d is not production's tip \(fffffff\)/);
+  assert.ok(!result.invocations.includes('pnpm release:sender'));
+  assert.ok(!result.invocations.includes('pnpm db:migrate'));
+});
+
+for (const ci of ['failure', '']) {
+  test(`dry run: a manual release of a commit whose CI concluded ${JSON.stringify(ci)} is refused`, () => {
+    const result = dryRun({
+      secrets: SECRETS,
+      vars: VARS,
+      ci,
+      dispatch: { environment: 'production', sha: SHA },
+    });
+
+    assert.equal(result.failedAt, 'Release');
+    assert.match(result.printed, /CI concluded ".*", which is not success; not deploying/);
+    assert.ok(!result.invocations.includes('pnpm release:sender'));
+  });
+}
