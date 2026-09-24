@@ -67,6 +67,17 @@ the `endEverySession` pattern), plain `sign-out` not `forwardSignOut`, so only t
 one session ends; no cross-account lever since minting needed the password or OTP.
 The body (`token`) and any non-cookie header still pass through, owner-only.
 
+**VEN-630 made the sign-in address budget rotatable** (audit 2026-09-24, blocker):
+`isSignInRefused` refuses a caller only if its own `pair|` bucket is spent, or the
+address bucket is spent **and** it has failed once itself. A fresh caller is never
+refused, so guesses per account = distinct caller keys × ~10 (the per-minute
+`chargeCaller` cap passes a parallel burst past the read-only check). On Vercel the
+key is the full `x-real-ip`, so one IPv6 /64 is unlimited callers; off Vercel it is
+the rightmost XFF. The owner is still lockable: one typo while the address is spent,
+a shared CGNAT address, and the "reset instead" escape is itself an any-caller
+5/10-min address budget. Fix shape: /64 caller keys + a hard address ceiling that
+binds everyone; the canonical form is OWASP device cookies (trusted device exempt).
+
 Related: the request-reset path hides account existence with a fixed 200 and
 `after()`; its sibling `email-otp/reset-password` returns the upstream status
 verbatim, so existence can leak there instead. See [[fixed-response-sibling-leak]].

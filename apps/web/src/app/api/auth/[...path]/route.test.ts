@@ -601,22 +601,34 @@ describe('sign-in through the auth proxy', () => {
     expect(statuses).toEqual(Array(12).fill(503));
   });
 
-  it('refuses the eleventh attempt once ten wrong passwords for one email came from ten addresses', async () => {
+  it('refuses the eleventh wrong password from one caller, in any casing of the email', async () => {
     upstreamPost.mockResolvedValue(Response.json({ code: 'INVALID' }, { status: 401 }));
 
     const statuses: number[] = [];
     for (let i = 0; i < 11; i++) {
-      const response = await call(
-        SIGN_IN,
-        { email: 'Victim@Example.com', password: 'guess' },
-        `7.7.7.${i}`,
-      );
-      statuses.push(response.status);
+      const email = i % 2 === 0 ? 'Victim@Example.com' : 'victim@example.com';
+      statuses.push((await call(SIGN_IN, { email, password: 'guess' }, '7.7.7.7')).status);
     }
 
     expect(statuses.slice(0, 10)).toEqual(Array(10).fill(401));
     expect(statuses[10]).toBe(429);
     expect(upstreamPost).toHaveBeenCalledTimes(10);
+  });
+
+  it('lets the owner sign in from another caller while a stranger has spent the address budget (VEN-630)', async () => {
+    upstreamPost.mockResolvedValue(Response.json({ code: 'INVALID' }, { status: 401 }));
+
+    for (let i = 0; i < 10; i++) {
+      await call(SIGN_IN, { email: 'owner@example.com', password: 'guess' }, '7.7.7.7');
+    }
+    expect(
+      (await call(SIGN_IN, { email: 'owner@example.com', password: 'guess' }, '7.7.7.7')).status,
+    ).toBe(429);
+
+    upstreamPost.mockResolvedValue(Response.json({ token: 't' }));
+    const owner = await call(SIGN_IN, { email: 'OWNER@example.com', password: 'right' }, '8.8.8.8');
+
+    expect(owner.status).toBe(200);
   });
 
   it('never locks out successful sign-ins, so naming an address cannot deny its owner', async () => {

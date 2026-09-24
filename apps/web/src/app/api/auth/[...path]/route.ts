@@ -21,6 +21,8 @@ import {
   callerAddress,
   chargeAddress,
   chargeCaller,
+  isSignInRefused,
+  recordSignInFailure,
 } from '@/lib/auth/proxy-throttle';
 
 /**
@@ -361,13 +363,18 @@ async function forwardBudgeted(
   }
 
   /*
-   * A password sign-in is charged for its failures only: the budget is shared
-   * and durable, so charging every attempt would let anyone lock an account out
-   * by naming its address. Codes and mail are charged as they are asked for.
+   * A password sign-in is charged for its failures only, and per caller as well
+   * as per address (VEN-630): the address budget binds only a caller that has
+   * already failed for it, so naming an address cannot lock out its owner.
+   * Codes and mail are charged as they are asked for.
    */
   const failuresOnly = path.join('/') === SIGN_IN;
+  const caller = callerAddress(request.headers);
+  const refused = failuresOnly
+    ? await isSignInRefused(email, caller)
+    : await chargeAddress(email, path);
 
-  if (await chargeAddress(email, path, Date.now(), !failuresOnly)) {
+  if (refused) {
     return NextResponse.json(
       { message: 'Too many attempts' },
       { status: 429, headers: { 'Retry-After': '600' } },
@@ -386,7 +393,7 @@ async function forwardBudgeted(
 
   // Only the provider's refusal of the credential counts; its outage must not spend anyone's budget.
   if (failuresOnly && (response.status === 401 || response.status === 403)) {
-    await chargeAddress(email, path);
+    await recordSignInFailure(email, caller);
   }
 
   const mintsSession = await mintsUnusedSession(path, response);
