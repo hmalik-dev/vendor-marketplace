@@ -526,6 +526,10 @@ describe('parseEnv on a deployment', () => {
     expect(env.STRIPE_PLATFORM_FEE_RATE).toBe(0.12);
   });
 
+  /*
+   * The env rate is also what a request accepted before VEN-712 is priced at
+   * (payments.service), so a deployment must not hold any other than the legal one.
+   */
   it('refuses a commission that differs from the rate the legal copy states', () => {
     expect(() => parseEnv({ ...DEPLOYED, STRIPE_PLATFORM_FEE_RATE: '0.15' })).toThrow(
       /STRIPE_PLATFORM_FEE_RATE: must equal the 0\.12 the legal copy states/,
