@@ -211,8 +211,90 @@ export async function chargeAddress(
   return shared ?? isAddressThrottled(address, path, now, record);
 }
 
+const SIGN_IN_PATH: readonly string[] = ['sign-in', 'email'];
+const pairHits = new Map<string, number[]>();
+
+/**
+ * Counts failed password sign-ins per account address **and** caller (VEN-630).
+ * A budget shared by every caller lets a stranger who only knows an address
+ * spend it and lock the owner out. So a caller is refused for one of two
+ * reasons: it spent its own budget for the address, or the address budget is
+ * spent and it has already failed once itself. A caller with no failure of its
+ * own for the address is never refused, so the owner gets in with the right
+ * password, and a stranger rotating callers gets one guess from each. The
+ * per-caller budget on the path and the provider's own limits stay behind both.
+ */
+async function chargePair(
+  address: string,
+  caller: string,
+  limit: number,
+  record: boolean,
+  now: number,
+): Promise<boolean> {
+  const normalized = address.trim().toLowerCase();
+  // Hashed: the API stores the bucket, and neither an address nor a caller is data it needs.
+  const digest = createHash('sha256').update(normalized).digest('hex');
+  const callerDigest = createHash('sha256').update(caller).digest('hex');
+  const shared = await chargeShared(
+    `pair|sign-in/email|${digest}|${callerDigest}`,
+    ADDRESS_WINDOW_MS,
+    limit,
+    record,
+  );
+
+  if (shared !== null) {
+    return shared;
+  }
+
+  const key = `${normalized}|${caller}`;
+  const recent = (pairHits.get(key) ?? []).filter((at) => now - at < ADDRESS_WINDOW_MS);
+
+  if (record) {
+    recent.push(now);
+    pairHits.set(key, recent);
+  }
+
+  if (pairHits.size > 5_000) {
+    for (const [stale, times] of pairHits) {
+      if (times.every((at) => now - at >= ADDRESS_WINDOW_MS)) {
+        pairHits.delete(stale);
+      }
+    }
+  }
+
+  return record ? recent.length > limit : recent.length >= limit;
+}
+
+/** Read-only: whether this caller may try a password for this address now. */
+export async function isSignInRefused(
+  address: string,
+  caller: string,
+  now: number = Date.now(),
+): Promise<boolean> {
+  if (await chargePair(address, caller, SIGN_IN_ADDRESS_LIMIT, false, now)) {
+    return true;
+  }
+
+  // The address budget binds only a caller that has already failed for it.
+  return (
+    (await chargeAddress(address, SIGN_IN_PATH, now, false)) &&
+    (await chargePair(address, caller, 1, false, now))
+  );
+}
+
+/** Records one refused password against the address and against the caller. */
+export async function recordSignInFailure(
+  address: string,
+  caller: string,
+  now: number = Date.now(),
+): Promise<void> {
+  await chargeAddress(address, SIGN_IN_PATH, now);
+  await chargePair(address, caller, SIGN_IN_ADDRESS_LIMIT, true, now);
+}
+
 /** Test seam: forgets every recorded call. */
 export function resetThrottle(): void {
   hits.clear();
   addressHits.clear();
+  pairHits.clear();
 }

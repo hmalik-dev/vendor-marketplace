@@ -4,11 +4,54 @@ import {
   chargeAddress,
   chargeCaller,
   isAddressThrottled,
+  isSignInRefused,
   isThrottled,
+  recordSignInFailure,
   resetThrottle,
 } from './proxy-throttle';
 
 const VERIFY = ['email-otp', 'verify-email'];
+
+describe('sign-in failures per account address and caller (VEN-630)', () => {
+  beforeEach(() => {
+    vi.stubEnv('WEB_TIER_KEY', '');
+    resetThrottle();
+  });
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  async function fail(address: string, caller: string, times: number) {
+    for (let i = 0; i < times; i++) await recordSignInFailure(address, caller, 1_000);
+  }
+
+  it('lets the owner from another caller in after ten failures elsewhere, and still refuses the failing caller', async () => {
+    await fail('owner@x.test', '1.1.1.1', 10);
+
+    expect(await isSignInRefused('owner@x.test', '2.2.2.2', 1_000)).toBe(false);
+    expect(await isSignInRefused('owner@x.test', '1.1.1.1', 1_000)).toBe(true);
+  });
+
+  it('refuses a caller that failed once itself while the address budget is spent', async () => {
+    for (let i = 0; i < 10; i++) await fail('owner@x.test', `9.9.9.${i}`, 1);
+    await fail('owner@x.test', '2.2.2.2', 1);
+
+    expect(await isSignInRefused('owner@x.test', '2.2.2.2', 1_000)).toBe(true);
+    expect(await isSignInRefused('owner@x.test', '3.3.3.3', 1_000)).toBe(false);
+  });
+
+  it('reads the address case-insensitively and per address', async () => {
+    await fail('Owner@X.test', '1.1.1.1', 10);
+
+    expect(await isSignInRefused('owner@x.test', '1.1.1.1', 1_000)).toBe(true);
+    expect(await isSignInRefused('other@x.test', '1.1.1.1', 1_000)).toBe(false);
+  });
+
+  it('forgives a caller after ten minutes', async () => {
+    await fail('owner@x.test', '1.1.1.1', 10);
+
+    expect(await isSignInRefused('owner@x.test', '1.1.1.1', 1_000 + 600_000)).toBe(false);
+  });
+});
 
 describe('isThrottled', () => {
   beforeEach(resetThrottle);

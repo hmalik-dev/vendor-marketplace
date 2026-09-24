@@ -53,12 +53,17 @@ export function SignInForm({ destination }: SignInFormProps): React.ReactElement
       return;
     }
 
-    setFailure(failureCopy(outcome, AUTH_COPY.signInFailed));
+    // A throttled sign-in names the way in that is never throttled: the reset.
+    setFailure(
+      outcome === 'throttled'
+        ? AUTH_COPY.signInThrottled
+        : failureCopy(outcome, AUTH_COPY.signInFailed),
+    );
   }
 
   // Neither a network failure nor a throttle says anything about what the reader typed.
   const credentialsRefused =
-    failure !== null && failure !== AUTH_COPY.unreachable && failure !== AUTH_COPY.throttled;
+    failure !== null && failure !== AUTH_COPY.unreachable && failure !== AUTH_COPY.signInThrottled;
 
   if (verifying) {
     return (
