@@ -10,6 +10,7 @@ import { MarketingNav } from '@/components/marketing-nav';
 import { SignedInDrawer, SignedOutDrawer } from '@/components/header-drawer';
 import { HeaderNav } from '@/components/header-nav';
 import { HeaderQuery } from '@/components/search/header-query';
+import { MessagesLink } from '@/components/messaging/messages-link';
 import { NotificationBell } from '@/components/messaging/notification-bell';
 import { Button } from '@/components/ui/button';
 import { getCategories } from '@/lib/vendor-data';
@@ -214,9 +215,7 @@ export async function SiteHeader(): Promise<React.ReactElement> {
               `stone-700` at 500, and ghost's `clay-500` is for tertiary
               actions in a pane (VEN-413).
             */}
-            <Link href="/messages" className={MARKETING_LINK_CLASS}>
-              Messages
-            </Link>
+            <MessagesLink gated={gated} />
             {/*
               Four items do not fit at 390 — they pushed the header past the
               viewport. Dashboard is the one that gives way, and since #26 it
@@ -240,8 +239,9 @@ export async function SiteHeader(): Promise<React.ReactElement> {
               name={displayNameFor(user)}
               avatarUrl={user?.avatarUrl ?? null}
               dashboardLabel={dashboardLabel}
+              customerProfile={role === 'customer'}
             />
-            <SignedInDrawer dashboardLabel={dashboardLabel} />
+            <SignedInDrawer dashboardLabel={dashboardLabel} customerProfile={role === 'customer'} />
           </Show>
         </div>
       </HeaderNav>

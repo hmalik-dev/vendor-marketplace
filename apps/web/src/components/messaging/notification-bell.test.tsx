@@ -8,8 +8,12 @@ const call = vi.fn(async () => ({ items: [], total: 0, page: 1, pageSize: 20 }))
 vi.mock('next/navigation', () => ({ usePathname: () => pathname }));
 vi.mock('@/lib/use-api', () => ({ useApi: () => call }));
 vi.mock('@/lib/report-error', () => ({ reportSwallowedError: vi.fn() }));
+let streamHandlers: { onEvent: (event: { type: string }) => void; onReconnect?: () => void };
 vi.mock('@/lib/use-event-stream', () => ({
-  useEventStream: () => ({ connected: true }),
+  useEventStream: (handlers: typeof streamHandlers) => {
+    streamHandlers = handlers;
+    return { connected: true };
+  },
 }));
 
 const { NotificationBell } = await import('./notification-bell');
@@ -358,5 +362,38 @@ describe('the bell announcements (VEN-542)', () => {
     const controls = button.getAttribute('aria-controls');
     expect(controls).toBeTruthy();
     expect(document.getElementById(controls ?? '')).not.toBeNull();
+  });
+});
+
+/*
+ * VEN-706. The header's `Messages` link opens no stream of its own — the API
+ * allows five per user — so it hears about arrivals through the bell's.
+ */
+describe('the bell announcing conversation changes', () => {
+  it.each([
+    ['a message arrives', () => streamHandlers.onEvent({ type: 'new_message' })],
+    ['the stream reconnects', () => streamHandlers.onReconnect?.()],
+  ])('dispatches conversations-changed when %s', async (_when, trigger) => {
+    const heard = vi.fn();
+    window.addEventListener('conversations-changed', heard);
+    render(<NotificationBell />);
+    await waitFor(() => expect(call).toHaveBeenCalled());
+
+    trigger();
+
+    expect(heard).toHaveBeenCalledTimes(1);
+    window.removeEventListener('conversations-changed', heard);
+  });
+
+  it('does not for a notification alone', async () => {
+    const heard = vi.fn();
+    window.addEventListener('conversations-changed', heard);
+    render(<NotificationBell />);
+    await waitFor(() => expect(call).toHaveBeenCalled());
+
+    streamHandlers.onEvent({ type: 'new_notification' });
+
+    expect(heard).not.toHaveBeenCalled();
+    window.removeEventListener('conversations-changed', heard);
   });
 });
