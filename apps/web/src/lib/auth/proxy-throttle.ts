@@ -32,6 +32,8 @@ const TIGHT_PATHS: ReadonlySet<string> = new Set([
   'email-otp/request-password-reset',
   'email-otp/reset-password',
   'change-password',
+  'revoke-session',
+  'revoke-other-sessions',
 ]);
 
 const hits = new Map<string, number[]>();
