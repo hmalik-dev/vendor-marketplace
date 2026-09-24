@@ -1,4 +1,9 @@
-import { formatPrice, OPERATOR_DIGEST_LOCAL_HOUR } from '@vendor-marketplace/shared';
+import {
+  formatPrice,
+  OPERATOR_DIGEST_LOCAL_HOUR,
+  PAYOUT_SWEEP_INTERVAL_MS,
+  payoutDueThroughDate,
+} from '@vendor-marketplace/shared';
 import {
   claimDigest,
   isDigestClaimed,
@@ -14,7 +19,7 @@ export interface OperatorDigestDeps extends OperatorAlertDeps {
   timeZone: string;
 }
 
-export type DigestResult = 'not-due' | 'already-claimed' | 'sent' | 'logged' | 'skipped' | 'failed';
+export type DigestResult = 'not-due' | 'already-claimed' | 'sent' | 'logged' | 'failed';
 
 const MS_PER_HOUR = 60 * 60_000;
 /** The digest looks back one day and ahead two, per the ticket. */
@@ -67,7 +72,8 @@ export function isDigestEmpty(figures: DigestFigures): boolean {
     figures.payouts.count === 0 &&
     openCases.underOneDay + openCases.oneToThreeDays + openCases.overThreeDays === 0 &&
     figures.bounces === 0 &&
-    figures.unpaidSoon.length === 0
+    figures.unpaidSoon.length === 0 &&
+    figures.overduePayouts === 0
   );
 }
 
@@ -88,6 +94,9 @@ export function composeDigestLines(figures: DigestFigures): string[] {
   const unlisted = figures.unpaidSoon.length - unpaid.length;
 
   return [
+    ...(isDigestEmpty(figures)
+      ? ['Nothing to report: the digest ran and the last day was quiet']
+      : []),
     'Last 24 hours',
     `New sign-ups: ${signups}`,
     `Booking requests: ${figures.requests}`,
@@ -100,6 +109,7 @@ export function composeDigestLines(figures: DigestFigures): string[] {
     `Accepted but unpaid, event in the next 48 hours: ${figures.unpaidSoon.length}`,
     ...unpaid,
     ...(unlisted > 0 ? [`  …and ${unlisted} more`] : []),
+    `Payouts overdue (due more than one sweep interval ago, still unreleased): ${figures.overduePayouts}`,
   ];
 }
 
@@ -109,9 +119,9 @@ export function composeDigestLines(figures: DigestFigures): string[] {
  * **Safe on every instance at once.** Each one ticks; the claim row's partial
  * unique index lets exactly one insert win for the operator-local date, and
  * only the winner sends. A failed send gives the claim back so a later tick
- * retries. An empty day is claimed as `skipped` so it is not recomputed every
- * five minutes until midnight — and so a quiet morning that turns busy at noon
- * does not produce a "morning" digest at 12:05.
+ * retries. An empty day is sent too (VEN-671): a digest that only arrives when
+ * something happened makes "the timer stopped" indistinguishable from "nothing
+ * happened", so its arrival is the daily proof that the process is running.
  */
 export async function runOperatorDigest(
   deps: OperatorDigestDeps,
@@ -132,18 +142,16 @@ export async function runOperatorDigest(
     until: now,
     fromDate: local.date,
     throughDate: addCalendarDays(local.date, LOOKAHEAD_DAYS),
+    overduePayoutDueThroughDate: payoutDueThroughDate(
+      new Date(now.getTime() - PAYOUT_SWEEP_INTERVAL_MS),
+    ),
   });
 
-  const empty = isDigestEmpty(figures);
-  const outcome = empty ? 'skipped' : deps.to === undefined ? 'logged' : 'sent';
+  const outcome = deps.to === undefined ? 'logged' : 'sent';
   const claim = await claimDigest(deps.db, local.date, outcome, now);
 
   if (claim === null) {
     return 'already-claimed';
-  }
-
-  if (empty) {
-    return 'skipped';
   }
 
   const summary = `Daily digest for ${local.date}`;

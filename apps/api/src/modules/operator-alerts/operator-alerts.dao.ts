@@ -29,6 +29,7 @@ import {
 } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { AppDatabase } from '../../lib/database.js';
+import { countDuePayoutBookings } from '../payments/payouts.dao.js';
 
 /**
  * Records an immediate alert unless one for the same kind and subject was
@@ -244,6 +245,8 @@ export interface DigestFigures {
   bounces: number;
   /** Accepted requests whose event is inside the window and which nobody has paid. */
   unpaidSoon: { requestId: string; eventDate: string }[];
+  /** Bookings whose payout was already due one sweep interval ago and is still unreleased. */
+  overduePayouts: number;
 }
 
 export interface DigestWindow {
@@ -253,6 +256,8 @@ export interface DigestWindow {
   /** Event dates `[fromDate, throughDate]`, operator-local. */
   fromDate: string;
   throughDate: string;
+  /** `payoutDueThroughDate` one sweep interval before `until`. */
+  overduePayoutDueThroughDate: string;
 }
 
 const MS_PER_DAY = 24 * 60 * 60_000;
@@ -279,78 +284,88 @@ export async function readDigestFigures(
   const oneDayAgo = new Date(until.getTime() - MS_PER_DAY).toISOString();
   const threeDaysAgo = new Date(until.getTime() - 3 * MS_PER_DAY).toISOString();
 
-  const [signups, requests, payments, refunds, payouts, openCases, bounces, unpaidSoon] =
-    await Promise.all([
-      db
-        .select({ role: users.role, count: count() })
-        .from(users)
-        .where(and(gte(users.createdAt, since), lt(users.createdAt, until)))
-        .groupBy(users.role)
-        .orderBy(asc(users.role)),
-      db
-        .select({ count: count() })
-        .from(bookingRequests)
-        .where(and(gte(bookingRequests.createdAt, since), lt(bookingRequests.createdAt, until))),
-      db
-        .select(tally(bookings.totalAmountCents))
-        .from(bookings)
-        .where(and(gte(bookings.paidAt, since), lt(bookings.paidAt, until))),
-      db
-        .select(tally(bookings.refundAmountCents))
-        .from(bookings)
-        .where(
-          and(
-            gt(bookings.refundAmountCents, 0),
-            gte(bookings.cancelledAt, since),
-            lt(bookings.cancelledAt, until),
-          ),
+  const [
+    signups,
+    requests,
+    payments,
+    refunds,
+    payouts,
+    openCases,
+    bounces,
+    unpaidSoon,
+    overduePayouts,
+  ] = await Promise.all([
+    db
+      .select({ role: users.role, count: count() })
+      .from(users)
+      .where(and(gte(users.createdAt, since), lt(users.createdAt, until)))
+      .groupBy(users.role)
+      .orderBy(asc(users.role)),
+    db
+      .select({ count: count() })
+      .from(bookingRequests)
+      .where(and(gte(bookingRequests.createdAt, since), lt(bookingRequests.createdAt, until))),
+    db
+      .select(tally(bookings.totalAmountCents))
+      .from(bookings)
+      .where(and(gte(bookings.paidAt, since), lt(bookings.paidAt, until))),
+    db
+      .select(tally(bookings.refundAmountCents))
+      .from(bookings)
+      .where(
+        and(
+          gt(bookings.refundAmountCents, 0),
+          gte(bookings.cancelledAt, since),
+          lt(bookings.cancelledAt, until),
         ),
-      db
-        .select(tally(bookings.vendorPayoutCents))
-        .from(bookings)
-        .where(and(gte(bookings.payoutReleasedAt, since), lt(bookings.payoutReleasedAt, until))),
-      db
-        .select({
-          underOneDay:
-            sql<number>`count(*) filter (where ${supportCases.createdAt} >= ${oneDayAgo})`.mapWith(
-              Number,
-            ),
-          oneToThreeDays:
-            sql<number>`count(*) filter (where ${supportCases.createdAt} < ${oneDayAgo} and ${supportCases.createdAt} >= ${threeDaysAgo})`.mapWith(
-              Number,
-            ),
-          overThreeDays:
-            sql<number>`count(*) filter (where ${supportCases.createdAt} < ${threeDaysAgo})`.mapWith(
-              Number,
-            ),
-        })
-        .from(supportCases)
-        .where(eq(supportCases.status, 'open')),
-      db
-        .select({ count: count() })
-        .from(emailDeliveries)
-        .where(
-          and(
-            eq(emailDeliveries.outcome, 'bounced'),
-            isNotNull(emailDeliveries.outcomeUpdatedAt),
-            gte(emailDeliveries.outcomeUpdatedAt, since),
-            lt(emailDeliveries.outcomeUpdatedAt, until),
+      ),
+    db
+      .select(tally(bookings.vendorPayoutCents))
+      .from(bookings)
+      .where(and(gte(bookings.payoutReleasedAt, since), lt(bookings.payoutReleasedAt, until))),
+    db
+      .select({
+        underOneDay:
+          sql<number>`count(*) filter (where ${supportCases.createdAt} >= ${oneDayAgo})`.mapWith(
+            Number,
           ),
+        oneToThreeDays:
+          sql<number>`count(*) filter (where ${supportCases.createdAt} < ${oneDayAgo} and ${supportCases.createdAt} >= ${threeDaysAgo})`.mapWith(
+            Number,
+          ),
+        overThreeDays:
+          sql<number>`count(*) filter (where ${supportCases.createdAt} < ${threeDaysAgo})`.mapWith(
+            Number,
+          ),
+      })
+      .from(supportCases)
+      .where(eq(supportCases.status, 'open')),
+    db
+      .select({ count: count() })
+      .from(emailDeliveries)
+      .where(
+        and(
+          eq(emailDeliveries.outcome, 'bounced'),
+          isNotNull(emailDeliveries.outcomeUpdatedAt),
+          gte(emailDeliveries.outcomeUpdatedAt, since),
+          lt(emailDeliveries.outcomeUpdatedAt, until),
         ),
-      db
-        .select({ requestId: bookingRequests.id, eventDate: bookingRequests.eventDate })
-        .from(bookingRequests)
-        .leftJoin(bookings, eq(bookings.requestId, bookingRequests.id))
-        .where(
-          and(
-            eq(bookingRequests.status, 'accepted'),
-            isNull(bookings.id),
-            gte(bookingRequests.eventDate, window.fromDate),
-            lte(bookingRequests.eventDate, window.throughDate),
-          ),
-        )
-        .orderBy(asc(bookingRequests.eventDate), asc(bookingRequests.id)),
-    ]);
+      ),
+    db
+      .select({ requestId: bookingRequests.id, eventDate: bookingRequests.eventDate })
+      .from(bookingRequests)
+      .leftJoin(bookings, eq(bookings.requestId, bookingRequests.id))
+      .where(
+        and(
+          eq(bookingRequests.status, 'accepted'),
+          isNull(bookings.id),
+          gte(bookingRequests.eventDate, window.fromDate),
+          lte(bookingRequests.eventDate, window.throughDate),
+        ),
+      )
+      .orderBy(asc(bookingRequests.eventDate), asc(bookingRequests.id)),
+    countDuePayoutBookings(db, window.overduePayoutDueThroughDate),
+  ]);
 
   return {
     signups,
@@ -361,5 +376,6 @@ export async function readDigestFigures(
     openCases: openCases[0] ?? { underOneDay: 0, oneToThreeDays: 0, overThreeDays: 0 },
     bounces: bounces[0]?.count ?? 0,
     unpaidSoon,
+    overduePayouts,
   };
 }

@@ -561,6 +561,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     webOrigin: canonicalWebOrigin(env),
     timeZone: env.OPERATOR_TIMEZONE,
     digestIntervalMs: options.operatorDigestIntervalMs ?? OPERATOR_DIGEST_POLL_INTERVAL_MS,
+    reporter: errorReporter,
     ...(options.operatorAlertWait ? { wait: options.operatorAlertWait } : {}),
   });
   await app.register(stepUpPlugin, { ...(options.stepUp ? { store: options.stepUp } : {}) });
@@ -596,7 +597,7 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
   });
 
   // Unversioned: the host's probes and the release gate call these by a fixed path.
-  await app.register(healthRoutes);
+  await app.register(healthRoutes, { deployEnv: env.DEPLOY_ENV });
   /*
    * Every other route, under one version prefix (VEN-650). Browsers call the
    * API directly, so a route that has to change shape ships beside the old
