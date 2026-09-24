@@ -232,6 +232,21 @@ export function calculateRefund(
   };
 }
 
+/**
+ * What a customer is refunded when the **vendor** cancels a confirmed booking
+ * (VEN-659, D48): all of it, whatever the timing. The customer never pays for
+ * the vendor's decision, so D3's late tier does not apply. This is the one
+ * place the policy lives; the API refunds it and the vendor's confirm step
+ * quotes it.
+ */
+export function vendorCancellationRefundCents(totalCents: number): number {
+  if (!Number.isInteger(totalCents) || totalCents < 0) {
+    throw new Error('vendorCancellationRefundCents: totalCents must be a non-negative integer');
+  }
+
+  return totalCents;
+}
+
 /** One window of the cancellation schedule, as the checkout block draws it. */
 export interface RefundScheduleRow {
   /**

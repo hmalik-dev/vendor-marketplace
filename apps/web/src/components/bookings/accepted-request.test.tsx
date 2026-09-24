@@ -187,12 +187,10 @@ describe('AcceptedRequest', () => {
   });
 
   /* VEN-615 ruling 2: a vendor cannot cancel in the app, so the page says how they do. */
-  it('says a vendor cancels through support and the customer is refunded in full', () => {
+  it('says that if the vendor cancels the customer is refunded in full', () => {
     render(<AcceptedRequest request={acceptedRequest()} booking={booking()} />);
 
-    expect(
-      screen.getByText(/cancels, they do it through support and you're refunded in full\./),
-    ).toBeDefined();
+    expect(screen.getByText(/cancels, you're refunded in full\./)).toBeDefined();
   });
 
   it('names the halved refund once the event is inside the cutoff', () => {

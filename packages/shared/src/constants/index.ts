@@ -350,7 +350,7 @@ export type PayoutModel = (typeof PAYOUT_MODELS)[number];
  * value here: it produces no `bookings` row at all, so its absence is what
  * names it.
  */
-export const BOOKING_CANCELLED_BY = ['customer', 'admin'] as const;
+export const BOOKING_CANCELLED_BY = ['customer', 'vendor', 'admin'] as const;
 export type BookingCancelledBy = (typeof BOOKING_CANCELLED_BY)[number];
 
 /**

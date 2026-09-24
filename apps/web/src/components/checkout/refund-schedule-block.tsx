@@ -122,8 +122,7 @@ function describe(
     label: `If ${vendorName} cancels`,
     consequence: (
       <>
-        <strong className="font-semibold">Full refund</strong>, whenever it happens — {vendorName}{' '}
-        cancels through support
+        <strong className="font-semibold">Full refund</strong>, whenever it happens
       </>
     ),
   };

@@ -38,3 +38,4 @@
 - [Failed lane seed leaves admin without a users row](failed-lane-seed-leaves-admin-without-users-row.md) — Neon 429 seed => admin lands on /accept-terms; retry db:seed:e2e once, then re-mint admin auth
 - [wait-http passes on a 404 dev server](wait-http-passes-on-404-dev-server-with-no-routes.md) — lane web 404'd every route incl. /sign-in yet read "up"; curl 3 real routes first, else BLOCKED
 - [Hand-seeded case rows need a valid reference; fresh lanes sit behind terms gates](hand-seeded-case-rows-need-a-valid-reference-and-terms-gates.md) — `CHB-...` refs 500 the admin case page (ORL-XXXX-XX regex); accept Terms/vendor agreement per role first
+- [Booking lifecycle drive recipe](full-booking-lifecycle-drive-recipe.md) — fresh sign-up -> request -> accept -> Stripe pay -> vendor action; selectors, scratch vendor context, DB quirks

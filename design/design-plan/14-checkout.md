@@ -89,7 +89,7 @@ reading this record, not drift. The frames are corrected by a design pass.
   full refund · `Until <instant>` late refund · `From <instant>` _Online
   cancellation closes. If something goes wrong, report a problem from your
   booking._ · `After <event day>` release · `If <vendor> cancels` _**Full
-  refund**, whenever it happens — <vendor> cancels through support_. Each
+  refund**, whenever it happens_ (VEN-659: the vendor now cancels from their own bookings page, so the through-support clause is gone). Each
   instant is a date and time in the viewer's own zone with the zone named
   (`Oct 7, 5:00 PM PDT`). The zero point stays midnight UTC on the event date
   (D3); a date-only label in UTC told a Pacific customer their full refund

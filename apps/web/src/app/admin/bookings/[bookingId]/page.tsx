@@ -48,6 +48,7 @@ const PAYOUT_MODEL_LABELS: Record<PayoutModel, string> = {
 
 const CANCELLED_BY_LABELS: Record<BookingCancelledBy, string> = {
   customer: 'The customer',
+  vendor: 'The vendor',
   admin: 'An admin',
 };
 
