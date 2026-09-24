@@ -1,6 +1,7 @@
 import type { SignUpRole } from '@vendor-marketplace/shared';
 import { reportSwallowedError } from '@/lib/report-error';
 import { clearSessionToken } from './client';
+import { announceSessionEnded } from './session-ended';
 
 /**
  * The browser's calls to the same-origin Neon Auth proxy (`/api/auth/*`, Better
@@ -201,6 +202,8 @@ export async function signOut(): Promise<void> {
   }
 
   clearSessionToken();
+  // After the request, never before: a failed sign-out must not sign anyone else out.
+  announceSessionEnded();
 }
 
 export type ChangePasswordOutcome = 'ok' | 'rejected' | 'signedOut' | 'throttled' | 'unreachable';

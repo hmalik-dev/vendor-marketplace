@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { FakeBroadcastChannel } from '@/testing/fake-broadcast-channel';
 import {
   changePassword,
   endSessions,
@@ -9,6 +10,7 @@ import {
   signUpWithEmail,
   verifyEmailCode,
 } from './auth-requests';
+import { resetSessionEndedForTests } from './session-ended';
 
 const INPUT = {
   email: 'new@example.com',
@@ -208,6 +210,49 @@ describe('signOut', () => {
     stubFetch(400);
 
     await expect(signOut()).resolves.toBeUndefined();
+  });
+
+  /*
+   * VEN-699: the other tabs of this browser hear it. Only after the request
+   * succeeded — a failed sign-out leaves the session live, so it must not log
+   * anyone else out.
+   */
+  describe("announcing to the browser's other tabs", () => {
+    beforeEach(() => {
+      resetSessionEndedForTests();
+      vi.stubGlobal('BroadcastChannel', FakeBroadcastChannel);
+    });
+
+    afterEach(() => {
+      resetSessionEndedForTests();
+      FakeBroadcastChannel.instances = [];
+    });
+
+    it('posts session-ended once the proxy confirms', async () => {
+      stubFetch(200);
+
+      await signOut();
+
+      expect(FakeBroadcastChannel.instances.map((channel) => channel.posted)).toEqual([
+        ['session-ended'],
+      ]);
+    });
+
+    it.each([500, 429])('posts nothing when the proxy answers %i', async (status) => {
+      stubFetch(status);
+
+      await expect(signOut()).rejects.toThrow();
+
+      expect(FakeBroadcastChannel.instances.flatMap((channel) => channel.posted)).toEqual([]);
+    });
+
+    it('posts nothing when the request never reaches the proxy', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('fetch failed')));
+
+      await expect(signOut()).rejects.toThrow();
+
+      expect(FakeBroadcastChannel.instances.flatMap((channel) => channel.posted)).toEqual([]);
+    });
   });
 });
 
