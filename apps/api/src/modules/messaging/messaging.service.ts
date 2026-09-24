@@ -18,7 +18,6 @@ import { conflict, forbidden, notFound } from '../../lib/errors.js';
 import type { AuthenticatedUser } from '../../plugins/neon-auth.js';
 import { requireCustomerName } from '../users/customer-name.js';
 import {
-  countEarlierUnreadInConversation,
   countUnreadPerConversation,
   findConversationById,
   findConversationsFor,
@@ -27,7 +26,7 @@ import {
   findMessagesBefore,
   findNotifications,
   findOpenableVendor,
-  insertMessage,
+  insertMessageReportingBacklog,
   insertNotification,
   markAllNotificationsRead,
   markConversationRead,
@@ -360,8 +359,16 @@ export async function sendMessage(
     await requireCustomerName(db, user.id);
   }
 
-  const inserted = await withRequestIdentity(db, identityOf(user), (tx) =>
-    insertMessage(tx, { conversationId, senderId: user.id, content }),
+  const recipientId = side === 'customer' ? row.vendorUserId : row.customerId;
+  const { message: inserted, othersUnread } = await withRequestIdentity(
+    db,
+    identityOf(user),
+    (tx) =>
+      insertMessageReportingBacklog(
+        tx,
+        { conversationId, senderId: user.id, content },
+        recipientId,
+      ),
   );
 
   const message = toMessage(inserted);
@@ -383,7 +390,9 @@ export async function sendMessage(
    * The notification is the part that may be lost; the message is not (#408).
    */
   try {
-    await notifyRecipient(db, hub, user, row, side, inserted);
+    if (othersUnread === 0) {
+      await notifyRecipient(db, hub, row, side, recipientId);
+    }
   } catch (error) {
     log.error(
       { conversationId, messageId: inserted.id, err: error },
@@ -409,20 +418,10 @@ export async function sendMessage(
 async function notifyRecipient(
   db: AppDatabase,
   hub: EventHub,
-  user: AuthenticatedUser,
   row: ConversationParties,
   side: 'customer' | 'vendor',
-  sent: MessageRow,
+  recipientId: string,
 ): Promise<void> {
-  const recipientId = side === 'customer' ? row.vendorUserId : row.customerId;
-  const earlierWaiting = await withRequestIdentity(db, identityOf(user), (tx) =>
-    countEarlierUnreadInConversation(tx, row.id, recipientId, sent.id),
-  );
-
-  if (earlierWaiting > 0) {
-    return;
-  }
-
   const stored = await insertNotification(db, {
     userId: recipientId,
     type: 'new_message',

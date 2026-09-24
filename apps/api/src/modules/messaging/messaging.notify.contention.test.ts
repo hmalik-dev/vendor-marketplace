@@ -4,6 +4,7 @@ import {
   notifications,
   users,
   vendorProfiles,
+  withRequestIdentity,
 } from '@vendor-marketplace/db';
 import {
   createPostgresTestDatabase,
@@ -13,16 +14,18 @@ import { and, eq, sql } from 'drizzle-orm';
 import type { FastifyBaseLogger } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { EventHub } from '../../lib/event-stream.js';
+import { identityOf, type AppDatabase } from '../../lib/database.js';
 import type { AuthenticatedUser } from '../../plugins/neon-auth.js';
-import { countEarlierUnreadInConversation } from './messaging.dao.js';
+import { insertMessageReportingBacklog } from './messaging.dao.js';
 import { sendMessage } from './messaging.service.js';
 
 /**
- * VEN-527 — two messages sent at once still notify the recipient once.
+ * VEN-527, VEN-726 — two messages sent at once still notify the recipient once.
  *
- * Both sends commit before either counts what is ahead of it, so a check that
- * asks for "any other unread message" sees the other one from both sides and
- * both skip: no notification at all. The check is ordered instead.
+ * The sends lock the conversation row and count what is waiting under that
+ * lock, so the second sees the first. An ordered check (`created_at`, `id`) is
+ * not enough: `created_at` is the transaction's start, so the send that starts
+ * first can commit second, see nothing ahead of it, and both notify.
  */
 let owner: PostgresTestDatabase;
 let api: ReturnType<PostgresTestDatabase['connectAs']>;
@@ -82,6 +85,15 @@ async function notificationsFor({ conversationId, vendor }: Thread): Promise<num
   ).length;
 }
 
+async function sendersWaitingOnALock(): Promise<number> {
+  // postgres-js hands back the rows themselves, not a `{ rows }` wrapper.
+  const rows = await owner.db.execute<{ total: number }>(
+    sql`select count(*)::int as total from pg_locks where not granted and locktype = 'transactionid'`,
+  );
+
+  return rows[0]?.total ?? 0;
+}
+
 beforeAll(async () => {
   owner = await createPostgresTestDatabase({ poolSize: 4 });
   customer = await makeUser('customer', 'customer');
@@ -92,75 +104,79 @@ afterAll(async () => {
   await owner?.close();
 });
 
-describe('the unread check ahead of a message', () => {
-  async function insertPair(
-    thread: Thread,
-    stamps: readonly [string, string],
-  ): Promise<[string, string]> {
-    const ids: string[] = [];
+describe('the backlog counted when a message is stored', () => {
+  it('holds a second send behind the first, which then counts as waiting', async () => {
+    const thread = await makeThread('forced-interleaving');
+    const otherTab = owner.connectAs('app_api');
+    const store = (db: AppDatabase, content: string) =>
+      insertMessageReportingBacklog(
+        db,
+        { conversationId: thread.conversationId, senderId: customer.id, content },
+        thread.vendor.id,
+      );
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let stored!: () => void;
+    const firstStored = new Promise<void>((resolve) => {
+      stored = resolve;
+    });
 
-    for (const stamp of stamps) {
-      // Raw timestamptz literals: a `Date` cannot carry the microseconds the column stores.
-      const [row] = await owner.db
-        .insert(messages)
-        .values({
-          conversationId: thread.conversationId,
-          senderId: customer.id,
-          content: stamp,
-          createdAt: sql`${stamp}::timestamptz`,
-        })
-        .returning({ id: messages.id });
-      ids.push(row!.id);
+    // The first send has stored its message and not committed: its transaction stays open.
+    const firstSend = owner.db.transaction(async (tx) => {
+      const result = await store(tx, 'first');
+      stored();
+      await held;
+
+      return result;
+    });
+    await firstStored;
+
+    let secondDone = false;
+    const secondSend = withRequestIdentity(otherTab, identityOf(customer), (tx) =>
+      store(tx, 'second'),
+    ).then((result) => {
+      secondDone = true;
+
+      return result;
+    });
+
+    try {
+      // Until the second is queued on the first's row lock, or has finished without queueing.
+      while (!secondDone && (await sendersWaitingOnALock()) === 0) {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+      expect(secondDone).toBe(false);
+    } finally {
+      release();
     }
 
-    return [ids[0]!, ids[1]!];
-  }
+    const [firstResult, secondResult] = await Promise.all([firstSend, secondSend]);
 
-  it('sees nothing ahead of the earlier of two messages and the earlier one ahead of the later', async () => {
-    const thread = await makeThread('ordered-check');
-    const [first, second] = await insertPair(thread, [
-      '2026-01-01 00:00:00.100000+00',
-      '2026-01-01 00:00:00.200000+00',
-    ]);
-    const count = (id: string): Promise<number> =>
-      countEarlierUnreadInConversation(owner.db, thread.conversationId, thread.vendor.id, id);
-
-    expect(await count(first)).toBe(0);
-    expect(await count(second)).toBe(1);
+    expect(firstResult.othersUnread).toBe(0);
+    expect(secondResult.othersUnread).toBe(1);
   });
 
-  it('orders two messages sent in the same millisecond by their microseconds', async () => {
-    const thread = await makeThread('same-millisecond');
-    const [first, second] = await insertPair(thread, [
-      '2026-01-01 00:00:00.001000+00',
-      '2026-01-01 00:00:00.001500+00',
-    ]);
-    const count = (id: string): Promise<number> =>
-      countEarlierUnreadInConversation(owner.db, thread.conversationId, thread.vendor.id, id);
+  it('counts only the sender’s unread messages besides its own', async () => {
+    const thread = await makeThread('backlog-count');
+    const send = (content: string) =>
+      insertMessageReportingBacklog(
+        owner.db,
+        { conversationId: thread.conversationId, senderId: customer.id, content },
+        thread.vendor.id,
+      );
 
-    expect(await count(first)).toBe(0);
-    expect(await count(second)).toBe(1);
-  });
+    expect((await send('one')).othersUnread).toBe(0);
+    expect((await send('two')).othersUnread).toBe(1);
+    expect((await send('three')).othersUnread).toBe(2);
 
-  it('breaks a created_at tie by id', async () => {
-    const thread = await makeThread('tied-check');
-    const rows = await owner.db
-      .insert(messages)
-      .values(
-        ['a', 'b'].map((content) => ({
-          conversationId: thread.conversationId,
-          senderId: customer.id,
-          content,
-          createdAt: new Date('2026-01-01T00:00:00.000Z'),
-        })),
-      )
-      .returning({ id: messages.id });
-    const [earlier, later] = rows.map((row) => row.id).sort();
-    const count = (id: string): Promise<number> =>
-      countEarlierUnreadInConversation(owner.db, thread.conversationId, thread.vendor.id, id);
+    await owner.db
+      .update(messages)
+      .set({ readAt: sql`now()` })
+      .where(eq(messages.conversationId, thread.conversationId));
 
-    expect(await count(earlier!)).toBe(0);
-    expect(await count(later!)).toBe(1);
+    expect((await send('four')).othersUnread).toBe(0);
   });
 });
 
