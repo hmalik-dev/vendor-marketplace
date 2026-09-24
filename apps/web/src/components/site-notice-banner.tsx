@@ -72,7 +72,7 @@ export function SiteNoticeBanner({ message, tone }: Notice): React.ReactElement 
         type="button"
         onClick={dismiss}
         aria-label="Dismiss notice"
-        className="-my-1 shrink-0 cursor-pointer rounded-md px-2 py-1 text-sm font-semibold underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+        className="-my-1 shrink-0 cursor-pointer rounded-md px-2 py-1 text-sm font-semibold underline underline-offset-4"
       >
         Dismiss
       </button>

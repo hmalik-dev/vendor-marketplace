@@ -273,7 +273,7 @@ export function PlatformSettingsPanel({
                 value={noticeDraft}
                 onChange={(event) => setNoticeDraft(event.target.value)}
                 aria-describedby={`${fieldId}-notice-count`}
-                className="w-full resize-y rounded-lg border border-stone-300 bg-stone-0 px-3 py-2 text-sm text-stone-900 focus-visible:outline-2 focus-visible:outline-offset-2"
+                className="w-full resize-y rounded-lg border border-stone-300 bg-stone-0 px-3 py-2 text-sm text-stone-900"
               />
               <p id={`${fieldId}-notice-count`} className="text-sm text-stone-600">
                 {noticeDraft.length} of {PLATFORM_NOTICE_MAX_LENGTH} characters. Plain text: no
