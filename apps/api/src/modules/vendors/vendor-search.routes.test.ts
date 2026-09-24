@@ -724,4 +724,16 @@ describe('GET /vendors', () => {
       expect(body.total).toBe(0);
     });
   });
+
+  describe('a control character in city or state (VEN-689)', () => {
+    it.each(['city=%00', 'state=%00', 'city=abc%00def'])(
+      '%s is a 400, not a 500',
+      async (query) => {
+        const response = await harness.app.inject({ method: 'GET', url: `/v1/vendors?${query}` });
+
+        expect(response.statusCode).toBe(400);
+        expect(response.json().error).toBe(ERROR_CODES.VALIDATION_ERROR);
+      },
+    );
+  });
 });

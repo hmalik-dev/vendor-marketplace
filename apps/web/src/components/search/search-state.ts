@@ -4,7 +4,6 @@ import {
   calendarDateSchema,
   DEFAULT_PAGE_SIZE,
   MAX_BUSINESS_NAME_LENGTH,
-  MAX_NAME_LENGTH,
   MAX_PACKAGE_PRICE_CENTS,
   paginationQuerySchema,
   REVIEW_RATING_MAX,
@@ -14,6 +13,7 @@ import {
   uuidSchema,
   vendorNounFor,
   VENDOR_SORT_OPTIONS,
+  vendorSearchQuerySchema,
   type TagCategory,
   type VendorSortOption,
 } from '@vendor-marketplace/shared';
@@ -101,8 +101,10 @@ export type SearchPatch = Partial<SearchState>;
 const searchStateSchema = z.object({
   name: z.string().max(MAX_BUSINESS_NAME_LENGTH),
   category: z.union([z.literal(''), slugSchema]),
-  city: z.string().max(MAX_NAME_LENGTH),
-  state: z.string().max(MAX_NAME_LENGTH),
+  // The API's own field, so a control character it refuses is cleared here
+  // and named, not sent on to come back as a failed search (VEN-689).
+  city: vendorSearchQuerySchema.shape.city.unwrap(),
+  state: vendorSearchQuerySchema.shape.state.unwrap(),
   minPriceCents: z.number().int().min(0).max(MAX_PACKAGE_PRICE_CENTS).nullable(),
   maxPriceCents: z.number().int().min(0).max(MAX_PACKAGE_PRICE_CENTS).nullable(),
   date: z.union([z.literal(''), calendarDateSchema]),
