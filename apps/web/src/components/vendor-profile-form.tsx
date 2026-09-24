@@ -504,7 +504,7 @@ export function VendorProfileForm({
 
   /*
    * What the preview rail mirrors: the live form, not the saved row, which is
-   * what makes "Updates as you type" true rather than decorative.
+   * what keeps the preview true rather than decorative.
    *
    * `startingPriceCents` is null on purpose. A starting price is derived from
    * this vendor's packages, which this screen does not load and cannot know —

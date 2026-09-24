@@ -244,7 +244,7 @@ describe('SupportScreen', () => {
     // Busy is announced rather than merely greyed out.
     expect(button.getAttribute('aria-busy')).toBe('true');
     expect(button.textContent).toContain('Sending…');
-    expect(screen.getByText('Fields locked')).toBeDefined();
+    expect(screen.queryByText('Fields locked')).toBeNull();
 
     // Read-only, not disabled: the message they just wrote stays readable and
     // selectable, which a disabled field's own fade would work against.
@@ -519,7 +519,7 @@ describe('SupportScreen', () => {
     );
 
     expect(screen.getByText(/doesn't open a chat thread here/)).toBeDefined();
-    expect(screen.getByText('One email, no ticket to track.')).toBeDefined();
+    expect(screen.queryByText('One email, no ticket to track.')).toBeNull();
     // Not a helpdesk: there is nothing here to attach a file with.
     expect(document.querySelectorAll('input[type="file"]')).toHaveLength(0);
   });

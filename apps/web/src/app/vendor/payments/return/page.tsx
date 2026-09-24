@@ -50,9 +50,7 @@ export default async function VendorPaymentsReturnPage(): Promise<React.ReactEle
     >
       <div className="max-w-[620px]">
         {isOnboarded ? (
-          <Banner status="settled" title="Payouts connected">
-            Nothing else to do here. Your next booking can be accepted straight from the dashboard.
-          </Banner>
+          <Banner status="settled" title="Payouts connected" />
         ) : (
           /*
             Steel, not red: nothing failed. `40-states.md` reserves red for a
