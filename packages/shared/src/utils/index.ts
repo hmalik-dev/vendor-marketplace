@@ -393,6 +393,11 @@ export interface FeeBreakdown {
   vendorPayoutCents: number;
 }
 
+/** A fee rate as the whole basis points a booking stores, so the rate is exact in the database. */
+export function feeRateToBps(rate: number): number {
+  return Math.round(rate * BPS_PER_UNIT);
+}
+
 /**
  * Splits a booking total into the platform commission and the vendor payout.
  * The payout is the remainder rather than a second rounded product, so the two

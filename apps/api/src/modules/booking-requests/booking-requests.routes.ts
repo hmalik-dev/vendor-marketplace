@@ -45,7 +45,7 @@ export interface BookingRequestRoutesOptions {
    * a URL from it for exactly this reason.
    */
   webOrigin: string;
-  /** `STRIPE_PLATFORM_FEE_RATE`: a read that expires a request books a payment made in time first. */
+  /** `STRIPE_PLATFORM_FEE_RATE`: fixed onto a request when it is accepted, and the fallback a read that books a payment made in time prices an older request at. */
   platformFeeRate: number;
 }
 
@@ -193,6 +193,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
           hub: app.events,
           mail: mailFor(request.log),
           guard: guardFor(request.log),
+          platformFeeRate: options.platformFeeRate,
         }),
     );
   }
