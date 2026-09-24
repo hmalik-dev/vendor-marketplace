@@ -6,6 +6,8 @@ import { AUTH_COPY } from '@/app/auth-copy';
 
 const refresh = vi.fn();
 const push = vi.fn();
+const toastSuccess = vi.fn();
+vi.mock('sonner', () => ({ toast: { success: (m: string) => toastSuccess(m) } }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh, push }) }));
 
 const { ChangePasswordForm } = await import('./change-password-form');
@@ -19,6 +21,7 @@ const fetchMock = vi.fn();
 beforeEach(() => {
   refresh.mockReset();
   push.mockReset();
+  toastSuccess.mockReset();
   fetchMock.mockReset().mockResolvedValue(new Response('{}', { status: 200 }));
   vi.stubGlobal('fetch', fetchMock);
 });
@@ -47,6 +50,15 @@ describe('ChangePasswordForm (VEN-677)', () => {
     expect(field.getAttribute('minlength')).toBe(String(PASSWORD_MIN_LENGTH));
     expect(field.getAttribute('autocomplete')).toBe('new-password');
     expect(screen.getByText(AUTH_COPY.passwordHelper)).toBeDefined();
+  });
+
+  it('centres its capped column (VEN-698)', () => {
+    const { container } = render(<ChangePasswordForm role="vendor" />);
+
+    const classes = container.querySelector('form')?.className.split(' ') ?? [];
+
+    expect(classes).toContain('mx-auto');
+    expect(classes).toContain('max-w-sm');
   });
 
   it.each([
@@ -82,6 +94,7 @@ describe('ChangePasswordForm (VEN-677)', () => {
     await fill(current, next, confirm);
 
     expect(fetchMock).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
     expect(screen.getByText(AUTH_COPY[copy])).toBeDefined();
   });
 
@@ -95,11 +108,12 @@ describe('ChangePasswordForm (VEN-677)', () => {
       newPassword: 'a-new-password',
     });
     expect(push).toHaveBeenCalledExactlyOnceWith('/vendor/dashboard');
+    expect(toastSuccess).toHaveBeenCalledExactlyOnceWith(AUTH_COPY.changeDone);
     expect(refresh).not.toHaveBeenCalled();
   });
 
   it.each([
-    ['customer', '/bookings'],
+    ['customer', '/'],
     ['admin', '/admin'],
   ] as const)('takes a %s to %s on success', async (role, home) => {
     const user = userEvent.setup();
@@ -110,6 +124,7 @@ describe('ChangePasswordForm (VEN-677)', () => {
     await user.click(screen.getByRole('button', { name: AUTH_COPY.changeSubmit }));
 
     expect(push).toHaveBeenCalledExactlyOnceWith(home);
+    expect(toastSuccess).toHaveBeenCalledExactlyOnceWith(AUTH_COPY.changeDone);
   });
 
   it.each([
@@ -124,6 +139,8 @@ describe('ChangePasswordForm (VEN-677)', () => {
     await fill('the-old-password', 'a-new-password', 'a-new-password');
 
     expect(screen.getByText(AUTH_COPY[copy])).toBeDefined();
+    expect(push).not.toHaveBeenCalled();
+    expect(toastSuccess).not.toHaveBeenCalled();
     expect(screen.queryByText('Invalid password upstream')).toBeNull();
     expect(refresh).not.toHaveBeenCalled();
   });
@@ -137,5 +154,6 @@ describe('ChangePasswordForm (VEN-677)', () => {
       '/sign-in?returnTo=%2Faccount%2Fsettings%2Fpassword',
     );
     expect(screen.queryByText(AUTH_COPY.changeWrongCurrent)).toBeNull();
+    expect(toastSuccess).not.toHaveBeenCalled();
   });
 });
