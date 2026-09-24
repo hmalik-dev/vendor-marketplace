@@ -261,6 +261,29 @@ describe('SearchBar — the event date cannot be in the past', () => {
     expect(onSubmit).not.toHaveBeenCalled();
     expect(screen.getByRole('alert')).toBeDefined();
   });
+
+  /*
+   * The bar has no vendor behind it, so it reaches as far as a booking can be
+   * requested (24 months) rather than the picker's default 12 (VEN-710).
+   */
+  it('reaches a day eighteen months out through the month and year view', async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = renderBar();
+
+    await user.click(dateField());
+    await user.click(await screen.findByRole('button', { name: /^Choose month and year,/ }));
+    await user.click(screen.getByRole('button', { name: 'Next year' }));
+    // The suite's today is June 2026, so December 2027 is 18 months out.
+    await user.click(screen.getByRole('button', { name: 'December 2027' }));
+    await user.click(
+      within(screen.getByRole('grid', { name: 'Event date' })).getByRole('gridcell', {
+        name: new RegExp(`^${formatAccessibleDate('2027-12-15')}`),
+      }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Search' }));
+
+    expect(onSubmit).toHaveBeenCalledWith({ ...EMPTY, date: '2027-12-15' });
+  });
 });
 
 /*
