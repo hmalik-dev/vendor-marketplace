@@ -51,7 +51,7 @@
 - [`canBook` is chrome, not a gate](canbook-is-chrome-not-a-gate.md) — three server checks refuse a vendor
 - [Vendor selection writes are transaction-only](vendor-selection-writes-are-transaction-only.md) — no self-transacting
 - [The `updatedAt` precondition is not a gate](edit-version-precondition-is-not-a-gate.md) — explicit `null` coerces to the epoch
-- [The vendor agreement gate has four definitions](vendor-agreement-gate-has-four-definitions.md) — payout takes any version; EXISTS needs `vendor_profiles` unaliased
+- [The vendor agreement gate has four definitions](vendor-agreement-gate-has-four-definitions.md) — payout takes any version; EXISTS needs `vendor_profiles` unaliased; VEN-708 bump clean
 - [Vendor invite gate checks before the row it creates](vendor-invite-gate-checks-before-the-row-it-creates.md) — an application row diverts `/accept-terms` for ever
 
 ## Money, bookings and background work

@@ -48,10 +48,10 @@ const ACCEPTED_AT = new Intl.DateTimeFormat('en-US', {
   timeZoneName: 'short',
 });
 
-/** `4 Jun 2026` — the agreements table's column, and the card header's date. */
-const ACCEPTED_DAY = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'short',
+/** `06/04/2026` — the agreements table's column, and the card header's date. */
+const ACCEPTED_DAY = new Intl.DateTimeFormat('en-US', {
+  day: '2-digit',
+  month: '2-digit',
   year: 'numeric',
   timeZone: 'UTC',
 });
@@ -194,7 +194,7 @@ function UnacceptedStep({
         not a navigation: onboarding state has to survive reading it, and a
         vendor who loses their place is a vendor who does not finish.
 
-        `meta` is frame `32`'s header strip: `11 sections · v1.0 · 4 Jun 2026`.
+        `meta` is frame `32`'s header strip: `11 sections · v1.0 · 06/04/2026`.
         The date is formatted rather than printed as the frontmatter's ISO
         string — `2026-06-04` on a card a vendor is asked to accept reads as a
         system value that escaped.

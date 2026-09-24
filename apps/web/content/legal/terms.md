@@ -1,6 +1,6 @@
 ---
 title: Terms of Service
-lastUpdated: 2026-06-04
+lastUpdated: 2026-09-24
 note: Effective for bookings made on or after that date
 ---
 
