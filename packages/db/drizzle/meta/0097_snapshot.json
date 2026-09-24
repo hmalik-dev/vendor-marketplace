@@ -1,6 +1,6 @@
 {
-  "id": "01eccbb7-ad79-4137-988c-a6447faa8d45",
-  "prevId": "177e5c29-bdef-4598-9899-febf62b66b06",
+  "id": "28653990-ddee-40b2-83f9-00b586cc8bd4",
+  "prevId": "01eccbb7-ad79-4137-988c-a6447faa8d45",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1627,6 +1627,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "platform_fee_bps": {
+          "name": "platform_fee_bps",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "stripe_payment_intent_id": {
           "name": "stripe_payment_intent_id",
           "type": "varchar(255)",
@@ -1918,6 +1924,10 @@
         "booking_requests_guest_count_non_negative": {
           "name": "booking_requests_guest_count_non_negative",
           "value": "\"booking_requests\".\"guest_count\" IS NULL OR \"booking_requests\".\"guest_count\" >= 0"
+        },
+        "booking_requests_platform_fee_bps_range": {
+          "name": "booking_requests_platform_fee_bps_range",
+          "value": "\"booking_requests\".\"platform_fee_bps\" IS NULL OR (\"booking_requests\".\"platform_fee_bps\" >= 0 AND \"booking_requests\".\"platform_fee_bps\" <= 10000)"
         }
       },
       "isRLSEnabled": true
@@ -1974,6 +1984,12 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true
+        },
+        "platform_fee_bps": {
+          "name": "platform_fee_bps",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
         },
         "vendor_payout_cents": {
           "name": "vendor_payout_cents",
@@ -2295,6 +2311,10 @@
         "bookings_platform_fee_cents_non_negative": {
           "name": "bookings_platform_fee_cents_non_negative",
           "value": "\"bookings\".\"platform_fee_cents\" >= 0"
+        },
+        "bookings_platform_fee_bps_range": {
+          "name": "bookings_platform_fee_bps_range",
+          "value": "\"bookings\".\"platform_fee_bps\" IS NULL OR (\"bookings\".\"platform_fee_bps\" >= 0 AND \"bookings\".\"platform_fee_bps\" <= 10000)"
         },
         "bookings_vendor_payout_cents_non_negative": {
           "name": "bookings_vendor_payout_cents_non_negative",
