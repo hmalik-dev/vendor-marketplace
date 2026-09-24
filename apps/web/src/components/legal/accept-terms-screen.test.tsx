@@ -166,32 +166,42 @@ describe('the role recorded at sign-up (VEN-507, VEN-662)', () => {
     expect(post).not.toHaveBeenCalled();
   });
 
-  it('shows the stored role before continuing when it is not the one stated', async () => {
-    const user = userEvent.setup();
-    post.mockResolvedValue(
-      status({
-        accepted: true,
-        acceptedAt: new Date(),
-        account: { exists: true, role: 'customer' },
-      }),
-    );
-    render(<AcceptTermsScreen status={recorded('vendor')} terms={TERMS} returnTo={null} />);
+  it.each([
+    { stated: 'vendor', stored: 'customer' },
+    { stated: 'customer', stored: 'vendor' },
+  ] as const)(
+    'shows the stored $stored role before continuing when $stated was stated',
+    async ({ stated, stored: landed }) => {
+      const user = userEvent.setup();
+      post.mockResolvedValue(
+        status({
+          accepted: true,
+          acceptedAt: new Date(),
+          account: { exists: true, role: landed },
+        }),
+      );
+      render(<AcceptTermsScreen status={recorded(stated)} terms={TERMS} returnTo={null} />);
 
-    await user.click(submit());
+      await user.click(submit());
 
-    await waitFor(() =>
-      expect(screen.getByTestId('landed-role').textContent).toBe("You're joining as a customer."),
-    );
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(`Welcome to ${BRAND_NAME}`);
-    expect(document.body.textContent).not.toMatch(FORBIDDEN_COPY);
-    expect(replace).not.toHaveBeenCalled();
+      await waitFor(() =>
+        expect(screen.getByTestId('landed-role').textContent).toBe(
+          `You're joining as a ${landed}.`,
+        ),
+      );
+      expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
+        `Welcome to ${BRAND_NAME}`,
+      );
+      expect(document.body.textContent).not.toMatch(FORBIDDEN_COPY);
+      expect(replace).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
 
-    expect(replace).toHaveBeenCalledWith('/after-sign-in');
-  });
+      expect(replace).toHaveBeenCalledWith('/after-sign-in');
+    },
+  );
 
-  it('names an admin account as an admin, never an operator', () => {
+  it('names an admin account as an admin', () => {
     render(<AcceptTermsScreen status={stored('admin')} terms={TERMS} returnTo={null} />);
 
     expect(screen.getByTestId('stored-role').textContent).toBe("You're joining as an admin.");
@@ -434,6 +444,11 @@ describe('the acceptance gate', () => {
     expect(
       screen.getByText(
         `Everyone using ${BRAND_NAME} accepts the current Terms. We record that you did — the version, the moment, and this browser — so both sides can say what was agreed.`,
+      ),
+    ).toBeDefined();
+    expect(
+      screen.getByText(
+        'We record the moment, this browser and its address, so the record means something later.',
       ),
     ).toBeDefined();
   });

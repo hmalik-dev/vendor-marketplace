@@ -316,7 +316,14 @@ export function AcceptTermsScreen({
           >
             {saving ? 'Recording…' : tickMode ? 'Accept and continue' : 'Continue'}
           </Button>
-          {tickMode ? null : <ContinueNotice className="mt-3 text-left" />}
+          {tickMode ? (
+            <p className="mt-2 text-helper text-stone-600">
+              We record the moment, this browser and its address, so the record means something
+              later.
+            </p>
+          ) : (
+            <ContinueNotice className="mt-3 text-left" />
+          )}
         </div>
       </form>
     </div>
