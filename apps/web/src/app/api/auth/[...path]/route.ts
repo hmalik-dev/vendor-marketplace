@@ -750,7 +750,7 @@ interface SessionRow {
 }
 
 function isoOrNull(value: unknown): string | null {
-  if (typeof value !== 'string' && typeof value !== 'number') {
+  if (typeof value !== 'string' && typeof value !== 'number' && !(value instanceof Date)) {
     return null;
   }
 
@@ -842,7 +842,28 @@ async function forwardListSessions(request: NextRequest): Promise<Response> {
     return NextResponse.json({ message: 'Unavailable' }, { status: 502 });
   }
 
-  const sessions: SessionRow[] = found
+  /*
+   * The provider caps its list (100 rows, oldest first), so an account that
+   * has piled up sessions may not list this one. It is drawn from what the
+   * provider says about the caller's own session, so it is still marked and
+   * still cannot be ended from here. The empty token is never read or sent.
+   */
+  const own = current.data?.session;
+  const listed = found.some((session) => session.id === currentId);
+  const rows: ProviderSession[] = listed
+    ? found
+    : [
+        {
+          id: currentId,
+          token: '',
+          userAgent: typeof own?.userAgent === 'string' ? own.userAgent : null,
+          createdAt: isoOrNull(own?.createdAt),
+          updatedAt: isoOrNull(own?.updatedAt),
+        },
+        ...found,
+      ];
+
+  const sessions: SessionRow[] = rows
     .map((session) => ({
       id: session.id,
       userAgent: session.userAgent,

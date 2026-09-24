@@ -24,6 +24,10 @@ describe('deviceLabel', () => {
       'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36',
       'Chrome on Android',
     ],
+    [
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36',
+      'Chrome on macOS',
+    ],
     ['Mozilla/5.0 (Windows NT 10.0)', 'Windows'],
     ['curl/8.4.0', 'Unknown device'],
     ['', 'Unknown device'],

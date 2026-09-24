@@ -1253,6 +1253,37 @@ describe('the devices an account is signed in on, through the auth proxy (VEN-68
     expect(await response.text()).not.toContain('sess-');
   });
 
+  it('still marks this device when the provider’s capped list does not include it', async () => {
+    getSession.mockResolvedValue({
+      data: {
+        user: { id: 'user-9' },
+        session: {
+          id: 'sess-new',
+          token: 'token-of-the-newest',
+          userAgent: 'Mozilla/5.0 Firefox/125.0',
+          createdAt: new Date('2026-09-24T10:00:00.000Z'),
+          updatedAt: '2026-09-24T10:05:00.000Z',
+        },
+      },
+    });
+
+    const body = (await (await list()).json()) as { sessions: Array<Record<string, unknown>> };
+
+    expect(body.sessions.map((row) => [row.id, row.current])).toEqual([
+      ['sess-new', true],
+      ['sess-here', false],
+      ['sess-phone', false],
+    ]);
+    expect(body.sessions[0]).toEqual({
+      id: 'sess-new',
+      userAgent: 'Mozilla/5.0 Firefox/125.0',
+      createdAt: '2026-09-24T10:00:00.000Z',
+      lastActiveAt: '2026-09-24T10:05:00.000Z',
+      current: true,
+    });
+    expect(JSON.stringify(body)).not.toContain('token-of-the-newest');
+  });
+
   it('never lets a session token, or the address, reach the browser', async () => {
     const text = await (await list()).text();
 
