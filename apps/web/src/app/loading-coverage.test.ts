@@ -58,6 +58,7 @@ const NO_BOUNDARY: Record<string, string> = {
   'bookings/[requestId]': 'notFound() and a session gate',
   'bookings/[requestId]/checkout': 'notFound() and a session gate',
   'bookings/[requestId]/confirmed': 'notFound() and a session gate',
+  'for-vendors': 'redirects a signed-in vendor',
   'forgot-password': 'redirects a signed-in visitor',
   'reset-password': 'redirects a signed-in visitor',
   search: 'permanentRedirect() canonicalises the query (segment-boundaries.test.tsx)',
@@ -102,7 +103,7 @@ describe('every route has a loading boundary or a stated reason it cannot', () =
 
   it('has a loader on the static pages that answer no status of their own', () => {
     expect(
-      ['cookies', 'for-vendors', 'legal/vendor-agreement', 'privacy', 'suspended', 'terms'].filter(
+      ['cookies', 'legal/vendor-agreement', 'privacy', 'suspended', 'terms'].filter(
         (segment) => !hasLoading(segment),
       ),
     ).toEqual([]);
