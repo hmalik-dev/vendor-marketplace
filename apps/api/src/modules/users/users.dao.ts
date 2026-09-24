@@ -1,7 +1,9 @@
 import { and, eq, exists, isNull, ne, sql, type SQL } from 'drizzle-orm';
 import { alias, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import {
+  emailDeliveries,
   legalAcceptances,
+  supportCases,
   USERS_EMAIL_UNIQUE_INDEX,
   users,
   vendorProfiles,
@@ -846,11 +848,24 @@ async function retireUserInTransaction<B>(
 
     const profiles = await tx
       .update(vendorProfiles)
-      .set({ isDeleted: true, isPublished: false, updatedAt: sql`now()` })
+      .set({ isDeleted: true, isPublished: false, address: null, updatedAt: sql`now()` })
       .where(eq(vendorProfiles.userId, row.id))
       .returning({ id: vendorProfiles.id });
 
     const profileRetired = profiles.length > 0;
+
+    /*
+     * The rows stay, the address does not (VEN-672): the same tombstone the
+     * `users` row took, so nothing a console search can reach still names them.
+     */
+    await tx
+      .update(emailDeliveries)
+      .set({ recipientEmail: row.email })
+      .where(eq(emailDeliveries.userId, row.id));
+    await tx
+      .update(supportCases)
+      .set({ senderEmail: row.email })
+      .where(eq(supportCases.senderUserId, row.id));
 
     await audit?.(tx, { profileRetired });
 

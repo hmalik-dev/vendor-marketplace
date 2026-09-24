@@ -64,6 +64,9 @@ export const emailDeliveryEntityEnum = pgEnum('email_delivery_entity', EMAIL_DEL
  * a bounce recorded against an address the account has since changed is the
  * only shape in which "we were sending to the wrong place until March" is
  * visible at all.
+ *
+ * That audit is of a live account. Closing one (VEN-672) replaces the address
+ * with the tombstone `users.email` takes, and keeps the row.
  */
 export const emailDeliveries = pgTable(
   'email_deliveries',
