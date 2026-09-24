@@ -12,6 +12,7 @@ import { BookingsTabs } from '@/components/admin/bookings-tabs';
 import { DataTable } from '@/components/admin/data-table';
 import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
 import { FilteredEmpty, type ActiveFilter } from '@/components/admin/filtered-empty';
+import { OutOfRange } from '@/components/admin/out-of-range';
 import { EmptyState } from '@/components/ui/empty-state';
 import { StatusPill } from '@/components/ui/status-pill';
 import { getAdminRequests } from '@/lib/admin-data';
@@ -152,7 +153,15 @@ export default async function AdminRequestsPage({
         rows={requests.items}
         rowKey={(row) => row.id}
         empty={
-          filtered ? (
+          requests.items.length === 0 && requests.total > 0 ? (
+            <OutOfRange
+              path={PATH}
+              params={{ group, status }}
+              page={requests.page}
+              pageSize={requests.pageSize}
+              total={requests.total}
+            />
+          ) : filtered ? (
             <FilteredEmpty
               headline="No requests match these filters"
               path={PATH}

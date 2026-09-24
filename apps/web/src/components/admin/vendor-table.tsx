@@ -120,12 +120,15 @@ export interface VendorTableProps {
    * them; this component still owns the true empty below.
    */
   filteredEmpty?: React.ReactNode;
+  /** A page past the last one, supplied by the page; shown before either empty state. */
+  pastEnd?: React.ReactNode;
 }
 
 export function VendorTable({
   rows,
   filtered,
   filteredEmpty,
+  pastEnd,
 }: VendorTableProps): React.ReactElement {
   const router = useRouter();
   const call = useApi();
@@ -344,7 +347,9 @@ export function VendorTable({
         rows={rows}
         rowKey={(row) => row.id}
         empty={
-          filtered && filteredEmpty ? (
+          pastEnd ? (
+            pastEnd
+          ) : filtered && filteredEmpty ? (
             filteredEmpty
           ) : (
             <EmptyState

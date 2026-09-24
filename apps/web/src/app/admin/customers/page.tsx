@@ -3,6 +3,7 @@ import { ADMIN_CUSTOMER_FLAGS, ADMIN_CUSTOMER_STATUSES } from '@vendor-marketpla
 import { AdminSurface } from '@/components/admin/admin-surface';
 import { DataTable } from '@/components/admin/data-table';
 import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
+import { OutOfRange } from '@/components/admin/out-of-range';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FilteredEmpty, type ActiveFilter } from '@/components/admin/filtered-empty';
 import { StatusPill } from '@/components/ui/status-pill';
@@ -156,7 +157,15 @@ export default async function AdminCustomersPage({
            * `role = 'customer'` is the screen's domain rather than a filter, so
            * it is not offered: widening past it would list vendors.
            */
-          filtered ? (
+          customers.items.length === 0 && customers.total > 0 ? (
+            <OutOfRange
+              path={PATH}
+              params={{ q, status, flag }}
+              page={customers.page}
+              pageSize={customers.pageSize}
+              total={customers.total}
+            />
+          ) : filtered ? (
             <FilteredEmpty
               headline={headline}
               path={PATH}

@@ -8,6 +8,7 @@ import { AdminSurface } from '@/components/admin/admin-surface';
 import { ExportCsvLink } from '@/components/admin/export-csv-link';
 import { FilteredEmpty, type ActiveFilter } from '@/components/admin/filtered-empty';
 import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
+import { OutOfRange } from '@/components/admin/out-of-range';
 import { VendorTable } from '@/components/admin/vendor-table';
 import { getAdminVendorFacets, getAdminVendors } from '@/lib/admin-data';
 import {
@@ -227,6 +228,17 @@ export default async function AdminVendorsPage({
       <VendorTable
         rows={vendors.items}
         filtered={filtered}
+        pastEnd={
+          vendors.items.length === 0 && vendors.total > 0 ? (
+            <OutOfRange
+              path={PATH}
+              params={params}
+              page={vendors.page}
+              pageSize={vendors.pageSize}
+              total={vendors.total}
+            />
+          ) : undefined
+        }
         filteredEmpty={
           <FilteredEmpty
             headline={filteredHeadline}

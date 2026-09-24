@@ -9,6 +9,7 @@ import { ACTION_LABELS, ActivityTable, SUBJECT_LABELS } from '@/components/admin
 import { AdminSurface } from '@/components/admin/admin-surface';
 import { ExportCsvLink } from '@/components/admin/export-csv-link';
 import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
+import { OutOfRange } from '@/components/admin/out-of-range';
 import { FilteredEmpty, type ActiveFilter } from '@/components/admin/filtered-empty';
 import { getAdminActivity, getAdminActivityActors } from '@/lib/admin-data';
 import { activityParams } from '@/lib/admin-list-params';
@@ -178,6 +179,17 @@ export default async function AdminActivityPage({
         rows={activity.items}
         path={PATH}
         filtered={filtered}
+        pastEnd={
+          activity.items.length === 0 && activity.total > 0 ? (
+            <OutOfRange
+              path={PATH}
+              params={params}
+              page={activity.page}
+              pageSize={activity.pageSize}
+              total={activity.total}
+            />
+          ) : undefined
+        }
         /*
          * The counted way out, built here rather than inside the table: the
          * words on each button are this screen's copy, and the table renders
