@@ -3,10 +3,9 @@
 import { Bell } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { TERMS_ACCEPTANCE_PATH, VENDOR_APPLY_PATH } from '@vendor-marketplace/shared';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { EmptyStateGlyph } from '@/components/ui/empty-state';
-import { isGateExemptPath } from '@/lib/terms-gate-paths';
+import { isHeaderReadSuppressed } from '@/lib/terms-gate-paths';
 import { useApi } from '@/lib/use-api';
 import { useEventStream } from '@/lib/use-event-stream';
 import { wireNotificationPageSchema, type WireNotification } from '@/lib/wire-schemas';
@@ -71,11 +70,7 @@ export function NotificationBell({
    * case on these three, and hiding the bell for everyone would cost the one
    * thing it is for.
    */
-  if (
-    pathname === TERMS_ACCEPTANCE_PATH ||
-    pathname === VENDOR_APPLY_PATH ||
-    (gated && isGateExemptPath(pathname))
-  ) {
+  if (isHeaderReadSuppressed(pathname, gated)) {
     return null;
   }
 

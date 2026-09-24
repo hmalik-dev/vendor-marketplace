@@ -94,6 +94,24 @@ describe('SignedInDrawer', () => {
     expect(signOut).toHaveBeenCalledExactlyOnceWith('/');
   });
 
+  it('adds My profile for a customer, between Messages and settings', async () => {
+    const user = userEvent.setup();
+
+    render(<SignedInDrawer dashboardLabel={DASHBOARD_LABEL_BY_ROLE.customer} customerProfile />);
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+
+    const rows = screen.getByRole('navigation', { name: 'Menu' }).querySelectorAll('li > *');
+
+    expect([...rows].map((row) => [row.textContent, row.getAttribute('href')])).toEqual([
+      ['Bookings', '/dashboard'],
+      ['Messages', '/messages'],
+      ['My profile', '/customer/profile'],
+      ['Account settings', '/account/settings'],
+      ['Contact support', '/support'],
+      ['Sign out', null],
+    ]);
+  });
+
   it('never writes "Dashboard" for a customer', async () => {
     const user = userEvent.setup();
 

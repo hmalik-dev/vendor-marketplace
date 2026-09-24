@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Textarea } from '@/components/ui/textarea';
 import { ReportDialog } from '@/components/reports/report-dialog';
+import { CONVERSATION_READ_EVENT } from '@/components/messaging/messages-link';
 import { reportSwallowedError } from '@/lib/report-error';
 import { useApi } from '@/lib/use-api';
 import { userFacingError } from '@/lib/user-facing-error';
@@ -375,6 +376,7 @@ export function MessagesScreen({
           schema: wireMessagePageSchema.nullable(),
           method: 'PUT',
         });
+        window.dispatchEvent(new Event(CONVERSATION_READ_EVENT));
       } catch (error: unknown) {
         reportSwallowedError('messages: marking a conversation read failed', error);
         setConversations((rows) =>

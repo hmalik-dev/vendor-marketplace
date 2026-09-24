@@ -148,33 +148,10 @@ describe('frame 08 — the vendor rail', () => {
   });
 });
 
-describe('frame 07 — the customer rail', () => {
-  const drawn = sidebarRows('07 Customer bookings hub');
-  const built = labelsIn(read('src/components/bookings/bookings-sidebar.tsx'));
-
-  it('reads the frame at all', () => {
-    expect(drawn).toEqual(['My bookings', 'Messages', 'Saved vendors', 'My profile']);
-  });
-
-  it('renders the frame rows it ships in the frame order', () => {
-    const shared = built.filter((label) => drawn.includes(label));
-
-    expect(shared).toEqual(drawn.filter((label) => built.includes(label)));
-  });
-
-  /*
-   * `Saved vendors` is the one row still held out, and for the reason it always
-   * was: there is no saved-vendor feature anywhere in the product — no route,
-   * no schema, no endpoint — so the row could only be a link to a 404.
-   */
-  it('leaves out only Saved vendors, which leads nowhere yet', () => {
-    expect(drawn.filter((label) => !built.includes(label))).toEqual(['Saved vendors']);
-  });
-
-  it('adds nothing the frame does not draw', () => {
-    expect(built.filter((label) => !drawn.includes(label))).toEqual([]);
-  });
-});
+/*
+ * Frame `07` draws a customer sidebar that VEN-706 supersedes: Messages and
+ * Bookings sit in the header, so the customer has no rail to match.
+ */
 
 /**
  * Frame `19` draws a *different* rail around the same hub — a `Booking` section
@@ -195,6 +172,5 @@ describe('frame 19 — the shell that was overruled', () => {
     const rules = read('src/lib/role-routes.ts');
 
     expect(rules).not.toContain("'/customer/payments'");
-    expect(read('src/components/bookings/bookings-sidebar.tsx')).not.toContain('Payments');
   });
 });

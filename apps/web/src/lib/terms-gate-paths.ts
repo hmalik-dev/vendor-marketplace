@@ -139,3 +139,20 @@ const REFUSAL_EXEMPT_PATHS: readonly string[] = [
 export function isRefusalExemptPath(pathname: string): boolean {
   return REFUSAL_EXEMPT_PATHS.includes(pathname);
 }
+
+/**
+ * Whether the header's own reads — the bell's notifications, the `Messages`
+ * link's unread state — must stay quiet on this page (VEN-451, VEN-586).
+ *
+ * The Terms and vendor-apply screens answer both with the gate's 403 for an
+ * account that cannot clear it. `/`, `/search` and a storefront are gate-exempt
+ * but are also the busiest pages for every *ungated* signed-in account, so they
+ * suppress only for a session the server found gated.
+ */
+export function isHeaderReadSuppressed(pathname: string, gated: boolean): boolean {
+  return (
+    pathname === TERMS_ACCEPTANCE_PATH ||
+    pathname === VENDOR_APPLY_PATH ||
+    (gated && isGateExemptPath(pathname))
+  );
+}
