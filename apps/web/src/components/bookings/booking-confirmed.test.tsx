@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { CATEGORY_SEEDS, CATEGORY_SLUGS } from '@vendor-marketplace/shared';
+import { CATEGORY_SEEDS, CATEGORY_SLUGS, payoutReleaseAt } from '@vendor-marketplace/shared';
 import { BookingConfirmed } from './booking-confirmed';
 import { AVATAR_SIZES } from '@/components/ui/avatar';
 import type { WireBooking } from '@/lib/wire-schemas';
@@ -240,8 +240,16 @@ describe('BookingConfirmed', () => {
   it('reads the sub-line frame 06 writes', () => {
     render(<BookingConfirmed booking={booking()} vendor={VENDOR} conversationId="conv-1" />);
 
+    // The release date is the event date plus the constant's interval, not the event date itself.
+    const releasedOn = new Intl.DateTimeFormat('en-US', {
+      month: 'long',
+      day: 'numeric',
+      timeZone: 'UTC',
+    }).format(payoutReleaseAt('2027-06-14')!);
+
+    expect(releasedOn).not.toBe('June 14');
     expect(screen.getByText(/Your booking with/).textContent).toBe(
-      'Your booking with Kessler & Co. is confirmed. Your payment is held until the event, then released.',
+      `Your booking with Kessler & Co. is confirmed. Your payment is held until the event, then released on ${releasedOn}.`,
     );
   });
 

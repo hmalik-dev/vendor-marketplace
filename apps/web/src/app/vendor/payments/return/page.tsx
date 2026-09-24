@@ -45,7 +45,7 @@ export default async function VendorPaymentsReturnPage(): Promise<React.ReactEle
       description={
         isOnboarded
           ? `Payouts are connected, so you can accept bookings now. ${BRAND_NAME} holds each payment and pays it out to you ${PAYOUT_RELEASE_HOURS} hours after the event date.`
-          : 'Stripe has your details and is verifying them. This usually takes a minute or two, and sometimes longer if a document needs a look.'
+          : 'Stripe has your details and is verifying them.'
       }
     >
       <div className="max-w-[620px]">

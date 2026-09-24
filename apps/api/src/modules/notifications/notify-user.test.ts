@@ -10,7 +10,7 @@ import { PAYOUT_NOTICES } from './notify-user.js';
 describe('the payout notices state what the release does', () => {
   it('says the release lands in the Stripe account and that Stripe pays it on', () => {
     expect(PAYOUT_NOTICES.sent.body).toBe(
-      'Your payment for a completed booking has been sent to your Stripe account. Stripe pays it on to your bank on its own schedule.',
+      'A payment for one of your bookings has been sent to your Stripe account. Stripe pays it on to your bank on its own schedule.',
     );
     expect(PAYOUT_NOTICES.sent.body).not.toContain('sent to your bank account');
   });

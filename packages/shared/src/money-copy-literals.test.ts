@@ -19,7 +19,13 @@ import { describe, expect, it } from 'vitest';
  */
 const ROOT = resolve(import.meta.dirname, '../../..');
 
-/** The surfaces that state money, timing or cancellation to a customer or vendor. */
+/**
+ * The surfaces that state money, timing or cancellation to a customer or vendor.
+ *
+ * Not here on purpose: `support-email.ts` and `support-screen.tsx`, whose "usually
+ * within one business day" is a staffing commitment no code decides, left as
+ * written and filed on VEN-378 with the monitored support destination.
+ */
 const SCANNED_FILES = [
   'apps/web/src/components/checkout/checkout-screen.tsx',
   'apps/web/src/components/checkout/checkout-unavailable.tsx',
@@ -34,13 +40,14 @@ const SCANNED_FILES = [
   'apps/web/src/app/vendor/dashboard/page.tsx',
   'apps/web/src/app/vendor/payments/page.tsx',
   'apps/web/src/app/vendor/payments/return/page.tsx',
+  'apps/web/src/components/admin/case-resolution.tsx',
+  'apps/web/src/components/admin/payment-table.tsx',
   'apps/web/src/app/vendor/bookings/page.tsx',
   'apps/web/src/app/for-vendors/page.tsx',
   'apps/web/src/lib/refund-deadline.ts',
   'apps/api/src/modules/notifications/notify-user.ts',
   'apps/api/src/modules/booking-requests/booking-requests.service.ts',
   'apps/api/src/modules/payments/payments.service.ts',
-  'apps/api/src/modules/support/support-email.ts',
   'packages/shared/src/constants/legal.ts',
 ] as const;
 
@@ -48,9 +55,17 @@ const SCANNED_FILES = [
 const MONEY_WORD =
   /\b(?:refund(?:s|ed|ing)?|pay|pays|paid|payment|payments|payout|payouts|charge|charged|held|hold|holds|cancel|cancels|cancelled|cancelling|cancellation|release|released|deposit|price)\b/i;
 
-/** A digit, or a spelled-out count of time. `{…}` and `${…}` are replaced first. */
-const TYPED_FIGURE =
-  /\d|\b(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|twelve|fourteen|twenty|thirty|forty|sixty|seventy|hundred|half|few|couple)\s+(?:(?:business|calendar)\s+)?(?:hours?|days?|weeks?|minutes?|months?)\b/i;
+/** Any digit. In a sentence about money it is a typed figure. `{…}` and `${…}` are replaced first. */
+const DIGIT = /\d/;
+
+/**
+ * A count of time, spelled out or in digits, in any sentence at all: "two weeks
+ * out", "about five minutes", "a minute or two", "24 hours". Nothing decides how
+ * long Stripe or a person takes, so a sentence that states it is unverifiable
+ * whether or not it names money.
+ */
+const TYPED_DURATION =
+  /\b(?:\d+|a|an|one|two|three|four|five|six|seven|eight|nine|ten|twelve|fourteen|twenty|thirty|forty|sixty|seventy|hundred|half|few|couple)\s+(?:(?:business|calendar)\s+)?(?:hours?|days?|weeks?|minutes?|months?)\b/i;
 
 const INTERPOLATION = '‹value›';
 
@@ -120,7 +135,9 @@ function readableUnits(source: string): string[] {
 
 /** Every readable sentence that talks about money and types a figure or a duration. */
 function typedMoneyFigures(source: string): string[] {
-  return readableUnits(source).filter((unit) => MONEY_WORD.test(unit) && TYPED_FIGURE.test(unit));
+  return readableUnits(source).filter(
+    (unit) => (MONEY_WORD.test(unit) && DIGIT.test(unit)) || TYPED_DURATION.test(unit),
+  );
 }
 
 function sourceOf(path: string): string {
@@ -173,6 +190,9 @@ describe('a money sentence types no figure or duration', () => {
       'stays held for you for 24 hours.',
       'message you two weeks out about payment',
       'You can not take payment until payouts are connected. It takes about five minutes.',
+      'This usually takes a minute or two, and sometimes longer.',
+      'They will message you two weeks out to plan the timeline.',
+      'Check back in a few minutes.',
     ]) {
       expect(typedMoneyFigures(`const a = '${written}';`)).toEqual([written]);
     }

@@ -4,6 +4,7 @@ import {
   CATEGORY_SEEDS,
   EVENT_TYPE_LABELS,
   formatPrice,
+  payoutReleaseAt,
   type EventType,
 } from '@vendor-marketplace/shared';
 import Link from 'next/link';
@@ -99,6 +100,7 @@ export function BookingConfirmed({
   conversationId,
 }: BookingConfirmedProps): React.ReactElement {
   const day = EVENT_DAY.format(new Date(`${booking.eventDate}T00:00:00Z`));
+  const releaseAt = payoutReleaseAt(booking.eventDate);
 
   /*
    * The check springs in, once. `prefers-reduced-motion` is honoured by the
@@ -197,7 +199,7 @@ export function BookingConfirmed({
       */}
       <p className="mt-2.5 max-w-[480px] text-center text-lg leading-prose text-stone-0">
         Your booking with {vendor.businessName} is confirmed. Your payment is held until the event,
-        then released.
+        then released{releaseAt === null ? '' : ` on ${EVENT_DAY.format(releaseAt)}`}.
       </p>
 
       {/*

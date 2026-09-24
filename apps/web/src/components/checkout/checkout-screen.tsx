@@ -5,7 +5,6 @@ import {
   formatDurationHours,
   formatPrice,
   LEGAL_PATHS,
-  paymentDeadline,
   payoutReleaseAt,
 } from '@vendor-marketplace/shared';
 import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js';
@@ -188,15 +187,6 @@ function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.React
   const [unreachable, setUnreachable] = useState(false);
 
   const event = eventDay(checkout.eventDate);
-  /*
-   * When the date stops being held for this customer: the payment window from
-   * acceptance, capped at the event (`paymentDeadline`). Absent when the
-   * request carries no acceptance time, and then the banner claims no hold.
-   */
-  const heldUntil = checkout.acceptedAt
-    ? paymentDeadline(checkout.acceptedAt, checkout.eventDate)
-    : null;
-
   const pay = useCallback(
     async (submitted: React.FormEvent) => {
       submitted.preventDefault();
@@ -286,7 +276,7 @@ function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.React
               then try once more.
             </Banner>
           ) : null}
-          {decline ? <DeclineBanner decline={decline} event={event} heldUntil={heldUntil} /> : null}
+          {decline ? <DeclineBanner decline={decline} event={event} /> : null}
 
           <PaymentElement options={{ layout: 'tabs' }} />
 
@@ -328,15 +318,7 @@ function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.React
   );
 }
 
-function DeclineBanner({
-  decline,
-  event,
-  heldUntil,
-}: {
-  decline: Decline;
-  event: Date;
-  heldUntil: Date | null;
-}): React.ReactElement {
+function DeclineBanner({ decline, event }: { decline: Decline; event: Date }): React.ReactElement {
   return (
     <div
       role="alert"
@@ -347,20 +329,19 @@ function DeclineBanner({
         {/*
           The money position first, in the heading, because it is the question
           the customer is actually asking — `40-states.md` §1.
+
+          The hold is stated as it stands, not with an end date. Its end is an
+          instant (`paymentDeadline`), and a bare day names more time than a
+          customer west of UTC has; a card that declines here has not moved it.
         */}
         <p className="mb-1 text-[13.5px] font-semibold text-stone-900">
           Your card was declined — you haven&apos;t been charged
         </p>
         <p className="text-[12.5px] leading-relaxed text-stone-700">
-          {decline.message} Try the same card again, use another card, or call your bank.
-          {heldUntil ? (
-            <>
-              {' '}
-              <strong className="font-semibold">
-                {SHORT_DAY.format(event)} stays held for you until {SHORT_DAY.format(heldUntil)}.
-              </strong>
-            </>
-          ) : null}
+          {decline.message} Try the same card again, use another card, or call your bank.{' '}
+          <strong className="font-semibold">
+            {SHORT_DAY.format(event)} is still held for you.
+          </strong>
         </p>
       </div>
     </div>

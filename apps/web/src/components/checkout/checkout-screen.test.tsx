@@ -1,9 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import {
-  BOOKING_PAYMENT_WINDOW_DAYS,
-  BRAND_NAME,
-  payoutReleaseAt,
-} from '@vendor-marketplace/shared';
+import { BRAND_NAME, payoutReleaseAt } from '@vendor-marketplace/shared';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CheckoutScreen } from './checkout-screen';
@@ -297,17 +293,9 @@ describe('CheckoutScreen', () => {
 
       const alert = await screen.findByRole('alert');
       expect(alert.textContent).toContain("Your card was declined — you haven't been charged");
-      // Accepted May 2 at noon UTC, plus the payment window, is when the hold ends.
-      const heldUntil = new Date(
-        checkout().acceptedAt!.getTime() + BOOKING_PAYMENT_WINDOW_DAYS * 24 * 60 * 60 * 1000,
-      );
-      const heldUntilLabel = heldUntil.toLocaleDateString('en-US', {
-        month: 'long',
-        day: 'numeric',
-        timeZone: 'UTC',
-      });
-      expect(alert.textContent).toContain(`June 14 stays held for you until ${heldUntilLabel}.`);
-      expect(alert.textContent).not.toContain('24 hours');
+      expect(alert.textContent).toContain('June 14 is still held for you.');
+      // No deadline is promised: the hold ends at an instant no bare day states.
+      expect(alert.textContent).not.toMatch(/24 hours|until|\d+ days/);
       expect(alert.textContent).toContain('Try the same card again, use another card');
       // It stayed on the screen; a declined charge navigates nowhere.
       expect(pushMock).not.toHaveBeenCalled();
@@ -330,15 +318,6 @@ describe('CheckoutScreen', () => {
       expect(
         await screen.findByRole('button', { name: 'Try this payment again — confirm June 14' }),
       ).toBeDefined();
-    });
-
-    it('claims no hold when the request carries no acceptance time', async () => {
-      render(<CheckoutScreen checkout={checkout({ acceptedAt: null })} requestId="req-1" />);
-
-      await userEvent.click(screen.getByRole('button', { name: /^Pay/ }));
-
-      const alert = await screen.findByRole('alert');
-      expect(alert.textContent).not.toContain('stays held');
     });
 
     it('promises no extension of the hold, however many attempts have failed', async () => {
