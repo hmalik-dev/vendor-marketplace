@@ -98,7 +98,7 @@ describe('SupportScreen', () => {
     expect(screen.getByRole('button', { name: 'Topic' }).textContent).toBe('Choose a topic');
   });
 
-  it('offers the five topics, and only those five', async () => {
+  it('offers the six topics in order, with the feature request before something else', async () => {
     const user = userEvent.setup();
     render(<SupportScreen accountEmail={null} errorContext={null} bookingContext={null} />);
 
@@ -108,6 +108,17 @@ describe('SupportScreen', () => {
     expect(options.map((option) => option.textContent)).toEqual(
       SUPPORT_TOPICS.map((topic) => SUPPORT_TOPIC_LABELS[topic]),
     );
+    expect(options.map((option) => option.textContent)).toEqual([
+      'Something broke',
+      'A booking or payment',
+      'My vendor profile',
+      'Trust & safety',
+      'A feature request',
+      'Something else',
+    ]);
+
+    await user.click(screen.getByRole('option', { name: 'A feature request' }));
+    expect(screen.getByRole('button', { name: 'Topic' }).textContent).toBe('A feature request');
   });
 
   /*
@@ -168,6 +179,42 @@ describe('SupportScreen', () => {
     // Identity comes from the session; the screen never sends an address for
     // an account that has one.
     expect(request.mock.calls[0]?.[1].body.email).toBeUndefined();
+  });
+
+  it('drops the booking and its hold note when the topic is changed to a feature request', async () => {
+    request.mockResolvedValue({ reference: 'ORL-4K7Q-P2', replyTo: RECEIPT_ADDRESS });
+    render(
+      <SupportScreen
+        accountEmail="ana@nandakumar.co"
+        errorContext={null}
+        bookingContext={{
+          id: '4f0b6f7e-7b0e-4a55-9d0c-2f1d3a9c8b11',
+          eventDate: '2026-06-15',
+          totalAmountCents: 145_000,
+          venue: 'Barr Mansion',
+        }}
+      />,
+    );
+
+    // A booking is attached: the topic is preselected and the hold is announced.
+    expect(screen.getByRole('button', { name: 'Topic' }).textContent).toBe('A booking or payment');
+    expect(screen.getByText(/puts the vendor's payment for this booking on hold/)).toBeTruthy();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Topic' }));
+    await user.click(await screen.findByRole('option', { name: 'A feature request' }));
+
+    expect(screen.queryByText(/puts the vendor's payment for this booking on hold/)).toBeNull();
+
+    await user.type(screen.getByLabelText('Message'), 'Let me pin a vendor.');
+    await user.click(screen.getByRole('button', { name: 'Send message' }));
+
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+    expect(request.mock.calls[0]?.[1].body).toEqual({
+      topic: 'feature-request',
+      message: 'Let me pin a vendor.',
+    });
+    expect(screen.queryByText(/on hold while we look into it/)).toBeNull();
   });
 
   it('confirms the address the receipt names, not the one typed, when the account read failed', async () => {

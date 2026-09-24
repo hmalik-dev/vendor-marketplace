@@ -3,6 +3,7 @@ import {
   ERROR_CODES,
   SUPPORT_REFERENCE_ALPHABET,
   SUPPORT_REFERENCE_PREFIX,
+  SUPPORT_TOPIC_FEATURE_REQUEST,
   type SupportMessageInput,
   type SupportMessageReceipt,
   type SupportSendFailureDetails,
@@ -298,6 +299,23 @@ export async function sendSupportMessage(
   gated: boolean,
   now: Date,
 ): Promise<SupportMessageReceipt> {
+  const isFeatureRequest = input.topic === SUPPORT_TOPIC_FEATURE_REQUEST;
+
+  /*
+   * A booking on a message is what places the payout hold, and an idea must
+   * never freeze money. Refused rather than quietly dropped, so a caller who
+   * attached one is told the two do not go together instead of being handed a
+   * success screen that promises a hold this request never placed. The screen
+   * omits the booking when this topic is chosen; this is the API's own answer.
+   */
+  if (isFeatureRequest && input.bookingId !== undefined) {
+    throw new AppError(
+      400,
+      ERROR_CODES.VALIDATION_ERROR,
+      'A feature request cannot be attached to a booking',
+    );
+  }
+
   const reference = generateSupportReference();
   const { replyTo, signedIn } = await resolveReplyTo(deps, input, auth);
 
@@ -331,14 +349,16 @@ export async function sendSupportMessage(
    * rule in one line: a row that could not be written must not lose the email or
    * strand the hold.
    */
-  const supportCase = await openSupportCase(deps, {
-    reference,
-    topic: input.topic,
-    message: input.message,
-    senderUserId: auth?.id ?? null,
-    senderEmail: replyTo,
-    bookingId: input.bookingId ?? null,
-  });
+  const supportCase = isFeatureRequest
+    ? null
+    : await openSupportCase(deps, {
+        reference,
+        topic: input.topic,
+        message: input.message,
+        senderUserId: auth?.id ?? null,
+        senderEmail: replyTo,
+        bookingId: input.bookingId ?? null,
+      });
 
   const fields = {
     reference,
