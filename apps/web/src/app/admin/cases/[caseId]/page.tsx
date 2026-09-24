@@ -276,6 +276,9 @@ export default async function AdminCasePage({
                 {booking.vendorOwedCents > 0 ? (
                   <KeyValue label="Owed by vendor" kind="mono">
                     {formatPrice(booking.vendorOwedCents)}
+                    {booking.vendorOwedRecoveredCents > 0
+                      ? ` (${formatPrice(booking.vendorOwedRecoveredCents)} recovered)`
+                      : ''}
                   </KeyValue>
                 ) : null}
                 <KeyValue label="Paid at" kind="mono">

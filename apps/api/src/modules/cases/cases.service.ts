@@ -331,7 +331,8 @@ function describeHoldRefusal(target: DisputedBookingProjection): string {
   if (target.payoutReleasedAt) {
     return (
       'The payout had already been released when this chargeback arrived, so there was ' +
-      'nothing left to freeze. Recovering it is a conversation with the vendor, not a ruling here.'
+      'nothing left to freeze. If the network rules against the platform, the vendor owes it back ' +
+      'and it is kept from their next payouts.'
     );
   }
 

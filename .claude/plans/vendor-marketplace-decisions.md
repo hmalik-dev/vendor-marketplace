@@ -2409,3 +2409,28 @@ most warnings never turn into a dispute.
    booking cancelled, nothing refunded (the network already repaid the customer).
    Released: `bookings.vendor_owed_cents` records what the vendor holds. Recovery
    from the vendor is VEN-658's.
+
+### D47: A chargeback lost after the vendor was paid is recovered from the vendor's next payouts — *2026-09-24*
+
+Replaces D39's "completed transfers are never clawed back" for the one case where the
+platform, as loss collector, is debited for money the vendor already holds (VEN-658).
+The account holder's rule: a vendor no-show loses money for neither Orla nor the customer.
+
+1. **The debt is recorded on the booking that was charged back** (`vendor_owed_cents`):
+   the vendor's share, capped at what was disputed, **plus Stripe's dispute fee**
+   (`STRIPE_DISPUTE_FEE_CENTS`, one constant). The fee ruling belongs to VEN-646; the
+   vendor bears it until that ruling says otherwise, and setting the constant to 0 makes
+   Orla absorb it.
+2. **The payout sweep nets it off the vendor's next transfers**, oldest debt first,
+   inside the transaction that claims the payout and only once the transfer stands.
+   `bookings.debt_netted_cents` records what a payout was reduced by and
+   `vendor_owed_recovered_cents` what a debt has recovered; what is outstanding is the
+   difference. A debt larger than the payout consumes it (released with no transfer) and
+   the rest carries to the next.
+3. **Rejected: reversing the original transfer at Stripe.** A reversal against a vendor
+   who has already withdrawn fails or drives their Stripe balance negative, and the
+   sweep's netting needs no second money path. A reversal Stripe raises itself is still
+   followed (`recordTransferReversal`) and never lowers a debt below what was recovered.
+4. **Not built here:** freezing payouts on a no-show report, a longer hold on a vendor's
+   first payouts, pausing bookings until a debt clears and a 90-day write-off. Each is a
+   separate mechanism from recovery and none is needed for the vendor to repay.
