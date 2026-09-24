@@ -19,6 +19,10 @@ import { fileURLToPath } from 'node:url';
 import {
   hasSessionCookie,
   keepOffTheImageOptimizer,
+  MAX_OTHER_SESSIONS,
+  MAX_PRUNED_PER_RUN,
+  pruneSessions,
+  sessionsToPrune,
   signInRefusal,
   waitForSession,
   withRetry,
@@ -205,4 +209,76 @@ test('the sign-in browser answers every optimizer request itself (VEN-655)', asy
   let aborted = 0;
   await routes[0].handler({ abort: async () => void (aborted += 1) });
   assert.equal(aborted, 1);
+});
+
+// Other sessions `s00`, `s01`, …: the higher the number, the more recently active.
+const listOf = (others) => ({
+  sessions: [
+    { id: 'here', current: true, lastActiveAt: '2000-01-01T00:00:00.000Z' },
+    ...Array.from({ length: others }, (_, i) => ({
+      id: `s${String(i).padStart(2, '0')}`,
+      current: false,
+      lastActiveAt: `2026-09-${String(10 + Math.floor(i / 10)).padStart(2, '0')}T0${i % 10}:00:00.000Z`,
+    })),
+  ],
+});
+
+test('sessionsToPrune: sessions up to the cap are kept, the stalest past it go (VEN-714)', () => {
+  assert.deepEqual(sessionsToPrune(listOf(MAX_OTHER_SESSIONS)), []);
+  assert.deepEqual(sessionsToPrune(listOf(MAX_OTHER_SESSIONS + 2)), ['s00', 's01']);
+});
+
+test('sessionsToPrune: ends at most MAX_PRUNED_PER_RUN, oldest first, never this device', () => {
+  const ids = sessionsToPrune(listOf(MAX_OTHER_SESSIONS + 30));
+  assert.deepEqual(ids, ['s00', 's01', 's02']);
+  assert.equal(ids.length, MAX_PRUNED_PER_RUN);
+  assert.equal(ids.includes('here'), false);
+});
+
+test('sessionsToPrune: a body that is not a session list names none', () => {
+  assert.deepEqual(sessionsToPrune(null), []);
+  assert.deepEqual(sessionsToPrune({ message: 'Unavailable' }), []);
+});
+
+function fakeRequest({ listStatus = 200, list, postStatus = 200 }) {
+  const calls = [];
+  return {
+    calls,
+    get: async (url) => {
+      calls.push(['GET', url]);
+      return { ok: () => listStatus < 300, json: async () => list };
+    },
+    post: async (url, options) => {
+      calls.push(['POST', url, options.data]);
+      return { ok: () => postStatus < 300 };
+    },
+  };
+}
+
+test('pruneSessions ends the stalest sessions by id, not every other session, over the cap', async () => {
+  const request = fakeRequest({ list: listOf(MAX_OTHER_SESSIONS + 2) });
+  assert.equal(await pruneSessions(request, 'http://localhost:3000'), 2);
+  assert.deepEqual(request.calls, [
+    ['GET', 'http://localhost:3000/api/auth/list-sessions'],
+    ['POST', 'http://localhost:3000/api/auth/revoke-session', { id: 's00' }],
+    ['POST', 'http://localhost:3000/api/auth/revoke-session', { id: 's01' }],
+  ]);
+});
+
+test('pruneSessions leaves a session count under the cap alone', async () => {
+  const request = fakeRequest({ list: listOf(3) });
+  assert.equal(await pruneSessions(request, 'http://localhost:3000'), 0);
+  assert.equal(request.calls.length, 1);
+});
+
+test('pruneSessions never throws, and stops at the first refused revoke', async () => {
+  assert.equal(
+    await pruneSessions(fakeRequest({ listStatus: 502, list: {} }), 'http://localhost:3000'),
+    0,
+  );
+  const broken = { get: async () => Promise.reject(new Error('down')) };
+  assert.equal(await pruneSessions(broken, 'http://localhost:3000'), 0);
+  const refused = fakeRequest({ list: listOf(MAX_OTHER_SESSIONS + 5), postStatus: 429 });
+  assert.equal(await pruneSessions(refused, 'http://localhost:3000'), 0);
+  assert.equal(refused.calls.length, 2);
 });
