@@ -89,8 +89,13 @@ export default async function BookingsPage({
   const user = await requireRole('customer', `/bookings?tab=${tab}`);
 
   const [requests, bookings, conversations] = await Promise.all([
-    getOwnBookingRequests(),
-    getOwnBookings(),
+    /*
+     * Required: the hub's subject is these two lists, so a failed read reaches
+     * the route's error boundary and its Try again rather than drawing "No
+     * bookings yet" for a customer who may have just paid.
+     */
+    getOwnBookingRequests({ required: true }),
+    getOwnBookings({ required: true }),
     /*
      * Frame `07`'s rail draws the three most recent threads. It fails soft on its
      * own — an unreachable messaging API costs the rail's second block, not the
