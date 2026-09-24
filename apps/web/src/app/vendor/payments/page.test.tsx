@@ -21,12 +21,13 @@ vi.mock('@/components/vendor/stripe-dashboard-link', () => ({
   StripeDashboardLink: () => <button type="button">Open your Stripe dashboard</button>,
 }));
 vi.mock('@/components/vendor/tax-statement-downloads', () => ({
+  // The real component's root is a `div`, which is what a paragraph must never hold.
   TaxStatementDownloads: ({ years }: { years: number[] }) => (
-    <ul>
+    <div>
       {years.map((year) => (
-        <li key={year}>{`${year} statement (CSV)`}</li>
+        <button key={year} type="button">{`${year} statement (CSV)`}</button>
       ))}
-    </ul>
+    </div>
   ),
 }));
 vi.mock('next/navigation', () => ({ redirect: (path: string) => redirect(path) }));
@@ -161,14 +162,35 @@ describe('VendorPaymentsPage', () => {
     getTaxStatementYears.mockResolvedValue([2027, 2026]);
     await renderPage({ stripeAccountId: 'acct_1', stripeOnboarded: true });
 
-    const banner = screen.getByRole('status');
-    expect(banner.textContent).toContain('Open your Stripe dashboard');
-    expect(banner.textContent).toContain('2027 statement (CSV)');
-    expect(banner.textContent).toContain('2026 statement (CSV)');
+    expect(screen.getByRole('button', { name: 'Open your Stripe dashboard' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '2027 statement (CSV)' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '2026 statement (CSV)' })).toBeTruthy();
     expect(document.body.textContent).not.toContain(
       ['There is nothing', 'else to do here.'].join(' '),
     );
   });
+
+  /*
+   * `Banner` puts its sentence in a `<p>`. A `<div>` inside it makes the browser
+   * close the paragraph while parsing the server markup, so the page fails to
+   * hydrate (React error 418) — which jsdom's client render never shows and the
+   * route-landing journey does. Assert the invalid nesting itself, for both
+   * states the statement list can sit in.
+   */
+  it.each([
+    ['payouts connected', true],
+    ['payouts not connected', false],
+  ])(
+    'keeps the statement list out of any paragraph when %s (VEN-725)',
+    async (_label, onboarded) => {
+      getTaxStatementYears.mockResolvedValue([2027, 2026]);
+      await renderPage({ stripeAccountId: 'acct_1', stripeOnboarded: onboarded });
+
+      expect(screen.getByRole('button', { name: '2027 statement (CSV)' })).toBeTruthy();
+      expect(document.querySelectorAll('p div, p ul, p ol, p table, p section')).toHaveLength(0);
+      expect(screen.getByRole('status').textContent).not.toContain('statement (CSV)');
+    },
+  );
 
   it('offers no dashboard link before payouts are connected, but keeps a past year statement', async () => {
     getTaxStatementYears.mockResolvedValue([2026]);
