@@ -64,7 +64,7 @@ export const PAYOUT_NOTICES = {
   sent: {
     type: 'payout_sent',
     title: 'A payout is on its way',
-    body: 'Your payment for a completed booking has been sent to your bank account.',
+    body: 'A payment for one of your bookings has been sent to your Stripe account. Stripe pays it on to your bank on its own schedule.',
   },
   connected: {
     type: 'stripe_onboarding_complete',

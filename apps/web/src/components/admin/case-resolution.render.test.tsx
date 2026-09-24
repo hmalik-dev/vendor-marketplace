@@ -228,7 +228,7 @@ describe('the two confirms', () => {
     openConfirm(/^Refund and cancel$/);
 
     const body = screen.getByRole('alertdialog').textContent ?? '';
-    expect(body).toContain("Refunds settle to the customer's bank in 5–10 days");
+    expect(body).toContain("Refunds reach the customer's bank on the card issuer's own schedule.");
     expect(body).not.toContain('refunding does not withdraw it');
   });
 

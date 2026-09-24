@@ -1826,6 +1826,22 @@ describe('/v1/booking-requests', () => {
       expect(rows[1]!.userId).toBe(customer[0]!.id);
     });
 
+    it('tells the customer which date the acceptance holds, and that payment confirms it', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+      const created = await createRequest(vendorId, { packageId, eventDate: OTHER_DATE });
+      await post(VENDOR, `/v1/booking-requests/${created.json().id}/accept`);
+
+      const rows = await harness.database.db
+        .select({ body: notifications.body })
+        .from(notifications)
+        .where(eq(notifications.type, 'request_accepted'));
+
+      expect(rows).toHaveLength(1);
+      // The date the request names, not the fixture's default one.
+      expect(rows[0]!.body).toBe(`${readable(OTHER_DATE)} is held. Payment confirms the booking.`);
+      expect(rows[0]!.body).not.toContain(readable(EVENT_DATE));
+    });
+
     /*
      * The invariant the test above names — "the other party" — held only for
      * `accept`, which is the one transition it exercised. Decline addressed

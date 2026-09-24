@@ -1194,6 +1194,9 @@ export const DEFAULT_CURRENCY = 'USD';
  */
 export const PAYOUT_RELEASE_HOURS = 72;
 
+/** How long the `session-revoke-marker` cookie lives; `/cookies` states it from here. */
+export const SESSION_REVOKE_MARKER_MAX_AGE_SECONDS = 20 * 60;
+
 /**
  * How often the API sweeps for payouts that have come due.
  *
