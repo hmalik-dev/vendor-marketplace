@@ -29,6 +29,7 @@ import {
   fullCustomerProfileSchema,
   userSchema,
   vendorProfileDetailSchema,
+  nearbyAvailabilityQuerySchema,
   vendorSearchQuerySchema,
 } from './index.js';
 import { resolveImageUrl } from '../utils/index.js';
@@ -1258,4 +1259,35 @@ describe('VEN-544 input rules', () => {
       false,
     );
   });
+});
+
+describe('the city and state of a public search (VEN-689)', () => {
+  const schemas = [
+    ['vendorSearchQuerySchema', (input: object) => vendorSearchQuerySchema.safeParse(input)],
+    [
+      'nearbyAvailabilityQuerySchema',
+      (input: object) => nearbyAvailabilityQuerySchema.safeParse({ date: '2030-01-15', ...input }),
+    ],
+  ] as const;
+
+  for (const [name, parse] of schemas) {
+    for (const field of ['city', 'state']) {
+      it(`${name} refuses a NUL or other control character in ${field}`, () => {
+        expect(parse({ [field]: '\u0000' }).success).toBe(false);
+        expect(parse({ [field]: 'a\u0000b' }).success).toBe(false);
+        expect(parse({ [field]: 'Au\u0007stin' }).success).toBe(false);
+      });
+
+      it(`${name} strips a bidi control from ${field}, as every free-text field does`, () => {
+        expect(parse({ [field]: 'Austin‮' }).data).toMatchObject({ [field]: 'Austin' });
+      });
+    }
+
+    it(`${name} accepts a real city and state`, () => {
+      expect(parse({ city: 'Austin', state: 'TX' }).data).toMatchObject({
+        city: 'Austin',
+        state: 'TX',
+      });
+    });
+  }
 });
