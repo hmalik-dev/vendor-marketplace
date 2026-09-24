@@ -910,3 +910,49 @@ describe('offers only the tag groups the searched category can answer', () => {
     expect(chips.indexOf('Languages')).toBeLessThan(chips.indexOf('Cultural'));
   });
 });
+
+describe('RefineBar mobile sheet', () => {
+  afterEach(() => cleanup());
+
+  /*
+   * VEN-692. Below 640px a chip opens as a modal sheet, and `RefineBar`
+   * re-renders whenever the shell's search settles. The sheet's focus trap used
+   * to rebuild on every render and pull focus back to the first control.
+   */
+  it('keeps focus on the control the user moved to across a re-render', async () => {
+    window.matchMedia = ((query: string) =>
+      ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addEventListener() {},
+        removeEventListener() {},
+        addListener() {},
+        removeListener() {},
+        dispatchEvent: () => false,
+      }) as unknown as MediaQueryList) as typeof window.matchMedia;
+
+    const user = userEvent.setup();
+    const bar = () => (
+      <RefineBar
+        state={state()}
+        setState={vi.fn()}
+        clearRefinements={vi.fn()}
+        tags={[]}
+        facets={[]}
+      />
+    );
+    const { rerender } = render(bar());
+
+    await user.click(screen.getByRole('button', { name: 'Price' }));
+
+    const min = screen.getByLabelText('Min');
+
+    min.focus();
+    expect(document.activeElement).toBe(min);
+
+    rerender(bar());
+
+    expect(document.activeElement).toBe(min);
+  });
+});

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, type RefObject } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 
 /** Everything focusable, in DOM order. `[hidden]` and disabled are excluded. */
 const FOCUSABLE =
@@ -62,6 +62,19 @@ export interface ModalSheetOptions {
  * This exists for the one case that cannot portal.
  */
 export function useModalSheet({ open, onClose, panel, trigger }: ModalSheetOptions): void {
+  /*
+   * `onClose` is read through a ref: callers pass a fresh closure on every
+   * render, and depending on it rebuilt the trap each time the parent
+   * re-rendered — the cleanup moved focus to the opener and the setup moved it
+   * to the panel's first control, so a background search settling pulled focus
+   * off the control the user had moved to (VEN-692).
+   */
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   useEffect(() => {
     if (!open) {
       return;
@@ -99,7 +112,7 @@ export function useModalSheet({ open, onClose, panel, trigger }: ModalSheetOptio
 
       if (event.key === 'Escape') {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -135,5 +148,5 @@ export function useModalSheet({ open, onClose, panel, trigger }: ModalSheetOptio
       document.removeEventListener('keydown', onKeyDown);
       opener?.focus();
     };
-  }, [open, onClose, panel, trigger]);
+  }, [open, panel, trigger]);
 }
