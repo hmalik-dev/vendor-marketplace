@@ -41,12 +41,28 @@ const PERSISTED_TOKENS: readonly (readonly [pattern: string, reason: string])[] 
   [`${W}_retirement`, 'advisory lock key shared with the release still serving'],
   [`app_is_${W}`, 'row-level-security function created by migrations'],
   [`messages_${W}_select`, 'row-level-security policy created by migrations'],
-  [`app\\.${W}(?:_role_grant)?`, 'GUCs the database policies read'],
+  [`app\\.${W}(?:_role_grant)?\\b`, 'GUCs the database policies read'],
   [`Former ${W}`, 'data value closure wrote into first_name'],
-  [`/admin/${W}s`, 'the retired console path, redirected to /admin/admins'],
+  [
+    `through the ${W} grant path`,
+    'exception text raised by the role-change trigger (migration 0069)',
+  ],
 ];
 
-const TOKENS = new RegExp(PERSISTED_TOKENS.map(([pattern]) => pattern).join('|'), 'gi');
+/**
+ * The retired console path, where a redirect or a test that pins it lives. It
+ * is not a persisted identifier, so it is stripped only in these files.
+ */
+const LEGACY_PATH = `/admin/${W}s`;
+const LEGACY_PATH_FILES: readonly string[] = [
+  'apps/web/src/config/legacy-redirects.ts',
+  'apps/web/src/config/legacy-redirects.test.ts',
+  'apps/web/src/app/route-parity-ledger.test.ts',
+];
+
+// Case-sensitive: the stored identifiers are lowercase and the env names uppercase,
+// so a renamed code name such as `OPERATOR_ALERT_KINDS` or `app.operatorAlerts` still fails.
+const TOKENS = new RegExp(PERSISTED_TOKENS.map(([pattern]) => pattern).join('|'), 'g');
 
 interface TrackedFile {
   path: string;
@@ -58,7 +74,10 @@ function isAllowed(path: string): boolean {
 }
 
 function names(file: TrackedFile): boolean {
-  return NEEDLE.test(file.path) || NEEDLE.test(file.text.replace(TOKENS, ''));
+  const text = LEGACY_PATH_FILES.includes(file.path)
+    ? file.text.replaceAll(LEGACY_PATH, '')
+    : file.text;
+  return NEEDLE.test(file.path) || NEEDLE.test(text.replace(TOKENS, ''));
 }
 
 /** Every tracked file outside the allow-list that still names the retired word. */
@@ -113,6 +132,33 @@ describe('the repo says Admin, never the retired word', () => {
       text: `${W}_granted is written when an ${W} is added\n`,
     };
     expect(violations([planted])).toEqual([planted.path]);
+  });
+
+  it('flags a renamed code name that only starts like a persisted identifier', () => {
+    const decorator: TrackedFile = { path: 'apps/api/src/a.ts', text: `app.${W}Alerts\n` };
+    const constant: TrackedFile = {
+      path: 'apps/api/src/b.ts',
+      text: `export const ${W.toUpperCase()}_ALERT_KINDS = []\n`,
+    };
+    const path: TrackedFile = { path: 'apps/web/src/c.tsx', text: `href: '/admin/${W}s'\n` };
+    const name: TrackedFile = {
+      path: 'apps/api/src/d.ts',
+      text: `'Former ${W[0]!.toUpperCase()}${W.slice(1)}'\n`,
+    };
+    expect(violations([decorator, constant, path, name])).toEqual([
+      decorator.path,
+      constant.path,
+      path.path,
+      name.path,
+    ]);
+  });
+
+  it('lets the redirect files name the retired console path', () => {
+    const redirect: TrackedFile = {
+      path: 'apps/web/src/config/legacy-redirects.ts',
+      text: `source: '/admin/${W}s'\n`,
+    };
+    expect(violations([redirect])).toEqual([]);
   });
 
   it('lets a persisted identifier stand on its own', () => {

@@ -32,7 +32,7 @@ export function closedAccountFields(
 > {
   return {
     email: `closed+${user.id}@invalid`,
-    firstName: `Former ${user.role === 'admin' ? 'admin' : user.role}`,
+    firstName: user.role === 'admin' ? 'Former operator' : `Former ${user.role}`,
     lastName: '',
     phone: null,
     avatarUrl: null,

@@ -171,7 +171,16 @@ export function extractRulingTable(markdown: string): Map<string, string> {
 }
 
 const FRAMED_LITERALS = extractFramedLiterals(sweepLedger);
+// VEN-696 renamed `/admin/operators` to `/admin/admins`; the README row (design/, not edited by a
+// ticket) still names the old path until a design pass, so its ruling carries over.
+const RENAMED_ROUTES: readonly (readonly [from: string, to: string])[] = [
+  ['/admin/operators', '/admin/admins'],
+];
 const RULED_ROUTES = extractRulingTable(readme);
+for (const [from, to] of RENAMED_ROUTES) {
+  const ruling = RULED_ROUTES.get(from);
+  if (ruling !== undefined && !RULED_ROUTES.has(to)) RULED_ROUTES.set(to, ruling);
+}
 
 // ---------------------------------------------------------------------------
 // The guard itself.

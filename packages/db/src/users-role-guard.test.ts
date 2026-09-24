@@ -37,7 +37,7 @@ describe('users.role guard', () => {
       `UPDATE users SET role = 'admin' WHERE id = '${USER}'`,
     );
 
-    expect(refusal).toContain('users.role can only change through the admin grant path');
+    expect(refusal).toContain('users.role can only change through the operator grant path');
     expect(await roleOf()).toBe('customer');
   });
 
