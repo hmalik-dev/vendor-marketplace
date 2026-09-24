@@ -33,7 +33,7 @@ const { default: ActivityPage } = await import('./activity/page');
 /** 31 rows at 15 a page is three pages; page 999 has none of them. */
 const PAST_END = { items: [], total: 31, page: 999, pageSize: 15, widenings: [] };
 
-type Params = Record<string, string>;
+type Params = Record<string, string | undefined>;
 
 afterEach(() => {
   cleanup();
