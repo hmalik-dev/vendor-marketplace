@@ -213,7 +213,9 @@ export async function applyDeliveryEvent(
 export const SEND_CLOSED_FAILURE_REASON = 'Email sending was closed for the day; not attempted';
 
 /** `true` for the rows that count towards `EMAIL_RETRY_MAX_ATTEMPTS`: every one but a refusal. */
-const countsAsAttempt = sql`not (${emailDeliveries.outcome} = 'failed' and ${emailDeliveries.providerMessageId} is null and ${emailDeliveries.failureReason} = ${SEND_CLOSED_FAILURE_REASON})`;
+function countsAsAttempt() {
+  return sql`not (${emailDeliveries.outcome} = 'failed' and ${emailDeliveries.providerMessageId} is null and ${emailDeliveries.failureReason} = ${SEND_CLOSED_FAILURE_REASON})`;
+}
 
 /**
  * How many attempts a notification has made, whatever their outcome and not
@@ -225,7 +227,7 @@ export async function emailAttemptHistory(
 ): Promise<{ attempts: number; firstSentAt: Date | null }> {
   const [row] = await db
     .select({
-      attempts: count(sql`case when ${countsAsAttempt} then 1 end`),
+      attempts: count(sql`case when ${countsAsAttempt()} then 1 end`),
       firstSentAt: min(emailDeliveries.sentAt),
     })
     .from(emailDeliveries)
