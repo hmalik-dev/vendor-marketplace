@@ -30,19 +30,15 @@ const app = await buildServer({
   realtimeListen: listener.listen,
 });
 
-let failed = 0;
-
 try {
   const result = await requestTaxCapabilityForVendors(db, app.stripe, (line) =>
     process.stdout.write(`${line}\n`),
   );
 
-  failed = result.failed;
+  if (result.failed > 0) {
+    process.exitCode = 1;
+  }
 } finally {
   await app.close();
   await Promise.all([client.end(), listener.close()]);
-}
-
-if (failed > 0) {
-  process.exitCode = 1;
 }

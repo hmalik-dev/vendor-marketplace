@@ -52,6 +52,7 @@ const PAID_DASHBOARD = {
     heldCount: 1,
     debtOutstandingCents: 0,
     debtRecoveredCents: 0,
+    backupWithholding: false,
   },
 };
 
@@ -65,6 +66,7 @@ const OWED_NOTHING = {
     heldCount: 0,
     debtOutstandingCents: 0,
     debtRecoveredCents: 0,
+    backupWithholding: false,
   },
 };
 
