@@ -150,7 +150,7 @@ export function CloseAccountForm({
   }
 
   return (
-    <div className="flex max-w-sm flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-sm flex-col gap-4">
       {problem ? (
         <Banner status="failed" role="alert">
           {problem}
