@@ -8,7 +8,7 @@ export interface TaxYearFigures {
   stripeAccountId: string;
   /** Box 1a: the customers' full charges, before commission, refunds, netting and fees. */
   grossCents: number;
-  /** Boxes 5a-5l: `grossCents` split by the UTC month of `paid_at`. */
+  /** Boxes 5a-5l: `grossCents` split by the UTC month of the settlement. */
   monthlyGrossCents: number[];
   /** Box 3: the number of settled bookings. */
   transactionCount: number;
@@ -56,7 +56,7 @@ export function foldTaxYearFigures(rows: readonly SettledBookingRow[]): TaxYearF
     };
 
     figures.grossCents += row.totalAmountCents;
-    figures.monthlyGrossCents[row.paidAt.getUTCMonth()]! += row.totalAmountCents;
+    figures.monthlyGrossCents[row.settledAt.getUTCMonth()]! += row.totalAmountCents;
     figures.transactionCount += 1;
     byVendor.set(row.vendorId, figures);
   }
