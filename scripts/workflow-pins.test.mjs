@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const WORKFLOWS = path.join(ROOT, '.github', 'workflows');
+const ACTIONS = path.join(ROOT, '.github', 'actions');
 
 const USES = /^\s*(?:-\s+)?uses:\s*(\S+)/;
 const PINNED = /^[^@\s]+@[0-9a-f]{40}$/;
@@ -58,6 +59,22 @@ test('every action in every workflow is pinned to a commit SHA', () => {
   assert.ok(files.length >= 3, `expected the workflows to be found, got ${files.length}`);
   for (const file of files) {
     const source = readFileSync(path.join(WORKFLOWS, file), 'utf8');
+    assert.deepEqual(unpinnedActions(source), [], `${file} has actions not pinned to a commit SHA`);
+  }
+});
+
+// A local composite action's own `uses:` run beside the same secrets as a
+// workflow's, and are exempt from the check above only as *references*.
+test('every action inside a local composite action is pinned to a commit SHA', () => {
+  const dirs = readdirSync(ACTIONS, { withFileTypes: true }).filter((d) => d.isDirectory());
+  const files = dirs.flatMap((d) =>
+    readdirSync(path.join(ACTIONS, d.name))
+      .filter((f) => /^action\.ya?ml$/.test(f))
+      .map((f) => path.join(d.name, f)),
+  );
+  assert.ok(files.length >= 1, 'expected the local composite actions to be found');
+  for (const file of files) {
+    const source = readFileSync(path.join(ACTIONS, file), 'utf8');
     assert.deepEqual(unpinnedActions(source), [], `${file} has actions not pinned to a commit SHA`);
   }
 });

@@ -48,10 +48,12 @@ describe('the repository agrees on one Node floor', () => {
   });
 
   it('has CI take its Node version from .nvmrc rather than a second literal', () => {
+    // The setup steps are one composite action shared by every CI job (VEN-716).
+    const setup = read('.github/actions/setup/action.yml');
     const workflow = read('.github/workflows/ci.yml');
 
-    expect(workflow).toContain('node-version-file: .nvmrc');
-    expect(workflow).not.toMatch(/^\s*node-version:/m);
+    expect(setup).toContain('node-version-file: .nvmrc');
+    expect(`${setup}${workflow}`).not.toMatch(/^\s*node-version:/m);
   });
 
   it('builds the API image on a Node major at or above the floor', () => {
