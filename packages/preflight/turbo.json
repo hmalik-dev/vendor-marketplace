@@ -20,6 +20,7 @@
         "$TURBO_ROOT$/docker-compose.yml",
         "$TURBO_ROOT$/turbo.json",
         "$TURBO_ROOT$/.github/workflows/ci.yml",
+        "$TURBO_ROOT$/.github/actions/setup/action.yml",
         "$TURBO_ROOT$/apps/api/Dockerfile",
         "$TURBO_ROOT$/apps/web/package.json"
       ]
