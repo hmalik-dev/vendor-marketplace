@@ -10,6 +10,10 @@ const clearSessionToken = vi.fn();
 vi.mock('@/lib/use-api', () => ({ useApi: () => call }));
 vi.mock('@/lib/auth/auth-requests', () => ({ signOut: () => signOut() }));
 vi.mock('@/lib/auth/client', () => ({ clearSessionToken: () => clearSessionToken() }));
+const reportSwallowedError = vi.fn();
+vi.mock('@/lib/report-error', () => ({
+  reportSwallowedError: (context: string, error: unknown) => reportSwallowedError(context, error),
+}));
 
 const { CloseAccountForm } = await import('./close-account-form');
 
@@ -120,12 +124,17 @@ describe('CloseAccountForm (VEN-680)', () => {
   });
 
   it('still leaves for the farewell when the provider cannot be told to sign out', async () => {
-    signOut.mockRejectedValue(new Error('Could not sign out'));
+    const failure = new Error('Could not sign out');
+    signOut.mockRejectedValue(failure);
     const user = await reachTheConfirmation();
     await user.type(screen.getByLabelText('Type your email address to confirm'), EMAIL);
     await user.type(screen.getByLabelText('Code from the email'), '123456');
     await user.click(screen.getByRole('button', { name: 'Close my account' }));
 
+    expect(reportSwallowedError).toHaveBeenCalledExactlyOnceWith(
+      'account closure: signing the browser out failed',
+      failure,
+    );
     expect(clearSessionToken).toHaveBeenCalledOnce();
     expect(assign).toHaveBeenCalledExactlyOnceWith('/account/closed');
   });

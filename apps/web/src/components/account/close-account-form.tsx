@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { signOut } from '@/lib/auth/auth-requests';
 import { clearSessionToken } from '@/lib/auth/client';
 import { formatEventDate } from '@/lib/booking-entries';
+import { reportSwallowedError } from '@/lib/report-error';
 import { useApi } from '@/lib/use-api';
 import { userFacingError } from '@/lib/user-facing-error';
 
@@ -141,7 +142,9 @@ export function CloseAccountForm({
     }
 
     // Closed: end the browser's session too. A sign-out that cannot reach the provider changes nothing, because the account no longer resolves.
-    await signOut().catch(() => undefined);
+    await signOut().catch((error: unknown) =>
+      reportSwallowedError('account closure: signing the browser out failed', error),
+    );
     clearSessionToken();
     window.location.assign(ACCOUNT_CLOSED_PATH);
   }
