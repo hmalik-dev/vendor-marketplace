@@ -17,10 +17,10 @@ export const metadata: Metadata = {
  *
  * **There is no banner, no preferences modal and no stored consent state**, and
  * that is a statement about this codebase rather than a shortcut: the tree sets
- * no cookies of its own and loads no advertising or session-recording script; the
+ * no cookies beyond the revoke marker (below) and loads no advertising or session-recording script; the
  * one measuring script is Vercel Web Analytics, which is cookieless and named in
- * the notice. The only cookie is the identity provider's session cookie, which is strictly necessary
- * and needs no consent. A banner over nothing is theatre, and
+ * the notice. The cookies are the identity provider's session cookie and the short-lived
+ * `session-revoke-marker` (VEN-713), both strictly necessary and needing no consent. A banner over nothing is theatre, and
  * `no-cookie-consent.test.ts` asserts the absence rather than leaving it to be
  * noticed. If anything that stores data on the device or follows a visitor
  * between sites is ever added, this page changes first and the banner arrives

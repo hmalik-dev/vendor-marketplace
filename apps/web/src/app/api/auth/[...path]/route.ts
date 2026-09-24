@@ -10,6 +10,7 @@ import {
 import {
   authConfigured,
   forgetSessionsFor,
+  markSessionsRevoked,
   mintedUserIdForCaller,
   neonAuth,
 } from '@/lib/auth/server';
@@ -829,6 +830,7 @@ async function forwardChangePassword(
 
   if (response.ok) {
     forgetSessionsFor(userId);
+    await markSessionsRevoked();
   }
 
   return response;
@@ -996,6 +998,7 @@ async function forwardListSessions(request: NextRequest): Promise<Response> {
 async function afterSessionsEnded(userId: string): Promise<void> {
   forgetSessionsFor(userId);
   await invalidateSessionsAtApi(userId);
+  await markSessionsRevoked();
 }
 
 function sessionIdIn(body: string): string | null {
