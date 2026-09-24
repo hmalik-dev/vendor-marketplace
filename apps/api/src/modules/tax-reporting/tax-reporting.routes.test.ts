@@ -505,6 +505,24 @@ describe('GET /admin/tax/1099-k.csv', () => {
       expect(total).toBe('Total,,400.00,200.00,50.00,0.00,0.00,150.00,');
     });
 
+    it('shows the backup withholding as its own column and subtracts it from what was transferred (VEN-723)', async () => {
+      const customerId = await signInAs(harness, CUSTOMER);
+      const vendor = await vendorProfile(VENDOR, 'acct_tax_main');
+      // A $1,000 share withheld at 24%: $240.00 kept for the IRS, $760.00 sent.
+      await booking(customerId, vendor.id, {
+        totalCents: usd(1136),
+        vendorPayoutCents: usd(1000),
+        backupWithheldCents: usd(240),
+        paidAt: '2026-06-01T10:00:00Z',
+      });
+
+      const [row, total] = (await statement(VENDOR, 2026)).body.trimEnd().split('\n').slice(1);
+
+      // 1136.00 charged - 0 refunded - 136.00 kept by Orla = the 1000.00 share; less 240.00 withheld = 760.00.
+      expect(row).toMatch(/,1136\.00,0\.00,136\.00,0\.00,240\.00,760\.00,06\/01\/2026$/);
+      expect(total).toBe('Total,,1136.00,0.00,136.00,0.00,240.00,760.00,');
+    });
+
     it('carries the same gross as the admin 1099-K file for the same vendor and year', async () => {
       await seedFixture();
       await signInAs(harness, ADMIN, true);
