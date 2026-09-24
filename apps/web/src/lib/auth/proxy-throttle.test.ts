@@ -3,6 +3,7 @@ import {
   callerAddress,
   chargeAddress,
   chargeCaller,
+  chargeRequest,
   isAddressThrottled,
   isSignInRefused,
   isThrottled,
@@ -357,5 +358,78 @@ describe('the shared counter', () => {
     await chargeCaller('1.2.3.4', ['email-otp', 'verify-email']);
 
     expect(seen.calls).toEqual([]);
+  });
+});
+
+describe('reset and code requests per account address and caller (VEN-718)', () => {
+  const RESET = ['email-otp', 'request-password-reset'];
+
+  beforeEach(() => {
+    vi.stubEnv('WEB_TIER_KEY', '');
+    resetThrottle();
+  });
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  async function ask(caller: string, times: number, path = RESET) {
+    const answers: boolean[] = [];
+    for (let i = 0; i < times; i++)
+      answers.push(await chargeRequest('owner@x.test', caller, path, 1_000));
+    return answers;
+  }
+
+  it('lets the owner from another caller in after a stranger spent the address budget, and still refuses the stranger', async () => {
+    expect(await ask('1.1.1.1', 5)).toEqual([false, false, false, false, false]);
+
+    expect(await ask('1.1.1.1', 1)).toEqual([true]);
+    expect(await ask('2.2.2.2', 1)).toEqual([false]);
+  });
+
+  it('refuses a caller that already used its own request while the address budget is spent', async () => {
+    for (let i = 0; i < 5; i++) await ask(`9.9.9.${i}`, 1);
+    await ask('2.2.2.2', 1);
+
+    expect(await ask('2.2.2.2', 1)).toEqual([true]);
+    expect(await ask('3.3.3.3', 1)).toEqual([false]);
+  });
+
+  it('keeps each path and each address to its own budget', async () => {
+    await ask('1.1.1.1', 6);
+
+    expect(await ask('1.1.1.1', 1, VERIFY)).toEqual([false]);
+    expect(await chargeRequest('other@x.test', '1.1.1.1', RESET, 1_000)).toBe(false);
+  });
+
+  it('refuses even a caller with no request of its own once fifty came from many callers', async () => {
+    for (let i = 0; i < 50; i++) await ask(`10.0.0.${i}`, 1);
+
+    expect(await ask('10.9.9.9', 1)).toEqual([true]);
+  });
+
+  it('holds a code check to ten guesses per address however many callers ask', async () => {
+    for (let i = 0; i < 10; i++) await ask(`10.0.0.${i}`, 1, VERIFY);
+
+    expect(await ask('10.9.9.9', 1, VERIFY)).toEqual([true]);
+    expect(await ask('10.9.9.9', 1, ['email-otp', 'reset-password'])).toEqual([false]);
+  });
+
+  it('refuses a request whose own charge went over the ceiling, as a parallel burst would', async () => {
+    const results = await Promise.all(
+      Array.from({ length: 12 }, (_, i) =>
+        chargeRequest('owner@x.test', `10.1.0.${i}`, VERIFY, 1_000),
+      ),
+    );
+
+    expect(results.filter((refused) => !refused)).toHaveLength(10);
+  });
+
+  it('counts an IPv6 /64 as one caller and forgives after ten minutes', async () => {
+    for (let i = 1; i <= 5; i++)
+      await chargeRequest('owner@x.test', `2001:db8::${i}`, RESET, 1_000);
+
+    expect(await chargeRequest('owner@x.test', '2001:db8::ffff', RESET, 1_000)).toBe(true);
+    expect(await chargeRequest('owner@x.test', '2001:db8::ffff', RESET, 1_000 + 600_000)).toBe(
+      false,
+    );
   });
 });
