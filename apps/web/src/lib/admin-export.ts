@@ -1,3 +1,4 @@
+import 'server-only';
 import { MAX_PAGE_SIZE, toDateString, type AdminExport } from '@vendor-marketplace/shared';
 import type { NextRequest } from 'next/server';
 import { recordAdminExport } from '@/lib/admin-export-audit';
