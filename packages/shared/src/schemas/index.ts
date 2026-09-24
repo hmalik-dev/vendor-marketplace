@@ -2091,8 +2091,8 @@ export const vendorSearchQuerySchema = z
      * question the platform can answer.
      */
     category: slugSchema.optional(),
-    city: z.string().trim().max(MAX_NAME_LENGTH).optional(),
-    state: z.string().trim().max(MAX_NAME_LENGTH).optional(),
+    city: freeText().max(MAX_NAME_LENGTH).optional(),
+    state: freeText().max(MAX_NAME_LENGTH).optional(),
     /**
      * Bounded above as well as below. Without the cap a pasted
      * `?minPriceCents=2147483648` passed validation, reached Postgres and
@@ -2197,8 +2197,8 @@ export type VendorCard = z.infer<typeof vendorCardSchema>;
  */
 export const nearbyAvailabilityQuerySchema = z.object({
   category: slugSchema.optional(),
-  city: z.string().trim().max(MAX_NAME_LENGTH).optional(),
-  state: z.string().trim().max(MAX_NAME_LENGTH).optional(),
+  city: freeText().max(MAX_NAME_LENGTH).optional(),
+  state: freeText().max(MAX_NAME_LENGTH).optional(),
   /** The date that came back empty. Required — this question needs an anchor. */
   date: calendarDateSchema,
   /** Days either side to consider. Never a magic number in the DAO. */

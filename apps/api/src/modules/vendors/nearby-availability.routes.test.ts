@@ -405,4 +405,17 @@ describe('GET /vendors/availability/nearby', () => {
 
     expect(response.statusCode).toBe(400);
   });
+
+  it.each(['city=a%00b', 'state=%00'])(
+    'refuses a control character (%s) with a 400 (VEN-689)',
+    async (query) => {
+      const response = await harness.app.inject({
+        method: 'GET',
+        url: `/v1/vendors/availability/nearby?date=${dayFromToday(10)}&${query}`,
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toBe('VALIDATION_ERROR');
+    },
+  );
 });

@@ -27,6 +27,12 @@ stranger; gate 2 goes through `requireParticipant`, and `findRequests` returns
 divergence: widening either set, or adding a status to
 `CONTACT_DISCLOSING_BOOKING_REQUEST_STATUSES`, changes only one of them.
 
+**VEN-689 (2026-09-24):** `findRelationship` now calls the shared
+`disclosesCustomerContact`, so the request-status set is one definition for
+both gates (audited: no widening, `['accepted']` either way). The booking-status
+half of gate 1 (`confirmed`/`completed`/`disputed`) and its permanence remain
+gate-1-only.
+
 **How to apply:** any diff touching `CONTACT_DISCLOSING_BOOKING_REQUEST_STATUSES`,
 `ACCEPTED_REQUEST_STATUSES`, `findRelationship`, or the `customer` object in
 `bookingRequestDetailSchema` must be checked against **both** call sites, not the
