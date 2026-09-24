@@ -1,21 +1,12 @@
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const requireCurrentUser = vi.fn();
-const requireRole = vi.fn();
 const getPublicVendorProfile = vi.fn();
 const getPublicVendorAvailability = vi.fn();
-const getVendorSlugSuccessor = vi.fn();
-
-vi.mock('@/lib/current-user', () => ({
-  requireCurrentUser: (returnTo?: string) => requireCurrentUser(returnTo),
-  requireRole: (role: string, returnTo?: string) => requireRole(role, returnTo),
-}));
 
 vi.mock('@/lib/vendor-data', () => ({
   getPublicVendorProfile: (slug: string) => getPublicVendorProfile(slug),
   getPublicVendorAvailability: (slug: string) => getPublicVendorAvailability(slug),
-  getVendorSlugSuccessor: (slug: string) => getVendorSlugSuccessor(slug),
 }));
 
 vi.mock('@/components/booking/booking-request-screen', () => ({
@@ -36,79 +27,40 @@ const VENDOR = {
   packages: [],
 };
 
-function props(): Parameters<typeof BookingRequestPage>[0] {
-  return {
-    params: Promise.resolve({ slug: 'sunlit-studio' }),
-    searchParams: Promise.resolve({}),
-  };
-}
-
-describe('BookingRequestPage role gate', () => {
+/*
+ * VEN-715: the customer gate (#401), the 404 and the 308 for a changed slug
+ * (VEN-648) moved to `layout.tsx` (`layout.test.tsx`), above the loading
+ * boundary. The page draws the form for a vendor it is given.
+ */
+describe('BookingRequestPage', () => {
   beforeEach(() => {
     getPublicVendorProfile.mockResolvedValue(VENDOR);
     getPublicVendorAvailability.mockResolvedValue([]);
-    requireRole.mockResolvedValue({ id: 'user-1', role: 'customer' });
   });
 
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  /*
-   * #401: the page bounced `role === 'vendor'` by hand and let everything else
-   * through, so an admin rendered the two-step form and only learned the API
-   * refuses them — `requireRole('customer')` — when the submit answered 403.
-   * The gate has to be the same one the API applies, not a subset of it.
-   */
-  it('asks for the role the API requires, not just "not a vendor"', async () => {
-    await BookingRequestPage(props());
-
-    expect(requireRole).toHaveBeenCalledWith('customer', '/vendors/sunlit-studio/request');
-    expect(requireCurrentUser).not.toHaveBeenCalled();
-  });
-
-  /*
-   * Named for what it measures: the guard is awaited *before* the page does
-   * any of its own work, so a role it turns away never reaches the form or the
-   * reads behind it. Which roles those are is `requireRole`'s own test.
-   */
-  it('runs the guard before anything the page would render', async () => {
-    requireRole.mockRejectedValue(new Error('NEXT_REDIRECT:/admin'));
-
-    await expect(BookingRequestPage(props())).rejects.toThrow('NEXT_REDIRECT:/admin');
-    expect(getPublicVendorAvailability).not.toHaveBeenCalled();
-  });
-
-  it('carries the chosen package and date through the sign-in round trip', async () => {
-    await BookingRequestPage({
+  it('seeds the form from the vendor’s own package and the calendar', async () => {
+    const element = await BookingRequestPage({
       params: Promise.resolve({ slug: 'sunlit-studio' }),
-      searchParams: Promise.resolve({ package: 'pkg-1', date: '2026-12-25' }),
+      searchParams: Promise.resolve({}),
     });
 
-    expect(requireRole).toHaveBeenCalledWith(
-      'customer',
-      '/vendors/sunlit-studio/request?package=pkg-1&date=2026-12-25',
-    );
-  });
-});
-
-describe('BookingRequestPage on a slug the vendor has since changed (VEN-648)', () => {
-  afterEach(() => {
-    vi.clearAllMocks();
+    expect(element.props).toMatchObject({ vendorId: 'vendor-1', vendorSlug: 'sunlit-studio' });
+    expect(getPublicVendorAvailability).toHaveBeenCalledWith('sunlit-studio');
   });
 
-  it('redirects permanently to the current slug, keeping the customer’s choices', async () => {
+  it('is a bug, not a 404, when the layout let a missing vendor through', async () => {
     getPublicVendorProfile.mockResolvedValue(null);
-    getVendorSlugSuccessor.mockResolvedValue('moonlit-studio');
 
-    const refusal = await BookingRequestPage({
-      params: Promise.resolve({ slug: 'sunlit-studio' }),
-      searchParams: Promise.resolve({ package: 'pkg-1', date: '2027-05-01' }),
-    }).catch((error: unknown) => error);
-
-    expect((refusal as { digest?: string }).digest).toBe(
-      'NEXT_REDIRECT;replace;/vendors/moonlit-studio/request?package=pkg-1&date=2027-05-01;308;',
-    );
-    expect(requireRole).not.toHaveBeenCalled();
+    await expect(
+      BookingRequestPage({
+        params: Promise.resolve({ slug: 'gone' }),
+        searchParams: Promise.resolve({}),
+      }),
+    ).rejects.toThrow('Vendor vanished between its layout and its page');
+    expect(getPublicVendorAvailability).not.toHaveBeenCalled();
   });
 });

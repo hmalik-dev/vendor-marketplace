@@ -1,10 +1,8 @@
 import type { Metadata } from 'next';
-import { notFound, redirect } from 'next/navigation';
-import { pageTitle, uuidSchema } from '@vendor-marketplace/shared';
+import { pageTitle } from '@vendor-marketplace/shared';
 import { BookingConfirmed } from '@/components/bookings/booking-confirmed';
-import { getBookingForRequest, getOwnBookingRequest } from '@/lib/customer-data';
+import { acceptedRequest, acceptedRequestId, readBookingForRequest } from '@/lib/booking-route';
 import { getOwnConversations } from '@/lib/messaging-data';
-import { requireRole } from '@/lib/current-user';
 
 export const metadata: Metadata = {
   title: pageTitle('Booking confirmed'),
@@ -29,30 +27,18 @@ interface PageProps {
 export default async function BookingConfirmedPage({
   params,
 }: PageProps): Promise<React.ReactElement> {
-  await requireRole('customer');
-  const { requestId } = await params;
-
-  const parsed = uuidSchema.safeParse(requestId);
-  if (!parsed.success) {
-    notFound();
-  }
-
+  /*
+   * The 404 and the redirect back to checkout for an unpaid request live in
+   * `layout.tsx` beside this file, above the loading boundary (VEN-715).
+   */
+  const requestId = await acceptedRequestId({ params });
   const [booking, request] = await Promise.all([
-    getBookingForRequest(parsed.data),
-    getOwnBookingRequest(parsed.data),
+    readBookingForRequest(requestId),
+    acceptedRequest(requestId),
   ]);
 
-  if (!request) {
-    notFound();
-  }
-
-  /*
-   * Not paid yet. Back to checkout rather than a 404 — the customer is one step
-   * behind rather than somewhere they should not be, and the destination they
-   * wanted is the one they get sent to.
-   */
-  if (!booking) {
-    redirect(`/bookings/${parsed.data}/checkout`);
+  if (booking === null) {
+    throw new Error('Booking vanished between its layout and its page');
   }
 
   /*

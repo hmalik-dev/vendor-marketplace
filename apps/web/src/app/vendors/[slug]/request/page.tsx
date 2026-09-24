@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { notFound, permanentRedirect } from 'next/navigation';
 import {
   isUniversallyPastDate,
   pageTitle,
@@ -8,13 +7,8 @@ import {
   type AvailabilityStatus,
 } from '@vendor-marketplace/shared';
 import { BookingRequestScreen } from '@/components/booking/booking-request-screen';
-import { requireRole } from '@/lib/current-user';
 import { parseGuestCountParam } from '@/lib/guest-count';
-import {
-  getPublicVendorAvailability,
-  getPublicVendorProfile,
-  getVendorSlugSuccessor,
-} from '@/lib/vendor-data';
+import { getPublicVendorAvailability, getPublicVendorProfile } from '@/lib/vendor-data';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -47,43 +41,16 @@ export default async function BookingRequestPage({
 }: PageProps): Promise<React.ReactElement> {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
 
-  /*
-   * Signing in comes back here, with the package and date the customer already
-   * chose in the rail — losing them meant starting the booking over.
-   */
-  const returnQuery = new URLSearchParams();
-  if (query.package) returnQuery.set('package', query.package);
-  if (query.date) returnQuery.set('date', query.date);
-  if (query.guests) returnQuery.set('guests', query.guests);
-  const returnSuffix = returnQuery.toString();
-
   const vendor = await getPublicVendorProfile(slug);
-  if (!vendor) {
-    // A slug the vendor has since changed, with the customer's choices kept (VEN-648).
-    const current = await getVendorSlugSuccessor(slug);
-
-    if (current !== null) {
-      permanentRedirect(`/vendors/${current}/request${returnSuffix ? `?${returnSuffix}` : ''}`);
-    }
-
-    notFound();
-  }
 
   /*
-   * The same gate the API applies, rather than a subset of it.
-   *
-   * This bounced `role === 'vendor'` by hand — right about vendors, who cannot
-   * request their own listing and have no customer identity to do it with, but
-   * silent about admins. `POST /booking-requests` is `requireRole('customer')`,
-   * so an admin rendered the two-step form, filled it, and learned on submit
-   * that they were never allowed to send it: a generic 403 after the work
-   * rather than a redirect before it (#401). `requireRole` sends each role to
-   * its own dashboard, so both land somewhere they can act.
+   * The 404, the 308 for a renamed slug and the customer gate are answered by
+   * `layout.tsx` beside this file, above the loading boundary (VEN-715), so a
+   * `null` here can only be a bug.
    */
-  await requireRole(
-    'customer',
-    `/vendors/${slug}/request${returnSuffix ? `?${returnSuffix}` : ''}`,
-  );
+  if (!vendor) {
+    throw new Error('Vendor vanished between its layout and its page');
+  }
 
   /*
    * The server's UTC day. It is only a seed: `BookingRequestScreen` re-anchors

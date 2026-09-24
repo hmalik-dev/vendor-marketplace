@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { notFound, permanentRedirect } from 'next/navigation';
 import {
   BRAND_NAME,
   addDays,
@@ -25,7 +24,6 @@ import {
   getPublicVendorAvailability,
   getPublicVendorProfile,
   getPublicVendorReviews,
-  getVendorSlugSuccessor,
   readOwnVendorProfileIdForChrome,
 } from '@/lib/vendor-data';
 
@@ -159,12 +157,9 @@ export default async function VendorProfilePage({
     together makes the page's worst case one deadline rather than the sum of
     two.
 
-    `Promise.all` rather than starting them and awaiting later, because
-    `notFound()` below throws: a read still in flight at that point would
-    reject with nobody listening. Awaiting all three first means every
-    rejection has a handler, and the 404 costs two reads whose results are
-    discarded — a page nobody can see is not worth a second round trip to
-    optimise.
+    `Promise.all` rather than starting them and awaiting later, so that every
+    rejection has a handler. The profile itself is already resolved: `layout.tsx`
+    read it to decide the 404, and `getPublicVendorProfile` is `cache()`d.
   */
   const [vendor, availability, reviews, viewerRole] = await Promise.all([
     getPublicVendorProfile(slug),
@@ -173,7 +168,7 @@ export default async function VendorProfilePage({
     /*
      * Which role is reading, not whether they may read: this page is public and
      * stays public. It decides only whether the rail's two CTAs are offered —
-     * both are `requireRole('customer')` at the API, so a vendor or an admin
+     * both are customer-only at the API, so a vendor or an admin
      * was being shown a pair of controls neither of them can use, and a
      * vendor's own storefront offered them against themselves.
      *
@@ -187,19 +182,12 @@ export default async function VendorProfilePage({
   ]);
 
   /*
-   * Missing, unpublished and deleted all arrive here as `null`, and all three
-   * get the designed 404 with its category recovery — a visitor's next step is
-   * the same in every case.
+   * Missing, unpublished, deleted and renamed slugs are answered by `layout.tsx`
+   * beside this file, above the loading boundary (VEN-715), so a `null` here can
+   * only be a bug.
    */
   if (!vendor) {
-    // A slug the vendor has since changed: its old links still lead there (VEN-648).
-    const current = await getVendorSlugSuccessor(slug);
-
-    if (current !== null) {
-      permanentRedirect(`/vendors/${current}`);
-    }
-
-    notFound();
+    throw new Error('Vendor vanished between its layout and its page');
   }
 
   /*
