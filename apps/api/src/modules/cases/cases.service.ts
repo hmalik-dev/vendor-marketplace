@@ -25,6 +25,7 @@ import { AppError, conflict, forbidden, notFound } from '../../lib/errors.js';
 import { insertAdminAction } from '../admin/admin.dao.js';
 import { fullName } from '../admin/admin.service.js';
 import {
+  earlyFraudWarningAlert,
   unmatchedDisputeAlert,
   type OperatorAlerts,
 } from '../operator-alerts/operator-alerts.service.js';
@@ -33,6 +34,7 @@ import {
   announceDisputeHold,
   disputeHoldAudience,
   placeDisputeHold,
+  settleLostChargeback,
   StaleBookingError,
   type BookingContext,
 } from '../payments/payments.service.js';
@@ -44,6 +46,7 @@ import {
   findBookingForDispute,
   findCaseBooking,
   findCaseByStripeDisputeId,
+  insertFraudWarningCase,
   findCaseResolutionState,
   findOpenCaseForConversation,
   findOpenChargebackCase,
@@ -391,7 +394,19 @@ export async function openChargebackCase(
   reference: string,
   now: Date,
 ): Promise<ChargebackOutcome> {
-  if (await findCaseByStripeDisputeId(deps.db, disputeId)) {
+  const existing = await findCaseByStripeDisputeId(deps.db, disputeId);
+
+  if (existing) {
+    /* A settlement that failed after the case was written is finished by the redelivery (VEN-645). */
+    if (existing.networkOutcome === 'lost' && existing.bookingId) {
+      await settleLostChargeback(
+        deps.bookings,
+        existing.bookingId,
+        (await retrieve()).amountCents,
+        now,
+      );
+    }
+
     return 'already-recorded';
   }
 
@@ -596,6 +611,15 @@ export async function openChargebackCase(
     await announceDisputeHold(deps.bookings, audience, 'network');
   }
 
+  /*
+   * Whether or not this delivery wrote the case: a delivery that wrote it and
+   * then failed here is redelivered into `already-recorded`, and the settlement
+   * is idempotent.
+   */
+  if (dispute.status === 'lost') {
+    await settleLostChargeback(deps.bookings, target.bookingId, dispute.amountCents, now);
+  }
+
   return written ? 'dispute-opened' : 'already-recorded';
 }
 
@@ -614,11 +638,21 @@ export async function openChargebackCase(
  * gone.
  */
 export async function recordChargebackOutcome(
-  deps: CaseDeps,
+  deps: Pick<ChargebackDeps, 'db' | 'log' | 'bookings'>,
   dispute: StripeDisputeSnapshot,
   now: Date,
 ): Promise<ChargebackOutcome> {
   const updated = await recordNetworkOutcome(deps.db, dispute.id, dispute.status, now);
+
+  /*
+   * A `lost` ruling is the one outcome that ends the booking's money (VEN-645):
+   * the customer is already whole and the platform has been debited. Every other
+   * outcome is recorded and left to an operator, as above. Idempotent, so a
+   * redelivered close settles nothing twice.
+   */
+  if (updated?.bookingId && dispute.status === 'lost') {
+    await settleLostChargeback(deps.bookings, updated.bookingId, dispute.amountCents, now);
+  }
 
   return updated ? 'dispute-recorded' : 'already-recorded';
 }
@@ -1007,4 +1041,67 @@ export async function readCaseConversation(
       pageSize,
     },
   };
+}
+
+/** What the early fraud warning handler did, for the webhook's response body. */
+export type FraudWarningOutcome = 'fraud-warning-opened' | 'fraud-warning-recorded' | 'ignored';
+
+/**
+ * A card issuer's early fraud warning opens a case and tells the operator
+ * (VEN-645).
+ *
+ * **Nothing is refunded and nothing is frozen** (D46): an early fraud warning is
+ * a signal, not a ruling. Auto-refunding on it would refund real customers whose
+ * charge the issuer merely flagged, and would forfeit the vendor's booking with
+ * no one having looked. The operator decides on the case, and a chargeback that
+ * follows takes the hold path above.
+ *
+ * One case per booking: Stripe redelivers, and a second warning on the same
+ * charge adds nothing an operator has not been told.
+ */
+export async function openFraudWarningCase(
+  deps: Pick<ChargebackDeps, 'db' | 'log' | 'bookings' | 'alerts' | 'deployEnv'>,
+  warning: { warningId: string; fraudType: string; paymentIntentId: string },
+  reference: string,
+): Promise<FraudWarningOutcome> {
+  if (
+    await isForeignEnvPaymentIntent(deps.bookings.stripe, warning.paymentIntentId, deps.deployEnv)
+  ) {
+    return 'ignored';
+  }
+
+  const target = await findBookingForDispute(deps.db, warning.paymentIntentId);
+
+  if (!target) {
+    deps.log.warn(
+      { warningId: warning.warningId, paymentIntentId: warning.paymentIntentId },
+      'Ignored an early fraud warning on a charge no booking here owns',
+    );
+    return 'ignored';
+  }
+
+  const written = await insertFraudWarningCase(deps.db, {
+    reference,
+    origin: 'fraud_warning',
+    message:
+      `A card issuer warned Stripe that this charge may be fraudulent ("${warning.fraudType}", warning ${warning.warningId}). ` +
+      'Nothing was refunded or frozen. Nobody typed this message; it is the platform recording a network event.',
+    senderUserId: target.customerId,
+    bookingId: target.bookingId,
+  });
+
+  if (!written) {
+    return 'fraud-warning-recorded';
+  }
+
+  deps.alerts?.dispatch(
+    earlyFraudWarningAlert({
+      caseId: written.id,
+      reference,
+      bookingId: target.bookingId,
+      fraudType: warning.fraudType,
+    }),
+  );
+
+  return 'fraud-warning-opened';
 }

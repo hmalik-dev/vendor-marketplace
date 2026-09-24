@@ -28,6 +28,7 @@ describe('case presentation', () => {
     expect(CASE_ARRIVAL.chargeback).toBe('Stripe webhook');
     /* The one the shipped ternary got wrong by falling through its else. */
     expect(CASE_ARRIVAL.user_report).toBe('Reported in the product');
+    expect(CASE_ARRIVAL.fraud_warning).toBe('Stripe Radar webhook');
   });
 
   it('gives every origin a distinct arrival line', () => {
