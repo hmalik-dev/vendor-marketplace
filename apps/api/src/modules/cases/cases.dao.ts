@@ -261,6 +261,7 @@ export interface CaseBookingProjection {
   platformFeeCents: number;
   vendorPayoutCents: number;
   vendorOwedCents: number;
+  vendorOwedRecoveredCents: number;
   payoutModel: PayoutModel;
   refundAmountCents: number | null;
   paidAt: Date | null;
@@ -295,6 +296,7 @@ export async function findCaseBooking(
       platformFeeCents: bookings.platformFeeCents,
       vendorPayoutCents: bookings.vendorPayoutCents,
       vendorOwedCents: bookings.vendorOwedCents,
+      vendorOwedRecoveredCents: bookings.vendorOwedRecoveredCents,
       payoutModel: bookings.payoutModel,
       refundAmountCents: bookings.refundAmountCents,
       paidAt: bookings.paidAt,

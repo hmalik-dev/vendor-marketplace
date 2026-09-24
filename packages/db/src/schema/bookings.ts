@@ -320,6 +320,17 @@ export const bookings = pgTable(
      */
     vendorOwedCents: integer('vendor_owed_cents').notNull().default(0),
     /**
+     * How much of `vendor_owed_cents` later payouts have already netted off
+     * (VEN-658). What is still outstanding is `vendor_owed_cents` less this.
+     */
+    vendorOwedRecoveredCents: integer('vendor_owed_recovered_cents').notNull().default(0),
+    /**
+     * What this booking's payout was reduced by to recover a vendor's debt from
+     * another booking (VEN-658). The transfer sent is `vendor_payout_cents` less
+     * this; the vendor's payouts view names it.
+     */
+    debtNettedCents: integer('debt_netted_cents').notNull().default(0),
+    /**
      * The customer's own words about the problem they reported, kept while the
      * complaint is open and cleared when it is resolved.
      *
@@ -471,6 +482,11 @@ export const bookings = pgTable(
     ),
     check('bookings_vendor_payout_cents_non_negative', sql`${table.vendorPayoutCents} >= 0`),
     check('bookings_vendor_owed_cents_non_negative', sql`${table.vendorOwedCents} >= 0`),
+    check(
+      'bookings_vendor_owed_recovered_cents_range',
+      sql`${table.vendorOwedRecoveredCents} >= 0 AND ${table.vendorOwedRecoveredCents} <= ${table.vendorOwedCents}`,
+    ),
+    check('bookings_debt_netted_cents_non_negative', sql`${table.debtNettedCents} >= 0`),
     check(
       'bookings_refund_amount_cents_range',
       sql`${table.refundAmountCents} IS NULL OR (${table.refundAmountCents} >= 0 AND ${table.refundAmountCents} <= ${table.totalAmountCents})`,

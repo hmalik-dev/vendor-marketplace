@@ -902,11 +902,13 @@ describe('the operations case queue (#431)', () => {
       expect(await bookingStatus(fixture.bookingId)).toBe('confirmed');
       expect(await bookingMoney(fixture.bookingId)).toMatchObject({
         vendorPayoutCents: 105_600,
-        vendorOwedCents: 105_600,
+        vendorOwedCents: 107_100,
       });
 
       const detail = await readCase((await readCases()).items[0]!.id);
-      expect(detail.booking?.vendorOwedCents).toBe(105_600);
+      /* The vendor's share plus Stripe's $15 dispute fee. */
+      expect(detail.booking?.vendorOwedCents).toBe(107_100);
+      expect(detail.booking?.vendorOwedRecoveredCents).toBe(0);
     });
 
     it('records a loss smaller than the payment as a debt and lifts the hold, instead of cancelling the event (VEN-645)', async () => {
@@ -928,7 +930,7 @@ describe('the operations case queue (#431)', () => {
       expect(await bookingStatus(fixture.bookingId)).toBe('confirmed');
       expect(await bookingMoney(fixture.bookingId)).toMatchObject({
         vendorPayoutCents: 105_600,
-        vendorOwedCents: 10_000,
+        vendorOwedCents: 11_500,
       });
     });
 
@@ -953,7 +955,7 @@ describe('the operations case queue (#431)', () => {
       ).toBe(200);
 
       expect(await bookingStatus(fixture.bookingId)).toBe('cancelled');
-      expect(await bookingMoney(fixture.bookingId)).toMatchObject({ vendorOwedCents: 105_600 });
+      expect(await bookingMoney(fixture.bookingId)).toMatchObject({ vendorOwedCents: 107_100 });
     });
 
     it('settles a chargeback that was already lost when the platform first heard of it, on redelivery too (VEN-645)', async () => {

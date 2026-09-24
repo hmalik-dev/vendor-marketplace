@@ -4,6 +4,7 @@ import {
   EXPIRY_HOLD_MAX_ATTEMPTS,
   EXPIRY_HOLD_SPACING_MS,
   MIN_BOOKING_AMOUNT_CENTS,
+  STRIPE_DISPUTE_FEE_CENTS,
   BPS_PER_UNIT,
   calculateFees,
   feeRateToBps,
@@ -75,6 +76,7 @@ import {
   findBookingIdByTransferId,
   lockBookingById,
   lowerReleasedVendorPayout,
+  raiseVendorOwed,
   recordVendorOwed,
   zeroUnreleasedVendorPayout,
   findAnyBookingByRequest,
@@ -1435,12 +1437,29 @@ async function reverseOutstanding(
       );
     }
 
+    await owePayoutRecoveredByNetting(context, booking, reversal.target);
+
     return false;
   }
 
   const outstanding = reversal.target - transfer.reversedCents;
 
   if (outstanding <= 0) {
+    return true;
+  }
+
+  /*
+   * A transfer carries the payout less what the sweep kept back to repay a lost
+   * chargeback (VEN-658), so it cannot be reversed for more than it holds; Stripe
+   * refuses an over-reversal and the booking could then never be cancelled. What
+   * it cannot give back was already spent on that other debt, so it is owed again.
+   */
+  const reversibleCents = transfer.amountCents - transfer.reversedCents;
+  const reverseCents = Math.min(outstanding, reversibleCents);
+
+  await owePayoutRecoveredByNetting(context, booking, outstanding - reverseCents);
+
+  if (reverseCents <= 0) {
     return true;
   }
 
@@ -1452,12 +1471,30 @@ async function reverseOutstanding(
   await underAttemptKey(context, reversal.paymentIntentId, reversal.scope, (attempt) =>
     context.stripe.reverseTransfer({
       transferId: transfer.transferId,
-      amountCents: outstanding,
+      amountCents: reverseCents,
       idempotencyKey: attempt === 0 ? reversal.scope : `${reversal.scope}_${attempt}`,
     }),
   );
 
   return true;
+}
+
+/**
+ * Records, as owed by the vendor, the part of a refund's clawback that the
+ * payout's transfer no longer holds because the sweep netted it off against a
+ * chargeback debt (VEN-658). Capped at what was netted, and set rather than
+ * added, so the retry of a reversal that half-landed records it once.
+ */
+async function owePayoutRecoveredByNetting(
+  context: BookingContext,
+  booking: BookingRow,
+  shortfallCents: number,
+): Promise<void> {
+  const owedCents = Math.min(shortfallCents, booking.debtNettedCents);
+
+  if (owedCents > 0) {
+    await raiseVendorOwed(context.db, booking.id, owedCents);
+  }
 }
 
 /**
@@ -2273,8 +2310,8 @@ const LOST_CHARGEBACK_REASON =
  *   them twice.
  * - **A payout already sent, or a loss smaller than the payment:** the vendor
  *   holds money the platform lost, so the amount they owe (never more than their
- *   share) is recorded on the booking for the console and for VEN-658's
- *   recovery. The booking stands, and a hold a partial loss placed is lifted,
+ *   share, plus Stripe's dispute fee) is recorded on the booking, and the
+ *   payout sweep keeps it back from their next transfers (VEN-658). The booking stands, and a hold a partial loss placed is lifted,
  *   because the event still happened.
  *
  * Idempotent under redelivery: the second run finds a zero payout, or an owed
@@ -2296,7 +2333,9 @@ export async function settleLostChargeback(
     const paid = locked.payoutReleasedAt !== null || locked.payoutModel === 'destination';
 
     if (paid || amountCents < locked.totalAmountCents) {
-      const owedCents = Math.min(amountCents, locked.vendorPayoutCents);
+      const shareCents = Math.min(amountCents, locked.vendorPayoutCents);
+      /* Stripe's dispute fee rides on the vendor's own share, so a booking that paid them nothing owes nothing. */
+      const owedCents = shareCents > 0 ? shareCents + STRIPE_DISPUTE_FEE_CENTS : 0;
       const record = locked.vendorOwedCents === 0 && owedCents > 0;
 
       if (record) {
