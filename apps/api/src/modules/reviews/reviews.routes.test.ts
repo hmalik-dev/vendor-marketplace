@@ -303,6 +303,37 @@ describe('reviews', () => {
       expect(rows[0]!.reviewCount).toBe(1);
     });
 
+    // VEN-701: the review is published under the customer's name.
+    it('refuses a customer with no name, and files the vendor’s review regardless', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Kessler & Co.');
+      const bookingId = await completedBooking(vendorId, packageId);
+      await harness.database.db
+        .update(users)
+        .set({ lastName: '' })
+        .where(eq(users.id, await idOf(CUSTOMER)));
+
+      const refused = await harness.app.inject({
+        method: 'POST',
+        url: `/v1/bookings/${bookingId}/reviews`,
+        headers: bearer(CUSTOMER),
+        payload: reviewBody(),
+      });
+
+      expect(refused.statusCode).toBe(403);
+      expect(refused.json().error).toBe('NAME_REQUIRED');
+      expect(await harness.database.db.select().from(reviews)).toHaveLength(0);
+
+      const vendorReview = await harness.app.inject({
+        method: 'POST',
+        url: `/v1/bookings/${bookingId}/reviews`,
+        headers: bearer(VENDOR),
+        payload: reviewBody(),
+      });
+
+      expect(vendorReview.statusCode).toBe(201);
+      expect(vendorReview.json().type).toBe('vendor_to_customer');
+    });
+
     /*
      * #399. Two reviews of one booking must answer 201 and 409, never 500.
      *

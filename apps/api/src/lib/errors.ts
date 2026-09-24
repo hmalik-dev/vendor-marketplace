@@ -45,6 +45,15 @@ export function termsRequiredError(message = 'Accept the Terms of Service to con
   return new AppError(403, ERROR_CODES.TERMS_REQUIRED, message);
 }
 
+/**
+ * A customer with no real name asked for something that would show it to
+ * another user (VEN-701). A 403 with its own code, like `termsRequiredError`,
+ * because the reader clears it themselves on the name step.
+ */
+export function nameRequiredError(message = 'Add your name to continue.'): AppError {
+  return new AppError(403, ERROR_CODES.NAME_REQUIRED, message);
+}
+
 export function notFound(message = 'Resource not found'): AppError {
   return new AppError(404, ERROR_CODES.NOT_FOUND, message);
 }

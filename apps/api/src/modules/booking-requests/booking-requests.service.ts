@@ -42,7 +42,7 @@ import { insertNotification } from '../messaging/messaging.dao.js';
 import { notificationHref } from '../messaging/messaging.service.js';
 import { AppError, conflict, forbidden, notFound, validationFailed } from '../../lib/errors.js';
 import type { AuthenticatedUser } from '../../plugins/neon-auth.js';
-import { findUserById } from '../users/users.dao.js';
+import { requireCustomerName } from '../users/customer-name.js';
 import {
   applyExpiry,
   applyTransition,
@@ -658,10 +658,7 @@ export async function createBookingRequest(
    * the vendor reads `customer.firstName` off this same request later
    * (`toDetail`) to project it into their view.
    */
-  const customer = await findUserById(db, user.id);
-  if (!customer?.firstName.trim() || !customer.lastName.trim()) {
-    throw validationFailed('Add your name before requesting a booking.');
-  }
+  await requireCustomerName(db, user.id);
 
   /*
    * The visibility test is the query, not three checks after it (#433). It used

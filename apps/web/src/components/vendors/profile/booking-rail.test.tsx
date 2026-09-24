@@ -278,6 +278,20 @@ describe('BookingRail', () => {
       expect(alert.textContent).toBe('Only a customer account can start a thread with a vendor.');
       expect(pushMock).not.toHaveBeenCalled();
     });
+
+    /* VEN-701: `useApi` is already sending a nameless customer to the name step, so the rail says nothing. */
+    it('stays quiet about a name refusal and leaves the button busy', async () => {
+      requestMock.mockRejectedValue(
+        new ApiClientError(403, ERROR_CODES.NAME_REQUIRED, 'Add your name to continue.'),
+      );
+      renderRail();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Send a message' }));
+
+      await waitFor(() => expect(requestMock).toHaveBeenCalledTimes(1));
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(pushMock).not.toHaveBeenCalled();
+    });
   });
 
   it('omits the package when the vendor has none to choose from', () => {
