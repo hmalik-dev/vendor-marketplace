@@ -2295,7 +2295,7 @@ describe('payments', () => {
             paymentIntentId: booking!.stripePaymentIntentId,
             amountCents: PRICE_CENTS,
             reason: 'requested_by_customer',
-            idempotencyKey: `cancel_${booking!.id}_marked`,
+            idempotencyKey: `vendor_cancel_${booking!.id}_marked`,
             reverseTransfer: false,
             refundApplicationFee: false,
           },
@@ -2333,9 +2333,13 @@ describe('payments', () => {
         expect(rows.find((row) => row.userId === booking!.customerId)?.body).toBe(
           'The vendor cancelled this booking and your payment of $1,450 is refunded in full. Their reason: A family emergency.',
         );
-        expect(harness.email.sent.filter((mail) => mail.to === 'grace@example.com')).toHaveLength(
-          1,
-        );
+        const cancellationMail = harness.email.sent
+          .filter((mail) => mail.subject.includes('cancel'))
+          .map((mail) => [mail.to, mail.subject]);
+        expect(cancellationMail).toEqual([
+          ['alan@example.com', 'Your booking was cancelled by the vendor'],
+          ['grace@example.com', 'You cancelled a booking'],
+        ]);
       });
 
       it('requires a reason', async () => {
