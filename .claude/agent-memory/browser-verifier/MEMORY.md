@@ -36,3 +36,4 @@
 - [VEN-677 change-password trips the legacy provider-surface guard](ven677-change-password-trips-legacy-provider-surface-guard.md) — the proxied call and the component's own filename both match auth-account-surfaces.test.ts's regex; run that suite on any new Better-Auth-named route
 - [Server-side fault injection via an outside-repo proxy](server-side-fault-injection-via-proxy.md) — page.route cannot hit a Next server read; proxy + baked web build; API paths are /v1/*, and .env.lane holds live keys (do not Read)
 - [Failed lane seed leaves admin without a users row](failed-lane-seed-leaves-admin-without-users-row.md) — Neon 429 seed => admin lands on /accept-terms; retry db:seed:e2e once, then re-mint admin auth
+- [wait-http passes on a 404 dev server](wait-http-passes-on-404-dev-server-with-no-routes.md) — lane web 404'd every route incl. /sign-in yet read "up"; curl 3 real routes first, else BLOCKED

@@ -41,15 +41,20 @@ export interface AccountLink {
 export { ACCOUNT_SETTINGS_PATH };
 
 /**
- * The menu's three links, shared with the drawer that carries the same rows at
+ * The menu's links, shared with the drawer that carries the same rows at
  * narrow widths — one list, so the bar and the drawer cannot disagree.
+ *
+ * A customer's `My profile` sat only in the bookings sidebar and the footer;
+ * with the sidebar gone (VEN-706) the menu carries it.
  */
 export function accountLinks(
   dashboardLabel: string,
   dashboardHref = '/dashboard',
-): readonly [AccountLink, AccountLink, AccountLink] {
+  { customerProfile = false }: { customerProfile?: boolean } = {},
+): readonly AccountLink[] {
   return [
     { label: dashboardLabel, href: dashboardHref },
+    ...(customerProfile ? [{ label: 'My profile', href: '/customer/profile' }] : []),
     { label: 'Account settings', href: ACCOUNT_SETTINGS_PATH },
     { label: 'Contact support', href: '/support' },
   ];
@@ -63,6 +68,8 @@ export interface AccountMenuProps {
   dashboardLabel: string;
   /** Where that row goes: `/dashboard` resolves the role; the console names itself. */
   dashboardHref?: string;
+  /** Whether to add the customer's `My profile` row. */
+  customerProfile?: boolean;
   /**
    * `dark` on the admin console's ink header: frame `13`'s 30px monogram in the
    * inverted pair, rather than the site header's 32px one.
@@ -82,6 +89,7 @@ export function AccountMenu({
   avatarUrl,
   dashboardLabel,
   dashboardHref,
+  customerProfile,
   tone = 'light',
 }: AccountMenuProps): React.ReactElement {
   const trigger = useRef<HTMLButtonElement>(null);
@@ -134,7 +142,7 @@ export function AccountMenu({
           }}
           className="z-50 flex min-w-[13rem] flex-col rounded-panel border border-stone-300 bg-stone-0 p-[6px] shadow-dropdown"
         >
-          {accountLinks(dashboardLabel, dashboardHref).map((link) => (
+          {accountLinks(dashboardLabel, dashboardHref, { customerProfile }).map((link) => (
             <DropdownMenu.Item key={link.href} asChild data-focus-own>
               <Link href={link.href} className={ITEM_CLASS}>
                 {link.label}

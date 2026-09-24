@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import { pageTitle, toDateString } from '@vendor-marketplace/shared';
 import { BookingsHub, BOOKING_TABS } from '@/components/bookings/bookings-hub';
 import { BookingsRail } from '@/components/bookings/bookings-rail';
-import { BookingsSidebar } from '@/components/bookings/bookings-sidebar';
 import { BOOKING_SORTS, toEntries, type BookingSort, type BookingTab } from '@/lib/booking-entries';
 import { getOwnBookingRequests, getOwnBookings } from '@/lib/customer-data';
 import { getOwnConversationBand } from '@/lib/messaging-data';
@@ -123,16 +122,6 @@ export default async function BookingsPage({
 
   return (
     <div className="flex h-[calc(100dvh-var(--header-height))] overflow-hidden">
-      <BookingsSidebar
-        bookingCount={entries.length}
-        /*
-          Frame `07`'s unread dot on the `Messages` row. Read off the threads the
-          rail already fetched rather than a second request — and a boolean,
-          because the frame draws a dot and no number.
-        */
-        hasUnreadMessages={band.hasUnread}
-        current="bookings"
-      />
       <BookingsHub
         entries={entries}
         tab={tab}

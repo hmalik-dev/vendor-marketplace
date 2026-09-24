@@ -47,14 +47,19 @@ export interface SignedInDrawerProps {
    * the drawer end up calling one destination two things.
    */
   dashboardLabel: string;
+  /** Whether the reader is a customer, whose drawer also carries `My profile`. */
+  customerProfile?: boolean;
 }
 
-export function SignedInDrawer({ dashboardLabel }: SignedInDrawerProps): React.ReactElement {
-  const [dashboard, settings, support] = accountLinks(dashboardLabel);
+export function SignedInDrawer({
+  dashboardLabel,
+  customerProfile,
+}: SignedInDrawerProps): React.ReactElement {
+  const [dashboard, ...rest] = accountLinks(dashboardLabel, undefined, { customerProfile });
 
   return (
     <NavDrawer
-      links={[dashboard, { label: 'Messages', href: '/messages' }, settings, support]}
+      links={[dashboard, { label: 'Messages', href: '/messages' }, ...rest]}
       action={
         <SignOutButton redirectUrl={SIGN_OUT_REDIRECT}>
           <button type="button" className={NAV_DRAWER_ROW_CLASS}>
