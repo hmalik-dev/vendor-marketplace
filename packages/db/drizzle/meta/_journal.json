@@ -666,6 +666,13 @@
       "when": 1790227655657,
       "tag": "0094_rainy_blackheart",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1790236142974,
+      "tag": "0095_sticky_luckman",
+      "breakpoints": true
     }
   ]
 }

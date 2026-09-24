@@ -40,6 +40,12 @@ free text and is read back by nothing — it is in no response projection, and t
 two emails route every interpolation through `escapeHtml`. The vendor's hold
 notification carries fixed copy, never the complaint.
 
+**VEN-704 `feature-request` topic skips the hold and the case row** — audited
+clean 2026-09-24. A `bookingId` on it is dropped, not authorized: the report
+email quotes `booking` only from `held`, so an anonymous id reaches nothing. The
+enum `ADD VALUE` is additive. Reopen if the renderer ever reads
+`input.bookingId`, or a topic check moves after `placeReportHold`.
+
 **How to apply:** treat `bookingId` on this body as the trust boundary, and read
 `placeDisputeHold` rather than the route options. Related:
 [[payout-sweep-is-a-second-money-mover]],

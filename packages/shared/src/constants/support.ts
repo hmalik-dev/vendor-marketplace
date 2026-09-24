@@ -20,29 +20,39 @@ import { BRAND_NAME } from './brand.js';
 export const SUPPORT_PATH = '/support';
 
 /**
- * Five topics, exactly — the routing key in the email subject.
+ * The routing key in the email subject, six entries.
  *
  * It earns its place because a human reads it, not because it feeds a queue,
- * which is why there is no sixth "other, but specific" option: a longer list
- * asks the visitor to do triage they cannot do.
+ * which is why there is no "other, but specific" option: a longer list asks the
+ * visitor to do triage they cannot do. `feature-request` is the one entry that
+ * is not a problem, and is the only topic that never opens a case.
  */
 export const SUPPORT_TOPICS = [
   'something-broke',
   'booking-or-payment',
   'vendor-profile',
   'trust-and-safety',
+  'feature-request',
   'something-else',
 ] as const;
 export type SupportTopic = (typeof SUPPORT_TOPICS)[number];
 
-/** The literal strings frame `29` draws, in the order it draws them. */
+/** The strings frame `29` draws, in its order, plus the feature request that VEN-704 added. */
 export const SUPPORT_TOPIC_LABELS: Record<SupportTopic, string> = {
   'something-broke': 'Something broke',
   'booking-or-payment': 'A booking or payment',
   'vendor-profile': 'My vendor profile',
   'trust-and-safety': 'Trust & safety',
+  'feature-request': 'A feature request',
   'something-else': 'Something else',
 };
+
+/**
+ * An idea, not a problem: it is sent to the inbox and nothing else. No case
+ * row, and no payout hold even when a booking is attached, so it can never
+ * appear in the admin queue as work that needs a ruling.
+ */
+export const SUPPORT_TOPIC_FEATURE_REQUEST: SupportTopic = 'feature-request';
 
 /**
  * Preselected when an error reference is attached, and only then.
@@ -56,7 +66,7 @@ export const SUPPORT_TOPIC_WITH_REFERENCE: SupportTopic = 'something-broke';
  * Preselected when a **booking** is attached, and only then (#425).
  *
  * Not `SUPPORT_TOPIC_WITH_REFERENCE`. A customer who followed `Report a
- * problem` off their own booking has already said which of the five this is,
+ * problem` off their own booking has already said which topic this is,
  * and `Something broke` would be the wrong one twice over: it reads as a bug
  * report, and it is the topic a human triages away from the money.
  */
@@ -186,7 +196,7 @@ export const REPORT_SUBJECT_LABELS: Record<ReportSubject, string> = {
 /**
  * Why, from a short list.
  *
- * Short for the reason `SUPPORT_TOPICS` is five: the list is a routing key a
+ * Short for the reason `SUPPORT_TOPICS` is short: the list is a routing key a
  * human reads, and a longer one asks the reporter to do triage they cannot do.
  * `off-platform-payment` earns its own member rather than folding into
  * `something-else` because it is the single complaint the marketplace most
