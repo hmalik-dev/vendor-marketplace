@@ -36,13 +36,24 @@ async function customerToken(): Promise<string> {
   return token;
 }
 
+/** Options for the customer's list reads. */
+export interface OwnListReadOptions {
+  /**
+   * Propagate an upstream failure instead of degrading to `[]`, for the surface
+   * whose subject *is* the list. An empty hub says "No bookings yet", which a
+   * customer who has just paid reads as a lost booking; the route's error
+   * boundary, with its Try again, is the honest answer to a failed read.
+   */
+  required?: boolean;
+}
+
 /**
  * The customer's own history is supporting content on a page whose subject is
  * their profile: one section failing costs that section, not the page. The
  * profile read itself is the one that must propagate, and it comes from
- * `requireCurrentUser`.
+ * `requireCurrentUser`. A page whose subject is the list passes `required`.
  */
-async function degradeToEmpty<T>(read: () => Promise<T[]>): Promise<T[]> {
+async function degradeToEmpty<T>(read: () => Promise<T[]>, required?: boolean): Promise<T[]> {
   try {
     return await read();
   } catch (error) {
@@ -61,18 +72,26 @@ async function degradeToEmpty<T>(read: () => Promise<T[]>): Promise<T[]> {
      */
     await redirectIfTermsRequired(error);
 
+    if (required === true) {
+      throw error;
+    }
+
     return [];
   }
 }
 
 /** Every request this customer has sent, newest first. */
-export async function getOwnBookingRequests(): Promise<WireBookingRequest[]> {
+export async function getOwnBookingRequests(
+  options: OwnListReadOptions = {},
+): Promise<WireBookingRequest[]> {
   const token = await customerToken();
 
-  return degradeToEmpty(() =>
-    readEveryPage((query) =>
-      apiRequest(`/booking-requests${query}`, { schema: wireBookingRequestListSchema, token }),
-    ),
+  return degradeToEmpty(
+    () =>
+      readEveryPage((query) =>
+        apiRequest(`/booking-requests${query}`, { schema: wireBookingRequestListSchema, token }),
+      ),
+    options.required,
   );
 }
 
@@ -264,13 +283,15 @@ export async function getBookingForRequest(requestId: string): Promise<WireBooki
 }
 
 /** Bookings that reached payment, carrying their occasion and venue. */
-export async function getOwnBookings(): Promise<WireBooking[]> {
+export async function getOwnBookings(options: OwnListReadOptions = {}): Promise<WireBooking[]> {
   const token = await customerToken();
 
-  return degradeToEmpty(() =>
-    readEveryPage((query) =>
-      apiRequest(`/bookings${query}`, { schema: wireBookingListSchema, token }),
-    ),
+  return degradeToEmpty(
+    () =>
+      readEveryPage((query) =>
+        apiRequest(`/bookings${query}`, { schema: wireBookingListSchema, token }),
+      ),
+    options.required,
   );
 }
 
