@@ -1,4 +1,4 @@
-import { and, eq, exists, isNull, ne, sql, type SQL } from 'drizzle-orm';
+import { and, eq, exists, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import { alias, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import {
   emailDeliveries,
@@ -848,7 +848,15 @@ async function retireUserInTransaction<B>(
 
     const profiles = await tx
       .update(vendorProfiles)
-      .set({ isDeleted: true, isPublished: false, address: null, updatedAt: sql`now()` })
+      .set({
+        isDeleted: true,
+        isPublished: false,
+        // The coordinates are the address to eight decimal places.
+        address: null,
+        latitude: null,
+        longitude: null,
+        updatedAt: sql`now()`,
+      })
       .where(eq(vendorProfiles.userId, row.id))
       .returning({ id: vendorProfiles.id });
 
@@ -862,10 +870,26 @@ async function retireUserInTransaction<B>(
       .update(emailDeliveries)
       .set({ recipientEmail: row.email })
       .where(eq(emailDeliveries.userId, row.id));
+    /*
+     * Cases from their account, and those they sent signed out from the same
+     * address (which carry no `sender_user_id`). A chargeback has no address and
+     * is left without one.
+     */
     await tx
       .update(supportCases)
       .set({ senderEmail: row.email })
-      .where(eq(supportCases.senderUserId, row.id));
+      .where(
+        and(
+          isNotNull(supportCases.senderEmail),
+          or(
+            eq(supportCases.senderUserId, row.id),
+            and(
+              isNull(supportCases.senderUserId),
+              sql`lower(${supportCases.senderEmail}) = lower(${target.email})`,
+            ),
+          ),
+        ),
+      );
 
     await audit?.(tx, { profileRetired });
 

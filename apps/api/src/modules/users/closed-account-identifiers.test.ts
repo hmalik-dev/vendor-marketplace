@@ -9,6 +9,7 @@ import {
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createTestHarness, type TestHarness } from '../../testing/test-server.js';
 import { findSupportCases } from '../cases/cases.dao.js';
+import { insertEmailDelivery } from '../notifications/email-delivery.dao.js';
 import { retireUserByAuthId } from './users.dao.js';
 
 /**
@@ -71,9 +72,14 @@ async function seedVendorWithTraces(): Promise<string> {
     senderEmail: EMAIL,
     message: 'Please help',
   });
-  await db
-    .insert(vendorProfiles)
-    .values({ userId: id, businessName: 'Ada Events', slug: 'ada-events', address: ADDRESS });
+  await db.insert(vendorProfiles).values({
+    userId: id,
+    businessName: 'Ada Events',
+    slug: 'ada-events',
+    address: ADDRESS,
+    latitude: '51.50735000',
+    longitude: '-0.12776000',
+  });
 
   return id;
 }
@@ -84,7 +90,13 @@ async function traces() {
   return {
     delivery: await db.select({ v: emailDeliveries.recipientEmail }).from(emailDeliveries),
     support: await db.select({ v: supportCases.senderEmail }).from(supportCases),
-    profile: await db.select({ v: vendorProfiles.address }).from(vendorProfiles),
+    profile: await db
+      .select({
+        v: vendorProfiles.address,
+        latitude: vendorProfiles.latitude,
+        longitude: vendorProfiles.longitude,
+      })
+      .from(vendorProfiles),
   };
 }
 
@@ -109,7 +121,7 @@ describe('closing an account (VEN-672)', () => {
     expect(await traces()).toEqual({
       delivery: [{ v: `closed+${id}@invalid` }],
       support: [{ v: `closed+${id}@invalid` }],
-      profile: [{ v: null }],
+      profile: [{ v: null, latitude: null, longitude: null }],
     });
   });
 
@@ -134,13 +146,78 @@ describe('closing an account (VEN-672)', () => {
 
   it('finds no case when the console searches the old email, but the reference still finds it', async () => {
     await seedVendorWithTraces();
+    await harness.database.db.insert(supportCases).values({
+      reference: 'CASE-SIGNED-OUT',
+      origin: 'support_message',
+      senderEmail: EMAIL.toUpperCase(),
+      message: 'I cannot sign in',
+    });
 
-    expect(await searchCases(EMAIL)).toEqual(['CASE-672']);
+    expect(await searchCases(EMAIL)).toEqual(['CASE-672', 'CASE-SIGNED-OUT']);
 
     await retireUserByAuthId(harness.database.db, 'auth_ada');
 
     expect(await searchCases(EMAIL)).toEqual([]);
     expect(await searchCases('CASE-672')).toEqual(['CASE-672']);
+    expect(await searchCases('CASE-SIGNED-OUT')).toEqual(['CASE-SIGNED-OUT']);
+  });
+
+  it('gives a chargeback case, which has no sender address, none', async () => {
+    const id = await seedVendorWithTraces();
+    await harness.database.db.insert(supportCases).values({
+      reference: 'CASE-CHARGEBACK',
+      origin: 'chargeback',
+      senderUserId: id,
+      message: 'Dispute opened',
+    });
+
+    await retireUserByAuthId(harness.database.db, 'auth_ada');
+
+    const [chargeback] = await harness.database.db
+      .select({ v: supportCases.senderEmail })
+      .from(supportCases)
+      .where(eq(supportCases.reference, 'CASE-CHARGEBACK'));
+
+    expect(chargeback?.v).toBeNull();
+  });
+});
+
+describe('a send that was in flight when the account closed (VEN-672)', () => {
+  it('records the delivery under the tombstone, not the address it was sent to', async () => {
+    const id = await seedVendorWithTraces();
+    await retireUserByAuthId(harness.database.db, 'auth_ada');
+
+    await insertEmailDelivery(harness.database.db, {
+      notificationId: crypto.randomUUID(),
+      userId: id,
+      recipientEmail: EMAIL,
+      notificationType: 'stripe_onboarding_complete',
+      outcome: 'sent',
+    });
+
+    const rows = await harness.database.db
+      .select({ v: emailDeliveries.recipientEmail })
+      .from(emailDeliveries);
+
+    expect(rows).toEqual([{ v: `closed+${id}@invalid` }, { v: `closed+${id}@invalid` }]);
+  });
+
+  it('records a live account under the address it was sent to', async () => {
+    const id = await seedVendorWithTraces();
+
+    await insertEmailDelivery(harness.database.db, {
+      notificationId: crypto.randomUUID(),
+      userId: id,
+      recipientEmail: 'sent.to@example.com',
+      notificationType: 'stripe_onboarding_complete',
+      outcome: 'sent',
+    });
+
+    const rows = await harness.database.db
+      .select({ v: emailDeliveries.recipientEmail })
+      .from(emailDeliveries);
+
+    expect(rows.map((row) => row.v).sort()).toEqual([EMAIL, 'sent.to@example.com']);
   });
 });
 
@@ -157,7 +234,7 @@ describe('the backfill for accounts closed before VEN-672', () => {
     const expected = {
       delivery: [{ v: `closed+${id}@invalid` }],
       support: [{ v: `closed+${id}@invalid` }],
-      profile: [{ v: null }],
+      profile: [{ v: null, latitude: null, longitude: null }],
     };
     expect(await traces()).toEqual(expected);
 
@@ -174,7 +251,7 @@ describe('the backfill for accounts closed before VEN-672', () => {
     expect(await traces()).toEqual({
       delivery: [{ v: EMAIL }],
       support: [{ v: EMAIL }],
-      profile: [{ v: ADDRESS }],
+      profile: [{ v: ADDRESS, latitude: '51.50735000', longitude: '-0.12776000' }],
     });
   });
 });
