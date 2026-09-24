@@ -9,7 +9,11 @@ import {
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { authenticated, requireAuthBeforeValidation } from '../../lib/guards.js';
+import {
+  authenticated,
+  requireAuthBeforeValidation,
+  requireRoleBeforeValidation,
+} from '../../lib/guards.js';
 import { notFound } from '../../lib/errors.js';
 import {
   bookingContextFor,
@@ -47,7 +51,7 @@ export const paymentRoutes: FastifyPluginAsyncZod<PaymentRoutesOptions> = async 
   app.post(
     '/customer/booking-requests/:requestId/checkout',
     {
-      onRequest: requireAuthBeforeValidation,
+      onRequest: requireRoleBeforeValidation('customer'),
       schema: { params: requestParamsSchema, response: { 200: checkoutIntentSchema } },
     },
     async (request) =>

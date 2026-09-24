@@ -1,7 +1,19 @@
-import { adminActions, users } from '@vendor-marketplace/db/schema';
-import { ADMIN_ACCESS_ACTIONS, type UserRole } from '@vendor-marketplace/shared';
-import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import {
+  adminActions,
+  bookingRequests,
+  bookings,
+  users,
+  vendorProfiles,
+} from '@vendor-marketplace/db/schema';
+import {
+  ADMIN_ACCESS_ACTIONS,
+  BOOKING_STATUSES,
+  EXPIRABLE_BOOKING_REQUEST_STATUSES,
+  type UserRole,
+} from '@vendor-marketplace/shared';
+import { and, desc, eq, inArray, isNull, not, notExists, or, sql } from 'drizzle-orm';
 import type { AppDatabase } from '../../lib/database.js';
+import { bookingBehindRequest, hasLapsed } from '../booking-requests/booking-requests.dao.js';
 import { hasAnotherLiveAdmin, ADMIN_RETIREMENT_LOCK } from '../users/users.dao.js';
 import { insertAdminAction } from './admin.dao.js';
 
@@ -13,6 +25,8 @@ export type AdminChange =
   | 'ambiguous'
   | 'banned'
   | 'unverified'
+  | 'live-storefront'
+  | 'open-bookings'
   | 'last-admin'
   | 'no-prior-role';
 
@@ -31,6 +45,74 @@ async function setRoleUnderGrant(
   await tx.update(users).set({ role, updatedAt: now }).where(eq(users.id, userId));
 }
 
+/** A booking that has not reached an end: the money or the event is still ahead. */
+const OPEN_BOOKING_STATUSES = BOOKING_STATUSES.filter(
+  (status) => status !== 'completed' && status !== 'cancelled',
+);
+
+/**
+ * Whether the account owns a published storefront, or is the customer or vendor
+ * on a request or booking still in play. An admin cannot act as either, so
+ * promoting one strands the listing or the booking (VEN-622).
+ *
+ * A request counts only while it can still be answered or paid: one past its
+ * deadline is lapsed even if nothing has aged its row yet, and one that became
+ * a booking is judged by the booking, because payment leaves it `accepted`.
+ */
+async function stranding(
+  tx: AppDatabase,
+  userId: string,
+  now: Date,
+): Promise<'live-storefront' | 'open-bookings' | null> {
+  const [storefront] = await tx
+    .select({ id: vendorProfiles.id })
+    .from(vendorProfiles)
+    .where(
+      and(
+        eq(vendorProfiles.userId, userId),
+        eq(vendorProfiles.isPublished, true),
+        eq(vendorProfiles.isDeleted, false),
+      ),
+    )
+    .limit(1);
+
+  if (storefront) {
+    return 'live-storefront';
+  }
+
+  const [request] = await tx
+    .select({ id: bookingRequests.id })
+    .from(bookingRequests)
+    .leftJoin(vendorProfiles, eq(vendorProfiles.id, bookingRequests.vendorId))
+    .where(
+      and(
+        inArray(bookingRequests.status, [...EXPIRABLE_BOOKING_REQUEST_STATUSES]),
+        not(hasLapsed(now)),
+        notExists(bookingBehindRequest()),
+        or(eq(bookingRequests.customerId, userId), eq(vendorProfiles.userId, userId)),
+      ),
+    )
+    .limit(1);
+
+  if (request) {
+    return 'open-bookings';
+  }
+
+  const [booking] = await tx
+    .select({ id: bookings.id })
+    .from(bookings)
+    .leftJoin(vendorProfiles, eq(vendorProfiles.id, bookings.vendorId))
+    .where(
+      and(
+        inArray(bookings.status, OPEN_BOOKING_STATUSES),
+        or(eq(bookings.customerId, userId), eq(vendorProfiles.userId, userId)),
+      ),
+    )
+    .limit(1);
+
+  return booking ? 'open-bookings' : null;
+}
+
 /**
  * Makes the live account holding `email` an admin, and records it.
  *
@@ -40,7 +122,9 @@ async function setRoleUnderGrant(
  *
  * Refused for a banned account, and for one whose address the auth provider
  * disagrees with (`pending_email`): the address this row holds is then not one
- * the holder has confirmed, and an admin is chosen by that address.
+ * the holder has confirmed, and an admin is chosen by that address. Also
+ * refused for a live storefront or an open request or booking, which an admin
+ * could no longer operate or reach.
  */
 export async function grantAdminByEmail(
   db: AppDatabase,
@@ -87,6 +171,12 @@ export async function grantAdminByEmail(
 
     if (target.pendingEmail !== null) {
       return { result: 'unverified', userId: target.id };
+    }
+
+    const blocker = await stranding(tx, target.id, now);
+
+    if (blocker) {
+      return { result: blocker, userId: target.id };
     }
 
     await setRoleUnderGrant(tx, target.id, 'admin', now);

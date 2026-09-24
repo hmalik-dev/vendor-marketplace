@@ -1,5 +1,11 @@
 import { ERROR_CODES } from '@vendor-marketplace/shared';
-import { adminActions, users } from '@vendor-marketplace/db/schema';
+import {
+  adminActions,
+  bookingRequests,
+  bookings,
+  users,
+  vendorProfiles,
+} from '@vendor-marketplace/db/schema';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { setUserRole } from '../../testing/set-user-role.js';
@@ -112,6 +118,9 @@ describe('admin grant and revoke', () => {
   });
 
   afterEach(async () => {
+    await harness.database.db.delete(bookings);
+    await harness.database.db.delete(bookingRequests);
+    await harness.database.db.delete(vendorProfiles);
     await harness.database.db.delete(users);
     harness.email.sent.length = 0;
   });
@@ -316,5 +325,169 @@ describe('admin grant and revoke', () => {
     expect(await roleOf(VENDOR)).toBe('vendor');
     expect(await roleOf(OUTSIDER)).toBe('customer');
     expect(await auditRows(customerId)).toHaveLength(0);
+  });
+
+  /**
+   * VEN-622: an admin cannot operate a storefront or reach a customer's
+   * booking, so promoting an account that has either would strand it.
+   */
+  describe('an account with something live', () => {
+    const STOREFRONT_REFUSAL =
+      'That account owns a published storefront, which an admin cannot operate. Unpublish the storefront first, then grant access';
+    const BOOKINGS_REFUSAL =
+      'That account has open booking requests or bookings, which an admin cannot manage. Let them finish or cancel them first, then grant access';
+
+    async function storefrontFor(
+      ownerAuthId: string,
+      state: { isPublished?: boolean; isDeleted?: boolean } = {},
+    ): Promise<string> {
+      const [row] = await harness.database.db
+        .insert(vendorProfiles)
+        .values({
+          userId: await idOf(ownerAuthId),
+          businessName: 'Sunlit Studio',
+          slug: 'sunlit-studio',
+          ...state,
+        })
+        .returning({ id: vendorProfiles.id });
+      return row!.id;
+    }
+
+    async function requestBetween(
+      customerAuthId: string,
+      vendorProfileId: string,
+      status: (typeof bookingRequests.$inferInsert)['status'],
+      expiresAt: Date | null = null,
+      eventDate = '2027-06-01',
+    ): Promise<string> {
+      const [row] = await harness.database.db
+        .insert(bookingRequests)
+        .values({
+          customerId: await idOf(customerAuthId),
+          vendorId: vendorProfileId,
+          eventDate,
+          status,
+          expiresAt,
+        })
+        .returning({ id: bookingRequests.id });
+      return row!.id;
+    }
+
+    it('refuses a vendor with a published storefront and leaves the role alone', async () => {
+      await fixtures();
+      await storefrontFor(VENDOR, { isPublished: true });
+
+      const response = await grant(ADMIN, emailOf(VENDOR));
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().message).toBe(STOREFRONT_REFUSAL);
+      expect(await roleOf(VENDOR)).toBe('vendor');
+      expect(await auditRows(await idOf(VENDOR))).toHaveLength(0);
+    });
+
+    it('grants a vendor whose storefront is unpublished or deleted and who has nothing open', async () => {
+      await fixtures();
+      await storefrontFor(VENDOR, { isPublished: false });
+
+      const response = await grant(ADMIN, emailOf(VENDOR));
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ userId: await idOf(VENDOR), changed: true });
+      expect(await roleOf(VENDOR)).toBe('admin');
+    });
+
+    it('does not count a deleted storefront as live', async () => {
+      await fixtures();
+      await storefrontFor(VENDOR, { isPublished: true, isDeleted: true });
+
+      expect((await grant(ADMIN, emailOf(VENDOR))).statusCode).toBe(200);
+      expect(await roleOf(VENDOR)).toBe('admin');
+    });
+
+    it.each(['pending', 'quoted', 'accepted'] as const)(
+      'refuses a customer with a %s request',
+      async (status) => {
+        await fixtures();
+        const profileId = await storefrontFor(VENDOR);
+        await requestBetween(CUSTOMER, profileId, status);
+
+        const response = await grant(ADMIN, emailOf(CUSTOMER));
+
+        expect(response.statusCode).toBe(409);
+        expect(response.json().message).toBe(BOOKINGS_REFUSAL);
+        expect(await roleOf(CUSTOMER)).toBe('customer');
+      },
+    );
+
+    it('refuses a vendor with an open request on an unpublished storefront', async () => {
+      await fixtures();
+      const profileId = await storefrontFor(VENDOR);
+      await requestBetween(CUSTOMER, profileId, 'pending');
+
+      const response = await grant(ADMIN, emailOf(VENDOR));
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().message).toBe(BOOKINGS_REFUSAL);
+      expect(await roleOf(VENDOR)).toBe('vendor');
+    });
+
+    it('refuses on an upcoming confirmed booking, and allows once it is completed', async () => {
+      await fixtures();
+      const profileId = await storefrontFor(VENDOR);
+      const requestId = await requestBetween(CUSTOMER, profileId, 'accepted');
+      const [booking] = await harness.database.db
+        .insert(bookings)
+        .values({
+          requestId,
+          customerId: await idOf(CUSTOMER),
+          vendorId: profileId,
+          eventDate: '2027-06-01',
+          totalAmountCents: 100_000,
+          platformFeeCents: 12_000,
+          vendorPayoutCents: 88_000,
+          status: 'confirmed',
+        })
+        .returning({ id: bookings.id });
+
+      const refused = await grant(ADMIN, emailOf(CUSTOMER));
+
+      expect(refused.statusCode).toBe(409);
+      expect(refused.json().message).toBe(BOOKINGS_REFUSAL);
+      expect(await roleOf(CUSTOMER)).toBe('customer');
+
+      await harness.database.db
+        .update(bookings)
+        .set({ status: 'completed' })
+        .where(eq(bookings.id, booking!.id));
+
+      expect((await grant(ADMIN, emailOf(CUSTOMER))).statusCode).toBe(200);
+      expect(await roleOf(CUSTOMER)).toBe('admin');
+    });
+
+    it('does not count a request whose reply window has lapsed but was never aged', async () => {
+      await fixtures();
+      const profileId = await storefrontFor(VENDOR);
+      await requestBetween(CUSTOMER, profileId, 'pending', new Date('2020-01-01T00:00:00Z'));
+      await requestBetween(
+        CUSTOMER,
+        profileId,
+        'quoted',
+        new Date('2020-01-01T00:00:00Z'),
+        '2027-07-01',
+      );
+
+      expect((await grant(ADMIN, emailOf(CUSTOMER))).statusCode).toBe(200);
+      expect(await roleOf(CUSTOMER)).toBe('admin');
+    });
+
+    it('grants a customer whose only requests have ended', async () => {
+      await fixtures();
+      const profileId = await storefrontFor(VENDOR);
+      await requestBetween(CUSTOMER, profileId, 'declined');
+      await requestBetween(CUSTOMER, profileId, 'expired');
+
+      expect((await grant(ADMIN, emailOf(CUSTOMER))).statusCode).toBe(200);
+      expect(await roleOf(CUSTOMER)).toBe('admin');
+    });
   });
 });

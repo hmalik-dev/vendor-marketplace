@@ -29,6 +29,7 @@ import {
   TEST_ENV,
   type TestHarness,
 } from '../../testing/test-server.js';
+import { setUserRole } from '../../testing/set-user-role.js';
 import { expireLapsedRequests } from '../booking-requests/booking-requests.service.js';
 import { recordReplacementIntent } from './payments.dao.js';
 import { bookingContextFor, expiryGuardFor, recordSuccessfulPayment } from './payments.service.js';
@@ -284,6 +285,23 @@ describe('payments', () => {
 
   afterAll(async () => {
     await harness.close();
+  });
+
+  describe('opening checkout as an admin (VEN-622)', () => {
+    it('answers 403 and mints no PaymentIntent', async () => {
+      const requestId = await acceptedRequest();
+      await setUserRole(harness.database.db, 'admin', eq(users.authUserId, CUSTOMER));
+
+      const response = await inject(
+        'POST',
+        `/v1/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error).toBe(ERROR_CODES.FORBIDDEN);
+      expect(harness.stripe.paymentIntents.size).toBe(0);
+    });
   });
 
   describe('opening checkout on a date that has passed (VEN-433)', () => {
