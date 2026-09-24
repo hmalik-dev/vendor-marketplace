@@ -2,7 +2,12 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { BRAND_NAME, LEGAL_PATHS, type SignUpRole } from '@vendor-marketplace/shared';
+import {
+  BRAND_NAME,
+  LEGAL_PATHS,
+  PASSWORD_MIN_LENGTH,
+  type SignUpRole,
+} from '@vendor-marketplace/shared';
 import { AUTH_COPY, failureCopy } from '@/app/auth-copy';
 import { AuthField } from '@/components/auth/auth-field';
 import { AuthScreen } from '@/components/auth/auth-screen';
@@ -277,7 +282,7 @@ export function SignUpForm({ initialRole, vendorInviteOnly }: SignUpFormProps): 
             name="password"
             autoComplete="new-password"
             aria-invalid={credentialsRefused ? true : undefined}
-            minLength={10}
+            minLength={PASSWORD_MIN_LENGTH}
             required
             value={password}
             onChange={(event) => setPassword(event.target.value)}
@@ -300,7 +305,7 @@ export function SignUpForm({ initialRole, vendorInviteOnly }: SignUpFormProps): 
             className="py-3.25"
             loading={busy}
             aria-disabled={role === null ? true : undefined}
-            disabled={email.trim() === '' || password.length < 10}
+            disabled={email.trim() === '' || password.length < PASSWORD_MIN_LENGTH}
           >
             {AUTH_COPY.signUpSubmit}
           </Button>

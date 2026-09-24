@@ -48,6 +48,17 @@ SDK forwards the browser's Origin to Neon. Change does not bump
 `sessions_invalidated_at` (deferred to VEN-670); a naive bump refuses the caller's own
 same-second re-mint.
 
+**A JSON body can also be a form body** (VEN-685 audit, 2026-09-24): `forwardBudgeted`
+and `forwardReset` forward the caller's `content-type`, so `content-type:
+application/x-www-form-urlencoded` with a JSON body whose string value holds
+`&email=victim&password=short&` passes every proxy check on the JSON reading while
+a form-parsing upstream (better-call does) acts on the injected pair: the password
+floor and the per-address budget key both miss. `change-password` pins
+`application/json` (VEN-677) and is safe. Fix: `headers.set('content-type',
+'application/json')` on every re-encoded upstream. node_modules reads are
+permission-denied for this agent, so the SDK's forwarding was inferred, not read.
+`readBounded` (VEN-685) counts stream bytes and fails closed on gzip; clean.
+
 Related: the request-reset path hides account existence with a fixed 200 and
 `after()`; its sibling `email-otp/reset-password` returns the upstream status
 verbatim, so existence can leak there instead. See [[fixed-response-sibling-leak]].
