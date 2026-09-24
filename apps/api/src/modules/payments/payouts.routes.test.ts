@@ -1905,14 +1905,23 @@ describe('payouts', () => {
       return cancelled;
     }
 
-    async function openChargebackCase(bookingId: string): Promise<string> {
+    async function openChargebackCase(
+      bookingId: string,
+      networkOutcome: string | null = null,
+    ): Promise<string> {
+      const [booking] = await harness.database.db
+        .select({ customerId: bookings.customerId })
+        .from(bookings)
+        .where(eq(bookings.id, bookingId));
       const [row] = await harness.database.db
         .insert(supportCases)
         .values({
-          reference: 'ORL-TEST-543',
+          reference: 'ORL-TEST-54',
           origin: 'chargeback',
           message: 'The card network opened a chargeback.',
           bookingId,
+          senderUserId: booking?.customerId,
+          networkOutcome,
         })
         .returning({ id: supportCases.id });
 
@@ -1943,6 +1952,41 @@ describe('payouts', () => {
         .where(eq(supportCases.id, caseId));
 
       expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+      expect(harness.stripe.transfers).toHaveLength(1);
+      expect(harness.stripe.transfers[0]?.amountCents).toBe(RETAINED_CENTS);
+    });
+
+    it.each([null, 'needs_response', 'lost'])(
+      'refuses to close a chargeback case whose outcome is %s, so the residual stays held (VEN-683)',
+      async (outcome) => {
+        const cancelled = await lateCancelledBooking();
+        const caseId = await openChargebackCase(cancelled.id, outcome);
+
+        await signInAsAdmin();
+        await signInAsAdmin();
+        const resolved = await inject('PUT', `/v1/admin/cases/${caseId}/resolve`, ADMIN);
+
+        expect(resolved.statusCode).toBe(409);
+        const [row] = await harness.database.db
+          .select({ status: supportCases.status })
+          .from(supportCases)
+          .where(eq(supportCases.id, caseId));
+        expect(row?.status).toBe('open');
+        expect(await sweep()).toEqual({ released: 0, skipped: 0, failed: 0 });
+        expect(harness.stripe.transfers).toEqual([]);
+      },
+    );
+
+    it('closes a won chargeback case and releases the residual exactly once (VEN-683)', async () => {
+      const cancelled = await lateCancelledBooking();
+      const caseId = await openChargebackCase(cancelled.id, 'won');
+
+      await signInAsAdmin();
+      const resolved = await inject('PUT', `/v1/admin/cases/${caseId}/resolve`, ADMIN);
+      expect(resolved.statusCode).toBe(200);
+
+      expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
+      expect(await sweep()).toEqual({ released: 0, skipped: 0, failed: 0 });
       expect(harness.stripe.transfers).toHaveLength(1);
       expect(harness.stripe.transfers[0]?.amountCents).toBe(RETAINED_CENTS);
     });

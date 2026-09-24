@@ -621,6 +621,29 @@ describe('the operations case queue (#431)', () => {
     expect(detail.booking?.payoutStatus).toBe('released');
   });
 
+  it('says a cancelled booking’s residual is held by the chargeback case (VEN-683)', async () => {
+    const fixture = await seed();
+    await harness.database.db
+      .update(bookings)
+      .set({ status: 'cancelled' })
+      .where(eq(bookings.id, fixture.bookingId));
+
+    const delivered = await deliverDispute('charge.dispute.created', {
+      id: 'dp_test_cancelled',
+      status: 'needs_response',
+      reason: 'fraudulent',
+      amountCents: TOTAL_CENTS,
+      intentId: fixture.paymentIntentId,
+    });
+    expect(delivered.statusCode).toBe(200);
+
+    const detail = await readCase((await readCases()).items[0]!.id);
+    expect(detail.holdRefusal).toBe(
+      'The booking is cancelled, so the payout was not frozen, but the vendor’s remaining share ' +
+        'is held by this case. It is released only once the card network rules in the platform’s favour.',
+    );
+  });
+
   it('records the network outcome on close without resolving the booking', async () => {
     const fixture = await seed();
     const dispute = {

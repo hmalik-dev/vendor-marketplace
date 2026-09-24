@@ -57,6 +57,7 @@ import {
   type DisputedBookingProjection,
   type SupportCaseProjection,
 } from './cases.dao.js';
+import { DISPUTE_RESOLVABLE_OUTCOMES } from '../payments/payouts.dao.js';
 
 /**
  * The operations case queue (#431) — one inbox for every dispute, however it
@@ -330,6 +331,13 @@ function describeHoldRefusal(target: DisputedBookingProjection): string {
     return (
       'The payout was already on hold when this chargeback arrived, so this case did not ' +
       'place it. It is frozen either way — the booking below says so.'
+    );
+  }
+
+  if (target.bookingStatus === 'cancelled' && target.vendorPayoutCents > 0) {
+    return (
+      'The booking is cancelled, so the payout was not frozen, but the vendor’s remaining share ' +
+      'is held by this case. It is released only once the card network rules in the platform’s favour.'
     );
   }
 
@@ -768,6 +776,28 @@ export async function resolveCase(
     throw conflict(
       'This case holds a payout. Resolve it for the vendor or the customer instead, ' +
         'so the money moves with the ruling.',
+    );
+  }
+
+  /*
+   * A cancelled booking is never `disputed`, so its chargeback case is the only
+   * thing holding the vendor's residual (`payoutResidualHeld`). Closing it lifts
+   * that hold, which pays the vendor while the network may have taken the money
+   * back — the same rule `resolveDispute` applies to a vendor-favour ruling. An
+   * allowlist, so an outcome Stripe adds later fails closed.
+   */
+  if (
+    state.caseStatus === 'open' &&
+    state.origin === 'chargeback' &&
+    state.bookingStatus === 'cancelled' &&
+    !state.payoutReleasedAt &&
+    (state.vendorPayoutCents ?? 0) > 0 &&
+    !DISPUTE_RESOLVABLE_OUTCOMES.includes(state.networkOutcome ?? '')
+  ) {
+    throw conflict(
+      state.networkOutcome === 'lost'
+        ? 'The card network ruled against the platform and has already taken this payment back, so the vendor’s remaining share cannot be paid out as well.'
+        : 'This case holds the vendor’s remaining share while the chargeback is with the card network. Close it once the network has ruled in the platform’s favour.',
     );
   }
 
