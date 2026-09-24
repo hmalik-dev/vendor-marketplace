@@ -1,4 +1,4 @@
-import { PAYOUT_RELEASE_HOURS, LEGAL_PATHS } from '@vendor-marketplace/shared';
+import { BRAND_NAME, PAYOUT_RELEASE_HOURS, LEGAL_PATHS } from '@vendor-marketplace/shared';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -208,8 +208,8 @@ describe('/for-vendors', () => {
       'not on the day',
       'sitting there',
       'in your account',
-      'Orla balance',
-      'an Orla',
+      `${BRAND_NAME} balance`,
+      `an ${BRAND_NAME}`,
     ]) {
       expect(page, retired).not.toContain(retired);
     }
