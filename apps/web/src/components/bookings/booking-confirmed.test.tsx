@@ -197,7 +197,7 @@ describe('BookingConfirmed', () => {
   it('sets the four type steps frame 06 draws', () => {
     render(<BookingConfirmed booking={booking()} vendor={VENDOR} conversationId="conv-1" />);
 
-    const subLine = screen.getByText(/has been paid into escrow/);
+    const subLine = screen.getByText(/Your booking with/);
     expect(subLine.className).toContain('text-lg');
 
     for (const action of ['Message Kessler & Co.', 'View booking']) {
@@ -240,9 +240,8 @@ describe('BookingConfirmed', () => {
   it('reads the sub-line frame 06 writes', () => {
     render(<BookingConfirmed booking={booking()} vendor={VENDOR} conversationId="conv-1" />);
 
-    expect(screen.getByText(/has been paid into escrow/).textContent).toBe(
-      'Kessler & Co. has been paid into escrow and your booking is confirmed. ' +
-        "They'll message you two weeks out to plan the timeline.",
+    expect(screen.getByText(/Your booking with/).textContent).toBe(
+      'Your booking with Kessler & Co. is confirmed. Your payment is held until the event, then released.',
     );
   });
 
@@ -273,7 +272,7 @@ describe('BookingConfirmed', () => {
   it('leads the sub-line on the prose token rather than a Tailwind default', () => {
     render(<BookingConfirmed booking={booking()} vendor={VENDOR} conversationId="conv-1" />);
 
-    const subLine = screen.getByText(/has been paid into escrow/);
+    const subLine = screen.getByText(/Your booking with/);
 
     expect(subLine.className).toContain('leading-prose');
     expect(subLine.className).not.toContain('leading-relaxed');

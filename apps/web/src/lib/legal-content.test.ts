@@ -12,6 +12,7 @@ import {
   LEGAL_JUMP_RAIL_MIN_SECTIONS,
   LEGAL_PATHS,
   PAYOUT_RELEASE_HOURS,
+  SESSION_REVOKE_MARKER_MAX_AGE_SECONDS,
   adminUserExportSchema,
   legalFactTokens,
 } from '@vendor-marketplace/shared';
@@ -226,7 +227,7 @@ describe('legal content', () => {
       [
         'session-revoke-marker',
         BRAND_NAME,
-        'Strictly necessary — set when you end other devices or change your password, so this device stays signed in. Lasts 20 minutes.',
+        `Strictly necessary — set when you end other devices or change your password, so this device stays signed in. Lasts ${SESSION_REVOKE_MARKER_MAX_AGE_SECONDS / 60} minutes.`,
       ],
     ]);
   });
@@ -434,6 +435,7 @@ describe('the facts in the copy', () => {
       String(Math.round(LATE_CANCELLATION_REFUND_RATE * 100)),
       String(PAYOUT_RELEASE_HOURS),
       String(BOOKING_REQUEST_EXPIRY_DAYS),
+      String(SESSION_REVOKE_MARKER_MAX_AGE_SECONDS / 60),
     ];
 
     for (const slug of LEGAL_DOCUMENT_SLUGS) {
@@ -475,6 +477,7 @@ describe('the facts in the copy', () => {
       lateRefundShare: '50%',
       payoutReleaseHours: '72 hours',
       requestExpiryDays: '7 days',
+      revokeMarkerLifetime: '20 minutes',
     });
   });
 });

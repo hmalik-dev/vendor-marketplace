@@ -5,6 +5,7 @@ import {
   formatDurationHours,
   formatPrice,
   LEGAL_PATHS,
+  paymentDeadline,
   payoutReleaseAt,
 } from '@vendor-marketplace/shared';
 import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js';
@@ -166,8 +167,6 @@ interface Decline {
   message: string;
   /** Stripe's own code, shown verbatim under the field — frame `21`. */
   code: string | null;
-  /** A second failure in a row changes the advice, per frame `21`. */
-  attempts: number;
 }
 
 function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.ReactElement {
@@ -189,6 +188,14 @@ function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.React
   const [unreachable, setUnreachable] = useState(false);
 
   const event = eventDay(checkout.eventDate);
+  /*
+   * When the date stops being held for this customer: the payment window from
+   * acceptance, capped at the event (`paymentDeadline`). Absent when the
+   * request carries no acceptance time, and then the banner claims no hold.
+   */
+  const heldUntil = checkout.acceptedAt
+    ? paymentDeadline(checkout.acceptedAt, checkout.eventDate)
+    : null;
 
   const pay = useCallback(
     async (submitted: React.FormEvent) => {
@@ -227,7 +234,6 @@ function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.React
         setDecline({
           message: result.error.message ?? 'Your bank refused the payment without giving a reason.',
           code: result.error.decline_code ?? result.error.code ?? null,
-          attempts: (decline?.attempts ?? 0) + 1,
         });
         inFlight.current = false;
         setPaying(false);
@@ -242,7 +248,7 @@ function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.React
        */
       router.push(`/bookings/${requestId}/confirmed`);
     },
-    [decline?.attempts, elements, requestId, router, stripe],
+    [elements, requestId, router, stripe],
   );
 
   return (
@@ -264,7 +270,7 @@ function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.React
         <p className="mb-5.5 text-cta text-stone-700">
           {checkout.vendor.businessName} accepted your request
           {checkout.acceptedAt ? ` on ${ACCEPTED_ON.format(checkout.acceptedAt)}` : ''}. Paying now
-          locks {SHORT_DAY.format(event)} in their calendar.
+          confirms your booking for {SHORT_DAY.format(event)}.
         </p>
 
         {/* This screen refuses in its own voice; the browser must not do it first. */}
@@ -280,7 +286,7 @@ function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.React
               then try once more.
             </Banner>
           ) : null}
-          {decline ? <DeclineBanner decline={decline} event={event} /> : null}
+          {decline ? <DeclineBanner decline={decline} event={event} heldUntil={heldUntil} /> : null}
 
           <PaymentElement options={{ layout: 'tabs' }} />
 
@@ -322,7 +328,15 @@ function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.React
   );
 }
 
-function DeclineBanner({ decline, event }: { decline: Decline; event: Date }): React.ReactElement {
+function DeclineBanner({
+  decline,
+  event,
+  heldUntil,
+}: {
+  decline: Decline;
+  event: Date;
+  heldUntil: Date | null;
+}): React.ReactElement {
   return (
     <div
       role="alert"
@@ -338,17 +352,16 @@ function DeclineBanner({ decline, event }: { decline: Decline; event: Date }): R
           Your card was declined — you haven&apos;t been charged
         </p>
         <p className="text-[12.5px] leading-relaxed text-stone-700">
-          {decline.message} Try the same card again, use another card, or call your bank.{' '}
-          <strong className="font-semibold">
-            {SHORT_DAY.format(event)} stays held for you for 24 hours.
-          </strong>
+          {decline.message} Try the same card again, use another card, or call your bank.
+          {heldUntil ? (
+            <>
+              {' '}
+              <strong className="font-semibold">
+                {SHORT_DAY.format(event)} stays held for you until {SHORT_DAY.format(heldUntil)}.
+              </strong>
+            </>
+          ) : null}
         </p>
-        {decline.attempts >= 2 ? (
-          <p className="mt-2 text-[12.5px] leading-relaxed text-stone-600">
-            It has declined twice — don&apos;t try a third time, because repeated attempts can
-            extend the hold. Message the vendor and they can extend the date instead.
-          </p>
-        ) : null}
       </div>
     </div>
   );

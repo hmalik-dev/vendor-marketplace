@@ -91,7 +91,7 @@ describe('VendorPaymentsPage', () => {
     await renderPage({ stripeAccountId: null, stripeOnboarded: false });
 
     const banner = screen.getByText(/You can't take payment until payouts are connected\./);
-    expect(banner.textContent).toContain('It takes about five minutes.');
+    expect(banner.textContent).toBe("You can't take payment until payouts are connected.");
 
     // Gold: this is waiting on the vendor, and nothing has failed.
     const surface = screen.getAllByRole('status')[0]!;

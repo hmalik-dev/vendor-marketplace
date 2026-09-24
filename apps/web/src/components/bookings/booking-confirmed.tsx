@@ -196,8 +196,8 @@ export function BookingConfirmed({
         `01-foundations.md`.
       */}
       <p className="mt-2.5 max-w-[480px] text-center text-lg leading-prose text-stone-0">
-        {vendor.businessName} has been paid into escrow and your booking is confirmed. They&apos;ll
-        message you two weeks out to plan the timeline.
+        Your booking with {vendor.businessName} is confirmed. Your payment is held until the event,
+        then released.
       </p>
 
       {/*

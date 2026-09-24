@@ -1,5 +1,9 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { BRAND_NAME, payoutReleaseAt } from '@vendor-marketplace/shared';
+import {
+  BOOKING_PAYMENT_WINDOW_DAYS,
+  BRAND_NAME,
+  payoutReleaseAt,
+} from '@vendor-marketplace/shared';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CheckoutScreen } from './checkout-screen';
@@ -93,7 +97,7 @@ describe('CheckoutScreen', () => {
     expect(screen.getByRole('heading', { name: 'Confirm and pay' })).toBeDefined();
     expect(
       screen.getByText(
-        'Kessler & Co. accepted your request on May 2. Paying now locks June 14 in their calendar.',
+        'Kessler & Co. accepted your request on May 2. Paying now confirms your booking for June 14.',
       ),
     ).toBeDefined();
   });
@@ -293,7 +297,17 @@ describe('CheckoutScreen', () => {
 
       const alert = await screen.findByRole('alert');
       expect(alert.textContent).toContain("Your card was declined — you haven't been charged");
-      expect(alert.textContent).toContain('June 14 stays held for you for 24 hours.');
+      // Accepted May 2 at noon UTC, plus the payment window, is when the hold ends.
+      const heldUntil = new Date(
+        checkout().acceptedAt!.getTime() + BOOKING_PAYMENT_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+      );
+      const heldUntilLabel = heldUntil.toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        timeZone: 'UTC',
+      });
+      expect(alert.textContent).toContain(`June 14 stays held for you until ${heldUntilLabel}.`);
+      expect(alert.textContent).not.toContain('24 hours');
       expect(alert.textContent).toContain('Try the same card again, use another card');
       // It stayed on the screen; a declined charge navigates nowhere.
       expect(pushMock).not.toHaveBeenCalled();
@@ -318,20 +332,23 @@ describe('CheckoutScreen', () => {
       ).toBeDefined();
     });
 
-    /*
-     * The no-third-attempt guidance, which is the one piece of advice on this
-     * screen the customer cannot work out for themselves: repeated attempts can
-     * extend the bank's hold.
-     */
-    it('warns against a third attempt only after the second failure', async () => {
+    it('claims no hold when the request carries no acceptance time', async () => {
+      render(<CheckoutScreen checkout={checkout({ acceptedAt: null })} requestId="req-1" />);
+
+      await userEvent.click(screen.getByRole('button', { name: /^Pay/ }));
+
+      const alert = await screen.findByRole('alert');
+      expect(alert.textContent).not.toContain('stays held');
+    });
+
+    it('promises no extension of the hold, however many attempts have failed', async () => {
       render(<CheckoutScreen checkout={checkout()} requestId="req-1" />);
 
       await userEvent.click(screen.getByRole('button', { name: /^Pay/ }));
-      expect(screen.queryByText(/don't try a third time/)).toBeNull();
-
       await userEvent.click(screen.getByRole('button', { name: /^Try this payment again/ }));
 
-      expect(await screen.findByText(/don't try a third time/)).toBeDefined();
+      const alert = await screen.findByRole('alert');
+      expect(alert.textContent).not.toMatch(/extend|third time/);
     });
   });
 });
