@@ -8,6 +8,8 @@
  * costs one round trip.
  */
 
+import { setRefusedTokenHandler } from '../api-client';
+import { REFUSED_TOKEN_HEADER } from './refused-token-header';
 import { tokenExpiryMs } from './token-expiry';
 
 /** Refetch when the cached token has this long or less left. */
@@ -23,10 +25,11 @@ interface CachedToken {
 let cached: CachedToken | null = null;
 let inflight: Promise<string | null> | null = null;
 
-async function fetchToken(): Promise<string | null> {
+async function fetchToken(refused?: string): Promise<string | null> {
   const response = await fetch(SESSION_TOKEN_PATH, {
     cache: 'no-store',
     credentials: 'same-origin',
+    ...(refused ? { headers: { [REFUSED_TOKEN_HEADER]: refused } } : {}),
   });
 
   if (response.status === 401 || (await authUnavailable(response))) {
@@ -87,3 +90,20 @@ export async function getSessionToken(): Promise<string | null> {
 export function clearSessionToken(): void {
   cached = null;
 }
+
+/**
+ * A 401 on the cached token (VEN-717): another device ended a session, and the
+ * web instance that minted this token has no marker to tell it so. Ask the route
+ * for a re-mint, once at a time, and hand the caller the new token.
+ */
+setRefusedTokenHandler((refused) => {
+  if (cached?.token === refused) {
+    cached = null;
+  }
+
+  inflight ??= fetchToken(refused).finally(() => {
+    inflight = null;
+  });
+
+  return inflight;
+});

@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
+import { apiRequest } from '../api-client';
 import { clearSessionToken, getSessionToken, REFRESH_WINDOW_MS } from './client';
 
 /** An unsigned JWT-shaped string whose payload carries `exp` (seconds). */
@@ -122,5 +124,48 @@ describe('getSessionToken', () => {
     fetchMock.mockResolvedValue(new Response('boom', { status: 502 }));
 
     await expect(getSessionToken()).rejects.toThrow('502');
+  });
+});
+
+describe('a token the API refuses (VEN-717)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    fetchMock.mockReset();
+    vi.stubGlobal('fetch', fetchMock);
+    clearSessionToken();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('asks the route for a re-mint naming the refused token, then retries with the new one', async () => {
+    const stale = jwt(nowSeconds + 900, 'stale');
+    const fresh = jwt(nowSeconds + 901, 'fresh');
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
+      const headers = (init.headers ?? {}) as Record<string, string>;
+
+      if (url === '/api/session/token') {
+        return headers['x-refused-token'] === stale ? answer(fresh) : answer(stale);
+      }
+
+      return headers.authorization === `Bearer ${fresh}`
+        ? new Response(JSON.stringify({ ok: true }), { status: 200 })
+        : new Response(
+            JSON.stringify({ statusCode: 401, error: 'UNAUTHORIZED', message: 'Session ended' }),
+            { status: 401 },
+          );
+    });
+
+    const first = await getSessionToken();
+    const result = await apiRequest('/users/me', {
+      schema: z.object({ ok: z.boolean() }),
+      token: first,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(await getSessionToken()).toBe(fresh);
   });
 });

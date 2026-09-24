@@ -3,7 +3,7 @@ import { createNeonAuth } from '@neondatabase/auth/next/server';
 import * as Sentry from '@sentry/nextjs';
 import { cookies } from 'next/headers';
 import { cache } from 'react';
-import { API_REQUEST_TIMEOUT_MS } from '@/lib/api-client';
+import { API_REQUEST_TIMEOUT_MS, setRefusedTokenHandler } from '@/lib/api-client';
 import { tokenExpiryMs } from './token-expiry';
 
 /**
@@ -144,33 +144,41 @@ export const getServerSession = cache(
       return { userId: remembered.userId, token: remembered.token };
     }
 
-    if (!authConfigured()) {
-      reportMissingConfig();
-      return null;
-    }
-
-    const auth = neonAuth();
-
-    const sessionResult = await withDeadline(auth.getSession(), 'getSession');
-
-    if (!sessionResult.data?.user) {
-      return null;
-    }
-    const { user } = sessionResult.data;
-
-    const tokenResult = await withDeadline(auth.token(), 'token');
-
-    if (!tokenResult.data?.token) {
-      return null;
-    }
-    const { token } = tokenResult.data;
-
-    const minted: ServerSession = { userId: user.id, token };
-    remember(cookieValue, minted, marker);
-
-    return minted;
+    return mintSession(cookieValue, marker);
   },
 );
+
+/** Asks Neon Auth who the caller is and for a fresh JWT, and remembers the answer. */
+async function mintSession(
+  cookieValue: string,
+  marker: string | null,
+): Promise<ServerSession | null> {
+  if (!authConfigured()) {
+    reportMissingConfig();
+    return null;
+  }
+
+  const auth = neonAuth();
+
+  const sessionResult = await withDeadline(auth.getSession(), 'getSession');
+
+  if (!sessionResult.data?.user) {
+    return null;
+  }
+  const { user } = sessionResult.data;
+
+  const tokenResult = await withDeadline(auth.token(), 'token');
+
+  if (!tokenResult.data?.token) {
+    return null;
+  }
+  const { token } = tokenResult.data;
+
+  const minted: ServerSession = { userId: user.id, token };
+  remember(cookieValue, minted, marker);
+
+  return minted;
+}
 
 /**
  * Neon Auth rate-limits `/get-session` and `/token` (429
@@ -201,6 +209,7 @@ interface MintedSession extends ServerSession {
 }
 
 const mintedSessions = new Map<string, MintedSession>();
+const refreshing = new Map<string, Promise<ServerSession | null>>();
 
 /**
  * The two names the SDK writes its session cookie under: `__Secure-` over
@@ -311,6 +320,55 @@ export function forgetSessionsFor(userId: string): void {
     }
   }
 }
+
+/**
+ * The answer to a 401 on a token this process handed out (VEN-717). A revoke
+ * bumps the account's `sessions_invalidated_at`, and only the device that asked
+ * carries {@link REVOKE_MARKER_COOKIE}; a third device signed in on another
+ * instance's cache has no marker, so that instance serves it a pre-revoke JWT
+ * the API refuses. The refusal is the one signal every device gets, so it
+ * drops every entry holding that token and mints again from the provider. A
+ * session the provider has ended mints nothing, so a revoked device still gets
+ * none. When the caller's entry was already replaced (the render's other calls
+ * refused the same token), that newer token is returned without another mint.
+ */
+export async function refreshRefusedToken(refused: string): Promise<ServerSession | null> {
+  const cookieValue = await sessionCookieValue();
+
+  if (cookieValue === null) {
+    return null;
+  }
+
+  const marker = await revokeMarkerValue();
+  const remembered = mintedSessions.get(cookieValue);
+
+  if (remembered && remembered.token !== refused && remembered.expiresAtMs > Date.now()) {
+    return { userId: remembered.userId, token: remembered.token };
+  }
+
+  for (const [key, minted] of mintedSessions) {
+    if (minted.token === refused) {
+      mintedSessions.delete(key);
+    }
+  }
+
+  // Calls that refused the same token at once share one mint.
+  const refreshKey = `${cookieValue}\n${refused}`;
+  const inflight = refreshing.get(refreshKey);
+
+  if (inflight) {
+    return inflight;
+  }
+
+  const minting = mintSession(cookieValue, marker).finally(() => {
+    refreshing.delete(refreshKey);
+  });
+  refreshing.set(refreshKey, minting);
+
+  return minting;
+}
+
+setRefusedTokenHandler(async (refused) => (await refreshRefusedToken(refused))?.token ?? null);
 
 /** Test seam: forgets every remembered session, and that the outage was reported. */
 export function clearServerSessions(): void {
