@@ -2,7 +2,9 @@
 
 import { SignOutButton } from '@/components/auth/sign-out-button';
 import { usePathname } from 'next/navigation';
-import { accountLinks, SIGN_OUT_REDIRECT } from '@/components/account-menu';
+import type { UserRole } from '@vendor-marketplace/shared';
+import { accountLinksFor, roleHasMessages } from '@/components/account-links';
+import { SIGN_OUT_REDIRECT } from '@/components/account-menu';
 import { MARKETING_LINKS } from '@/components/marketing-nav';
 import { NAV_DRAWER_ROW_CLASS, NavDrawer } from '@/components/nav-drawer';
 
@@ -18,8 +20,7 @@ import { NAV_DRAWER_ROW_CLASS, NavDrawer } from '@/components/nav-drawer';
  *   quietly reintroducing the nav on every screen. Off `/`, "Sign in" and the
  *   Sign up pill both stay in the bar and there is nothing left to put away.
  * - **Signed in** it holds Dashboard, which the header hides below `sm` for
- *   width, and every row of the avatar's account menu — `Account settings`,
- *   `Contact support` and `Sign out` too — so a narrow width loses nothing the menu offers (VEN-403).
+ *   width, and every row of the avatar's account menu for the reader's role, `Messages` where the role has an inbox, and `Sign out` — so a narrow width loses nothing the menu offers (VEN-403).
  */
 export function SignedOutDrawer(): React.ReactElement | null {
   const pathname = usePathname();
@@ -38,28 +39,21 @@ export function SignedOutDrawer(): React.ReactElement | null {
 
 export interface SignedInDrawerProps {
   /**
-   * What the `/dashboard` row is called for this reader.
-   *
-   * Passed in rather than resolved here: this is a Client Component and the
-   * role lives on the server, and the drawer holds the *same* control the bar
-   * hides below `sm` — so one label, resolved once, in
-   * `DASHBOARD_LABEL_BY_ROLE`. Two copies of that decision is how the bar and
-   * the drawer end up calling one destination two things.
+   * The reader's role, which decides the rows: the same `accountLinksFor` list
+   * the avatar menu reads, so the drawer, which holds the control the bar
+   * hides below `sm`, names it what the bar does. `Messages` follows the first
+   * row for the roles that have an inbox.
    */
-  dashboardLabel: string;
-  /** Whether the reader is a customer, whose drawer also carries `My profile`. */
-  customerProfile?: boolean;
+  role: UserRole;
 }
 
-export function SignedInDrawer({
-  dashboardLabel,
-  customerProfile,
-}: SignedInDrawerProps): React.ReactElement {
-  const [dashboard, ...rest] = accountLinks(dashboardLabel, undefined, { customerProfile });
+export function SignedInDrawer({ role }: SignedInDrawerProps): React.ReactElement {
+  const [first, ...rest] = accountLinksFor(role);
+  const messages = roleHasMessages(role) ? [{ label: 'Messages', href: '/messages' }] : [];
 
   return (
     <NavDrawer
-      links={[dashboard, { label: 'Messages', href: '/messages' }, ...rest]}
+      links={[...(first ? [first] : []), ...messages, ...rest]}
       action={
         <SignOutButton redirectUrl={SIGN_OUT_REDIRECT}>
           <button type="button" className={NAV_DRAWER_ROW_CLASS}>

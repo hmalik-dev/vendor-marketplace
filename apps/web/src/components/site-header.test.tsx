@@ -139,12 +139,12 @@ describe('SiteHeader', () => {
    * of other vendors and `redirectVendorToDashboard` sends a vendor straight
    * back out of it, so a wordmark pointing there makes the one control every
    * screen carries a round trip through a redirect. A customer's home is the
-   * marketplace, and an admin renders it too. Frame `30`.
+   * marketplace, and an admin's is the console (VEN-702). Frame `30`.
    */
   it.each([
     ['vendor' as const, '/dashboard'],
     ['customer' as const, '/'],
-    ['admin' as const, '/'],
+    ['admin' as const, '/admin'],
     [null, '/'],
   ])('points the wordmark at home as a %s reads it', async (role, href) => {
     authState = role === null ? 'signed-out' : 'signed-in';
@@ -281,6 +281,25 @@ describe('SiteHeader', () => {
   });
 
   /*
+   * VEN-702: an admin lives on `/admin` and has no inbox, so the bar draws no
+   * `Messages` link and no bell; a customer and a vendor keep both.
+   */
+  it.each([
+    ['customer' as const, true],
+    ['vendor' as const, true],
+    ['admin' as const, false],
+  ])('draws Messages and the bell for a %s: %s', async (role, drawn) => {
+    authState = 'signed-in';
+    currentRole = role;
+
+    render(await SiteHeader());
+
+    expect(screen.queryByRole('link', { name: 'Messages' }) !== null).toBe(drawn);
+    expect(screen.queryByRole('button', { name: 'Notifications' }) !== null).toBe(drawn);
+    expect(screen.getByRole('button', { name: 'Account menu' })).toBeDefined();
+  });
+
+  /*
    * One control, three destinations — `/dashboard` resolves the role and
    * forwards — so no single string is true for every reader. The label is
    * therefore the role's, and it is the same word in the bar and in the drawer
@@ -362,7 +381,7 @@ describe('SiteHeader', () => {
     [
       'customer' as const,
       [
-        ['Bookings', '/dashboard'],
+        ['My bookings', '/dashboard'],
         ['My profile', '/customer/profile'],
         ['Account settings', '/account/settings'],
         ['Contact support', '/support'],
@@ -379,9 +398,8 @@ describe('SiteHeader', () => {
     [
       'admin' as const,
       [
-        ['Admin', '/dashboard'],
+        ['Admin', '/admin'],
         ['Account settings', '/account/settings'],
-        ['Contact support', '/support'],
       ],
     ],
   ])('opens a %s account menu of exactly its own rows and sign out', async (role, rows) => {

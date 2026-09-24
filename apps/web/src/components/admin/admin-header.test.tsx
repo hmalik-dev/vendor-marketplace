@@ -110,7 +110,7 @@ describe('AdminHeader', () => {
    * VEN-677, ruled by the account holder: the console's avatar opens the same
    * account menu as the site header's, with its first row back to the console.
    */
-  it('opens the account menu: the console, settings, support and sign out', () => {
+  it('opens the account menu: the console, settings and sign out, with no support row', () => {
     render(<AdminHeader email={EMAIL} name="Admin" />);
 
     // jsdom has no PointerEvent, and Radix opens a menu from the keyboard too.
@@ -122,7 +122,6 @@ describe('AdminHeader', () => {
     expect(items.map((item) => [item.textContent, item.getAttribute('href')])).toEqual([
       ['Admin', '/admin'],
       ['Account settings', '/account/settings'],
-      ['Contact support', '/support'],
       ['Sign out', null],
     ]);
   });

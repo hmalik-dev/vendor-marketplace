@@ -42,82 +42,78 @@ afterEach(() => {
   signOut.mockClear();
 });
 
+const SIGN_OUT_ROW = ['Sign out', null];
+
 /**
- * The drawer holds the *same* control the bar hides below `sm`, so it must call
- * it the same thing. Two copies of that decision is how one destination ends up
- * with two names, which is the shape of the defect #361 filed against the bar.
- *
- * The role lives on the server and this is a Client Component, so the label
- * arrives as a prop — and what is worth pinning is that every role's label
- * reaches the rendered row, not that the component knows how to look one up.
+ * The drawer holds the *same* rows the avatar menu does, read from the same
+ * `accountLinksFor` list: the rows below are pinned by role so a row added to
+ * one surface and not the other fails here (VEN-702). `Messages` follows the
+ * first row where the role has an inbox; an admin has none.
  */
 describe('SignedInDrawer', () => {
-  it.each(Object.entries(DASHBOARD_LABEL_BY_ROLE))(
-    'labels the dashboard row for a %s account',
-    async (_role, label) => {
-      const user = userEvent.setup();
-
-      render(<SignedInDrawer dashboardLabel={label} />);
-      await user.click(screen.getByRole('button', { name: 'Open menu' }));
-
-      expect(screen.getByRole('link', { name: label })).toHaveProperty(
-        'href',
-        'http://localhost:3000/dashboard',
-      );
-      expect(screen.getByRole('link', { name: 'Messages' })).toHaveProperty(
-        'href',
-        'http://localhost:3000/messages',
-      );
-    },
-  );
-
-  /*
-   * VEN-403: at narrow widths the avatar's account menu is out of reach behind
-   * the hamburger, so the drawer carries every row that menu offers.
-   */
-  it('carries the account menu’s rows: dashboard, settings, support and sign out', async () => {
+  it.each([
+    [
+      'customer' as const,
+      [
+        ['My bookings', '/dashboard'],
+        ['Messages', '/messages'],
+        ['My profile', '/customer/profile'],
+        ['Account settings', '/account/settings'],
+        ['Contact support', '/support'],
+        SIGN_OUT_ROW,
+      ],
+    ],
+    [
+      'vendor' as const,
+      [
+        ['Dashboard', '/dashboard'],
+        ['Messages', '/messages'],
+        ['Account settings', '/account/settings'],
+        ['Contact support', '/support'],
+        SIGN_OUT_ROW,
+      ],
+    ],
+    [
+      'admin' as const,
+      [['Admin', '/admin'], ['Account settings', '/account/settings'], SIGN_OUT_ROW],
+    ],
+  ])('carries exactly a %s account’s rows', async (role, expected) => {
     const user = userEvent.setup();
 
-    render(<SignedInDrawer dashboardLabel={DASHBOARD_LABEL_BY_ROLE.vendor} />);
+    render(<SignedInDrawer role={role} />);
     await user.click(screen.getByRole('button', { name: 'Open menu' }));
 
     const rows = screen.getByRole('navigation', { name: 'Menu' }).querySelectorAll('li > *');
 
-    expect([...rows].map((row) => [row.textContent, row.getAttribute('href')])).toEqual([
-      ['Dashboard', '/dashboard'],
-      ['Messages', '/messages'],
-      ['Account settings', '/account/settings'],
-      ['Contact support', '/support'],
-      ['Sign out', null],
-    ]);
-    await user.click(screen.getByRole('button', { name: 'Sign out' }));
-    expect(signOut).toHaveBeenCalledExactlyOnceWith('/');
+    expect([...rows].map((row) => [row.textContent, row.getAttribute('href')])).toEqual(expected);
   });
 
-  it('adds My profile for a customer, between Messages and settings', async () => {
+  it('signs out to the home page', async () => {
     const user = userEvent.setup();
 
-    render(<SignedInDrawer dashboardLabel={DASHBOARD_LABEL_BY_ROLE.customer} customerProfile />);
+    render(<SignedInDrawer role="vendor" />);
     await user.click(screen.getByRole('button', { name: 'Open menu' }));
+    await user.click(screen.getByRole('button', { name: 'Sign out' }));
 
-    const rows = screen.getByRole('navigation', { name: 'Menu' }).querySelectorAll('li > *');
-
-    expect([...rows].map((row) => [row.textContent, row.getAttribute('href')])).toEqual([
-      ['Bookings', '/dashboard'],
-      ['Messages', '/messages'],
-      ['My profile', '/customer/profile'],
-      ['Account settings', '/account/settings'],
-      ['Contact support', '/support'],
-      ['Sign out', null],
-    ]);
+    expect(signOut).toHaveBeenCalledExactlyOnceWith('/');
   });
 
   it('never writes "Dashboard" for a customer', async () => {
     const user = userEvent.setup();
 
-    render(<SignedInDrawer dashboardLabel={DASHBOARD_LABEL_BY_ROLE.customer} />);
+    render(<SignedInDrawer role="customer" />);
     await user.click(screen.getByRole('button', { name: 'Open menu' }));
 
     expect(document.body.textContent).not.toContain('Dashboard');
+  });
+
+  it('offers an admin neither Messages nor Contact support', async () => {
+    const user = userEvent.setup();
+
+    render(<SignedInDrawer role="admin" />);
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+
+    expect(screen.queryByRole('link', { name: 'Messages' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Contact support' })).toBeNull();
   });
 });

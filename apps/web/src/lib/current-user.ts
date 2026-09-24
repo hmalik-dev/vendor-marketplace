@@ -147,6 +147,22 @@ export async function requireRole(role: UserRole, returnTo?: string): Promise<Wi
 }
 
 /**
+ * Loads the caller and sends an admin to their console: the gate for a surface
+ * an admin has no use for, `/messages` (VEN-702). `requireRole` admits one
+ * role; this turns one away, and `role-routes.guard.test.ts` reads it as a
+ * gate that denies `admin`.
+ */
+export async function requireNonAdmin(returnTo?: string): Promise<WireUser> {
+  const user = await requireCurrentUser(returnTo);
+
+  if (user.role === 'admin') {
+    redirect(DASHBOARD_PATH_BY_ROLE.admin);
+  }
+
+  return user;
+}
+
+/**
  * Guards the authentication pages. Somebody who already holds a session has
  * nothing to do on sign-in or sign-up, so send them to `/after-sign-in`, which
  * resolves the role from the local record and forwards on.
