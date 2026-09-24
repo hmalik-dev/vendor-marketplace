@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures.js';
 import { E2E_VENDOR_SLUG } from './fixtures-data.js';
+import { waitForHydration } from './hydration.js';
 
 /**
  * The core transaction's first half: a customer sends a booking request.
@@ -15,14 +16,17 @@ test.describe('booking request', () => {
   test('takes a customer from the vendor profile to a sent request', async ({ customerPage }) => {
     await customerPage.goto(`/vendors/${E2E_VENDOR_SLUG}`);
 
-    const request = customerPage.getByRole('link', { name: /request booking/i }).first();
-    const requestButton = customerPage.getByRole('button', { name: /request booking/i }).first();
-
-    if (await request.count()) {
-      await request.click();
-    } else {
-      await requestButton.click();
-    }
+    /*
+     * The rail streams in behind the profile's loading boundary (VEN-715), so it
+     * is not on the page when `goto` resolves. The CTA is a link, and reading
+     * whether it exists before React owns it (`count()`) took the empty answer
+     * for "there is no link" and fell through to a button that never exists.
+     */
+    await waitForHydration(customerPage, `a[href^="/vendors/${E2E_VENDOR_SLUG}/request"]`);
+    await customerPage
+      .getByRole('link', { name: /request booking/i })
+      .first()
+      .click();
 
     await expect(customerPage).toHaveURL(/\/vendors\/.+\/request/);
 

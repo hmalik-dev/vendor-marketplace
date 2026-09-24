@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { BOOKINGS_PAUSED_NOTICE } from '@vendor-marketplace/shared';
 import { Banner } from '@/components/ui/banner';
+import { RetryLink } from '@/components/checkout/retry-link';
 import { Button } from '@/components/ui/button';
 
 /**
@@ -255,10 +256,13 @@ export function CheckoutUnavailable({
         <Button asChild variant="primary">
           {/*
             A link, not a client-side retry: the intent is opened while the page
-            renders on the server, so navigating to the same URL *is* the retry
-            and there is no state on this screen worth preserving across it.
+            renders on the server, so re-rendering this URL *is* the retry and
+            there is no state on this screen worth preserving across it. It is a
+            `RetryLink` because a plain `<Link>` to the URL the reader is on is
+            answered from the router cache, and the retry would never reach the
+            server.
           */}
-          <Link href={copy.action.href}>{copy.action.label}</Link>
+          <RetryLink href={copy.action.href}>{copy.action.label}</RetryLink>
         </Button>
         {copy.secondary ? (
           <Button asChild variant="secondary">
