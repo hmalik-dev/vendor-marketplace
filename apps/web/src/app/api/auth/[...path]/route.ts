@@ -1,7 +1,12 @@
 import * as Sentry from '@sentry/nextjs';
 import type { NextRequest } from 'next/server';
 import { after, NextResponse } from 'next/server';
-import { SIGN_UP_ROLES, type SignUpRole, WEB_TIER_KEY_HEADER } from '@vendor-marketplace/shared';
+import {
+  PASSWORD_MIN_LENGTH,
+  SIGN_UP_ROLES,
+  type SignUpRole,
+  WEB_TIER_KEY_HEADER,
+} from '@vendor-marketplace/shared';
 import {
   authConfigured,
   forgetSessionsFor,
@@ -245,6 +250,44 @@ const SIGN_UP_ROLE_ATTEMPTS = 2;
 const REQUEST_RESET = 'email-otp/request-password-reset';
 const RESET_PATHS: ReadonlySet<string> = new Set([REQUEST_RESET, 'email-otp/reset-password']);
 
+/**
+ * The request body as text, or `null` when it is over `MAX_BODY_BYTES`. The
+ * header is only a hint a chunked request omits, so the stream is counted as it
+ * is read and cancelled at the cap, and the rest is never buffered.
+ */
+async function readBounded(request: NextRequest): Promise<string | null> {
+  if (Number(request.headers.get('content-length') ?? 0) > MAX_BODY_BYTES) {
+    return null;
+  }
+
+  const reader = request.body?.getReader();
+
+  if (reader === undefined) {
+    return '';
+  }
+
+  const decoder = new TextDecoder();
+  let text = '';
+  let received = 0;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+
+    if (done) {
+      return text + decoder.decode();
+    }
+
+    received += value.byteLength;
+
+    if (received > MAX_BODY_BYTES) {
+      await reader.cancel();
+      return null;
+    }
+
+    text += decoder.decode(value, { stream: true });
+  }
+}
+
 function emailIn(body: string): string {
   try {
     const email = (JSON.parse(body) as { email?: unknown } | null)?.email;
@@ -265,14 +308,15 @@ async function forwardBudgeted(
   context: RouteContext,
   path: string[],
 ): Promise<Response> {
-  if (Number(request.headers.get('content-length') ?? 0) > MAX_BODY_BYTES) {
+  let body = await readBounded(request);
+  const email = emailIn(body ?? '');
+
+  if (body === null || email === '') {
     return NextResponse.json({ message: 'Bad request' }, { status: 400 });
   }
 
-  let body = await request.text();
-  const email = emailIn(body);
-
-  if (email === '') {
+  // The floor is refused before the provider is called, and before the address budget is touched.
+  if (path.join('/') === SIGN_UP && !meetsPasswordFloor(body)) {
     return NextResponse.json({ message: 'Bad request' }, { status: 400 });
   }
 
@@ -312,6 +356,8 @@ async function forwardBudgeted(
   const headers = new Headers(request.headers);
   headers.delete('content-length');
   headers.delete('content-encoding');
+  // The body was checked as JSON, so it reaches the provider as JSON and nothing else.
+  headers.set('content-type', 'application/json');
   const upstream = new Request(request.url, { method: 'POST', headers, body });
   const response = await neonAuth()
     .handler()
@@ -486,16 +532,17 @@ async function forwardReset(
   context: RouteContext,
   path: string[],
 ): Promise<Response> {
-  if (Number(request.headers.get('content-length') ?? 0) > MAX_BODY_BYTES) {
-    return NextResponse.json({ message: 'Bad request' }, { status: 400 });
-  }
-
-  const body = await request.text();
-  const email = emailIn(body);
+  const body = await readBounded(request);
+  const email = emailIn(body ?? '');
 
   // Both calls need an address, and the per-address budget only works if every
   // forwarded call is charged to one: a body this cannot read is not forwarded.
-  if (email === '') {
+  if (body === null || email === '') {
+    return NextResponse.json({ message: 'Bad request' }, { status: 400 });
+  }
+
+  // The code check sets the new password, so the floor holds here as at sign-up.
+  if (path.join('/') !== REQUEST_RESET && !meetsPasswordFloor(body)) {
     return NextResponse.json({ message: 'Bad request' }, { status: 400 });
   }
 
@@ -513,6 +560,8 @@ async function forwardReset(
   const headers = new Headers(request.headers);
   headers.delete('content-length');
   headers.delete('content-encoding');
+  // The body was checked as JSON, so it reaches the provider as JSON and nothing else.
+  headers.set('content-type', 'application/json');
   const upstream = new Request(request.url, { method: 'POST', headers, body });
   const call = (): Promise<Response> =>
     neonAuth()
@@ -559,6 +608,19 @@ function isFilled(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
 }
 
+function isLongEnough(value: unknown): value is string {
+  return typeof value === 'string' && value.length >= PASSWORD_MIN_LENGTH;
+}
+
+/** Whether the body's `password` is a string at or over the product's password floor. */
+function meetsPasswordFloor(body: string): boolean {
+  try {
+    return isLongEnough((JSON.parse(body) as { password?: unknown } | null)?.password);
+  } catch {
+    return false;
+  }
+}
+
 /** The two passwords a change carries, and nothing else the client sent; `null` when either is missing. */
 function passwordsIn(body: string): PasswordChange | null {
   try {
@@ -566,7 +628,7 @@ function passwordsIn(body: string): PasswordChange | null {
     const current = parsed.currentPassword;
     const next = parsed.newPassword;
 
-    return isFilled(current) && isFilled(next)
+    return isFilled(current) && isLongEnough(next)
       ? { currentPassword: current, newPassword: next }
       : null;
   } catch {
@@ -596,11 +658,8 @@ async function forwardChangePassword(
   context: RouteContext,
   path: string[],
 ): Promise<Response> {
-  if (Number(request.headers.get('content-length') ?? 0) > MAX_BODY_BYTES) {
-    return NextResponse.json({ message: 'Bad request' }, { status: 400 });
-  }
-
-  const change = passwordsIn(await request.text());
+  const text = await readBounded(request);
+  const change = text === null ? null : passwordsIn(text);
 
   if (change === null) {
     return NextResponse.json({ message: 'Bad request' }, { status: 400 });

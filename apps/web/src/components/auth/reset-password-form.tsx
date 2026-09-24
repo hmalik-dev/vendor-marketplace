@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { PASSWORD_MIN_LENGTH } from '@vendor-marketplace/shared';
 import { AUTH_COPY, failureCopy } from '@/app/auth-copy';
 import { AuthField } from '@/components/auth/auth-field';
 import { Banner } from '@/components/ui/banner';
@@ -127,7 +128,7 @@ export function ResetPasswordForm({ initialEmail }: ResetPasswordFormProps): Rea
         placeholder="••••••••••"
         name="password"
         autoComplete="new-password"
-        minLength={10}
+        minLength={PASSWORD_MIN_LENGTH}
         required
         value={password}
         onChange={(event) => setPassword(event.target.value)}
@@ -136,7 +137,9 @@ export function ResetPasswordForm({ initialEmail }: ResetPasswordFormProps): Rea
       <Button
         type="submit"
         loading={busy}
-        disabled={email.trim() === '' || code.trim().length !== 6 || password.length < 10}
+        disabled={
+          email.trim() === '' || code.trim().length !== 6 || password.length < PASSWORD_MIN_LENGTH
+        }
       >
         {AUTH_COPY.resetSubmit}
       </Button>

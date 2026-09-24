@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BRAND_NAME } from '@vendor-marketplace/shared';
+import { BRAND_NAME, PASSWORD_MIN_LENGTH } from '@vendor-marketplace/shared';
 import { AUTH_COPY } from '@/app/auth-copy';
 
 const replace = vi.fn();
@@ -130,6 +130,21 @@ describe('SignUpForm', () => {
 
     await user.click(screen.getByRole('button', { name: CREATE }));
     await waitFor(() => expect(signUpWithEmail).toHaveBeenCalledTimes(1));
+  });
+
+  it.each([
+    [PASSWORD_MIN_LENGTH - 1, true],
+    [PASSWORD_MIN_LENGTH, false],
+  ])('with a %i-character password, submit disabled is %s', async (length, disabled) => {
+    const user = userEvent.setup();
+    render(<SignUpForm initialRole="customer" vendorInviteOnly={false} />);
+
+    await user.type(screen.getByLabelText('Email'), 'sam@example.com');
+    await user.type(screen.getByLabelText('Password'), 'x'.repeat(length));
+
+    expect((screen.getByRole('button', { name: CREATE }) as HTMLButtonElement).disabled).toBe(
+      disabled,
+    );
   });
 
   it('blocks the Enter key the same way as the button', async () => {
