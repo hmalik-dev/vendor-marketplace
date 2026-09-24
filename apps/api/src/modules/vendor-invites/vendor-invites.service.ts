@@ -143,6 +143,7 @@ export async function seedApplicationOnRefusal(
   db: AppDatabase,
   error: unknown,
   email: string,
+  log?: { error: (details: unknown, message: string) => void },
 ): Promise<never> {
   if (error instanceof AppError && error.code === ERROR_CODES.VENDOR_NOT_INVITED) {
     /*
@@ -159,7 +160,10 @@ export async function seedApplicationOnRefusal(
      * into an opaque 500.
      */
     if (!(await hasLiveAccount(db, email))) {
-      await seedApplication(db, email).catch(() => undefined);
+      // The payload is the error alone: the address is personal data and stays out of the log.
+      await seedApplication(db, email).catch((err: unknown) => {
+        log?.error({ err }, 'waitlist seed failed');
+      });
     }
   }
 

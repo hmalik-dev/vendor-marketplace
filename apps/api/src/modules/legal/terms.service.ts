@@ -202,7 +202,10 @@ export async function acceptTerms(
   loadSnapshot: () => Promise<AuthUserSnapshot>,
   input: { version: string; accepted?: boolean | undefined; role?: SignUpRole | undefined },
   context: AcceptanceContext,
-  log?: { warn: (details: unknown, message: string) => void },
+  log?: {
+    warn: (details: unknown, message: string) => void;
+    error: (details: unknown, message: string) => void;
+  },
 ): Promise<TermsAcceptanceStatus> {
   if (input.accepted === false) {
     throw validationFailed('Tick the box to accept the Terms of Service.');
@@ -276,7 +279,7 @@ export async function acceptTerms(
         );
       });
     } catch (error) {
-      await seedApplicationOnRefusal(db, error, existing.email);
+      await seedApplicationOnRefusal(db, error, existing.email, log);
     }
 
     return termsStatusOf(db, existing);
@@ -329,7 +332,7 @@ export async function acceptTerms(
       return row;
     });
   } catch (error) {
-    await seedApplicationOnRefusal(db, error, snapshot.email);
+    await seedApplicationOnRefusal(db, error, snapshot.email, log);
     throw error;
   }
 
