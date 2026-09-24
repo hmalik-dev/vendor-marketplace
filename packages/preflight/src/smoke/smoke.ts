@@ -142,7 +142,14 @@ export async function runSmokeCheck(options: SmokeOptions): Promise<SmokeResult>
     const response = await fetchWithTimeout(`${api}/ready`, requestTimeoutMs, fetchImpl);
 
     if (!response.ok) {
-      return { ok: false, detail: `HTTP ${response.status} — ${response.body.slice(0, 120)}` };
+      // A database role row-level security does not bind is named in `reason`,
+      // which the 120-character cut below would lose behind the other fields (VEN-671).
+      const reason = /"reason"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(response.body)?.[1];
+
+      return {
+        ok: false,
+        detail: `HTTP ${response.status} — ${reason ?? response.body.slice(0, 120)}`,
+      };
     }
 
     // The body is what proves the dependencies answered, not the status.
@@ -153,7 +160,7 @@ export async function runSmokeCheck(options: SmokeOptions): Promise<SmokeResult>
     }
 
     if (!options.expectCommit) {
-      return { ok: true, detail: 'database and storage up' };
+      return { ok: true, detail: 'database up' };
     }
 
     // A short SHA on either side still has to match, so compare on the prefix.
@@ -167,7 +174,7 @@ export async function runSmokeCheck(options: SmokeOptions): Promise<SmokeResult>
     return {
       ok: matches,
       detail: matches
-        ? `database and storage up, serving ${options.expectCommit.slice(0, 7)}`
+        ? `database up, serving ${options.expectCommit.slice(0, 7)}`
         : `ready, but serving ${serving ? serving.slice(0, 7) : 'an unknown commit'} rather than ${options.expectCommit.slice(0, 7)}`,
     };
   });

@@ -7,6 +7,7 @@ import {
   users,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
+import { eq } from 'drizzle-orm';
 import { Writable } from 'node:stream';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createTestHarness, TEST_ENV, type TestHarness } from '../../testing/test-server.js';
@@ -226,16 +227,93 @@ describe('the operator digest (VEN-405)', () => {
     expect(harness.email.sent).toEqual([]);
   });
 
-  it('sends nothing on an empty day, and does not re-examine it', async () => {
-    expect(await runOperatorDigest(deps(), NOW)).toBe('skipped');
-    expect(harness.email.sent).toEqual([]);
+  it('sends on an empty day too, so its absence means the timer stopped', async () => {
+    expect(await runOperatorDigest(deps(), NOW)).toBe('sent');
 
-    // Activity arriving later that day does not produce a noon "morning" digest.
+    expect(harness.email.sent).toHaveLength(1);
+    expect(harness.email.sent[0]!.text.split('\n')).toEqual([
+      'Daily digest for 2026-09-14',
+      '',
+      'Nothing to report: the digest ran and the last day was quiet',
+      'Last 24 hours',
+      'New sign-ups: none',
+      'Booking requests: 0',
+      'Payments: 0 totalling $0',
+      'Refunds: 0 totalling $0',
+      'Payouts released: 0 totalling $0',
+      'Bounced emails: 0',
+      'Open cases',
+      'Under 1 day: 0; 1–3 days: 0; over 3 days: 0',
+      'Accepted but unpaid, event in the next 48 hours: 0',
+      'Payouts overdue (due more than one sweep interval ago, still unreleased): 0',
+      `Open: ${TEST_ENV.WEB_URL}/admin`,
+    ]);
+
+    // One digest a day: a second tick, or activity arriving later, sends nothing more.
     await seedActivity();
     expect(await runOperatorDigest(deps(), new Date(NOW.getTime() + 4 * HOUR))).toBe(
       'already-claimed',
     );
-    expect(harness.email.sent).toEqual([]);
+    expect(harness.email.sent).toHaveLength(1);
+  });
+
+  it('counts a booking whose payout came due before the last sweep interval and is still unreleased', async () => {
+    await seedActivity();
+    const db = harness.database.db;
+    const [vendor] = await db.select({ id: vendorProfiles.id }).from(vendorProfiles);
+    const [customer] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.role, 'customer'));
+    const overdue = async (
+      eventDate: string,
+      values: Partial<typeof bookings.$inferInsert> = {},
+    ) => {
+      const [request] = await db
+        .insert(bookingRequests)
+        .values({
+          customerId: customer!.id,
+          vendorId: vendor!.id,
+          eventDate,
+          status: 'accepted',
+          createdAt: LONG_AGO,
+        })
+        .returning({ id: bookingRequests.id });
+      await db.insert(bookings).values({
+        requestId: request!.id,
+        customerId: customer!.id,
+        vendorId: vendor!.id,
+        eventDate,
+        status: 'confirmed',
+        payoutModel: 'separate',
+        totalAmountCents: 10_000,
+        platformFeeCents: 1_000,
+        vendorPayoutCents: 9_000,
+        paidAt: LONG_AGO,
+        ...values,
+      });
+    };
+
+    /*
+     * Seventy-two hours (the release window) before `atMidnight` is 00:05 UTC on
+     * the 11th, so the sweep at that moment first found the 11th due, and one
+     * sweep interval earlier only the 10th and before were.
+     */
+    const atMidnight = new Date('2026-09-14T00:05:00Z');
+    // Overdue: due before the previous sweep and still unreleased.
+    await overdue('2026-09-10');
+    await overdue('2026-09-09');
+    // Not counted: already released, and an event that became due only within the last interval.
+    await overdue('2026-09-08', { payoutReleasedAt: ago(30) });
+    await overdue('2026-09-11');
+
+    expect(await runOperatorDigest(deps({ clock: () => atMidnight }), atMidnight)).toBe('sent');
+
+    const lines = harness.email.sent[0]!.text.split('\n');
+    expect(lines).toContain(
+      'Payouts overdue (due more than one sweep interval ago, still unreleased): 2',
+    );
+    expect(lines).not.toContain('Nothing to report: the digest ran and the last day was quiet');
   });
 
   it('sends one digest whose totals equal the seeded rows', async () => {
@@ -262,6 +340,7 @@ describe('the operator digest (VEN-405)', () => {
       'Under 1 day: 1; 1–3 days: 1; over 3 days: 1',
       'Accepted but unpaid, event in the next 48 hours: 1',
       `  Request ${expectedUnpaidId}, event 2026-09-15`,
+      'Payouts overdue (due more than one sweep interval ago, still unreleased): 0',
       `Open: ${TEST_ENV.WEB_URL}/admin`,
     ]);
   });
