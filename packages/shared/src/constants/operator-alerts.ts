@@ -131,3 +131,11 @@ export const REFUND_EXPOSURE_AFTER_RELEASE_DAYS = 120;
  */
 export const STRIPE_FEE_ALLOWANCE_BPS = 440;
 export const STRIPE_FEE_ALLOWANCE_FIXED_CENTS = 30;
+
+/**
+ * Stripe's fee for a dispute the platform lost, added to what the vendor owes
+ * (VEN-658). One constant so the ruling on who bears it (VEN-646) is a one-line
+ * change: 0 makes Orla absorb it, this makes the vendor whose booking was
+ * charged back bear it, which is best practice for a high-trust marketplace.
+ */
+export const STRIPE_DISPUTE_FEE_CENTS = 1500;

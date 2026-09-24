@@ -19,7 +19,9 @@ import { notifyVendorUser, PAYOUT_NOTICES, type NotifyDeps } from '../notificati
 import { readPlatformSwitchesUncached } from '../platform-settings/platform-settings.service.js';
 import { findBookingById } from './payments.dao.js';
 import {
+  applyDebtRecovery,
   claimReleasableBooking,
+  planDebtRecovery,
   findDuePayoutBookingIds,
   recordPayoutFailure,
   recordPayoutRelease,
@@ -402,28 +404,55 @@ async function releaseOnePayout(
        */
       const existing = await context.stripe.findTransfer(transferGroup, { live: true });
 
+      /*
+       * What the vendor owes from lost chargebacks is kept back from this
+       * payout (VEN-658), oldest debt first, and whatever is left carries to
+       * the next. A transfer found under the group was already sent for a
+       * netted amount, so the recovery follows what Stripe holds rather than
+       * being planned again; planned either way, it is only written after the
+       * transfer stands, so a failed transfer recovers nothing.
+       *
+       * The idempotency key is per attempt and the amount can differ between
+       * attempts when a debt appears in between. That is safe: `findTransfer`
+       * catches the retry of a transfer that landed, and a request Stripe
+       * refuses for a changed amount is a failure that increments the attempt.
+       */
+      const heldByStripeCents = existing ? existing.amountCents - existing.reversedCents : 0;
+      const recovery = await planDebtRecovery(
+        tx,
+        booking.vendorId,
+        existing
+          ? Math.max(booking.vendorPayoutCents - heldByStripeCents, 0)
+          : booking.vendorPayoutCents,
+      );
+      const nettedCents = recovery.reduce((sum, item) => sum + item.cents, 0);
+      const sendCents = booking.vendorPayoutCents - nettedCents;
+
       const transfer =
         existing ??
-        (await context.stripe.createTransfer({
-          bookingId,
-          /*
-           * The attempt this is, so a retry is a new request at Stripe rather
-           * than a replay of the last failure. Read from the row, which is
-           * where the count durably lives — a rolled-back transaction never
-           * incremented it, so the one case that *must* replay (a transfer that
-           * reached Stripe under a commit that did not land) still does.
-           */
-          attempt: booking.payoutAttempts,
-          /*
-           * The stored figure, never a freshly computed fee. The rate in force
-           * when the card succeeded is already written to this row, and
-           * recomputing the split at release time would silently reprice every
-           * unreleased booking the moment `STRIPE_PLATFORM_FEE_RATE` changed.
-           */
-          amountCents: booking.vendorPayoutCents,
-          destinationAccountId: booking.vendorStripeAccountId,
-          transferGroup,
-        }));
+        (sendCents > 0
+          ? await context.stripe.createTransfer({
+              bookingId,
+              /*
+               * The attempt this is, so a retry is a new request at Stripe rather
+               * than a replay of the last failure. Read from the row, which is
+               * where the count durably lives — a rolled-back transaction never
+               * incremented it, so the one case that *must* replay (a transfer that
+               * reached Stripe under a commit that did not land) still does.
+               */
+              attempt: booking.payoutAttempts,
+              /*
+               * The stored figure less the debt recovered, never a freshly computed
+               * fee. The rate in force when the card succeeded is already written to
+               * this row, and recomputing the split at release time would silently
+               * reprice every unreleased booking the moment `STRIPE_PLATFORM_FEE_RATE`
+               * changed.
+               */
+              amountCents: sendCents,
+              destinationAccountId: booking.vendorStripeAccountId,
+              transferGroup,
+            })
+          : null);
 
       /*
        * A transfer found under the group was made for the obligation as it
@@ -432,24 +461,27 @@ async function releaseOnePayout(
        * is clawed back before the release is recorded — otherwise the full
        * share is booked as the release of a half-share.
        */
-      const surplusCents =
-        transfer.amountCents - (existing?.reversedCents ?? 0) - booking.vendorPayoutCents;
+      const surplusCents = existing
+        ? existing.amountCents - existing.reversedCents - booking.vendorPayoutCents
+        : 0;
 
       if (existing && surplusCents > 0) {
         context.log.warn(
-          { bookingId, transferId: transfer.transferId, surplusCents },
+          { bookingId, transferId: existing.transferId, surplusCents },
           'Found a transfer larger than what is owed; reversing the surplus',
         );
         await context.stripe.reverseTransfer({
-          transferId: transfer.transferId,
+          transferId: existing.transferId,
           amountCents: surplusCents,
           idempotencyKey: `release_${bookingId}_surplus_${booking.payoutAttempts}`,
         });
       }
 
+      await applyDebtRecovery(tx, recovery);
       await recordPayoutRelease(tx, bookingId, {
-        stripeTransferId: transfer.transferId,
+        stripeTransferId: transfer?.transferId ?? null,
         releasedAt: now,
+        debtNettedCents: nettedCents,
       });
 
       releasedVendorId = booking.vendorId;

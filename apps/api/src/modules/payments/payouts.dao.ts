@@ -459,17 +459,116 @@ export async function claimReleasableBooking(
   return rows?.[0] ?? null;
 }
 
-/** Records the transfer that moved this payout, and clears any prior failure. */
+/** One booking's share of a vendor's debt that a payout is about to recover. */
+export interface DebtRecovery {
+  bookingId: string;
+  cents: number;
+}
+
+/**
+ * Decides which of a vendor's outstanding debts a payout of `capCents` recovers
+ * (VEN-658): oldest first, never more than the cap, never more than is owed.
+ *
+ * Reads only; the writes are `applyDebtRecovery`, called once the transfer has
+ * succeeded, so a transfer that fails leaves every debt as it was. The rows are
+ * locked `SKIP LOCKED` in id order, so two sweeps netting the same vendor's
+ * debts cannot deadlock — the one that loses a row simply recovers less now and
+ * the rest carries over.
+ */
+export async function planDebtRecovery(
+  tx: AppDatabase,
+  vendorId: string,
+  capCents: number,
+): Promise<DebtRecovery[]> {
+  if (capCents <= 0) {
+    return [];
+  }
+
+  const rows = await tx
+    .select({
+      id: bookings.id,
+      outstandingCents: sql<number>`(${bookings.vendorOwedCents} - ${bookings.vendorOwedRecoveredCents})::int`,
+    })
+    .from(bookings)
+    .where(
+      and(
+        eq(bookings.vendorId, vendorId),
+        gt(bookings.vendorOwedCents, bookings.vendorOwedRecoveredCents),
+      ),
+    )
+    .orderBy(asc(bookings.id))
+    .for('update', { skipLocked: true });
+
+  const plan: DebtRecovery[] = [];
+  let remaining = capCents;
+
+  for (const row of rows) {
+    const cents = Math.min(row.outstandingCents, remaining);
+
+    if (cents > 0) {
+      plan.push({ bookingId: row.id, cents });
+      remaining -= cents;
+    }
+  }
+
+  return plan;
+}
+
+/** Writes a `planDebtRecovery` plan onto the debts it recovers. Same transaction as the release. */
+export async function applyDebtRecovery(tx: AppDatabase, plan: DebtRecovery[]): Promise<void> {
+  for (const { bookingId, cents } of plan) {
+    await tx
+      .update(bookings)
+      .set({
+        vendorOwedRecoveredCents: sql`${bookings.vendorOwedRecoveredCents} + ${cents}`,
+        updatedAt: sql`now()`,
+      })
+      .where(eq(bookings.id, bookingId));
+  }
+}
+
+/** A vendor's debt for lost chargebacks, and how much of it later payouts have recovered. */
+export interface VendorDebtTotals {
+  outstandingCents: number;
+  recoveredCents: number;
+}
+
+export async function findVendorDebtTotals(
+  db: AppDatabase,
+  vendorId: string,
+): Promise<VendorDebtTotals> {
+  const rows = await db
+    .select({
+      owed: sql<number>`coalesce(sum(${bookings.vendorOwedCents}), 0)::int`,
+      recovered: sql<number>`coalesce(sum(${bookings.vendorOwedRecoveredCents}), 0)::int`,
+    })
+    .from(bookings)
+    .where(eq(bookings.vendorId, vendorId));
+  const row = rows?.[0];
+
+  return {
+    outstandingCents: (row?.owed ?? 0) - (row?.recovered ?? 0),
+    recoveredCents: row?.recovered ?? 0,
+  };
+}
+
+/**
+ * Records the transfer that moved this payout, and clears any prior failure.
+ *
+ * `stripeTransferId` is null when recovery consumed the whole payout, so no
+ * transfer was made; the payout is released all the same.
+ */
 export async function recordPayoutRelease(
   tx: AppDatabase,
   bookingId: string,
-  release: { stripeTransferId: string; releasedAt: Date },
+  release: { stripeTransferId: string | null; releasedAt: Date; debtNettedCents: number },
 ): Promise<void> {
   await tx
     .update(bookings)
     .set({
       stripeTransferId: release.stripeTransferId,
       payoutReleasedAt: release.releasedAt,
+      debtNettedCents: release.debtNettedCents,
       payoutFailureReason: null,
       updatedAt: sql`now()`,
     })

@@ -195,6 +195,11 @@ export default async function AdminVendorDetailPage({
                   'Released by the sweep'
                 )}
               </KeyValue>
+              {vendor.debtOutstandingCents > 0 ? (
+                <KeyValue label="Owed to Orla" kind="mono">
+                  {formatPrice(vendor.debtOutstandingCents)}
+                </KeyValue>
+              ) : null}
             </KeyValueList>
           </AdminCard>
 

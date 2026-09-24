@@ -48,6 +48,7 @@ import {
   type LockRequestRow,
   type StoredLockRow,
 } from './admin-detail.dao.js';
+import { findVendorDebtTotals } from '../payments/payouts.dao.js';
 import { fullName, toVendorRow } from './admin.service.js';
 
 /**
@@ -186,14 +187,16 @@ export async function readVendorDetail(
   }
 
   const range = lockRange(now);
-  const [packages, portfolio, stored, requests, heldBookings, notifications] = await Promise.all([
-    findVendorPackagesForAdmin(db, vendorId),
-    findVendorPortfolioForAdmin(db, vendorId),
-    findStoredCalendarRows(db, vendorId, range),
-    findLiveRequestsHoldingDates(db, vendorId, range, now),
-    findBookingsHoldingDates(db, vendorId, range),
-    readNotifications(db, notificationsSentTo(vendor.userId)),
-  ]);
+  const [packages, portfolio, stored, requests, heldBookings, notifications, debt] =
+    await Promise.all([
+      findVendorPackagesForAdmin(db, vendorId),
+      findVendorPortfolioForAdmin(db, vendorId),
+      findStoredCalendarRows(db, vendorId, range),
+      findLiveRequestsHoldingDates(db, vendorId, range, now),
+      findBookingsHoldingDates(db, vendorId, range),
+      readNotifications(db, notificationsSentTo(vendor.userId)),
+      findVendorDebtTotals(db, vendorId),
+    ]);
 
   return {
     vendor: {
@@ -206,6 +209,7 @@ export async function readVendorDetail(
       isPublished: vendor.isPublished,
       moderationHold: vendor.moderationHold,
       payoutHold: vendor.payoutHold,
+      debtOutstandingCents: debt.outstandingCents,
     },
     packages,
     portfolio,

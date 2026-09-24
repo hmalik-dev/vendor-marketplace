@@ -710,19 +710,21 @@ export async function lowerReleasedVendorPayout(
   transferId: string,
   netCents: number,
 ): Promise<string | null> {
+  /* What Stripe holds is the payout less what later netting kept back, so that gap is not a reversal. */
+  const expectedCents = sql`(${netCents} + ${bookings.debtNettedCents})`;
   const rows = await db
     .update(bookings)
     .set({
-      vendorPayoutCents: netCents,
-      /* Money taken back from the vendor is money they no longer owe. */
-      vendorOwedCents: sql`greatest(${bookings.vendorOwedCents} - (${bookings.vendorPayoutCents} - ${netCents}), 0)`,
+      vendorPayoutCents: expectedCents,
+      /* Money taken back from the vendor is money they no longer owe, but never less than was already recovered. */
+      vendorOwedCents: sql`greatest(${bookings.vendorOwedCents} - (${bookings.vendorPayoutCents} - ${expectedCents}), ${bookings.vendorOwedRecoveredCents})`,
       updatedAt: sql`now()`,
     })
     .where(
       and(
         eq(bookings.stripeTransferId, transferId),
         isNotNull(bookings.payoutReleasedAt),
-        gt(bookings.vendorPayoutCents, netCents),
+        gt(bookings.vendorPayoutCents, expectedCents),
       ),
     )
     .returning({ id: bookings.id });

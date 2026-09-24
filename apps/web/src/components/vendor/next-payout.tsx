@@ -36,7 +36,15 @@ export interface NextPayoutProps {
  * dispute is waiting: the money is still owed, it simply has no date.
  */
 export function NextPayout({ payouts, serverToday }: NextPayoutProps): React.ReactElement {
-  const { pendingCents, pendingCount, next, heldCents, heldCount } = payouts;
+  const {
+    pendingCents,
+    pendingCount,
+    next,
+    heldCents,
+    heldCount,
+    debtOutstandingCents,
+    debtRecoveredCents,
+  } = payouts;
 
   return (
     <div className="rounded-[13px] bg-stone-0 p-3.75 shadow-sm">
@@ -71,6 +79,15 @@ export function NextPayout({ payouts, serverToday }: NextPayoutProps): React.Rea
       {heldCount > 0 && (
         <p className="mt-1.5 text-helper text-gold-600">
           {formatPrice(heldCents)} held while a reported problem is reviewed
+        </p>
+      )}
+      {debtOutstandingCents > 0 && (
+        <p className="mt-1.5 text-helper text-gold-600">
+          {formatPrice(debtOutstandingCents)} is kept back from your payouts until it is repaid: the
+          card network ruled against a chargeback on a booking you were already paid for
+          {debtRecoveredCents > 0
+            ? `, and ${formatPrice(debtRecoveredCents)} is already repaid`
+            : ''}
         </p>
       )}
     </div>

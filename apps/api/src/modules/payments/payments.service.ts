@@ -4,6 +4,7 @@ import {
   EXPIRY_HOLD_MAX_ATTEMPTS,
   EXPIRY_HOLD_SPACING_MS,
   MIN_BOOKING_AMOUNT_CENTS,
+  STRIPE_DISPUTE_FEE_CENTS,
   BPS_PER_UNIT,
   calculateFees,
   feeRateToBps,
@@ -2273,8 +2274,8 @@ const LOST_CHARGEBACK_REASON =
  *   them twice.
  * - **A payout already sent, or a loss smaller than the payment:** the vendor
  *   holds money the platform lost, so the amount they owe (never more than their
- *   share) is recorded on the booking for the console and for VEN-658's
- *   recovery. The booking stands, and a hold a partial loss placed is lifted,
+ *   share, plus Stripe's dispute fee) is recorded on the booking, and the
+ *   payout sweep keeps it back from their next transfers (VEN-658). The booking stands, and a hold a partial loss placed is lifted,
  *   because the event still happened.
  *
  * Idempotent under redelivery: the second run finds a zero payout, or an owed
@@ -2296,7 +2297,9 @@ export async function settleLostChargeback(
     const paid = locked.payoutReleasedAt !== null || locked.payoutModel === 'destination';
 
     if (paid || amountCents < locked.totalAmountCents) {
-      const owedCents = Math.min(amountCents, locked.vendorPayoutCents);
+      const shareCents = Math.min(amountCents, locked.vendorPayoutCents);
+      /* Stripe's dispute fee rides on the vendor's own share, so a booking that paid them nothing owes nothing. */
+      const owedCents = shareCents > 0 ? shareCents + STRIPE_DISPUTE_FEE_CENTS : 0;
       const record = locked.vendorOwedCents === 0 && owedCents > 0;
 
       if (record) {
