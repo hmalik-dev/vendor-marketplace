@@ -78,7 +78,7 @@
 ## Account closure, bans and support
 
 - [Closure refuses only the customer side](closure-refuses-only-the-customer-side.md) — a vendor closure refunds every future booking (D39 supersedes [the old unwind note](account-unwind-full-refund-is-the-ban-argument.md))
-- [Ban and closure are resumable endpoints now](unwind-resume-is-a-repeatable-endpoint.md) — pending gate never clears on a legacy booking
+- [Ban and closure are resumable endpoints now](unwind-resume-is-a-repeatable-endpoint.md) — pending gate never clears on a legacy booking; VEN-693 unban halt clean
 - [An unwind spares a request with a booking behind it](unwind-decline-spares-requests-with-a-booking.md) — closes a post-unban double-book
 - [`cancelled_by` names the actor, not the suspended side](cancelled-by-does-not-say-which-side.md) — copy false to an unbanned customer
 - [The acceptance record is undeletable PII](legal-acceptance-record-is-undeletable-pii.md) — soft delete never fires the trigger
