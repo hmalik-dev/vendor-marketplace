@@ -1,12 +1,18 @@
+import { HistoryLoadError } from '@/components/customer/history-load-error';
 import { EmptyState } from '@/components/ui/empty-state';
 import type { WireCustomerReview } from '@/lib/wire-schemas';
 
 export interface CustomerReviewsProps {
-  reviews: readonly WireCustomerReview[];
+  /** `null` is a failed read, which is not the same claim as no reviews. */
+  reviews: readonly WireCustomerReview[] | null;
 }
 
 /** What vendors said about working with this customer. */
 export function CustomerReviews({ reviews }: CustomerReviewsProps): React.ReactElement {
+  if (reviews === null) {
+    return <HistoryLoadError subject="your reviews" />;
+  }
+
   if (reviews.length === 0) {
     return (
       <EmptyState

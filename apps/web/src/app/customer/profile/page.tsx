@@ -11,7 +11,10 @@ import { CustomerProfileForm } from '@/components/customer/customer-profile-form
 import { Avatar } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { getOwnCustomerReviews } from '@/lib/customer-data';
+import type { WireCustomerReview } from '@/lib/wire-schemas';
 import { requireRole } from '@/lib/current-user';
+import { isNavigationSignal } from '@/lib/navigation-signal';
+import { reportSwallowedError } from '@/lib/report-error';
 
 export const metadata: Metadata = {
   title: pageTitle('Your profile'),
@@ -28,6 +31,24 @@ const TAB_LABELS: Record<Tab, string> = {
 
 function isTab(value: string | undefined): value is Tab {
   return (TABS as readonly string[]).includes(value ?? '');
+}
+
+/**
+ * The reviews read in required mode, reporting failure as `null`. The Reviews tab
+ * draws an error with a retry for it, never "No reviews yet". 401 and
+ * `TERMS_REQUIRED` redirect inside the read, and those signals pass through.
+ */
+async function readReviewsOrNull(): Promise<WireCustomerReview[] | null> {
+  try {
+    return await getOwnCustomerReviews({ required: true });
+  } catch (error) {
+    if (isNavigationSignal(error)) {
+      throw error;
+    }
+    reportSwallowedError('customer profile: loading reviews failed', error);
+
+    return null;
+  }
 }
 
 interface PageProps {
@@ -49,7 +70,7 @@ export default async function CustomerProfilePage({
   const [user, query] = await Promise.all([requireRole('customer'), searchParams]);
   const tab: Tab = isTab(query.tab) ? query.tab : 'profile';
 
-  const reviews = await getOwnCustomerReviews();
+  const reviews = await readReviewsOrNull();
 
   const settledRate = completionRate(user.completedBookingsCount, user.cancelledBookingsCount);
   const budget = user.budgetTier ? BUDGET_TIER_LABELS[user.budgetTier as BudgetTier] : null;
