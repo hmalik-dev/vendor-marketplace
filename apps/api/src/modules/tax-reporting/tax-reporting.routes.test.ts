@@ -96,6 +96,7 @@ describe('GET /admin/tax/1099-k.csv', () => {
       /** A refund made in the Stripe Dashboard, which never touches `refund_amount_cents`. */
       externalRefundCents?: number;
       debtNettedCents?: number;
+      backupWithheldCents?: number;
       payoutModel?: 'destination' | 'separate';
       /** Defaults to `paidAt` for `separate` rows; `null` is charged but not yet transferred. */
       releasedAt?: string | null;
@@ -125,6 +126,7 @@ describe('GET /admin/tax/1099-k.csv', () => {
       refundAmountCents: values.refundCents ?? null,
       externalRefundCents: values.externalRefundCents ?? 0,
       debtNettedCents: values.debtNettedCents ?? 0,
+      backupWithheldCents: values.backupWithheldCents ?? 0,
       payoutModel: values.payoutModel ?? 'separate',
       status: 'confirmed',
       stripePaymentIntentId: `pi_tax_${seq}`,
@@ -281,6 +283,52 @@ describe('GET /admin/tax/1099-k.csv', () => {
     ]);
   });
 
+  it('fills federal_income_tax_withheld with what the payouts withheld, and totals it by year for Form 945', async () => {
+    const customerId = await signInAs(harness, CUSTOMER);
+    const vendor = await vendorProfile(VENDOR, 'acct_tax_withheld');
+
+    // $1,000 share withheld at 24%, and one that was not; the 2027 release is the next year's.
+    await booking(customerId, vendor.id, {
+      totalCents: usd(1136),
+      vendorPayoutCents: usd(1000),
+      backupWithheldCents: usd(240),
+      paidAt: '2026-03-05T10:00:00Z',
+    });
+    await booking(customerId, vendor.id, {
+      totalCents: usd(500),
+      vendorPayoutCents: usd(440),
+      paidAt: '2026-04-05T10:00:00Z',
+    });
+    await booking(customerId, vendor.id, {
+      totalCents: usd(568),
+      vendorPayoutCents: usd(500),
+      backupWithheldCents: usd(120),
+      paidAt: '2027-01-15T10:00:00Z',
+    });
+    await signInAs(harness, ADMIN, true);
+    await emailedStepUp(ADMIN);
+
+    const [, row] = (await download(ADMIN, 2026)).body.trimEnd().split('\n');
+    const years = await harness.app.inject({
+      method: 'GET',
+      url: '/v1/admin/tax/years',
+      headers: bearer(ADMIN),
+    });
+
+    expect(row?.split(',').slice(0, 6)).toEqual([
+      'acct_tax_withheld',
+      'k',
+      'REQUIRED_EVEN_IF_BELOW_THRESHOLD',
+      '1636.00',
+      '2',
+      '240.00',
+    ]);
+    expect(years.json().backupWithheld).toEqual([
+      { year: 2027, cents: usd(120) },
+      { year: 2026, cents: usd(240) },
+    ]);
+  });
+
   it('gives the same bytes and the same hash on a second download, one audit row each', async () => {
     await seedFixture();
     const adminId = await signInAs(harness, ADMIN, true);
@@ -319,7 +367,7 @@ describe('GET /admin/tax/1099-k.csv', () => {
     });
 
     expect(empty.body).toBe(`${TAX_1099K_HEADER.join(',')}\n`);
-    expect(years.json()).toEqual({ years: [2027, 2026] });
+    expect(years.json()).toEqual({ years: [2027, 2026], backupWithheld: [] });
   });
 
   it('asks a session with no fresh step-up for one, and writes no audit row', async () => {
@@ -457,6 +505,24 @@ describe('GET /admin/tax/1099-k.csv', () => {
       expect(total).toBe('Total,,400.00,200.00,50.00,0.00,0.00,150.00,');
     });
 
+    it('shows the backup withholding as its own column and subtracts it from what was transferred (VEN-723)', async () => {
+      const customerId = await signInAs(harness, CUSTOMER);
+      const vendor = await vendorProfile(VENDOR, 'acct_tax_main');
+      // A $1,000 share withheld at 24%: $240.00 kept for the IRS, $760.00 sent.
+      await booking(customerId, vendor.id, {
+        totalCents: usd(1136),
+        vendorPayoutCents: usd(1000),
+        backupWithheldCents: usd(240),
+        paidAt: '2026-06-01T10:00:00Z',
+      });
+
+      const [row, total] = (await statement(VENDOR, 2026)).body.trimEnd().split('\n').slice(1);
+
+      // 1136.00 charged - 0 refunded - 136.00 kept by Orla = the 1000.00 share; less 240.00 withheld = 760.00.
+      expect(row).toMatch(/,1136\.00,0\.00,136\.00,0\.00,240\.00,760\.00,06\/01\/2026$/);
+      expect(total).toBe('Total,,1136.00,0.00,136.00,0.00,240.00,760.00,');
+    });
+
     it('carries the same gross as the admin 1099-K file for the same vendor and year', async () => {
       await seedFixture();
       await signInAs(harness, ADMIN, true);
@@ -583,12 +649,14 @@ describe('foldTaxYearFigures', () => {
         vendorId: 'v1',
         stripeAccountId: 'acct_1',
         totalAmountCents: 200_000,
+        backupWithheldCents: 24_000,
         settledAt: new Date('2026-12-31T23:59:59Z'),
       },
       {
         vendorId: 'v1',
         stripeAccountId: 'acct_1',
         totalAmountCents: 100_000,
+        backupWithheldCents: 0,
         settledAt: new Date('2026-01-01T00:00:00Z'),
       },
     ]);
@@ -597,6 +665,7 @@ describe('foldTaxYearFigures', () => {
     expect(figures?.monthlyGrossCents[11]).toBe(200_000);
     expect(figures?.grossCents).toBe(300_000);
     expect(figures?.transactionCount).toBe(2);
+    expect(figures?.withheldCents).toBe(24_000);
   });
 
   it('renders cents as exact dollars with no float rounding', () => {
@@ -607,9 +676,27 @@ describe('foldTaxYearFigures', () => {
         grossCents: 1_000_005,
         monthlyGrossCents: [1_000_005, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         transactionCount: 1,
+        withheldCents: 0,
       },
     ]);
 
     expect(csv.split('\n')[1]).toContain(',10000.05,1,0.00,10000.05,0.00,');
+  });
+
+  it('fills federal_income_tax_withheld from the withheld cents, not the gross', () => {
+    const csv = render1099kCsv([
+      {
+        vendorId: 'v1',
+        stripeAccountId: 'acct_1',
+        grossCents: 400_000,
+        monthlyGrossCents: [400_000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        transactionCount: 2,
+        withheldCents: 48_005,
+      },
+    ]);
+
+    expect(csv.split('\n')[1]).toBe(
+      'acct_1,k,REQUIRED_EVEN_IF_BELOW_THRESHOLD,4000.00,2,480.05,4000.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00,0.00',
+    );
   });
 });

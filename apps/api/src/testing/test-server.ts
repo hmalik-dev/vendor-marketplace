@@ -5,6 +5,7 @@ import {
   CURRENT_TERMS_VERSION,
   CURRENT_VENDOR_AGREEMENT_VERSION,
   legalDocumentSha256,
+  type TaxIdState,
 } from '@vendor-marketplace/shared';
 import { users } from '@vendor-marketplace/db/schema';
 import { createTestDatabase, type TestDatabase } from '@vendor-marketplace/db/testing';
@@ -457,6 +458,16 @@ export interface FakeStripe extends StripeConnectGateway {
    * transfer" would put invented copy in twenty tests that never read it.
    */
   accountStatuses: Map<string, FakeAccountStatus>;
+  /**
+   * The accounts that carry the 1099-K capability (VEN-723): those onboarding or
+   * the backfill has requested it on, plus any a suite adds to stand for one that
+   * already had it.
+   */
+  taxCapabilityAccounts: Set<string>;
+  /** Where each account's tax ID stands; absent means `missing`. */
+  taxIdStates: Map<string, TaxIdState>;
+  /** Makes requesting the 1099-K capability fail, as Stripe would refuse it. */
+  refuseTaxCapability: boolean;
   /** Signatures the fake verifier accepts; anything else is rejected. */
   validSignatures: Set<string>;
   /**
@@ -541,6 +552,8 @@ export interface FakeStripe extends StripeConnectGateway {
     idempotencyKey: string;
     /** Cents already reversed, so an over-reversal is refused as Stripe does. */
     reversedCents: number;
+    /** The withholding stamped on the transfer (VEN-723). */
+    backupWithheldCents?: number | undefined;
   }[];
   /** Reversals asked for, in order, with the transfer each one applied to. */
   reversals: {
@@ -604,6 +617,8 @@ function createFakeStripe(deployEnv: string): FakeStripe {
   const recipientAccountKeys: FakeStripe['recipientAccountKeys'] = [];
   const accountsByKey = new Map<string, string>();
   const accountStatuses = new Map<string, FakeAccountStatus>();
+  const taxCapabilityAccounts = new Set<string>();
+  const taxIdStates = new Map<string, TaxIdState>();
   const validSignatures = new Set<string>(['valid-signature']);
   const paymentIntents = new Map<string, PaymentIntentSnapshot>();
   /** What each refund request carried; absent for a refund made outside the platform. */
@@ -646,6 +661,9 @@ function createFakeStripe(deployEnv: string): FakeStripe {
     recipientAccountKeys,
     createdLinks,
     accountStatuses,
+    taxCapabilityAccounts,
+    taxIdStates,
+    refuseTaxCapability: false,
     validSignatures,
     paymentIntents,
     intentsByKey,
@@ -732,6 +750,22 @@ function createFakeStripe(deployEnv: string): FakeStripe {
       }
       return { accountId };
     },
+
+    ensureTaxReportingCapability: async (accountId) => {
+      if (fake.refuseTaxCapability) {
+        throw new Error('This capability cannot be requested for this account');
+      }
+
+      if (taxCapabilityAccounts.has(accountId)) {
+        return 'already';
+      }
+
+      taxCapabilityAccounts.add(accountId);
+
+      return 'requested';
+    },
+
+    readTaxIdState: async (accountId) => taxIdStates.get(accountId) ?? 'missing',
 
     createOnboardingLink: async (input) => {
       createdLinks.push(input);
@@ -913,6 +947,7 @@ function createFakeStripe(deployEnv: string): FakeStripe {
         transferGroup: input.transferGroup,
         idempotencyKey,
         reversedCents: 0,
+        backupWithheldCents: input.backupWithheldCents,
       });
 
       return { transferId, amountCents: input.amountCents };
@@ -930,6 +965,9 @@ function createFakeStripe(deployEnv: string): FakeStripe {
             transferId: transfer.transferId,
             amountCents: transfer.amountCents,
             reversedCents: transfer.reversedCents,
+            ...(transfer.backupWithheldCents
+              ? { backupWithheldCents: transfer.backupWithheldCents }
+              : {}),
           }
         : null;
     },

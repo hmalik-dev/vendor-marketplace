@@ -33,4 +33,6 @@ export const ADMIN_CEILING_ACTIONS = [
   'admin_account_closed',
   'user_data_exported',
   'tax_report_exported',
+  'vendor_backup_withholding_set',
+  'vendor_backup_withholding_cleared',
 ] as const;

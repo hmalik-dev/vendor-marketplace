@@ -1,4 +1,6 @@
 import {
+  BACKUP_WITHHOLDING_RATE_BPS,
+  backupWithholdingCents,
   isPayoutFailing,
   PAYOUT_RELEASE_HOURS,
   payoutDueThroughDate,
@@ -20,6 +22,8 @@ import {
   claimReleasableBooking,
   planDebtRecovery,
   findDuePayoutBookingIds,
+  findBackupWithholdingSetter,
+  recordBackupWithholdingWithheld,
   recordPayoutFailure,
   recordPayoutRelease,
 } from './payouts.dao.js';
@@ -402,6 +406,27 @@ async function releaseOnePayout(
       const existing = await context.stripe.findTransfer(transferGroup, { live: true });
 
       /*
+       * Backup withholding comes off the vendor's share first (VEN-723, D49): it
+       * is owed to the IRS, so debts are recovered from what is left, never
+       * from that money. Read from the claimed row, and computed by the one
+       * function the vendor's dashboard shows it with.
+       *
+       * A transfer found under the group carries what its own attempt withheld,
+       * stamped on it, and that is what is recorded: today's setting may have
+       * moved since, and neither clearing it nor switching it on rewrites a
+       * payment already made.
+       */
+      const backupCents = existing
+        ? Math.min(existing.backupWithheldCents ?? 0, booking.vendorPayoutCents)
+        : booking.vendorBackupWithholding
+          ? backupWithholdingCents(booking.vendorPayoutCents)
+          : 0;
+      const payableCents = booking.vendorPayoutCents - backupCents;
+      /* Before any money moves: a withholding nobody can be named for fails the payout, not the audit. */
+      const withholdingActorId =
+        backupCents > 0 ? await findBackupWithholdingSetter(tx, booking.vendorId) : null;
+
+      /*
        * What the vendor owes from lost chargebacks is kept back from this
        * payout (VEN-658), oldest debt first, and whatever is left carries to
        * the next. A transfer found under the group was already sent for a
@@ -416,12 +441,12 @@ async function releaseOnePayout(
        */
       /* What a found transfer already withheld is a fact to record, not a plan to redo against today's debts. */
       const withheldCents = existing
-        ? Math.max(booking.vendorPayoutCents - (existing.amountCents - existing.reversedCents), 0)
+        ? Math.max(payableCents - (existing.amountCents - existing.reversedCents), 0)
         : 0;
       const recovery = await planDebtRecovery(
         tx,
         booking.vendorId,
-        existing ? withheldCents : booking.vendorPayoutCents,
+        existing ? withheldCents : payableCents,
       );
       const plannedCents = recovery.reduce((sum, item) => sum + item.cents, 0);
 
@@ -433,7 +458,7 @@ async function releaseOnePayout(
       }
 
       const nettedCents = existing ? withheldCents : plannedCents;
-      const sendCents = booking.vendorPayoutCents - nettedCents;
+      const sendCents = payableCents - nettedCents;
 
       const transfer =
         existing ??
@@ -458,6 +483,7 @@ async function releaseOnePayout(
               amountCents: sendCents,
               destinationAccountId: booking.vendorStripeAccountId,
               transferGroup,
+              backupWithheldCents: backupCents,
             })
           : null);
 
@@ -469,7 +495,7 @@ async function releaseOnePayout(
        * share is booked as the release of a half-share.
        */
       const surplusCents = existing
-        ? existing.amountCents - existing.reversedCents - booking.vendorPayoutCents
+        ? existing.amountCents - existing.reversedCents - payableCents
         : 0;
 
       if (existing && surplusCents > 0) {
@@ -489,7 +515,19 @@ async function releaseOnePayout(
         stripeTransferId: transfer?.transferId ?? null,
         releasedAt: now,
         debtNettedCents: nettedCents,
+        backupWithheldCents: backupCents,
       });
+
+      if (withholdingActorId !== null) {
+        await recordBackupWithholdingWithheld(tx, {
+          actorId: withholdingActorId,
+          bookingId,
+          vendorId: booking.vendorId,
+          cents: backupCents,
+          rateBps: BACKUP_WITHHOLDING_RATE_BPS,
+          at: now,
+        });
+      }
 
       releasedVendorId = booking.vendorId;
 

@@ -3,6 +3,7 @@ import type { AppDatabase } from '../../lib/database.js';
 import { notFound } from '../../lib/errors.js';
 import { findVendorProfileByUserId } from '../vendors/vendors.dao.js';
 import {
+  backupWithheldByYear,
   settledBookings,
   taxYearsWithSettledBookings,
   type SettledBookingRow,
@@ -18,6 +19,8 @@ export interface TaxYearFigures {
   monthlyGrossCents: number[];
   /** Box 3: the number of settled bookings. */
   transactionCount: number;
+  /** Box 4: federal income tax withheld as backup withholding (VEN-723), from the payouts' own records. */
+  withheldCents: number;
 }
 
 /**
@@ -52,7 +55,7 @@ export const TAX_1099K_HEADER = [
 export function foldTaxYearFigures(
   rows: readonly Pick<
     SettledBookingRow,
-    'vendorId' | 'stripeAccountId' | 'totalAmountCents' | 'settledAt'
+    'vendorId' | 'stripeAccountId' | 'totalAmountCents' | 'backupWithheldCents' | 'settledAt'
   >[],
 ): TaxYearFigures[] {
   const byVendor = new Map<string, TaxYearFigures>();
@@ -64,11 +67,13 @@ export function foldTaxYearFigures(
       grossCents: 0,
       monthlyGrossCents: Array.from({ length: 12 }, () => 0),
       transactionCount: 0,
+      withheldCents: 0,
     };
 
     figures.grossCents += row.totalAmountCents;
     figures.monthlyGrossCents[row.settledAt.getUTCMonth()]! += row.totalAmountCents;
     figures.transactionCount += 1;
+    figures.withheldCents += row.backupWithheldCents;
     byVendor.set(row.vendorId, figures);
   }
 
@@ -94,7 +99,8 @@ function dollars(cents: number): string {
  * The file. Same rows in, same bytes out: rows are ordered by account id and
  * nothing in it depends on the clock. No tax ID, name or bank detail: Stripe
  * holds those, and an Update leaves the columns it is not sent as they are.
- * `federal_income_tax_withheld` is 0 until backup withholding lands (VEN-723).
+ * `federal_income_tax_withheld` is what the sweep withheld from the vendor's
+ * payouts that year (VEN-723), summed from the bookings' own cents.
  */
 export function render1099kCsv(figures: readonly TaxYearFigures[]): string {
   const lines: string[] = [TAX_1099K_HEADER.join(',')];
@@ -107,7 +113,7 @@ export function render1099kCsv(figures: readonly TaxYearFigures[]): string {
         'REQUIRED_EVEN_IF_BELOW_THRESHOLD',
         dollars(row.grossCents),
         row.transactionCount,
-        dollars(0),
+        dollars(row.withheldCents),
         ...row.monthlyGrossCents.map(dollars),
       ].join(','),
     );
@@ -118,7 +124,7 @@ export function render1099kCsv(figures: readonly TaxYearFigures[]): string {
 
 /**
  * The vendor's yearly statement columns (VEN-725): what stands between the
- * 1099-K gross and the bank. `backup_withholding` is 0 until VEN-723 lands.
+ * 1099-K gross and the bank.
  */
 export const VENDOR_STATEMENT_HEADER = [
   'event_date',
@@ -148,8 +154,8 @@ const bookingReference = (bookingId: string): string => bookingId.slice(0, 8);
  * One vendor's statement for `year`: a row per booking `taxYearFigures` counts,
  * then a totals row. The totals row's charge comes from `foldTaxYearFigures`,
  * the function the 1099-K file is built from, so the two cannot drift.
- * The amount transferred is the stored payout less the debt netted, which is
- * what the sweep sends; charge less refunds less commission is that stored payout.
+ * The amount transferred is the stored payout less the debt netted and the
+ * backup withholding kept (VEN-723), which is what the sweep sends; charge less refunds less commission is that stored payout.
  */
 export async function vendorStatementCsv(
   db: AppDatabase,
@@ -158,11 +164,11 @@ export async function vendorStatementCsv(
 ): Promise<string> {
   const rows = await settledBookings(db, year, vendorId);
   const gross = foldTaxYearFigures(rows)[0]?.grossCents ?? 0;
-  const totals = { refunded: 0, commission: 0, netted: 0, transferred: 0 };
+  const totals = { refunded: 0, commission: 0, netted: 0, withheld: 0, transferred: 0 };
   const lines: string[] = [VENDOR_STATEMENT_HEADER.join(',')];
 
   for (const row of rows) {
-    const transferred = row.vendorPayoutCents - row.debtNettedCents;
+    const transferred = row.vendorPayoutCents - row.debtNettedCents - row.backupWithheldCents;
     // What Orla kept: `platform_fee_cents` is written once at payment and never follows a refund,
     // so the commission is what is left after the refund and the vendor's stored share.
     const commission = row.totalAmountCents - row.refundedCents - row.vendorPayoutCents;
@@ -170,6 +176,7 @@ export async function vendorStatementCsv(
     totals.refunded += row.refundedCents;
     totals.commission += commission;
     totals.netted += row.debtNettedCents;
+    totals.withheld += row.backupWithheldCents;
     totals.transferred += transferred;
     lines.push(
       [
@@ -179,7 +186,7 @@ export async function vendorStatementCsv(
         dollars(row.refundedCents),
         dollars(commission),
         dollars(row.debtNettedCents),
-        dollars(0),
+        dollars(row.backupWithheldCents),
         dollars(transferred),
         usDateFromInstant(row.settledAt),
       ].join(','),
@@ -194,7 +201,7 @@ export async function vendorStatementCsv(
       dollars(totals.refunded),
       dollars(totals.commission),
       dollars(totals.netted),
-      dollars(0),
+      dollars(totals.withheld),
       dollars(totals.transferred),
       '',
     ].join(','),
@@ -229,4 +236,4 @@ export async function vendorTaxYearsFor(db: AppDatabase, userId: string): Promis
 
 export const sha256Hex = (text: string): string => createHash('sha256').update(text).digest('hex');
 
-export { taxYearsWithSettledBookings };
+export { backupWithheldByYear, taxYearsWithSettledBookings };

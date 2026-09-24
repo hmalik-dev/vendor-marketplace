@@ -20,6 +20,7 @@ function payouts(
     heldCount: 0,
     debtOutstandingCents: 0,
     debtRecoveredCents: 0,
+    backupWithholding: false,
     ...overrides,
   };
 }
@@ -226,5 +227,66 @@ describe('NextPayout', () => {
     const { container } = render(<NextPayout payouts={payouts()} serverToday={TODAY} />);
 
     expect(container.textContent).not.toContain('kept back');
+  });
+
+  /* VEN-723: backup withholding comes off the share first, and debt is kept back from what is left. */
+  it('names the backup withholding beside the debt line, and prints the figure that is sent', () => {
+    render(
+      <NextPayout
+        payouts={payouts({
+          pendingCents: 100_000,
+          pendingCount: 1,
+          next: next({ cents: 100_000 }),
+          backupWithholding: true,
+        })}
+        serverToday={TODAY}
+      />,
+    );
+
+    expect(screen.getByText('$760')).toBeDefined();
+    expect(screen.getByText('Backup withholding (IRS): −$240')).toBeDefined();
+  });
+
+  it('keeps debt back from what is left after the withholding, in the order the sweep applies them', () => {
+    const { container } = render(
+      <NextPayout
+        payouts={payouts({
+          pendingCents: 100_000,
+          pendingCount: 1,
+          next: next({ cents: 100_000 }),
+          debtOutstandingCents: 30_000,
+          backupWithholding: true,
+        })}
+        serverToday={TODAY}
+      />,
+    );
+
+    // $1,000 less $240 withheld less $300 kept back.
+    expect(screen.getByText('$460')).toBeDefined();
+    expect(screen.getByText('Backup withholding (IRS): −$240')).toBeDefined();
+    expect(container.textContent).toContain('after $300 kept back');
+  });
+
+  it('says nothing about withholding when it is off, or when nothing is pending', () => {
+    const off = render(
+      <NextPayout
+        payouts={payouts({
+          pendingCents: 100_000,
+          pendingCount: 1,
+          next: next({ cents: 100_000 }),
+        })}
+        serverToday={TODAY}
+      />,
+    );
+
+    expect(off.container.textContent).not.toContain('Backup withholding');
+    expect(screen.getByText('$1,000')).toBeDefined();
+    cleanup();
+
+    const idle = render(
+      <NextPayout payouts={payouts({ backupWithholding: true })} serverToday={TODAY} />,
+    );
+
+    expect(idle.container.textContent).not.toContain('Backup withholding');
   });
 });

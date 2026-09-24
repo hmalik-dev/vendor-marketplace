@@ -192,7 +192,13 @@ export async function getVendorDashboard(
       date,
       status: byDate.get(date) ?? ('available' as AvailabilityStatus),
     })),
-    payouts: toPayoutSummary(owedPayoutTotals, nextPendingPayout, debtTotals, now),
+    payouts: toPayoutSummary(
+      owedPayoutTotals,
+      nextPendingPayout,
+      debtTotals,
+      now,
+      vendor.backupWithholdingReason !== null,
+    ),
   };
 }
 
@@ -230,6 +236,7 @@ function toPayoutSummary(
   soonest: NextPendingPayoutRow | null,
   debt: VendorDebtTotals,
   now: Date,
+  backupWithholding: boolean,
 ): VendorDashboard['payouts'] {
   const summary = {
     pendingCents: 0,
@@ -238,6 +245,7 @@ function toPayoutSummary(
     heldCount: 0,
     debtOutstandingCents: debt.outstandingCents,
     debtRecoveredCents: debt.recoveredCents,
+    backupWithholding,
   };
 
   for (const row of rows) {

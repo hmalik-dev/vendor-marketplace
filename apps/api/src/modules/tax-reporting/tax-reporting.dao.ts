@@ -1,5 +1,5 @@
 import { bookings, vendorProfiles } from '@vendor-marketplace/db/schema';
-import { and, asc, eq, gt, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, isNotNull, sql } from 'drizzle-orm';
 import type { AppDatabase } from '../../lib/database.js';
 
 export interface SettledBookingRow {
@@ -11,6 +11,8 @@ export interface SettledBookingRow {
   refundedCents: number;
   vendorPayoutCents: number;
   debtNettedCents: number;
+  /** What backup withholding kept from this booking's payout (VEN-723). */
+  backupWithheldCents: number;
   stripeAccountId: string;
   totalAmountCents: number;
   /** When the vendor's share moved: the transfer for `separate`, the charge for `destination`. */
@@ -53,6 +55,7 @@ export async function settledBookings(
       refundedCents: sql<number>`coalesce(${bookings.refundAmountCents}, 0) + ${bookings.externalRefundCents}`,
       vendorPayoutCents: bookings.vendorPayoutCents,
       debtNettedCents: bookings.debtNettedCents,
+      backupWithheldCents: bookings.backupWithheldCents,
       stripeAccountId: vendorProfiles.stripeAccountId,
       totalAmountCents: bookings.totalAmountCents,
       settledAt: sql<Date | string>`${settledAtExpr}`.as('settled_at'),
@@ -97,4 +100,34 @@ export async function taxYearsWithSettledBookings(
     );
 
   return rows.map((row) => row.year).sort((a, b) => b - a);
+}
+
+/**
+ * What backup withholding kept in each calendar year (UTC), the figure Form 945
+ * is filed from (VEN-723). Dated by the release, the moment the money was
+ * withheld, and only years that withheld something appear.
+ */
+export async function backupWithheldByYear(
+  db: AppDatabase,
+): Promise<{ year: number; cents: number }[]> {
+  const year = sql<number>`extract(year from ${bookings.payoutReleasedAt} at time zone 'UTC')::int`;
+  const rows = await db
+    .select({ year, cents: sql<number>`sum(${bookings.backupWithheldCents})::int` })
+    .from(bookings)
+    .where(and(isNotNull(bookings.payoutReleasedAt), gt(bookings.backupWithheldCents, 0)))
+    .groupBy(year)
+    .orderBy(desc(year));
+
+  return rows;
+}
+
+/** Every connected account a vendor has, oldest vendor first, for the capability backfill (VEN-723). */
+export async function vendorStripeAccountIds(db: AppDatabase): Promise<string[]> {
+  const rows = await db
+    .select({ accountId: vendorProfiles.stripeAccountId })
+    .from(vendorProfiles)
+    .where(isNotNull(vendorProfiles.stripeAccountId))
+    .orderBy(asc(vendorProfiles.createdAt), asc(vendorProfiles.id));
+
+  return rows.flatMap((row) => (row.accountId ? [row.accountId] : []));
 }

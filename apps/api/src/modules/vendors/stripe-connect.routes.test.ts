@@ -99,6 +99,7 @@ describe('vendor Stripe Connect onboarding', () => {
     harness.stripe.recipientAccountKeys.length = 0;
     harness.stripe.createdLinks.length = 0;
     harness.stripe.accountStatuses.clear();
+    harness.stripe.taxCapabilityAccounts.clear();
   });
 
   afterAll(async () => {
@@ -148,6 +149,48 @@ describe('vendor Stripe Connect onboarding', () => {
        */
       const [vendor] = await harness.database.db.select().from(vendorProfiles);
       expect(harness.stripe.createdAccounts[0]?.vendorId).toBe(vendor!.id);
+    });
+
+    /*
+     * VEN-723 (D49): the hosted onboarding the link opens asks for the address
+     * and TIN because the account carries the 1099-K capability from the moment
+     * it exists. Asserted on the fake, which mirrors the real gateway's create.
+     */
+    it('requests the 1099-K capability on the account it creates', async () => {
+      await seedVendorProfile('vendor_a');
+      harness.stripe.taxCapabilityAccounts.clear();
+
+      expect((await connect('vendor_a')).statusCode).toBe(200);
+
+      expect([...harness.stripe.taxCapabilityAccounts]).toEqual(['acct_test_1']);
+    });
+
+    it('keeps the account when Stripe refuses the capability, mints no link, and finishes on the retry with no second account', async () => {
+      await seedVendorProfile('vendor_a');
+      harness.stripe.taxCapabilityAccounts.clear();
+      harness.stripe.refuseTaxCapability = true;
+
+      try {
+        expect((await connect('vendor_a')).statusCode).toBe(500);
+        expect(harness.stripe.createdLinks).toHaveLength(0);
+        expect((await status('vendor_a')).json().stripeAccountId).toBe('acct_test_1');
+      } finally {
+        harness.stripe.refuseTaxCapability = false;
+      }
+
+      expect((await connect('vendor_a')).statusCode).toBe(200);
+      expect(harness.stripe.createdAccounts).toHaveLength(1);
+      expect([...harness.stripe.taxCapabilityAccounts]).toEqual(['acct_test_1']);
+    });
+
+    it('asks again for an account made before the capability existed, when its vendor returns to onboarding', async () => {
+      await seedVendorProfile('vendor_a');
+      expect((await connect('vendor_a')).statusCode).toBe(200);
+      harness.stripe.taxCapabilityAccounts.clear();
+
+      expect((await connect('vendor_a')).statusCode).toBe(200);
+
+      expect([...harness.stripe.taxCapabilityAccounts]).toEqual(['acct_test_1']);
     });
 
     it('reuses the account on a second call and issues a new link', async () => {

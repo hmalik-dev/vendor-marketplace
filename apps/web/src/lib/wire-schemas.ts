@@ -561,7 +561,11 @@ export const wireAdminPaymentPageSchema =
 export type WireAdminPaymentPage = z.infer<typeof wireAdminPaymentPageSchema>;
 
 /** Calendar years with settled bookings, for the 1099-K downloads (VEN-722). */
-export const wireAdminTaxYearsSchema = z.object({ years: z.array(z.number().int()) });
+export const wireAdminTaxYearsSchema = z.object({
+  years: z.array(z.number().int()),
+  /** What backup withholding kept in each year, for Form 945 (VEN-723); only years that withheld something. */
+  backupWithheld: z.array(z.object({ year: z.number().int(), cents: z.number().int() })),
+});
 export type WireAdminTaxYears = z.infer<typeof wireAdminTaxYearsSchema>;
 
 /** The years a vendor has a yearly statement for (VEN-725): the same shape as the admin's list. */

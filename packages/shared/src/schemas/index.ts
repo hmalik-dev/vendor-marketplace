@@ -17,6 +17,7 @@ import {
   ADMIN_PAGE_SIZE,
   ADMIN_REQUEST_GROUPS,
   AVAILABILITY_STATUSES,
+  BACKUP_WITHHOLDING_REASONS,
   BOOKING_REQUEST_NOTES_MAX_LENGTH,
   BOOKING_WEEK_WINDOW_DAYS,
   BOOKING_REQUEST_STATUSES,
@@ -1598,6 +1599,8 @@ export const vendorPayoutSummarySchema = z.object({
   debtOutstandingCents: z.int().min(0),
   /** How much of that debt earlier payouts have already recovered. */
   debtRecoveredCents: z.int().min(0),
+  /** An admin has backup withholding on for this vendor (VEN-723); the next payout is reduced by it. */
+  backupWithholding: z.boolean(),
 });
 
 export type VendorPayoutSummary = z.infer<typeof vendorPayoutSummarySchema>;
@@ -3396,6 +3399,51 @@ export const adminVendorPayoutHoldResultSchema = z.object({
 });
 export type AdminVendorPayoutHoldResult = z.infer<typeof adminVendorPayoutHoldResultSchema>;
 
+/** Why backup withholding is on (VEN-723): no TIN on file, or an IRS notice. */
+export const backupWithholdingReasonSchema = z.enum(BACKUP_WITHHOLDING_REASONS);
+
+/** What is on a vendor while an admin has backup withholding switched on. */
+export const vendorBackupWithholdingSchema = z.object({
+  reason: backupWithholdingReasonSchema,
+  /** When the IRS notice arrived, or when the missing TIN was noticed. */
+  noticeDate: calendarDateSchema,
+});
+export type VendorBackupWithholding = z.infer<typeof vendorBackupWithholdingSchema>;
+
+/**
+ * `PUT /admin/vendors/:vendorId/backup-withholding` (VEN-723): a state, like the
+ * payout hold. Switching it on records the reason and the notice date; clearing
+ * it records the date a corrected TIN or a certified W-9 was received, and is
+ * refused (400) without one.
+ */
+export const setVendorBackupWithholdingSchema = z.discriminatedUnion('withholding', [
+  z.object({
+    withholding: z.literal(true),
+    reason: backupWithholdingReasonSchema,
+    noticeDate: calendarDateSchema,
+  }),
+  z.object({ withholding: z.literal(false), receivedDate: calendarDateSchema }),
+]);
+export type SetVendorBackupWithholding = z.infer<typeof setVendorBackupWithholdingSchema>;
+
+export const adminVendorBackupWithholdingResultSchema = z.object({
+  vendorId: uuidSchema,
+  backupWithholding: vendorBackupWithholdingSchema.nullable(),
+});
+export type AdminVendorBackupWithholdingResult = z.infer<
+  typeof adminVendorBackupWithholdingResultSchema
+>;
+
+/**
+ * Stripe's own vocabulary for where a vendor's tax ID stands (VEN-723): `Verified`
+ * against the IRS, `Provided` and awaiting the check, `Mismatch` when the IRS
+ * check failed, `Missing` when none has been given. The number itself is never
+ * carried.
+ */
+export const TAX_ID_STATES = ['verified', 'provided', 'mismatch', 'missing'] as const;
+export const taxIdStateSchema = z.enum(TAX_ID_STATES);
+export type TaxIdState = z.infer<typeof taxIdStateSchema>;
+
 // --- The vendor gate (VEN-406) ---------------------------------------------
 
 /** `GET /vendor-applications/gate`: whether a vendor needs an invite to sign up. */
@@ -3563,6 +3611,10 @@ export const adminVendorDetailProfileSchema = adminVendorRowSchema.extend({
   moderationHold: z.boolean(),
   /** VEN-404's per-vendor switch; the sweep skips a held vendor's payouts. */
   payoutHold: z.boolean(),
+  /** Backup withholding on this vendor's payouts, or `null` (VEN-723). */
+  backupWithholding: vendorBackupWithholdingSchema.nullable(),
+  /** Read live from Stripe; `null` when there is no account or Stripe could not be read. */
+  taxIdState: taxIdStateSchema.nullable(),
   /** What the vendor still owes for chargebacks lost on paid bookings, netted off their payouts (VEN-658). */
   debtOutstandingCents: z.int().min(0),
 });

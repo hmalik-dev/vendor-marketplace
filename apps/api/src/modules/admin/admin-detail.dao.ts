@@ -34,6 +34,7 @@ import {
   type AdminVendorPackage,
   type AdminVendorPortfolioItem,
   type AvailabilityStatus,
+  type BackupWithholdingReason,
   type BookingCancelledBy,
   type BookingRequestStatus,
   type BookingStatus,
@@ -60,6 +61,8 @@ export interface AdminVendorDetailProjection extends AdminVendorProjection {
   serviceRadiusKm: number | null;
   travelsBeyondRadius: boolean;
   payoutHold: boolean;
+  backupWithholdingReason: BackupWithholdingReason | null;
+  backupWithholdingNoticeDate: string | null;
 }
 
 /** An inclusive `YYYY-MM-DD` range. */
@@ -110,6 +113,8 @@ export async function findAdminVendorDetail(
       serviceRadiusKm: vendorProfiles.serviceRadiusKm,
       travelsBeyondRadius: vendorProfiles.travelsBeyondRadius,
       payoutHold: vendorProfiles.payoutHold,
+      backupWithholdingReason: vendorProfiles.backupWithholdingReason,
+      backupWithholdingNoticeDate: vendorProfiles.backupWithholdingNoticeDate,
     })
     .from(vendorProfiles)
     .innerJoin(users, eq(users.id, vendorProfiles.userId))

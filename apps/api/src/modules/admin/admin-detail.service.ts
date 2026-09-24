@@ -18,9 +18,11 @@ import {
   type AdminRequestQuery,
   type AdminVendorDetail,
   type BookingRequestStatus,
+  type TaxIdState,
 } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 import { notFound } from '../../lib/errors.js';
+import type { StripeConnectGateway } from '../../lib/stripe.js';
 import { availabilityWindow } from '../availability/availability.service.js';
 import {
   countAdminRequests,
@@ -174,11 +176,40 @@ function withoutRecipient(read: Awaited<ReturnType<typeof readNotifications>>): 
   return { ...read, items: read.items.map(({ userId: _userId, ...item }) => item) };
 }
 
+/** What the detail needs from Stripe: the tax-ID state, which is read live and never stored. */
+export interface VendorDetailStripe {
+  stripe: Pick<StripeConnectGateway, 'readTaxIdState'>;
+  log: { warn: (details: Record<string, unknown>, message: string) => void };
+}
+
+/**
+ * Stripe's word for where the vendor's tax ID stands. A read that fails is
+ * `null`, never a guess: the page still renders and says it could not tell.
+ */
+async function readTaxIdState(
+  deps: VendorDetailStripe,
+  vendorId: string,
+  stripeAccountId: string | null,
+): Promise<TaxIdState | null> {
+  if (!stripeAccountId) {
+    return null;
+  }
+
+  try {
+    return await deps.stripe.readTaxIdState(stripeAccountId);
+  } catch (error) {
+    deps.log.warn({ vendorId, err: error }, 'Could not read the vendor tax ID state from Stripe');
+
+    return null;
+  }
+}
+
 /** `GET /admin/vendors/:vendorId`. */
 export async function readVendorDetail(
   db: AppDatabase,
   vendorId: string,
   now: Date,
+  deps: VendorDetailStripe,
 ): Promise<AdminVendorDetail> {
   const vendor = await findAdminVendorDetail(db, vendorId);
 
@@ -187,7 +218,7 @@ export async function readVendorDetail(
   }
 
   const range = lockRange(now);
-  const [packages, portfolio, stored, requests, heldBookings, notifications, debt] =
+  const [packages, portfolio, stored, requests, heldBookings, notifications, debt, taxIdState] =
     await Promise.all([
       findVendorPackagesForAdmin(db, vendorId),
       findVendorPortfolioForAdmin(db, vendorId),
@@ -196,6 +227,7 @@ export async function readVendorDetail(
       findBookingsHoldingDates(db, vendorId, range),
       readNotifications(db, notificationsSentTo(vendor.userId)),
       findVendorDebtTotals(db, vendorId),
+      readTaxIdState(deps, vendorId, vendor.stripeAccountId),
     ]);
 
   return {
@@ -209,6 +241,14 @@ export async function readVendorDetail(
       isPublished: vendor.isPublished,
       moderationHold: vendor.moderationHold,
       payoutHold: vendor.payoutHold,
+      backupWithholding:
+        vendor.backupWithholdingReason && vendor.backupWithholdingNoticeDate
+          ? {
+              reason: vendor.backupWithholdingReason,
+              noticeDate: vendor.backupWithholdingNoticeDate,
+            }
+          : null,
+      taxIdState,
       debtOutstandingCents: debt.outstandingCents,
     },
     packages,

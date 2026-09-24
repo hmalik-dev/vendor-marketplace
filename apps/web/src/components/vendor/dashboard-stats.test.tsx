@@ -38,6 +38,7 @@ describe('DashboardStats', () => {
             pendingCount: 1,
             debtOutstandingCents: 0,
             debtRecoveredCents: 0,
+            backupWithholding: false,
             next: {
               cents: 175_000,
               customerFirstName: 'Anjali',
@@ -74,6 +75,7 @@ describe('DashboardStats', () => {
             pendingCount: 1,
             debtOutstandingCents: 0,
             debtRecoveredCents: 0,
+            backupWithholding: false,
             next: {
               cents: 175_000,
               customerFirstName: 'Anjali',

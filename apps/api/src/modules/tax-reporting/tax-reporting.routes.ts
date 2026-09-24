@@ -1,3 +1,7 @@
+import {
+  adminVendorBackupWithholdingResultSchema,
+  setVendorBackupWithholdingSchema,
+} from '@vendor-marketplace/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { assertRole, requireRoleBeforeValidation } from '../../lib/guards.js';
@@ -5,7 +9,9 @@ import { requireStepUp } from '../../lib/step-up.js';
 import { insertAdminAction } from '../admin/admin.dao.js';
 import { withinDestructiveCeiling } from '../admin/admin-step-up.service.js';
 import { bookingContextFor } from '../payments/payments.service.js';
+import { setVendorBackupWithholding } from './backup-withholding.service.js';
 import {
+  backupWithheldByYear,
   render1099kCsv,
   sha256Hex,
   taxYearFigures,
@@ -14,6 +20,7 @@ import {
   vendorTaxYearsFor,
 } from './tax-reporting.service.js';
 
+const vendorParamsSchema = z.object({ vendorId: z.uuid() });
 const yearQuerySchema = z.object({ year: z.coerce.number().int().min(2020).max(2100) });
 
 /**
@@ -30,6 +37,7 @@ export const taxReportingRoutes: FastifyPluginAsyncZod<{ webOrigin: string }> = 
 
   app.get('/admin/tax/years', { onRequest: adminOnly }, async () => ({
     years: await taxYearsWithSettledBookings(app.db),
+    backupWithheld: await backupWithheldByYear(app.db),
   }));
 
   /*
@@ -54,6 +62,42 @@ export const taxReportingRoutes: FastifyPluginAsyncZod<{ webOrigin: string }> = 
         .header('content-disposition', `attachment; filename="statement-${year}.csv"`)
         .header('cache-control', 'no-store')
         .send(await vendorStatementFor(app.db, assertRole(request.auth, ['vendor']).id, year));
+    },
+  );
+
+  /**
+   * Switches backup withholding on or off for one vendor (VEN-723, D49). Behind
+   * a fresh step-up and the hourly ceiling like the other irreversible admin
+   * actions: it decides how much of a vendor's money leaves for the IRS, and
+   * clearing it stops that.
+   */
+  app.put(
+    '/admin/vendors/:vendorId/backup-withholding',
+    {
+      onRequest: [adminOnly, requireStepUp],
+      schema: {
+        params: vendorParamsSchema,
+        body: setVendorBackupWithholdingSchema,
+        response: { 200: adminVendorBackupWithholdingResultSchema },
+      },
+    },
+    async (request) => {
+      const adminId = assertRole(request.auth, ['admin']).id;
+      const ctx = bookingContextFor(app, app.log, options.webOrigin);
+
+      return withinDestructiveCeiling(
+        { db: app.db, log: ctx.log, alerts: ctx.alerts },
+        adminId,
+        app.clock(),
+        () =>
+          setVendorBackupWithholding(
+            app.db,
+            adminId,
+            request.params.vendorId,
+            request.body,
+            app.clock(),
+          ),
+      );
     },
   );
 
