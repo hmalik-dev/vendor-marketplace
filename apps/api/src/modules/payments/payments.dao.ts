@@ -381,11 +381,28 @@ export async function confirmBooking(
       .onConflictDoNothing({ target: bookings.requestId })
       .returning();
 
-    const row = inserted?.[0];
+    const inserted0 = inserted?.[0];
 
-    if (!row) {
+    if (!inserted0) {
       return null;
     }
+
+    /*
+     * The location is read again from the request, inside this transaction
+     * (VEN-687). The caller copied it before the insert, and the insert's
+     * foreign key waits behind a closure of the customer holding the user row;
+     * that closure has scrubbed the request by the time this runs, and would
+     * not have seen this booking, which was not yet committed.
+     */
+    const [current] = await tx
+      .update(bookings)
+      .set({
+        eventLocation: sql`(select ${bookingRequests.eventLocation} from ${bookingRequests} where ${bookingRequests.id} = ${inserted0.requestId})`,
+      })
+      .where(eq(bookings.id, inserted0.id))
+      .returning();
+
+    const row = current ?? inserted0;
 
     /*
      * `booked`, not `blocked`. The distinction is the product's: a `blocked`
