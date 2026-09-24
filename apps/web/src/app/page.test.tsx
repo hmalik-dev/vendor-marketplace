@@ -166,58 +166,22 @@ describe('HomePage', () => {
     expect(screen.getByTestId('hero-search')).toBeDefined();
   });
 
-  it('jumps straight to four categories instead of the old free-text link row', async () => {
-    render(await HomePage());
-
-    expect(screen.getByText('Or jump straight to')).toBeDefined();
-    // The four and their order were ruled with #419, when Florals left the
-    // taxonomy and Beauty took its slot.
-    for (const [name, slug] of [
-      ['Photography', 'photography'],
-      ['Catering', 'catering'],
-      ['Entertainment', 'entertainment'],
-      ['Beauty', 'beauty'],
-    ]) {
-      expect(screen.getAllByRole('link', { name })[0]).toHaveProperty(
-        'href',
-        `http://localhost:3000/search?category=${slug}`,
-      );
-    }
-  });
-
-  /*
-   * The order is rendered, not incidental: the row is read left to right and
-   * the ruling named a sequence. Asserting each link separately above proves
-   * every one is present and points somewhere real; this proves the row.
-   */
-  it('renders the jump row in the ruled order, and no longer offers Florals', async () => {
+  it('draws no category shortcut row under the hero search bar', async () => {
     const { container } = render(await HomePage());
 
-    const row = screen.getByText('Or jump straight to').parentElement;
-    expect(row).not.toBeNull();
+    expect(screen.queryByText(/^or jump\b/i)).toBeNull();
 
-    expect([...row!.querySelectorAll('a')].map((link) => link.textContent)).toEqual([
-      'Photography',
-      'Catering',
-      'Entertainment',
-      'Beauty',
-    ]);
-    expect(container.querySelector('a[href="/search?category=florals"]')).toBeNull();
-  });
-
-  /* VEN-401: a category hidden from the console leaves the jump row too. */
-  it('drops a jump chip for a category the taxonomy no longer offers', async () => {
-    const offered = (await getCategories()).filter((category) => category.slug !== 'entertainment');
-    getCategories.mockResolvedValueOnce(offered);
-
-    render(await HomePage());
-
-    const row = screen.getByText('Or jump straight to').parentElement;
-    expect([...row!.querySelectorAll('a')].map((link) => link.textContent)).toEqual([
-      'Photography',
-      'Catering',
-      'Beauty',
-    ]);
+    // The hero is the block that holds the headline and stops short of the
+    // category section, which shares its outer <section>.
+    const cards = container.querySelector('#categories-heading')?.closest('section');
+    let hero: HTMLElement | null = container.querySelector('h1');
+    while (hero?.parentElement && !hero.parentElement.contains(cards ?? null)) {
+      hero = hero.parentElement;
+    }
+    expect(hero).not.toBeNull();
+    expect(hero!.querySelectorAll('a[href^="/search?category="]')).toHaveLength(0);
+    // The cards below the hero are the one route to a category from the page.
+    expect(cards!.querySelectorAll('a[href^="/search?category="]')).toHaveLength(6);
   });
 
   it('features the six categories the frame draws, in displayOrder', async () => {
