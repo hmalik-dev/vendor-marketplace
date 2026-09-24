@@ -20,6 +20,7 @@ import {
   addressLimit,
   callerAddress,
   chargeAddress,
+  chargeRequest,
   chargeCaller,
   isSignInRefused,
   recordSignInFailure,
@@ -45,7 +46,7 @@ import {
  * longer doing it, so the browser gets a fixed 200 at once and the call to Neon
  * finishes after the response. Status, body and timing then say nothing about
  * whether the address has an account. That call and the code check are also
- * budgeted per address (`chargeAddress`).
+ * budgeted per address and per caller (`chargeRequest`, VEN-718).
  *
  * Built per request, because `neonAuth()` reads the environment on first use
  * and a module-level `auth.handler()` would read it at build.
@@ -372,7 +373,7 @@ async function forwardBudgeted(
   const caller = callerAddress(request.headers);
   const refused = failuresOnly
     ? await isSignInRefused(email, caller)
-    : await chargeAddress(email, path);
+    : await chargeRequest(email, caller, path);
 
   if (refused) {
     return NextResponse.json(
@@ -680,7 +681,7 @@ async function forwardReset(
     return NextResponse.json({ message: 'Bad request' }, { status: 400 });
   }
 
-  const overBudget = await chargeAddress(email, path);
+  const overBudget = await chargeRequest(email, callerAddress(request.headers), path);
   const isRequest = path.join('/') === REQUEST_RESET;
 
   if (overBudget && !isRequest) {
