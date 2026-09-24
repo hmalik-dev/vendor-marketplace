@@ -114,7 +114,7 @@
 - [`request.ip` is one hop, never IP-validated](request-ip-is-one-hop-trusted-not-validated.md) — unbounded text against `varchar(45)` when persisted as evidence
 - [`/ready` is unthrottled by design](ready-probe-is-unthrottled-and-now-reads-a-file.md) — VEN-495 sync read on the unlimited route; presence booleans (VEN-632) and RLS posture (VEN-671) accepted; the owner check must follow role membership
 - [Operator alert dedupe is attacker-armable](operator-alert-dedupe-is-attacker-armable.md) — a shed 429 costs a DB write; the email cap drops on a DB outage
-- [The daily send cap's closure is sticky](email-send-cap-closure-is-sticky.md) — VEN-661: a closed day blocks step-up codes till UTC midnight; raising the cap does not reopen it
+- [The daily send cap's closure is sticky](email-send-cap-closure-is-sticky.md) — VEN-661: a closed day blocks step-up codes till UTC midnight; raising the cap does not reopen it; [VEN-680 self-closure codes spend the essential headroom](self-closure-step-up-codes-are-essential-mail.md)
 
 ## Data layer, seeds and tooling
 
