@@ -1,5 +1,6 @@
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
+import { API_CONNECT_TIMEOUT_SECONDS, API_SESSION_SETTINGS } from './api-session.js';
 import * as schema from './schema/index.js';
 
 export type Database = PostgresJsDatabase<typeof schema>;
@@ -9,6 +10,8 @@ export interface CreateDatabaseOptions {
   connectionString?: string;
   /** Connection pool size. Scripts should use 1. */
   max?: number;
+  /** Seconds to wait for a connection. postgres.js waits 30 when unset. */
+  connectTimeout?: number;
   /** Session settings sent as startup parameters, so every connection — and every reconnect — has them. */
   connection?: Record<string, string>;
 }
@@ -30,7 +33,23 @@ export function createDatabase(options: CreateDatabaseOptions = {}): {
 
   const client = postgres(connectionString, {
     max: options.max ?? 10,
+    ...(options.connectTimeout === undefined ? {} : { connect_timeout: options.connectTimeout }),
     ...(options.connection ? { connection: options.connection } : {}),
   });
   return { db: drizzle(client, { schema }), client };
+}
+
+/**
+ * The pool the API serves requests over: `createDatabase` with the API's
+ * connect and session bounds (VEN-607). The one place they are applied, so an
+ * entry point cannot forget them.
+ */
+export function createApiDatabase(
+  options: Pick<CreateDatabaseOptions, 'connectionString' | 'max'> = {},
+): ReturnType<typeof createDatabase> {
+  return createDatabase({
+    ...options,
+    connectTimeout: API_CONNECT_TIMEOUT_SECONDS,
+    connection: API_SESSION_SETTINGS,
+  });
 }

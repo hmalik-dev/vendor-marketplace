@@ -1531,9 +1531,42 @@ export async function cancelBooking(
     disputeReason: null,
   } as const;
 
-  let cancelled = await asBookingActor(context.db, user.id, (tx) =>
-    cancelBookingAndFreeDate(tx, bookingId, cancellation, 'confirmed', booking.payoutReleasedAt),
-  );
+  /*
+   * The refund is already out, so the money moved and the row did not: the
+   * one state that needs a human, and the operator is told rather than left
+   * to find a log line.
+   */
+  const alertRefundUnrecorded = (): void => {
+    context.log.error(
+      { bookingId, refundId: refund.refundId, refundCents: refund.amountCents },
+      'Refunded a booking whose row could not be cancelled',
+    );
+    context.alerts?.dispatch(
+      refundFailedAlert({
+        bookingId,
+        during: 'a cancellation',
+        refundId: refund.refundId,
+      }),
+    );
+  };
+
+  /*
+   * A write that threw after the refund went out — a lock wait that timed out
+   * behind the payout sweep, say (VEN-607) — is the same state as one that lost
+   * its predicate, and gets the same alert before the error goes on.
+   */
+  const writeCancellation = (
+    from: 'confirmed' | 'completed',
+    payoutReleasedAt: Date | null,
+  ): Promise<BookingRow | null> =>
+    asBookingActor(context.db, user.id, (tx) =>
+      cancelBookingAndFreeDate(tx, bookingId, cancellation, from, payoutReleasedAt),
+    ).catch((error: unknown) => {
+      alertRefundUnrecorded();
+      throw error;
+    });
+
+  let cancelled = await writeCancellation('confirmed', booking.payoutReleasedAt);
   let lostTo: BookingRow | null = null;
 
   if (!cancelled) {
@@ -1550,9 +1583,7 @@ export async function cancelBooking(
 
     if (lostTo?.status === 'completed') {
       const releasedBefore = lostTo.payoutReleasedAt;
-      cancelled = await asBookingActor(context.db, user.id, (tx) =>
-        cancelBookingAndFreeDate(tx, bookingId, cancellation, 'completed', releasedBefore),
-      );
+      cancelled = await writeCancellation('completed', releasedBefore);
     }
   }
 
@@ -1567,22 +1598,7 @@ export async function cancelBooking(
     (lostTo?.status === 'cancelled' && lostTo.cancelledBy === 'customer' ? lostTo : null);
 
   if (!settled) {
-    /*
-     * The refund is already out, so the money moved and the row did not: the
-     * one state that needs a human, and the operator is told rather than left
-     * to find a log line.
-     */
-    context.log.error(
-      { bookingId, refundId: refund.refundId, refundCents: refund.amountCents },
-      'Refunded a booking whose row could not be cancelled',
-    );
-    context.alerts?.dispatch(
-      refundFailedAlert({
-        bookingId,
-        during: 'a cancellation',
-        refundId: refund.refundId,
-      }),
-    );
+    alertRefundUnrecorded();
     throw conflict('That booking changed while you were cancelling it');
   }
 

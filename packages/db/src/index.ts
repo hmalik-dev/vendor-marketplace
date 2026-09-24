@@ -41,3 +41,4 @@ export {
   type IdentityTransaction,
   type RequestIdentity,
 } from './request-identity.js';
+export * from './api-session.js';

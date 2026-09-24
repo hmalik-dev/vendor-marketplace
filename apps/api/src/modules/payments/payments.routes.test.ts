@@ -21,7 +21,7 @@ import {
   toDateString,
   formatPrice,
 } from '@vendor-marketplace/shared';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
   bearer,
@@ -1724,6 +1724,49 @@ describe('payments', () => {
       expect(alerts[0]?.text).toContain('re_test_1');
       const [after] = await harness.database.db.select().from(bookings);
       expect(after?.status).toBe('confirmed');
+    });
+
+    /*
+     * VEN-607. The row write waits on a lock the payout sweep holds across its
+     * Stripe calls and the session's `lock_timeout` ends the wait. The refund is
+     * out, so this is the same state as a lost predicate: the operator is told,
+     * and the customer is asked to try again.
+     */
+    it('alerts the operator and answers 503 when the row write times out on a lock after the refund', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+      harness.stripe.duringNextRefund = async () => {
+        await harness.database.db.execute(sql`
+          create function ven_607_lock_timeout() returns trigger language plpgsql as $$
+          begin
+            raise exception 'canceling statement due to lock timeout' using errcode = '55P03';
+          end $$`);
+        await harness.database.db.execute(sql`
+          create trigger ven_607_lock_timeout before update on bookings
+          for each row execute function ven_607_lock_timeout()`);
+      };
+
+      let response: Awaited<ReturnType<typeof inject>>;
+      try {
+        response = await inject('PUT', `/v1/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
+      } finally {
+        // The database outlives this test, and the trigger would fail every write after it.
+        await harness.database.db.execute(
+          sql`drop trigger if exists ven_607_lock_timeout on bookings`,
+        );
+      }
+      await harness.flushEmail();
+
+      expect(response.statusCode).toBe(503);
+      expect(response.json().error).toBe('SERVICE_BUSY');
+      expect(harness.stripe.refunds).toHaveLength(1);
+      const alerts = harness.email.sent.filter(
+        (message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL,
+      );
+      expect(alerts).toHaveLength(1);
+      expect(alerts[0]?.text).toContain(booking!.id);
+      expect(alerts[0]?.text).toContain('re_test_1');
     });
 
     it('still refuses, and alerts, when someone other than the customer cancelled it mid-refund', async () => {
