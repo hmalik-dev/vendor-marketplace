@@ -264,6 +264,7 @@ async function invalidateSessionsAtApi(userId: string | undefined): Promise<void
 
 const MAX_BODY_BYTES = 4096;
 const SIGN_UP = 'sign-up/email';
+const SIGN_IN = 'sign-in/email';
 const SIGN_UP_ROLE_TIMEOUT_MS = 2_000;
 const SIGN_UP_ROLE_ATTEMPTS = 2;
 const REQUEST_RESET = 'email-otp/request-password-reset';
@@ -363,7 +364,7 @@ async function forwardBudgeted(
    * and durable, so charging every attempt would let anyone lock an account out
    * by naming its address. Codes and mail are charged as they are asked for.
    */
-  const failuresOnly = path.join('/') === 'sign-in/email';
+  const failuresOnly = path.join('/') === SIGN_IN;
 
   if (await chargeAddress(email, path, Date.now(), !failuresOnly)) {
     return NextResponse.json(
@@ -387,11 +388,117 @@ async function forwardBudgeted(
     await chargeAddress(email, path);
   }
 
+  const mintsSession = await mintsUnusedSession(path, response);
+
   if (role !== undefined && response.ok && !(await recordSignUpRole(response, role))) {
+    // The browser is told the sign-up failed and keeps no cookie, so the session it opened is ended too.
+    await endMintedSession(request, response);
     return NextResponse.json({ code: 'SIGN_UP_UNRECORDED' }, { status: 503 });
   }
 
+  if (mintsSession) {
+    return discardMintedSession(request, response);
+  }
+
   return response;
+}
+
+const VERIFY_EMAIL = 'email-otp/verify-email';
+
+/**
+ * Whether this answer opened a provider session the browser must not keep
+ * (VEN-714): a sign-up and an address verification are followed by a sign-in
+ * with the credentials the form already holds, and a sign-in the provider
+ * answers 200 for an unverified address is followed by the code step and a
+ * second sign-in. The session cookie of the last is the one the device uses;
+ * the others would list as devices nobody used.
+ */
+async function mintsUnusedSession(path: string[], response: Response): Promise<boolean> {
+  const joined = path.join('/');
+
+  if (!response.ok) {
+    return false;
+  }
+
+  if (joined === SIGN_IN) {
+    return isUnverifiedSignIn(response);
+  }
+
+  return joined === SIGN_UP || joined === VERIFY_EMAIL;
+}
+
+/**
+ * Ends the session a provider answer just opened, with its own cookie, and
+ * reports a failure rather than throwing (VEN-714). Nothing happens when the
+ * answer set no cookie.
+ */
+async function endMintedSession(request: NextRequest, response: Response): Promise<void> {
+  const cookie = response.headers
+    .getSetCookie()
+    .map((line) => line.split(';')[0])
+    .join('; ');
+
+  if (cookie === '') {
+    return;
+  }
+
+  try {
+    const headers = callerHeaders(request);
+    headers.delete('authorization');
+    headers.set('cookie', cookie);
+    const signOut = segments(SIGN_OUT);
+    const ended = await neonAuth()
+      .handler()
+      .POST(authCall(request, signOut, headers, '{}') as NextRequest, {
+        params: Promise.resolve({ path: signOut }),
+      });
+
+    if (!ended.ok) {
+      Sentry.captureMessage('Could not end a session the browser will not keep', {
+        level: 'warning',
+        extra: { status: ended.status },
+      });
+    }
+  } catch (error) {
+    Sentry.captureException(error);
+  }
+}
+
+/**
+ * Ends the session a sign-up, verification or unverified sign-in just opened
+ * and answers without any `Set-Cookie`, so the browser never holds it
+ * (VEN-714). Best-effort: the answer is returned either way, since the account
+ * itself was created.
+ */
+async function discardMintedSession(request: NextRequest, response: Response): Promise<Response> {
+  await endMintedSession(request, response);
+
+  // Copied one by one, cookies left out: the product writes no cookie of its own (`no-cookie-consent.test.ts`).
+  const headers = new Headers();
+  for (const [name, value] of response.headers) {
+    if (!/^set-cookie$/i.test(name)) {
+      headers.append(name, value);
+    }
+  }
+  headers.delete('content-length');
+  headers.delete('content-encoding');
+
+  return new Response(await response.text(), {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+/** A sign-in answer that names an account whose address is not verified. */
+async function isUnverifiedSignIn(response: Response): Promise<boolean> {
+  try {
+    const body = (await response.clone().json()) as { user?: { emailVerified?: unknown } } | null;
+    return body?.user?.emailVerified === false;
+  } catch {
+    // An answer that is not JSON names no unverified account, so it is left as it came.
+    return false;
+  }
 }
 
 /** The sign-up body with its role taken out, or `null` when it carries no sign-up role. */
