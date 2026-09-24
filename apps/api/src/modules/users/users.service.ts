@@ -149,11 +149,15 @@ export async function syncUserFromAuth(
  *
  * It is re-checked rather than trusted from the ticket because a ban landing
  * between issue and connect would otherwise be ignored, and a stream, once
- * open, stays open.
+ * open, stays open. The same goes for a session generation bump (VEN-670): a
+ * stream passes the `openedAt` it was admitted at, and one older than the
+ * account's `sessionsInvalidatedAt` is refused, so a ticket spent in the gap
+ * between the bump and the hub closing that user's streams does not outlive it.
  */
 export async function resolveStreamSubject(
   db: AppDatabase,
   userId: string,
+  openedAt?: Date,
 ): Promise<{ id: string }> {
   const account = await findUserById(db, userId);
 
@@ -163,6 +167,10 @@ export async function resolveStreamSubject(
 
   if (account.isBanned) {
     throw accountSuspended();
+  }
+
+  if (openedAt && account.sessionsInvalidatedAt && account.sessionsInvalidatedAt > openedAt) {
+    throw unauthorized('This stream was opened before the sessions of this account were ended');
   }
 
   return { id: account.id };

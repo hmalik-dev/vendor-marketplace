@@ -136,16 +136,24 @@ export async function findSessionSubject(
  * fails the auth hook's `iat` comparison even though it is still signed and
  * unexpired (VEN-628). A no-op for an auth subject with no row yet — nothing
  * to invalidate, and the acceptance gate handles that subject on its own path.
+ * Returns the account's row id (what live streams are keyed by), or `null` when
+ * there is no such account.
  */
-export async function invalidateSessionsFor(db: AppDatabase, authUserId: string): Promise<void> {
+export async function invalidateSessionsFor(
+  db: AppDatabase,
+  authUserId: string,
+): Promise<string | null> {
   if (!authUserId) {
-    return;
+    return null;
   }
 
-  await db
+  const rows = await db
     .update(users)
     .set({ sessionsInvalidatedAt: sql`now()` })
-    .where(eq(users.authUserId, authUserId));
+    .where(eq(users.authUserId, authUserId))
+    .returning({ id: users.id });
+
+  return rows[0]?.id ?? null;
 }
 
 export async function findUserById(db: AppDatabase, id: string): Promise<UserRow | null> {

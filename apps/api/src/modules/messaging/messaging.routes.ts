@@ -307,6 +307,7 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
     const allowed = origin && options.allowedOrigins.includes(origin) ? origin : null;
 
     // Before the headers, so the refusal is a plain 429 the client backs off from.
+    const openedAt = new Date();
     const unsubscribe = app.events.subscribe(user.id, reply.raw);
 
     if (!unsubscribe) {
@@ -353,7 +354,7 @@ export const messagingRoutes: FastifyPluginAsyncZod<MessagingRoutesOptions> = as
        * stream within one heartbeat. Only a refusal ends it: a database that
        * blinks must not drop every open tab.
        */
-      resolveStreamSubject(app.db, user.id).catch((error: unknown) => {
+      resolveStreamSubject(app.db, user.id, openedAt).catch((error: unknown) => {
         if (error instanceof AppError) {
           clearInterval(heartbeat);
           unsubscribe();

@@ -29,7 +29,7 @@
 - [The sign-up role is recorded server-side, first write wins](signup-role-is-confirmed-not-narrowed.md) — VEN-662: proxy records against the provider id; a squatter fixes the victim's role (Low)
 - [Route handlers do not inherit layout gates](route-handlers-do-not-inherit-layout-gates.md) — `/admin/vendors/export` authorizes itself
 - [Validation runs before preHandler guards](schema-validation-runs-before-prehandler-guards.md) — `requireAuthBeforeValidation` is the fix; two enum routes left low-severity on purpose
-- [The event stream's auth is hand-rolled on purpose](stream-route-auth-is-hand-rolled.md) — adding `requireAuth` breaks it; removing the inline ban check is the regression
+- [The event stream's auth is hand-rolled on purpose](stream-route-auth-is-hand-rolled.md) — adding `requireAuth` breaks it; removing the inline ban check is the regression; tickets outlive a session bump (VEN-670)
 - [safeReturnPath is FIXED](validate-before-normalize-return-path.md) — parse-then-reserialise, 894k-case fuzz clean; VEN-653's one-path loop exemption audited clean
 - [`x-orla-request-path` is forgeable only where nothing reads it](middleware-request-path-header-trust.md) — the matcher skips dotted paths
 - [The role bounce loop is FIXED](role-bounce-self-loop-admin-bookings.md) — `roleCanReach` is a redirect hint and must never become a gate

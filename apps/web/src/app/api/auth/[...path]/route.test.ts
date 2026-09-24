@@ -276,6 +276,59 @@ describe('password reset through the auth proxy', () => {
       expect(forgetSessionsFor).toHaveBeenCalledExactlyOnceWith('user-9');
     });
 
+    it('bounds every earlier JWT at the API once the sessions are ended (VEN-670)', async () => {
+      vi.stubEnv('WEB_TIER_KEY', 'k'.repeat(40));
+      answers(sessionResponse());
+      const fetchMock = vi.fn().mockResolvedValue(Response.json({ invalidated: true }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const response = await call(RESET, reset);
+
+      expect(response.status).toBe(200);
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/internal/session-generation'),
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ authUserId: 'user-9' }),
+        }),
+      );
+    });
+
+    it('still bounds the JWTs at the API when the provider revoke throws (VEN-670)', async () => {
+      vi.stubEnv('WEB_TIER_KEY', 'k'.repeat(40));
+      upstreamPost.mockImplementation(async (_request, context) => {
+        const path = await route(context);
+        if (path === 'sign-in/email') return sessionResponse();
+        if (path === 'revoke-sessions') throw new Error('provider down');
+        return Response.json({ success: true });
+      });
+      const fetchMock = vi.fn().mockResolvedValue(Response.json({ invalidated: true }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      const response = await call(RESET, reset);
+
+      expect(response.status).toBe(200);
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/internal/session-generation'),
+        expect.objectContaining({ body: JSON.stringify({ authUserId: 'user-9' }) }),
+      );
+      expect(captureException).toHaveBeenCalledWith(new Error('provider down'));
+    });
+
+    it('reports a failed session-generation call after a reset, and still answers the reset', async () => {
+      vi.stubEnv('WEB_TIER_KEY', 'k'.repeat(40));
+      answers(sessionResponse());
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({}, { status: 500 })));
+
+      const response = await call(RESET, reset);
+
+      expect(response.status).toBe(200);
+      expect(captureMessage).toHaveBeenCalledWith("Could not bound a signed-out session's JWT", {
+        level: 'warning',
+        extra: { status: 500 },
+      });
+    });
+
     it('does not sign in or revoke when the code check is refused', async () => {
       upstreamPost.mockResolvedValue(Response.json({ code: 'INVALID_OTP' }, { status: 400 }));
 
