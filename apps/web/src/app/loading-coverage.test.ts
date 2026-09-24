@@ -55,6 +55,7 @@ const NO_BOUNDARY: Record<string, string> = {
   'account/settings': 'gates in the page',
   'account/settings/name': 'gates in the page',
   'account/settings/password': 'gates in the page',
+  'account/settings/sessions': 'gates in the page',
   'bookings/[requestId]': 'notFound() and a session gate',
   'bookings/[requestId]/checkout': 'notFound() and a session gate',
   'bookings/[requestId]/confirmed': 'notFound() and a session gate',
