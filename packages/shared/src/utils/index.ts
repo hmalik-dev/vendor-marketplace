@@ -14,6 +14,9 @@ import {
   type PayoutStatus,
   type RefundTerms,
 } from '../constants/index.js';
+import { trimTrailingSlashes } from './trim-slashes.js';
+
+export { trimTrailingSlashes };
 
 const SLUG_FALLBACK = 'vendor';
 const CALENDAR_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -985,7 +988,7 @@ export function resolveImageUrl(
     return null;
   }
 
-  const base = publicBaseUrl?.replace(/\/+$/, '');
+  const base = publicBaseUrl ? trimTrailingSlashes(publicBaseUrl) : publicBaseUrl;
 
   if (/^https?:\/\//i.test(value)) {
     const legacyKey = base ? legacyR2ObjectKey(value) : null;
@@ -1060,7 +1063,7 @@ function decodeOnce(value: string): string {
  * Anything not under that base is left exactly as it is.
  */
 export function toObjectKey(publicBaseUrl: string, stored: string): string {
-  const base = publicBaseUrl.replace(/\/+$/, '');
+  const base = trimTrailingSlashes(publicBaseUrl);
 
   return stored.startsWith(`${base}/`) ? stored.slice(base.length + 1) : stored;
 }
