@@ -245,7 +245,7 @@ function remember(cookieValue: string, session: ServerSession, marker: string | 
     }
   }
 
-  if (mintedSessions.size < MAX_REMEMBERED_SESSIONS) {
+  if (mintedSessions.has(cookieValue) || mintedSessions.size < MAX_REMEMBERED_SESSIONS) {
     mintedSessions.set(cookieValue, { ...session, expiresAtMs, marker });
   }
 }
@@ -257,7 +257,8 @@ function remember(cookieValue: string, session: ServerSession, marker: string | 
  * the surviving device's next request can land on another instance still
  * holding a token minted before the bump, and the API refuses it. The device
  * that ended its other sessions is the one that survives, so the instance that
- * handled the revoke hands it a fresh random marker cookie, and every instance
+ * handled the revoke hands it a fresh random marker cookie (a third device left
+ * signed in by ending one named device is not reached this way), and every instance
  * serves a remembered token only if it was minted under the marker the caller
  * now carries. A marker is compared for equality, never ordered, so no two
  * clocks are involved. It outlives the JWT's own 15 minutes, after which every

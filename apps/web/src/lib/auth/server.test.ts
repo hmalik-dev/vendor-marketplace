@@ -137,6 +137,39 @@ describe('getServerSession', () => {
     expect(await getServerSession()).toBeNull();
   });
 
+  it('hands a revoked device nothing on another instance, whatever marker it presents (VEN-713)', async () => {
+    const sessionCookie = { name: '__Secure-neon-auth.session_token', value: 'cookie-c' };
+    getSession.mockResolvedValueOnce({ data: { user: { id: 'user-1' } }, error: null });
+    token.mockResolvedValue({ data: { token: jwt(NOW / 1000 + 900) }, error: null });
+    getAll.mockReturnValue([sessionCookie]);
+    await getServerSession();
+
+    // The provider ended this session; a planted marker only forces the re-mint, which finds no session.
+    getSession.mockResolvedValue({ data: null, error: null });
+    getAll.mockReturnValue([sessionCookie, { name: REVOKE_MARKER_COOKIE, value: 'planted' }]);
+
+    expect(await getServerSession()).toBeNull();
+    expect(token).toHaveBeenCalledTimes(1);
+  });
+
+  it('replaces a full cache’s stale entry for a caller instead of re-minting on every request (VEN-713)', async () => {
+    getSession.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null });
+    token.mockResolvedValue({ data: { token: jwt(NOW / 1000 + 900) }, error: null });
+
+    for (let index = 0; index < 5_000; index += 1) {
+      getAll.mockReturnValue([{ name: 'neon-auth.session_token', value: `cookie-${index}` }]);
+      await getServerSession();
+    }
+
+    const sessionCookie = { name: 'neon-auth.session_token', value: 'cookie-0' };
+    getAll.mockReturnValue([sessionCookie, { name: REVOKE_MARKER_COOKIE, value: 'marker-1' }]);
+    await getServerSession();
+    const mintsBefore = token.mock.calls.length;
+    await getServerSession();
+
+    expect(token).toHaveBeenCalledTimes(mintsBefore);
+  });
+
   it('marks the caller with an httpOnly, random, expiring marker cookie', async () => {
     await markSessionsRevoked();
     await markSessionsRevoked();
