@@ -33,7 +33,7 @@ describe('PublishBlockerBanner', () => {
    * nothing beside this banner would contradict it: it would be the only thing
    * on the screen, telling a vendor who is in search that they are not.
    */
-  it('says nothing to a vendor who is already live, blockers or not', () => {
+  it('says nothing to a vendor who is already live about any blocker but the name', () => {
     const { container } = render(
       <PublishBlockerBanner blockers={['bio', 'responseTime']} isPublished />,
     );
