@@ -861,8 +861,31 @@ test('workflow: the checkout step names the commit CI tested, before anything el
   const [checkout, ...rest] = JOB.steps;
 
   assert.match(checkout.uses, /^actions\/checkout@[0-9a-f]{40}$/);
-  assert.equal(checkout.with.ref, '${{ github.event.workflow_run.head_sha || inputs.sha }}');
+  // A manual run checks out the branch, never the sha it was handed (VEN-634).
+  assert.equal(
+    checkout.with.ref,
+    "${{ github.event.workflow_run.head_sha || format('refs/heads/{0}', inputs.environment) }}",
+  );
   assert.ok(rest.length > 0);
+});
+
+const CONFIRM_STEP = 'Confirm the checkout is the commit requested';
+
+test('workflow: right after checkout, a step fails unless HEAD is the requested commit, before anything of it runs', () => {
+  const [, confirm, ...rest] = JOB.steps;
+  const install = rest.find((step) => /pnpm install/.test(step.run ?? ''));
+
+  assert.equal(confirm.name, CONFIRM_STEP);
+  assert.equal(
+    confirm.env.REQUESTED_SHA,
+    '${{ github.event.workflow_run.head_sha || inputs.sha }}',
+  );
+  assert.match(confirm.run, /git rev-parse HEAD/);
+  assert.match(confirm.run, /exit 1/);
+  // The requested sha reaches the script as an environment variable, never inline.
+  assert.ok(!confirm.run.includes('${{'));
+  // Nothing of the commit installs or runs between the checkout and the confirmation.
+  assert.ok(JOB.steps.indexOf(install) > 1);
 });
 
 test('workflow: only the release step is handed a database URL, and only the unpooled one', () => {
@@ -934,9 +957,8 @@ test('workflow: only the release step is handed the two build secrets', () => {
 });
 
 test('workflow: the release the SDKs report is the commit CI tested', () => {
-  const sha = '${{ github.event.workflow_run.head_sha || inputs.sha }}';
-  assert.equal(JOB.env.SENTRY_RELEASE, sha);
-  assert.equal(JOB.steps[0].with.ref, sha);
+  assert.equal(JOB.env.SENTRY_RELEASE, '${{ github.event.workflow_run.head_sha || inputs.sha }}');
+  assert.ok(JOB.steps[0].with.ref.startsWith('${{ github.event.workflow_run.head_sha ||'));
 });
 
 // --- dry run ------------------------------------------------------------------
@@ -959,6 +981,7 @@ call="$(basename "$0") $*"
 printf '%s\\n' "$call" >> "$here/invocations.log"
 case "$call" in
   "gh run list"*) cat "$here/ci" ;;
+  "git rev-parse HEAD") cat "$here/head" ;;
   "git ls-remote"*)
     # Answers only for the ref of the branch under test, so a gate that asks for any other sees no tip.
     [ "$3" = "refs/heads/$(cat "$here/branch")" ] && printf '%s\\t%s\\n' "$(cat "$here/tip")" "$3" ;;
@@ -1003,6 +1026,10 @@ function operand(term, context) {
   }
   if (term.startsWith('inputs.')) {
     return context.inputs?.[term.slice('inputs.'.length)] ?? '';
+  }
+  const format = /^format\('refs\/heads\/\{0\}', (inputs\.\w+)\)$/.exec(term);
+  if (format) {
+    return `refs/heads/${operand(format[1], context)}`;
   }
   const known = {
     'github.event_name': context.eventName,
@@ -1070,6 +1097,8 @@ globalThis.fetch = async (url, init) => {
     writeFileSync(path.join(dir, 'branch'), branch);
     writeFileSync(path.join(dir, 'fail'), fail);
     writeFileSync(path.join(dir, 'ci'), ci);
+    // What the checkout step left HEAD at: the CI run's commit, or a manual run's branch tip.
+    writeFileSync(path.join(dir, 'head'), dispatch ? tip : SHA);
 
     const context = {
       secrets,
@@ -1110,7 +1139,10 @@ globalThis.fetch = async (url, init) => {
         },
         encoding: 'utf8',
       });
-      ran.push(step.name);
+      // The checkout confirmation is not a release phase; its own tests read `failedAt`.
+      if (step.name !== CONFIRM_STEP) {
+        ran.push(step.name);
+      }
       printed.push(result.stdout, result.stderr);
       if (result.status !== 0) {
         failedAt = step.name;
@@ -1121,6 +1153,8 @@ globalThis.fetch = async (url, init) => {
     const invocations = readFileSync(log, 'utf8')
       .split('\n')
       .filter(Boolean)
+      // The checkout confirmation is not a release phase; its own tests read `failedAt`.
+      .filter((line) => line !== 'git rev-parse HEAD')
       .map((line) => line.split(' ').slice(0, 3).join(' '));
     return { ran, failedAt, invocations, printed: printed.join('') };
   } finally {
@@ -2045,7 +2079,7 @@ test('dry run: a manual release of the production tip asks CI, then deploys and 
   assert.match(result.printed, /Deploying a1b2c3d to production/);
 });
 
-test('dry run: a manual release still refuses a sha that is not the branch tip, before anything else runs', () => {
+test('dry run: a manual release refuses a sha that is not the branch tip before the tree installs anything', () => {
   const result = dryRun({
     secrets: SECRETS,
     vars: VARS,
@@ -2053,10 +2087,9 @@ test('dry run: a manual release still refuses a sha that is not the branch tip, 
     dispatch: { environment: 'production', sha: SHA },
   });
 
-  assert.equal(result.failedAt, 'Release');
+  assert.equal(result.failedAt, CONFIRM_STEP);
   assert.match(result.printed, /a1b2c3d is not production's tip \(fffffff\)/);
-  assert.ok(!result.invocations.includes('pnpm release:sender'));
-  assert.ok(!result.invocations.includes('pnpm db:migrate'));
+  assert.deepEqual(result.invocations, []);
 });
 
 for (const ci of ['failure', '']) {
@@ -2073,3 +2106,36 @@ for (const ci of ['failure', '']) {
     assert.ok(!result.invocations.includes('pnpm release:sender'));
   });
 }
+
+test('web-deploy: a promote the CLI refuses warns and does not fail a production release, which `ready` still judges', async () => {
+  const lines = [];
+  const io = {
+    run: async (command, args, options) => {
+      if (args[2] === 'deploy') {
+        options.write(`${DEPLOY_URL}\n`);
+      }
+      if (args[2] === 'promote') {
+        throw new PhaseError('npx vercel promote exited with 1');
+      }
+    },
+    write: () => {},
+    error: (text) => lines.push(text),
+  };
+
+  await PHASES['web-deploy'](
+    {
+      PATH: '/bin',
+      DEPLOY_TARGET: 'production',
+      VERCEL_TOKEN: fake('vercel'),
+      VERCEL_ORG_ID: 'org',
+      VERCEL_PROJECT_ID: 'prj',
+      SENTRY_RELEASE: SHA,
+      WEB_URL: 'https://orla.test',
+      NEON_AUTH_BASE_URL: NEON_AUTH.production,
+    },
+    io,
+  );
+
+  assert.equal(lines.length, 1);
+  assert.match(lines[0], /^::warning::npx vercel promote exited with 1; the domain may not be on/);
+});

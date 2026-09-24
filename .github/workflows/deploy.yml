@@ -16,9 +16,12 @@
 #
 #   VEN-634: a person can also start a run by hand (`workflow_dispatch`, inputs
 #   `environment` and `sha`) to redeploy an environment's tip, for instance after
-#   fixing a provider variable. There is no CI run to lean on, so the gate looks
-#   up CI's conclusion for that commit and refuses one that is not green, or
-#   that is not the branch's tip.
+#   fixing a provider variable. A manual run checks out the environment
+#   branch's tip, never the `sha` it was handed, and fails before anything of
+#   that commit runs unless the tip is that sha: the code that judges the release
+#   is always what the branch holds, as on the CI-triggered path. There is no CI
+#   run to lean on, so the gate then looks up CI's conclusion for the commit and
+#   refuses one that is not green.
 #
 #   VEN-633: this file names no phase itself. Promoting an older commit runs
 #   that commit's own `deploy.mjs release`, so a phase `main`'s workflow
@@ -102,7 +105,21 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || inputs.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || format('refs/heads/{0}', inputs.environment) }}
+
+      # Before `pnpm install` or any script of this commit runs: what was checked
+      # out is what was asked for. For a manual run that means `sha` is the branch's
+      # tip, so a dispatch can never run a commit that is not on the branch (a
+      # fork's pull request head, say) with this job's secrets.
+      - name: Confirm the checkout is the commit requested
+        env:
+          REQUESTED_SHA: ${{ github.event.workflow_run.head_sha || inputs.sha }}
+        run: |
+          head=$(git rev-parse HEAD)
+          if [ "$head" != "$REQUESTED_SHA" ]; then
+            echo "::error::${REQUESTED_SHA:0:7} is not ${DEPLOY_TARGET}'s tip (${head:0:7}); a release deploys only the tip."
+            exit 1
+          fi
 
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 

@@ -136,6 +136,9 @@ export function bakedCommit(file: string = RELEASE_COMMIT_FILE): string | null {
   }
 }
 
+/** Read once: it cannot change while the process runs, and `/ready` is unthrottled. */
+const BAKED_COMMIT = bakedCommit();
+
 /**
  * The release this process is. The commit baked into the image comes first
  * (VEN-634): a variable follows a redeploy of an older image, or a failed `up`,
@@ -148,9 +151,9 @@ export function bakedCommit(file: string = RELEASE_COMMIT_FILE): string | null {
  */
 export function deployedCommit(
   source: NodeJS.ProcessEnv = process.env,
-  file: string = RELEASE_COMMIT_FILE,
+  baked: string | null = BAKED_COMMIT,
 ): string | null {
-  return bakedCommit(file) ?? releaseIdentifier(source);
+  return baked ?? releaseIdentifier(source);
 }
 
 interface ProbeResult<T = unknown> {

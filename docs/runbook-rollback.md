@@ -110,14 +110,18 @@ the environment's tip needs to be released again without a new commit:
 3. It runs the whole release for that commit: preflight, web build, migrate (a
    no-op when the schema is current), API, web, then the readiness poll.
 
-The run **refuses** a `sha` that is not the branch's tip, and a commit whose CI
-push run did not conclude `success`, so a manual run can only redeploy what the
-branch already says. A `sha` that is no longer the tip fails the run; it is not
-skipped.
+The run checks out the **branch's tip**, not the `sha` you typed, and fails
+before anything runs unless the two are the same commit. It also refuses a
+commit whose CI push run did not conclude `success`. So a manual run can only
+redeploy what the branch already says, and never a commit from a fork or a
+pull request. A `sha` that is no longer the tip fails the run; it is not
+skipped. Before dispatching, check the Deploy runs for a **waiting** one:
+GitHub keeps only the newest waiting run per environment, so a dispatch would
+replace it, and a failed dispatch leaves that release undeployed.
 
 It runs that commit's own `scripts/deploy.mjs`. A tip that predates this
-support answers `CI ran for "workflow_dispatch", not a push`; until the tip
-includes it, use `gh run rerun <run-id>` on that commit's last Deploy run.
+support refuses the run at its gate (`CI concluded "", which is not success` or
+`CI ran for "workflow_dispatch", not a push`); until the tip includes it, use `gh run rerun <run-id>` on that commit's last Deploy run.
 
 ## 5. A release that stopped after the API
 

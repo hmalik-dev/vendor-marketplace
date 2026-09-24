@@ -57,6 +57,16 @@ whole-set fallback passes preflight and is stopped later by `migrate`. Since
 VEN-633 every phase shares one `node` process, and on Linux a same-uid child
 can read the parent's `/proc/<ppid>/environ`; `pick()` is hygiene, not isolation.
 
+**VEN-634 — `workflow_dispatch` (finding 2026-09-24).** The dispatch arm of the
+job `if` is unconditional and checkout uses `inputs.sha` verbatim; the
+tip/CI-green check lives in the **checked-out** `deploy.mjs`, i.e. inside the
+code it gates. Repo is PUBLIC and environments carry no branch policy (docs
+forbid one), so any fork-PR sha (fetchable via `refs/pull/*`) pasted into the
+dispatch runs `pnpm install` + its own `deploy.mjs` with every production
+secret. Fix: check out `refs/heads/<environment>` and refuse in YAML unless
+`git rev-parse HEAD` == `inputs.sha`. GH_TOKEN/`actions: read`, `gh` redaction,
+concurrency key and the Dockerfile `RELEASE_COMMIT` ARG (not a secret) were clean.
+
 **How to apply:** a new per-environment input needs either a tier-named
 variable (a repository fallback then cannot be the other tier's value) or a
 canary compared against `DEPLOY_TARGET`. See

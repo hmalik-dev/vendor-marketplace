@@ -1078,10 +1078,32 @@ export const PHASES = {
         `vercel deploy did not print a deployment URL to ${production ? 'promote' : 'alias'}.`,
       );
     }
-    const point = production
-      ? ['promote', deployment]
-      : ['alias', 'set', deployment, aliasHost(env)];
-    await io.run('npx', [...cli, ...point], { env: child, redact, write: io.write });
+    if (!production) {
+      await io.run('npx', [...cli, 'alias', 'set', deployment, aliasHost(env)], {
+        env: child,
+        redact,
+        write: io.write,
+      });
+      return;
+    }
+    /*
+     * A failed promote is a warning, not a failure: with auto-assign on (every
+     * release but the one after a rollback) the domain is already on this
+     * deployment, and the CLI's own refusals — a team it cannot resolve, a
+     * deployment already live — must not fail a release that is otherwise
+     * fine. `ready` is the arbiter: it fails on Web/API skew if the domain is
+     * still on the old build.
+     */
+    try {
+      await io.run('npx', [...cli, 'promote', deployment], { env: child, redact, write: io.write });
+    } catch (error) {
+      if (!(error instanceof PhaseError)) {
+        throw error;
+      }
+      io.error(
+        `::warning::${error.message}; the domain may not be on this deployment, and the readiness check will say (docs/runbook-rollback.md, step 1).\n`,
+      );
+    }
   },
 
   /*

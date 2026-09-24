@@ -11,7 +11,7 @@
 - [A new secret header has three registries](new-secret-header-has-three-registries.md) — pino `redact`, Sentry `CREDENTIAL_HEADER`, a self-failing placeholder
 - [The Resend secret's absence is refusal](resend-webhook-absence-is-refusal.md) — optional everywhere is correct
 - [CSP `'unsafe-inline'` is a recorded trade-off](csp-unsafe-inline-is-a-recorded-tradeoff.md) — never add script-src hosts
-- [Deploy pipeline secret handling](deploy-pipeline-secret-handling.md) — child env/argv redacted; tier fallback; Resend key full-access; VEN-660 clean
+- [Deploy pipeline secret handling](deploy-pipeline-secret-handling.md) — child env/argv redacted; tier fallback; VEN-634 dispatch gate runs inside the sha it gates
 - [CI e2e artifacts are public](ci-e2e-artifacts-are-public.md) — traces carry cookies, stripe-listen.log carries whsec
 - [`.auth/*.json` was outside the secret scan](auth-storage-state-is-outside-the-secret-scan.md) — `FORBIDDEN_PATHS` covers the path only
 - [A storage branch per lane, CI run and PR](neon-storage-branch-per-runner.md) — `NEON_API_KEY` is production-capable; keep it step-scoped
