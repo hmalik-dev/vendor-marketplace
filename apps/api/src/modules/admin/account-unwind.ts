@@ -6,7 +6,7 @@ import {
 import type { AppDatabase } from '../../lib/database.js';
 import { queueNotificationEmail } from '../notifications/notification-email.js';
 import { insertNotification } from '../messaging/messaging.dao.js';
-import { refundFailedAlert } from '../operator-alerts/operator-alerts.service.js';
+import { refundFailedAlert } from '../admin-alerts/admin-alerts.service.js';
 import { cancelBookingAndFreeDate, zeroUnreleasedVendorPayout } from '../payments/payments.dao.js';
 import { createRefundOnce, type BookingContext } from '../payments/payments.service.js';
 import {
@@ -36,7 +36,7 @@ export type AdminContext = BookingContext;
  * committed — the unwind below has issued refunds through Stripe and cancelled
  * the bookings, `approveSuggestion`'s tag transaction has closed and the
  * suggestion is no longer `pending`. A throw at that point answered 500 on an
- * operation the operator cannot repeat: the retry re-enters a partly applied
+ * operation the admin cannot repeat: the retry re-enters a partly applied
  * ban, or finds a suggestion it can no longer resolve. Same rule as
  * `bestEffortAnnouncement` in the booking-request service and `bestEffortNotice`
  * in payments; #408 added it there and left these two, which is exactly how a
@@ -89,7 +89,7 @@ export interface AccountUnwindCopy {
    * Who decided this, which is what licenses the **full** refund below.
    *
    * The refund is deliberately full rather than D3's cancellation tiers, and
-   * the argument for that is `operator`-shaped: the platform is removing a
+   * the argument for that is `admin`-shaped: the platform is removing a
    * party from a transaction the other side did nothing wrong in, so charging
    * them a penalty for our moderation decision would be indefensible.
    *
@@ -101,7 +101,7 @@ export interface AccountUnwindCopy {
    * So an `account-holder` unwind refuses to price the bookings that account
    * paid for, and leaves them for a human. See `unwindAccountBookings`.
    */
-  readonly initiatedBy: 'operator' | 'account-holder';
+  readonly initiatedBy: 'admin' | 'account-holder';
   /**
    * Namespaces the refund's Stripe idempotency key.
    *
@@ -182,7 +182,7 @@ export interface AccountUnwindResult {
   refundsFailed: number;
   /**
    * Confirmed bookings this unwind deliberately did not touch, because pricing
-   * them is a decision nobody has made yet. Always `0` for an operator unwind.
+   * them is a decision nobody has made yet. Always `0` for an admin unwind.
    */
   bookingsLeftForReview: number;
 }
@@ -320,7 +320,7 @@ async function unwindBatch(
      * reads exactly `payout_released_at` and `stripe_transfer_id` to divert it
      * to a human. So the refusal to price holds on both sides of the line: the
      * post-release side is empty, and the legacy rows that look like it are
-     * handed to an operator either way. Nothing here infers a price from
+     * handed to an admin either way. Nothing here infers a price from
      * release state, and nothing needs to.
      */
     if (copy.initiatedBy === 'account-holder' && booking.customerId === targetId) {
@@ -356,7 +356,7 @@ async function unwindBatch(
     if (isLegacyDestinationPayout(booking)) {
       context.log.error(
         { bookingId: booking.id, operation: copy.operation },
-        'Skipped a legacy destination-charge booking during an account unwind; it needs an operator refund',
+        'Skipped a legacy destination-charge booking during an account unwind; it needs an admin refund',
       );
       refundsFailed += 1;
       continue;
@@ -437,7 +437,7 @@ async function unwindBatch(
          * customer, and one failure must not abandon the rest — but it leaves a
          * **confirmed** booking on an account nobody can reach, with neither
          * party told, and the result used to have no field to say so. The
-         * operator saw a clean success and a log line nobody was reading.
+         * admin saw a clean success and a log line nobody was reading.
          */
         refundsFailed += 1;
         continue;
@@ -476,7 +476,7 @@ async function unwindBatch(
          * the loop (a Dashboard refund holding it `disputed`, the customer's own
          * cancel). Left alone the booking is refunded in full with its payout
          * intact, and the sweep pays the vendor after an unban (VEN-546). So the
-         * payout is zeroed here, the operator is told, and the refund is not
+         * payout is zeroed here, the admin is told, and the refund is not
          * counted as a clean one.
          */
         context.log.error(
@@ -587,7 +587,7 @@ async function unwindBatch(
  * from what `unwindAccountBookings` would select. An account-holder unwind
  * leaves the holder's own bookings for review by design, so those never count:
  * they would keep a finished closure looking unfinished for ever, and so would a
- * legacy destination charge, which the unwind hands to an operator rather than
+ * legacy destination charge, which the unwind hands to an admin rather than
  * refunds. A booking
  * whose refund Stripe refuses does count, and stays counted until it is fixed.
  */
@@ -612,8 +612,8 @@ export async function countUnwindPending(
   ).length;
 }
 
-/** An operator suspended the account. */
-export const SUSPENSION_UNWIND = unwindCopy('ban', 'ban-refund:direct', 'suspended', 'operator');
+/** An admin suspended the account. */
+export const SUSPENSION_UNWIND = unwindCopy('ban', 'ban-refund:direct', 'suspended', 'admin');
 
 /**
  * The account holder deleted their identity (#433).
@@ -630,9 +630,9 @@ export const DELETION_UNWIND = unwindCopy(
 );
 
 /**
- * An operator closed the account on its holder's request (#438).
+ * An admin closed the account on its holder's request (#438).
  *
- * `account-holder`, though an operator typed it. The word names **whose
+ * `account-holder`, though an admin typed it. The word names **whose
  * decision** the closure is, not whose hands were on the keyboard, and that is
  * what licenses or refuses the full refund above: the person leaving is the one
  * who paid, so pricing their own future bookings is the unpriced decision D39

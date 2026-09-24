@@ -94,7 +94,7 @@ function isPresent(part: string | undefined): part is string {
  *
  * `message` is the receiving server's own diagnostic and is the useful half;
  * the classification is prepended because `Permanent/General` is what tells an
- * operator whether the address is dead or the mailbox was merely full, and a
+ * admin whether the address is dead or the mailbox was merely full, and a
  * message alone often does not say.
  */
 function bounceReason(event: ResendEvent): string | null {

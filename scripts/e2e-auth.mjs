@@ -15,7 +15,7 @@
 //
 // The accounts are Neon Auth identities on the dev branch (VEN-447, VEN-448),
 // created once with a verified address, so signing in needs no inbox and no
-// code. The operator account is one of them; its `users.role` is granted by
+// code. The admin account is one of them; its `users.role` is granted by
 // `db:seed:e2e`, never by signing in.
 import { chromium } from 'playwright';
 import { readFileSync, mkdirSync, existsSync, rmSync } from 'node:fs';

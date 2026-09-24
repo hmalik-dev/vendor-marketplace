@@ -25,7 +25,7 @@ export async function GET(request: NextRequest): Promise<Response> {
    * Forwarding `request.nextUrl.search` verbatim made this the one admin URL
    * that skipped the boundary: `?status=nonsense` reached the API, came back
    * 400, threw inside the walk and rendered the 500 page — on an authenticated
-   * admin route, for a link the operator had bookmarked.
+   * admin route, for a link the admin had bookmarked.
    */
   const raw = rawSearchParams(request);
   const facets = await getAdminVendorFacets();

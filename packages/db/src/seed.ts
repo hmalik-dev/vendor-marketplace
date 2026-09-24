@@ -124,7 +124,7 @@ export async function seedCategories<
         icon: sql`excluded.icon`,
         /*
          * `display_order` and `is_active` are written on insert only. Once a
-         * category exists, the console owns both (VEN-401): an operator's
+         * category exists, the console owns both (VEN-401): an admin's
          * deactivation or reorder must survive the next `db:seed`, which every
          * lane and every CI run performs.
          */

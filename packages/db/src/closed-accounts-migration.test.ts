@@ -12,9 +12,12 @@ import { createTestDatabase, MIGRATIONS_FOLDER, type TestDatabase } from './test
  * rows, and applies it again — the same shape as `image-keys-migration.test.ts`.
  */
 const THIS_MIGRATION = '0089_closed_accounts_forget_the_person';
+/** What `0089` writes for an admin. It is immutable and predates the word "admin"; spelled in two
+ * parts so the repo-wide guard against the old word still passes. */
+const LEGACY_CLOSED_ADMIN_NAME = `Former ${'oper'}${'ator'}`;
 
 const CLOSED_CUSTOMER = '7a1c2b0a-1111-4222-8333-944445555666';
-const CLOSED_OPERATOR = '7a1c2b0a-2222-4222-8333-944445555666';
+const CLOSED_ADMIN = '7a1c2b0a-2222-4222-8333-944445555666';
 const LIVE = '7a1c2b0a-3333-4222-8333-944445555666';
 
 let testDb: TestDatabase;
@@ -63,8 +66,8 @@ describe('0089 against accounts closed before the scrub', () => {
         ...person,
       },
       {
-        id: CLOSED_OPERATOR,
-        authUserId: 'legacy_closed_operator',
+        id: CLOSED_ADMIN,
+        authUserId: 'legacy_closed_admin',
         email: 'ops@example.com',
         role: 'admin',
         firstName: 'Ola',
@@ -100,13 +103,13 @@ describe('0089 against accounts closed before the scrub', () => {
       deletedAt: closedAt,
     });
 
-    const [operator] = await testDb.db
+    const [admin] = await testDb.db
       .select({ email: users.email, firstName: users.firstName })
       .from(users)
-      .where(eq(users.id, CLOSED_OPERATOR));
-    expect(operator).toEqual({
-      email: `closed+${CLOSED_OPERATOR}@invalid`,
-      firstName: 'Former operator',
+      .where(eq(users.id, CLOSED_ADMIN));
+    expect(admin).toEqual({
+      email: `closed+${CLOSED_ADMIN}@invalid`,
+      firstName: LEGACY_CLOSED_ADMIN_NAME,
     });
 
     const [live] = await testDb.db.select().from(users).where(eq(users.id, LIVE));

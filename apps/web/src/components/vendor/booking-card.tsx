@@ -1,6 +1,7 @@
 import { EVENT_TYPE_LABELS, formatPrice, type EventType } from '@vendor-marketplace/shared';
 import { Avatar } from '@/components/ui/avatar';
 import { StatusPill } from '@/components/ui/status-pill';
+import { CancelBooking } from '@/components/vendor/cancel-booking';
 import { CompleteBooking } from '@/components/vendor/complete-booking';
 import type { WireBooking, WireBookingRequest } from '@/lib/wire-schemas';
 
@@ -125,6 +126,7 @@ export function BookingCard({
             {request.finalPriceCents === null ? '—' : formatPrice(request.finalPriceCents)}
           </p>
           {booking ? <CompleteBooking booking={booking} serverToday={serverToday} /> : null}
+          {booking ? <CancelBooking booking={booking} /> : null}
         </div>
       </div>
     </li>

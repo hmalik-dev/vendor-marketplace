@@ -10,6 +10,7 @@ import {
 import {
   authConfigured,
   forgetSessionsFor,
+  markSessionsRevoked,
   mintedUserIdForCaller,
   neonAuth,
 } from '@/lib/auth/server';
@@ -19,7 +20,10 @@ import {
   addressLimit,
   callerAddress,
   chargeAddress,
+  chargeRequest,
   chargeCaller,
+  isSignInRefused,
+  recordSignInFailure,
 } from '@/lib/auth/proxy-throttle';
 
 /**
@@ -42,7 +46,7 @@ import {
  * longer doing it, so the browser gets a fixed 200 at once and the call to Neon
  * finishes after the response. Status, body and timing then say nothing about
  * whether the address has an account. That call and the code check are also
- * budgeted per address (`chargeAddress`).
+ * budgeted per address and per caller (`chargeRequest`, VEN-718).
  *
  * Built per request, because `neonAuth()` reads the environment on first use
  * and a module-level `auth.handler()` would read it at build.
@@ -360,13 +364,18 @@ async function forwardBudgeted(
   }
 
   /*
-   * A password sign-in is charged for its failures only: the budget is shared
-   * and durable, so charging every attempt would let anyone lock an account out
-   * by naming its address. Codes and mail are charged as they are asked for.
+   * A password sign-in is charged for its failures only, and per caller as well
+   * as per address (VEN-630): the address budget binds only a caller that has
+   * already failed for it, so naming an address cannot lock out its owner.
+   * Codes and mail are charged as they are asked for.
    */
   const failuresOnly = path.join('/') === SIGN_IN;
+  const caller = callerAddress(request.headers);
+  const refused = failuresOnly
+    ? await isSignInRefused(email, caller)
+    : await chargeRequest(email, caller, path);
 
-  if (await chargeAddress(email, path, Date.now(), !failuresOnly)) {
+  if (refused) {
     return NextResponse.json(
       { message: 'Too many attempts' },
       { status: 429, headers: { 'Retry-After': '600' } },
@@ -385,7 +394,7 @@ async function forwardBudgeted(
 
   // Only the provider's refusal of the credential counts; its outage must not spend anyone's budget.
   if (failuresOnly && (response.status === 401 || response.status === 403)) {
-    await chargeAddress(email, path);
+    await recordSignInFailure(email, caller);
   }
 
   const mintsSession = await mintsUnusedSession(path, response);
@@ -672,7 +681,7 @@ async function forwardReset(
     return NextResponse.json({ message: 'Bad request' }, { status: 400 });
   }
 
-  const overBudget = await chargeAddress(email, path);
+  const overBudget = await chargeRequest(email, callerAddress(request.headers), path);
   const isRequest = path.join('/') === REQUEST_RESET;
 
   if (overBudget && !isRequest) {
@@ -829,6 +838,7 @@ async function forwardChangePassword(
 
   if (response.ok) {
     forgetSessionsFor(userId);
+    await markSessionsRevoked();
   }
 
   return response;
@@ -996,6 +1006,7 @@ async function forwardListSessions(request: NextRequest): Promise<Response> {
 async function afterSessionsEnded(userId: string): Promise<void> {
   forgetSessionsFor(userId);
   await invalidateSessionsAtApi(userId);
+  await markSessionsRevoked();
 }
 
 function sessionIdIn(body: string): string | null {

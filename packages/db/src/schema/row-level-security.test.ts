@@ -8,7 +8,7 @@ const SCHEMA_REVIEW = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '../../../../docs/schema-review.md',
 );
-const REVIEW_CLASSES = ['user-owned', 'public-read', 'operator-only', 'system'];
+const REVIEW_CLASSES = ['user-owned', 'public-read', 'admin-only', 'system'];
 const SCRATCH_TABLE = 'rls_scratch_table';
 
 let testDb: TestDatabase;

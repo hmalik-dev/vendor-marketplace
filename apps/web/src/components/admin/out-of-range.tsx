@@ -17,7 +17,7 @@ export interface OutOfRangeProps {
  *
  * Its own state rather than either empty state: "No bookings yet" and "No
  * payments match" both say there is nothing to see, beside a count line that
- * says otherwise. That is what an operator lands on after acting on the only
+ * says otherwise. That is what an admin lands on after acting on the only
  * row of the last page and refreshing, or after pasting a stale `?page=`.
  */
 export function OutOfRange({

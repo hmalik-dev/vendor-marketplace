@@ -35,21 +35,21 @@ const PAID_AT = new Intl.DateTimeFormat('en-US', {
  *
  * A cancelled booking's residual is genuinely owed and genuinely failing, so
  * the row keeps its flag — but the service refuses to release it on an
- * operator's say-so, because D31 rewrote the amount after the fact and the
+ * admin's say-so, because D31 rewrote the amount after the fact and the
  * scheduled sweep is what pays it. A button whose only outcome is a 409
- * teaches an operator to distrust the whole column.
+ * teaches an admin to distrust the whole column.
  */
 export function canRetryPayout(row: WireAdminPaymentRow): boolean {
   return row.payoutFailing && !row.payoutStranded && row.status !== 'cancelled';
 }
 
 /**
- * What a retry answered, in the operator's words — and in the banner tone the
+ * What a retry answered, in the admin's words — and in the banner tone the
  * outcome earns, rather than one neutral grey for all three.
  *
  * A `failed` retry is a successful *request*: the attempt was made, recorded
  * and counted. The outcome is the whole point of pressing the button, so it is
- * reported rather than swallowed — an operator shown a closed dialog and an
+ * reported rather than swallowed — an admin shown a closed dialog and an
  * unchanged row has learned nothing, which is the state #432 opens with.
  *
  * **Every branch names the vendor.** The filter exists to put several failing
@@ -136,7 +136,7 @@ export function PaymentTable({
      * Cleared first, so a previous row's answer cannot be read as this one's.
      * `ConfirmAction` holds its dialog open when the call throws, and the
      * `setNotice` below never runs on that path — which would otherwise leave
-     * the last banner standing above a table the operator has just acted on
+     * the last banner standing above a table the admin has just acted on
      * again, naming a different vendor.
      */
     setNotice(null);

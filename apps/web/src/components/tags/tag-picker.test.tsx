@@ -323,11 +323,11 @@ describe('TagSuggestionForm within the picker', () => {
   });
 
   /*
-   * A tag an operator deactivated after the vendor chose it. The profile still
+   * A tag an admin deactivated after the vendor chose it. The profile still
    * carries it and the save sends it back, but the picker only offers active
    * tags, so it drew no pill and no Remove control (VEN-436).
    */
-  describe('a held tag an operator has since deactivated', () => {
+  describe('a held tag an admin has since deactivated', () => {
     const HIDDEN: WireTag = { ...tag('Amharic', 'language', 24), isActive: false };
 
     it('shows it as a removable pill', async () => {

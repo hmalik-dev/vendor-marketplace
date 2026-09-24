@@ -289,7 +289,7 @@ async function firstRejection<T extends readonly unknown[]>(
  * Rejects category ids that do not exist or are no longer selectable.
  *
  * `heldIds` are the categories the vendor is already listed under. One an
- * operator has since deactivated stays acceptable (VEN-401): the editor cannot
+ * admin has since deactivated stays acceptable (VEN-401): the editor cannot
  * draw a hidden category, so it sends the id back untouched on every save, and
  * refusing it would lock the vendor out of their own storefront.
  */
@@ -624,7 +624,7 @@ export async function updateVendorProfile(
    * `moderationHold` is excluded from the patch **type**, not merely left out of
    * it (#457). The DAO takes a general `Partial<NewVendorProfileRow>` because
    * the console's own writer legitimately sets that column, so nothing below the
-   * service can tell a vendor's save from an operator's — which left "no
+   * service can tell a vendor's save from an admin's — which left "no
    * vendor-facing write may touch it" resting on whoever edits this function
    * next remembering the rule. Now `patch.moderationHold = …` does not compile
    * here, and the compiler is the one reader that never forgets.
@@ -846,11 +846,11 @@ export async function updateVendorProfile(
        *
        * `existing` was read before `resolveSlug`, the category and tag
        * resolution and two counts, and nothing here locks the row — so the guard
-       * above is a fast refusal, not the guarantee. An operator's takedown
+       * above is a fast refusal, not the guarantee. An admin's takedown
        * committing inside that window would otherwise be overwritten by a publish
        * that had already passed the check, leaving `is_published = true` beside
        * `moderation_hold = true`: on search, `Held` in the console, and the
-       * operator's own republish answering 409 with no lever left but a ban.
+       * admin's own republish answering 409 with no lever left but a ban.
        */
       /*
        * Only a live storefront's old address is recorded: before publication

@@ -111,7 +111,7 @@ test('a clone with no .env gets one with the local database filled in and storag
   /*
    * Rows that are absent-able locally are emptied, because their placeholders
    * are not absent: `postgresql://...` in DATABASE_URL_UNPOOLED is what the
-   * migrator prefers, and `operator@...` fails the API's boot schema.
+   * migrator prefers, and `admin@...` fails the API's boot schema.
    */
   for (const key of OPTIONAL_PLACEHOLDER_KEYS) {
     assert.equal(envValue(created, key), '', key);

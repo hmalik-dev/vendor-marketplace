@@ -11,7 +11,7 @@ import type { WireAdminCaseDetail } from '@/lib/wire-schemas';
 /**
  * The sweep date, named.
  *
- * `Tue 8 Sep` — the weekday is what makes it a date an operator can hold a
+ * `Tue 8 Sep` — the weekday is what makes it a date an admin can hold a
  * conversation about rather than a number they would have to look up. UTC,
  * like every other stamp on this console.
  */
@@ -23,11 +23,11 @@ const SWEEP_DATE = new Intl.DateTimeFormat('en-US', {
 });
 
 /**
- * The thing operators get wrong, drawn into Pattern C's `ConfirmAction`.
+ * The thing admins get wrong, drawn into Pattern C's `ConfirmAction`.
  *
  * The refund position carries a caution about when the money lands. The vendor
  * position carries one only on a chargeback, because only a chargeback has a
- * bank dispute that stays open whichever way the platform rules — an operator
+ * bank dispute that stays open whichever way the platform rules — an admin
  * who releases a payout and assumes the chargeback went with it has made a
  * mistake. A customer's report has no Stripe dispute, so it says nothing of one.
  * A chargeback's refund is offered only once the network has closed it, since
@@ -63,7 +63,7 @@ export interface CaseResolutionProps {
  *
  * Each goes through `ConfirmAction` **naming the consequence in money**, per
  * `22-admin.md`. "Are you sure?" names nothing; "$1,200 goes back to the
- * customer and the booking is cancelled" is the sentence an operator is actually
+ * customer and the booking is cancelled" is the sentence an admin is actually
  * deciding on. Pattern C adds what the delta found missing: **what the other
  * party gets**, the payout sweep **by name**, and the field that will be written.
  */
@@ -150,7 +150,7 @@ export function CaseResolution({ supportCase }: CaseResolutionProps): React.Reac
   /*
    * The counterparty's zero, formatted rather than typed as `$0.00`. It is the
    * figure the delta insists on — "and what did the vendor get?" is the second
-   * question an operator is asked afterwards — and reading it out of
+   * question an admin is asked afterwards — and reading it out of
    * `formatPrice` keeps it in the same currency and shape as the amount beside
    * it, which is what makes the two comparable at a glance.
    */
@@ -162,7 +162,7 @@ export function CaseResolution({ supportCase }: CaseResolutionProps): React.Reac
    * `payoutReleaseAt` is D35's rule: `PAYOUT_RELEASE_HOURS` after the start of
    * the event day. Once that instant has passed the sweep takes the booking on
    * its next tick, which is minutes rather than days away — so the date to tell
-   * an operator is the later of the two, and "the next sweep" is honest for
+   * an admin is the later of the two, and "the next sweep" is honest for
    * both branches. The frame draws exactly this: *"pays out to Kessler & Co. on
    * the next sweep, **Tue 8 Sep**"*.
    */
@@ -174,7 +174,7 @@ export function CaseResolution({ supportCase }: CaseResolutionProps): React.Reac
   /*
    * Pattern C's resolve control: **two positions, side by side, equal weight**.
    *
-   * Neither is `primary`. The operator's job here is to judge, and a filled clay
+   * Neither is `primary`. The admin's job here is to judge, and a filled clay
    * button on one side would be the product voting on somebody else's money —
    * which is why the delta draws this differently from every other pair of
    * console actions. Only the destructive edge is marked, and it is *outlined*

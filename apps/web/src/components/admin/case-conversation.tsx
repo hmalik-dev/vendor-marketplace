@@ -38,14 +38,14 @@ export const THREAD_CHIP = 'Case-scoped read';
  * is always true of the window without inventing which days it covers.
  */
 export const THREAD_SCOPE =
-  "Read-only, and scoped to the dates the case is about. Operators see those messages, not the relationship's whole history.";
+  "Read-only, and scoped to the dates the case is about. Admins see those messages, not the relationship's whole history.";
 
 /** Pattern C's footer, for the window the server actually applied. */
 export const WINDOW_SCOPE: Record<ThreadWindow['basis'], string> = {
   event_date:
-    "Read-only, and scoped to the event date. Operators see the messages the case is about, not the relationship's whole history.",
+    "Read-only, and scoped to the event date. Admins see the messages the case is about, not the relationship's whole history.",
   report_filed:
-    "Read-only, and scoped to the week the report was filed. Operators see the messages the case is about, not the relationship's whole history.",
+    "Read-only, and scoped to the week the report was filed. Admins see the messages the case is about, not the relationship's whole history.",
 };
 
 /** `12 Sep only` for one day; `6–12 Sep`, or `29 May – 4 Jun` across a month. */
@@ -88,9 +88,9 @@ function ScopeLine({ children }: { children: string }): React.ReactElement {
  * a log that records reads nobody made is a log nobody can use to answer who
  * read what. One deliberate press, one row.
  *
- * **There is no reply box, and there is not meant to be.** The operator reads,
+ * **There is no reply box, and there is not meant to be.** The admin reads,
  * then acts through moderation or through support. Nothing here posts into the
- * thread: a participant is a party to the conversation and an operator is not.
+ * thread: a participant is a party to the conversation and an admin is not.
  *
  * Renders Pattern C's whole `Reported thread` card, band included, because the
  * chip in the band states the window the response enforced (VEN-412) and only
@@ -144,7 +144,7 @@ export function CaseConversation({
       className="flex flex-col"
     >
       {/*
-        The id stays on the page without the audited read: an operator quoting
+        The id stays on the page without the audited read: an admin quoting
         it into a ticket or `/admin/activity` should not have to open the thread
         to copy it.
       */}
@@ -208,7 +208,7 @@ export function CaseConversation({
               {/*
                 What somebody typed, paragraphs intact. `break-words` because
                 every character of this is user input and a single unbroken run
-                would otherwise decide the width of the card an operator rules
+                would otherwise decide the width of the card an admin rules
                 from.
               */}
               <p className="text-sm leading-prose break-words whitespace-pre-wrap text-stone-900">

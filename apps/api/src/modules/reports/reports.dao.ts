@@ -15,7 +15,7 @@ import { VENDOR_VISIBLE } from '../vendors/vendor-visibility.js';
  * row it names (#436).
  *
  * **This read is acceptance 2 and it is also the authorisation.** A report
- * whose subject does not resolve is a case an operator opens onto nothing, and
+ * whose subject does not resolve is a case an admin opens onto nothing, and
  * an id is a thing anybody can type — so the pair is looked up before a row is
  * written, and the vendor it ultimately concerns is read from the database
  * rather than from the reporter's payload. The same rule `supportMessageSchema`
@@ -23,7 +23,7 @@ import { VENDOR_VISIBLE } from '../vendors/vendor-visibility.js';
  * words about *who* would be a queue reading whatever the reporter chose.
  */
 export interface ReportSubjectProjection {
-  /** The vendor this report ultimately concerns, for the operator's context. */
+  /** The vendor this report ultimately concerns, for the admin's context. */
   vendorBusinessName: string;
   vendorSlug: string;
   /**
@@ -85,7 +85,7 @@ async function vendorProfileSubject(
  * and for a review the `customer_to_vendor` + `is_public` pair the vendor page
  * lists — so a subject the reporter could not see resolves to `null`, the same
  * answer as an id that does not exist. Anything else makes 200 versus 404 an
- * existence oracle and copies a draft vendor's name into an operator case.
+ * existence oracle and copies a draft vendor's name into an admin case.
  */
 function publicSubjectOf(
   row: { businessName: string; slug: string } | undefined,
@@ -174,10 +174,10 @@ async function conversationSubject(
  *
  * Lives here rather than in `messaging.dao.ts` because the participant-facing
  * reads there answer "may this caller see this", and this one answers "who is
- * this operator looking at" — a different question with a different guard in
+ * this admin looking at" — a different question with a different guard in
  * front of it. `findMessages` and `countMessages` are shared with those reads;
  * the parties are not, because a participant already knows who they are talking
- * to and an operator does not.
+ * to and an admin does not.
  */
 export interface ConversationPartiesProjection {
   customerId: string;

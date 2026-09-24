@@ -1042,7 +1042,7 @@ export const bookingRequestDetailSchema = bookingRequestSchema.extend({
    * What the money did, for a request that got as far as a booking (#415).
    *
    * A request reaches `cancelled` three ways — withdrawn before acceptance,
-   * cancelled after payment, unwound by an operator — and the row itself
+   * cancelled after payment, unwound by an admin — and the row itself
    * cannot tell them apart, so both parties' screens said only "This request
    * was cancelled." on a booking where hundreds of dollars had moved and come
    * back. `null` **is** the first case: a withdrawal never produced a
@@ -1167,6 +1167,12 @@ export const cancelBookingSchema = z.object({
   expectedRefundCents: z.number().int().nonnegative().optional(),
 });
 export type CancelBookingInput = z.infer<typeof cancelBookingSchema>;
+
+/** A vendor cancelling a confirmed booking: the reason is required, the refund is always full. */
+export const vendorCancelBookingSchema = z.object({
+  reason: freeText().min(1).max(1_000),
+});
+export type VendorCancelBookingInput = z.infer<typeof vendorCancelBookingSchema>;
 
 export const resolveDisputeSchema = z.object({
   /**
@@ -1584,6 +1590,14 @@ export const vendorPayoutSummarySchema = z.object({
   /** The same sum over the rows a dispute is holding. No release date exists. */
   heldCents: z.int().min(0),
   heldCount: z.int().min(0),
+  /**
+   * What the vendor still owes after chargebacks the platform lost on payouts
+   * already sent (VEN-658). It is kept back from upcoming payouts until it is
+   * cleared, so `pendingCents` is what is owed *before* that deduction.
+   */
+  debtOutstandingCents: z.int().min(0),
+  /** How much of that debt earlier payouts have already recovered. */
+  debtRecoveredCents: z.int().min(0),
 });
 
 export type VendorPayoutSummary = z.infer<typeof vendorPayoutSummarySchema>;
@@ -1613,7 +1627,7 @@ export const vendorDashboardSchema = z.object({
   earningsThisMonthCents: z.int().min(0),
   isPublished: z.boolean(),
   /**
-   * An operator took the storefront down. Not a draft the vendor can finish:
+   * An admin took the storefront down. Not a draft the vendor can finish:
    * they cannot clear it from the dashboard, so the page must say so.
    */
   moderationHold: z.boolean(),
@@ -1895,7 +1909,7 @@ export const vendorProfileDetailSchema = vendorProfileSchema.extend({
    */
   publishBlockers: z.array(z.enum(PUBLISH_BLOCKER_KEYS)),
   /**
-   * An operator has taken this storefront down and only an operator can put it
+   * An admin has taken this storefront down and only an admin can put it
    * back (#457).
    *
    * On the vendor's **own** detail read and nowhere else — it is a fact about
@@ -2374,7 +2388,7 @@ export interface Paginated<T> {
  *
  * The counted way out of a filtered-empty console list, drawn by Pattern A of
  * the admin delta: *"Open cases instead (4)"*, *"Any origin (2)"*, *"All time
- * (9)"*. The point of the number is that an operator picks the widening that
+ * (9)"*. The point of the number is that an admin picks the widening that
  * **pays** instead of clearing everything and rebuilding the query from
  * scratch.
  *
@@ -2525,7 +2539,7 @@ export const reportReasonSchema = z.enum(REPORT_REASONS);
  * One report, as the dialog sends it.
  *
  * **Two ids and no prose about who.** The subject is named by type and id and
- * everything else the operator reads — whose profile, which vendor, who is in
+ * everything else the admin reads — whose profile, which vendor, who is in
  * the thread — is resolved from those on the server. A report that quoted the
  * subject's own name out of the reporter's payload would be a queue reading
  * whatever the reporter chose to put in it, which is the same rule
@@ -2548,7 +2562,7 @@ export type CreateReportInput = z.infer<typeof createReportSchema>;
  * What a report hands back: the reference, and nothing else.
  *
  * The support receipt's reference, without its reply address. There is no status
- * to poll and no case the reporter can open — the queue is the operator's
+ * to poll and no case the reporter can open — the queue is the admin's
  * screen — so the reference is the whole of what they are given, and the
  * dialog says so in words.
  */
@@ -2584,13 +2598,13 @@ export type FieldErrorDetails = z.infer<typeof fieldErrorDetailsSchema>;
  * state that already exists** rather than from a column invented for the table.
  *
  * There is no `flagged` or `paused` column on `vendor_profiles`, and adding one
- * would give an operator a second place to record something the product already
+ * would give an admin a second place to record something the product already
  * knows. The mapping, in order — the first match wins:
  *
  * | Status    | Condition                                                          |
  * | --------- | ------------------------------------------------------------------ |
  * | `flagged` | the account is banned — the one moderation state there is          |
- * | `held`    | an operator unpublished it and only an operator can undo that      |
+ * | `held`    | an admin unpublished it and only an admin can undo that      |
  * | `live`    | the profile is published                                           |
  * | `paused`  | unpublished, but payouts are connected — set up and taken down     |
  * | `review`  | unpublished and never onboarded — a draft that has never been live |
@@ -2616,15 +2630,15 @@ export const adminPaginationShape = {
  * `held` is the moderation state `paused` could not express (#457). Both are an
  * unpublished storefront, and until `vendor_profiles.moderation_hold` existed
  * nothing on the row said whether the vendor had paused their own trading or an
- * operator had taken them down — the ambiguity the republish dialog warns about
+ * admin had taken them down — the ambiguity the republish dialog warns about
  * in prose. It is derived from the hold column, so it is still state the product
  * already holds rather than a status somebody types into the table.
  *
  * The others are all states a row can move between: a paused storefront
  * publishes again, a flagged one is reinstated, a held one is republished by
- * the operator who held it. `retired` is none of those — the
+ * the admin who held it. `retired` is none of those — the
  * owner deleted their auth identity, nothing in the product can undo it, and
- * the operator's only useful question about the row is which of their bookings
+ * the admin's only useful question about the row is which of their bookings
  * it unwound. Without it a deleted account read as `review`, which is the label
  * for a vendor still waiting to be let in.
  */
@@ -2687,7 +2701,7 @@ export const adminVendorRowSchema = z.object({
    * `stripeOnboarded` is false on both, and only these three fields differ.
    */
   stripeAccountId: z.string().nullable(),
-  /** Stripe's own code for why a capability is off — never operator-written. */
+  /** Stripe's own code for why a capability is off — never admin-written. */
   stripeDisabledReason: z.string().nullable(),
   /** What Stripe is still waiting on from the vendor. Empty when nothing is. */
   stripeRequirementsDue: z.array(z.string()),
@@ -2766,7 +2780,7 @@ export const adminCustomerRowSchema = z.object({
   /**
    * The address the identity provider holds and this row could not be given,
    * or `null` when the two agree. Carried on every row rather than only on the
-   * filtered list, for the reason `refundStuck` is: an operator scanning the
+   * filtered list, for the reason `refundStuck` is: an admin scanning the
    * unfiltered table sees it without having to know the filter exists.
    *
    * The matching `email_sync_failed_at` is deliberately **not** here. A list
@@ -2824,7 +2838,7 @@ export const adminBookingRowSchema = z.object({
   vendorId: uuidSchema,
   /**
    * Whether this row is the state above. Carried on every row rather than only
-   * on the filtered list, so an operator scanning the unfiltered table sees it
+   * on the filtered list, so an admin scanning the unfiltered table sees it
    * without having to know the filter exists.
    */
   refundStuck: z.boolean(),
@@ -2875,7 +2889,7 @@ export const adminPaymentRowSchema = z.object({
    * Deliberately **not** a fourth `PayoutStatus` member. `payoutStatusOf` omits
    * `failed` on purpose — a failed transfer is retried every quarter of an hour
    * and self-heals, so telling a *vendor* about it would alarm them about
-   * something already in hand. An operator is the one reader who has to know,
+   * something already in hand. An admin is the one reader who has to know,
    * so the fact lives here as a flag beside the shared status rather than as a
    * private redefinition of it.
    *
@@ -2907,7 +2921,7 @@ export const adminReviewRowSchema = z.object({
   vendorName: z.string(),
   vendorSlug: z.string(),
   /**
-   * `false` once an operator has hidden it (#435).
+   * `false` once an admin has hidden it (#435).
    *
    * The console is the one surface that reads hidden reviews — every public
    * read filters them out — so the row has to carry the flag or the only
@@ -3035,7 +3049,7 @@ export const adminBanResultSchema = z.object({
    * confirmed** on a suspended account.
    *
    * The ban used to log those and carry on, and the result had no field to say
-   * so — so the operator's table showed the account suspended with no signal
+   * so — so the admin's table showed the account suspended with no signal
    * that money had not moved and a booking still stood (#400). A ban with a
    * non-zero count here needs a human: the money is with Stripe, the customer
    * has not been told, and the vendor's date is still held.
@@ -3049,7 +3063,7 @@ export type AdminBanResult = z.infer<typeof adminBanResultSchema>;
  * Graduated moderation (#435) — the levers between "nothing" and a ban.
  *
  * Every request body here is a **state**, not a verb: `{ isPublished: false }`
- * rather than an `/unpublish` route. Two operators acting on the same row then
+ * rather than an `/unpublish` route. Two admins acting on the same row then
  * converge on the state they both asked for instead of toggling past each
  * other, and the same route reinstates what it took down, which is what makes
  * the action reversible in the API rather than only in the UI.
@@ -3083,14 +3097,14 @@ export type SetReviewVisibility = z.infer<typeof setReviewVisibilitySchema>;
  *
  * The recomputed aggregate is returned rather than left for the caller to read
  * back: hiding a review is only meaningfully different from deleting one if the
- * operator can see that the rating moved the same way, and a second request to
+ * admin can see that the rating moved the same way, and a second request to
  * find that out is a second chance for the two numbers to disagree.
  *
  * Never nullable: the lever applies only to `customer_to_vendor` rows, so a
  * response of this shape always describes a storefront rating that moved. A
  * `vendor_to_customer` row is refused before it gets here — its `is_public` is
  * the author's own choice about who may read their note, not a moderation
- * state, and treating the two as one column is how an operator would have
+ * state, and treating the two as one column is how an admin would have
  * published a private note.
  */
 export const adminReviewVisibilityResultSchema = z.object({
@@ -3110,7 +3124,7 @@ export type SetPackageActive = z.infer<typeof setPackageActiveSchema>;
  *
  * Publishing requires one bookable package, so deactivating the last one
  * unpublishes the profile — the same rule the vendor's own editor already
- * enforces. The operator has to be told: they asked to remove one service and
+ * enforces. The admin has to be told: they asked to remove one service and
  * a business went off the marketplace.
  */
 export const adminPackageActiveResultSchema = z.object({
@@ -3159,11 +3173,11 @@ export const adminPaymentPageSchema = paginatedSchema(adminPaymentRowSchema).ext
 export type AdminPaymentPage = z.infer<typeof adminPaymentPageSchema>;
 
 /**
- * What one operator-driven payout retry did.
+ * What one admin-driven payout retry did.
  *
  * `busy` is the third answer and it is not padding: a retry that found the
  * fifteen-minute sweep already holding the row lock attempted nothing, and
- * reporting that as `failed` would put a refusal in front of an operator that
+ * reporting that as `failed` would put a refusal in front of an admin that
  * Stripe never made.
  */
 export const ADMIN_PAYOUT_RETRY_OUTCOMES = ['released', 'failed', 'busy'] as const;
@@ -3172,7 +3186,7 @@ export type AdminPayoutRetryOutcome = (typeof ADMIN_PAYOUT_RETRY_OUTCOMES)[numbe
 
 /**
  * The outcome plus the payout state it left behind, so the console redraws the
- * row from the answer rather than from what it was showing when the operator
+ * row from the answer rather than from what it was showing when the admin
  * pressed the button — including **today's** failure reason rather than the one
  * they were reading.
  */
@@ -3202,7 +3216,7 @@ export type AdminTagSuggestionPage = z.infer<typeof adminTagSuggestionPageSchema
 /**
  * The tag management table. Not paginated: the whole point of the screen is to
  * see the vocabulary as one list, grouped by category, and the vocabulary is
- * bounded by what an operator has approved rather than by user-generated volume.
+ * bounded by what an admin has approved rather than by user-generated volume.
  */
 export const adminTagListSchema = z.object({ items: z.array(adminTagRowSchema) });
 export type AdminTagList = z.infer<typeof adminTagListSchema>;
@@ -3257,12 +3271,12 @@ export const adminActivityRowSchema = z.object({
   id: uuidSchema,
   actorId: uuidSchema,
   /**
-   * The operator's name, resolved through a join at read time rather than
+   * The admin's name, resolved through a join at read time rather than
    * frozen on the row.
    *
    * The opposite choice from `legal_acceptances.accepted_by_name`, and for the
    * opposite reason: that table freezes the name because it is evidence of who
-   * signed what, while this one answers "who is doing this" for an operator
+   * signed what, while this one answers "who is doing this" for an admin
    * looking at the console today. The **id** is the record; the name is how it
    * is read.
    *
@@ -3283,7 +3297,7 @@ export type AdminActivityRow = z.infer<typeof adminActivityRowSchema>;
  * The activity feed's filters.
  *
  * `actor` and `subject` are the two the ticket names, and they are the two an
- * operator actually asks for: "what did this operator do" and "what did the
+ * admin actually asks for: "what did this admin do" and "what did the
  * console do to this account". `action` narrows the firehose further and costs
  * nothing, since the column is already an enum.
  */
@@ -3300,7 +3314,7 @@ export const adminActivityQuerySchema = z.object({
 export type AdminActivityQuery = z.infer<typeof adminActivityQuerySchema>;
 
 /**
- * `GET /admin/activity/actors` — the operators the log names, for the
+ * `GET /admin/activity/actors` — the admins the log names, for the
  * `Actor ▾` facet (VEN-388). Only actors with at least one row, so every choice
  * narrows to something.
  */
@@ -3315,7 +3329,7 @@ export type AdminActivityPage = z.infer<typeof adminActivityPageSchema>;
 
 // --- Launch switches (VEN-404) ---------------------------------------------
 
-/** The values an operator sets on `/admin/settings`. */
+/** The values an admin sets on `/admin/settings`. */
 export const platformSwitchesSchema = z.object({
   bookingRequestsPaused: z.boolean(),
   checkoutPaused: z.boolean(),
@@ -3342,7 +3356,7 @@ export const publicPlatformNoticeSchema = z
   .nullable();
 export type PublicPlatformNotice = z.infer<typeof publicPlatformNoticeSchema>;
 
-/** A vendor whose automatic payouts an operator is holding. */
+/** A vendor whose automatic payouts an admin is holding. */
 export const adminHeldVendorSchema = z.object({
   id: uuidSchema,
   businessName: z.string(),
@@ -3394,7 +3408,7 @@ export type VendorSignUpGate = z.infer<typeof vendorSignUpGateSchema>;
  * the wire only so the schema still matches the row it upserts.
  *
  * `category` is a category id (`GET /categories`), never free text: the
- * screen offers a select of the real, active categories so what the operator
+ * screen offers a select of the real, active categories so what the admin
  * reviews is already the shape `createVendorProfileSchema` needs. `state` is
  * asked but never required to be *complete* — only business name, category and
  * city are (see `isVendorApplicationComplete`).
@@ -3439,7 +3453,7 @@ export const adminVendorApplicationRowSchema = z.object({
   /** The stored value: a category id for a row from the details screen, free text for one that predates it. */
   category: z.string().nullable(),
   /**
-   * `category` resolved to a name for the operator to read, when it is a
+   * `category` resolved to a name for the admin to read, when it is a
    * category id that still exists. Null for a pre-VEN-512 free-text row (read
    * `category` itself there) and for an id that was later deactivated or
    * deleted.
@@ -3485,7 +3499,7 @@ export const decideVendorApplicationSchema = z.object({
 });
 export type DecideVendorApplication = z.infer<typeof decideVendorApplicationSchema>;
 
-/** `POST /admin/vendor-applications/invite`: the operator's multi-select invite (VEN-513). */
+/** `POST /admin/vendor-applications/invite`: the admin's multi-select invite (VEN-513). */
 export const bulkInviteApplicationsSchema = z.object({
   applicationIds: z.array(uuidSchema).min(1).max(MAX_BULK_INVITE_APPLICATIONS),
 });
@@ -3516,7 +3530,7 @@ export const adminVendorInviteRowSchema = z.object({
   createdAt: z.date(),
   /** When the invited address opened its vendor account; null until then. */
   acceptedAt: z.date().nullable(),
-  /** `failed` is what the operator can act on; `pending` covers in flight and invites sent before this was recorded. */
+  /** `failed` is what the admin can act on; `pending` covers in flight and invites sent before this was recorded. */
   emailStatus: z.enum(['sent', 'failed', 'pending']),
   /** Why the last send failed; null unless `emailStatus` is `failed`. */
   emailFailureReason: z.string().nullable(),
@@ -3549,6 +3563,8 @@ export const adminVendorDetailProfileSchema = adminVendorRowSchema.extend({
   moderationHold: z.boolean(),
   /** VEN-404's per-vendor switch; the sweep skips a held vendor's payouts. */
   payoutHold: z.boolean(),
+  /** What the vendor still owes for chargebacks lost on paid bookings, netted off their payouts (VEN-658). */
+  debtOutstandingCents: z.int().min(0),
 });
 export type AdminVendorDetailProfile = z.infer<typeof adminVendorDetailProfileSchema>;
 
@@ -3565,7 +3581,7 @@ export type AdminVendorPackage = z.infer<typeof adminVendorPackageSchema>;
 /**
  * One portfolio photo. The references are plain strings rather than
  * `imageRefSchema`: this is a response, and a stored row that predates a
- * tightened input rule must still be listable so an operator can remove it.
+ * tightened input rule must still be listable so an admin can remove it.
  */
 export const adminVendorPortfolioItemSchema = z.object({
   id: uuidSchema,
@@ -3824,7 +3840,7 @@ export const supportCaseStatusSchema = z.enum(SUPPORT_CASE_STATUSES);
  *
  * The queue answers one question — "what is waiting, and how long has it been
  * waiting" — so the row carries the age's raw material (`createdAt`) and the
- * handle a sender can quote (`reference`), and nothing an operator would have
+ * handle a sender can quote (`reference`), and nothing an admin would have
  * to open the case to act on. The body is deliberately absent: a table of
  * 4,000-character messages is not scannable, and it would put user-written text
  * on a screen that exists to be skimmed.
@@ -3855,7 +3871,7 @@ export const adminCaseRowSchema = z.object({
    *
    * On the **row** rather than only on the detail, because the queue's job is
    * to be triaged without opening anything: `Review` beside a `user_report`
-   * tells an operator what they are about to work, and a queue that made them
+   * tells an admin what they are about to work, and a queue that made them
    * click to find out is a queue worked one case at a time.
    */
   subjectType: reportSubjectSchema.nullable(),
@@ -3870,7 +3886,7 @@ export type AdminCaseRow = z.infer<typeof adminCaseRowSchema>;
  * The linked booking, with **everything `adminBookingRowSchema` omits**.
  *
  * A separate shape rather than a widened booking row, because this is the one
- * screen where an operator decides who keeps the money and deciding it needs
+ * screen where an admin decides who keeps the money and deciding it needs
  * the split, the refund and the payout state. Every other console surface is a
  * list, and putting the money internals on a list row would spread them across
  * five screens with no use for them — which is what `bookingSchema` says about
@@ -3888,6 +3904,8 @@ export const adminCaseBookingSchema = z.object({
   vendorPayoutCents: z.int(),
   /** What the vendor owes after a chargeback the platform lost on a released payout (VEN-645). */
   vendorOwedCents: z.int(),
+  /** How much of `vendorOwedCents` later payouts have recovered (VEN-658). */
+  vendorOwedRecoveredCents: z.int(),
   refundAmountCents: z.int().nullable(),
   paidAt: z.date().nullable(),
   payoutReleasedAt: z.date().nullable(),
@@ -3911,20 +3929,20 @@ export const adminCaseDetailSchema = adminCaseRowSchema.extend({
    * not something a card network's decision can be turned away by. So the hold
    * is attempted and its refusal is recorded here rather than swallowed: a
    * chargeback case sitting on a `completed` booking otherwise reads as an
-   * operator error rather than as money that had already left.
+   * admin error rather than as money that had already left.
    */
   holdRefusal: z.string().nullable(),
-  /** Set when the report reached nobody, so the operator knows to chase it. */
+  /** Set when the report reached nobody, so the admin knows to chase it. */
   emailFailedAt: z.date().nullable(),
   /**
    * Stripe's own word for how the network closed it — `won`, `lost`,
    * `warning_closed`. **Their vocabulary, not ours**, which is why it is a
    * string rather than an enum of this platform's: enumerating it here would
    * claim ownership of a list Stripe changes, and a member we had not heard of
-   * would fail the response schema on a screen an operator needs.
+   * would fail the response schema on a screen an admin needs.
    */
   networkOutcome: z.string().nullable(),
-  /** The dispute in Stripe, for the operator who has to open the Dashboard. */
+  /** The dispute in Stripe, for the admin who has to open the Dashboard. */
   stripeDisputeId: z.string().nullable(),
   resolvedByName: z.string().nullable(),
   resolvedAt: z.date().nullable(),
@@ -3949,7 +3967,7 @@ export const adminCaseQuerySchema = z.object({
    * Defaulted to `open`, and the default is the feature.
    *
    * The number that matters is the age of the oldest open case, because it is
-   * money somebody is not being paid — so the screen an operator lands on is
+   * money somebody is not being paid — so the screen an admin lands on is
    * the one that shows it. A queue that opens on everything ever filed buries
    * that behind a click.
    */
@@ -3966,13 +3984,13 @@ export type AdminCasePage = z.infer<typeof adminCasePageSchema>;
 // --- Data rights: export, closure, legal record (#438) ----------------------
 
 /**
- * One acceptance as an **operator** reads it, which is the public
+ * One acceptance as an **admin** reads it, which is the public
  * `legalAcceptanceSchema` plus the evidence fields.
  *
  * Read-only by construction rather than by convention: `legal_acceptances`
  * carries three triggers that refuse UPDATE, DELETE and TRUNCATE, so there is
  * deliberately no write counterpart to this schema anywhere. The console says
- * so on the surface rather than leaving an operator to discover it by trying.
+ * so on the surface rather than leaving an admin to discover it by trying.
  */
 export const legalAcceptanceRecordSchema = legalAcceptanceSchema.extend({
   id: uuidSchema,
@@ -4090,7 +4108,7 @@ export const adminExportNotificationSchema = z.object({
  * object (#438).
  *
  * The privacy policy says *"ask us for a copy of what we hold"* and that
- * requests go through Contact support, so this is what the operator hands back.
+ * requests go through Contact support, so this is what the admin hands back.
  * JSON rather than a folder of CSVs because the shape is a graph — bookings
  * point at counterparties, messages at conversations — and flattening it to
  * columns would lose the part a subject actually asked for.
@@ -4217,7 +4235,7 @@ export const adminCloseAccountResultSchema = z.object({
    * who holds it. The auth provider is a network call the retirement cannot roll back, so
    * a failure there leaves an account that is closed here and still signed in
    * there — reported rather than swallowed, exactly like `refundsFailed`, so
-   * the console can tell an operator the one thing still owed.
+   * the console can tell an admin the one thing still owed.
    */
   identityDeleted: z.boolean(),
 });
@@ -4277,7 +4295,7 @@ export const adminUserDataRightsSchema = z.object({
    * customer's own forward bookings refuse the closure; a vendor's are
    * refunded to their customers with the payout written to zero, because the
    * vendor walked away and the customer did nothing wrong. The console shows
-   * the count so an operator confirming a closure is told what it will do
+   * the count so an admin confirming a closure is told what it will do
    * rather than the opposite.
    */
   bookingsRefundedOnClose: z.int(),
@@ -4288,7 +4306,7 @@ export type AdminUserDataRights = z.infer<typeof adminUserDataRightsSchema>;
  * One message as the console renders it (#436).
  *
  * The sender's **name and side**, resolved on the server, rather than a bare
- * `senderId` the operator would have to look up twice per thread. `senderId`
+ * `senderId` the admin would have to look up twice per thread. `senderId`
  * stays because it is what the row is keyed on and what an action row would
  * name.
  *
@@ -4313,26 +4331,26 @@ export type AdminConversationMessage = z.infer<typeof adminConversationMessageSc
  *
  * The case is in the response rather than assumed by the caller because the
  * grant is the point: this route refuses every conversation no open case
- * names, so the screen states which case it is reading under, and the operator
+ * names, so the screen states which case it is reading under, and the admin
  * sees the same scope the server enforced. It is also what the `admin_actions`
  * row records, so the screen and the log cannot disagree about why the thread
  * was opened.
  *
- * **There is no write half.** An operator reads here and then acts through
+ * **There is no write half.** An admin reads here and then acts through
  * moderation or through support; nothing in the console posts into a thread,
- * because a participant is a party to the conversation and an operator is not.
+ * because a participant is a party to the conversation and an admin is not.
  */
 /**
  * The page window for a reported thread.
  *
  * `paginationQueryShape` with the thread's own page size rather than
  * `adminPaginationShape`: this is a conversation and it is read in bulk like
- * every other conversation. An operator reading a thread twenty rows at a time
+ * every other conversation. An admin reading a thread twenty rows at a time
  * would write four audit rows to read one argument.
  */
 export const adminConversationQuerySchema = z.object({
   /**
-   * The case the operator is reading under (VEN-412). A thread can carry two
+   * The case the admin is reading under (VEN-412). A thread can carry two
    * open reports filed weeks apart, and each grants its own dates, so the case
    * on screen names the window rather than whichever report is oldest. It is
    * checked against the conversation, never trusted as a pairing.
@@ -4424,20 +4442,20 @@ export const throttleChargeSchema = z.object({
 });
 export type ThrottleCharge = z.infer<typeof throttleChargeSchema>;
 
-// --- Operator access (VEN-506) ---------------------------------------------
+// --- Admin access (VEN-506) ---------------------------------------------
 
-/** Who to make an operator: an existing account, found by the address it signed up with. */
-export const grantOperatorSchema = z.object({ email: emailSchema });
-export type GrantOperator = z.infer<typeof grantOperatorSchema>;
+/** Who to make an admin: an existing account, found by the address it signed up with. */
+export const grantAdminSchema = z.object({ email: emailSchema });
+export type GrantAdmin = z.infer<typeof grantAdminSchema>;
 
 /**
- * One operator in the console's list.
+ * One admin in the console's list.
  *
- * `grantedAt` and `grantedBy` are `null` for an operator nobody granted in the
- * app — the first-operator bootstrap — and such a row has no role to go back
+ * `grantedAt` and `grantedBy` are `null` for an admin nobody granted in the
+ * app — the first-admin bootstrap — and such a row has no role to go back
  * to, so `revocable` is `false` for it rather than a guess.
  */
-export const adminOperatorRowSchema = z.object({
+export const adminAccountRowSchema = z.object({
   userId: uuidSchema,
   firstName: z.string(),
   lastName: z.string(),
@@ -4448,14 +4466,14 @@ export const adminOperatorRowSchema = z.object({
   grantedByName: z.string().nullable(),
   revocable: z.boolean(),
 });
-export type AdminOperatorRow = z.infer<typeof adminOperatorRowSchema>;
+export type AdminAccountRow = z.infer<typeof adminAccountRowSchema>;
 
-export const adminOperatorListSchema = z.object({ items: z.array(adminOperatorRowSchema) });
-export type AdminOperatorList = z.infer<typeof adminOperatorListSchema>;
+export const adminAccountListSchema = z.object({ items: z.array(adminAccountRowSchema) });
+export type AdminAccountList = z.infer<typeof adminAccountListSchema>;
 
-/** `changed` is `false` when the account already was (or was not) an operator. */
-export const adminOperatorChangeResultSchema = z.object({
+/** `changed` is `false` when the account already was (or was not) an admin. */
+export const adminAccountChangeResultSchema = z.object({
   userId: uuidSchema,
   changed: z.boolean(),
 });
-export type AdminOperatorChangeResult = z.infer<typeof adminOperatorChangeResultSchema>;
+export type AdminAccountChangeResult = z.infer<typeof adminAccountChangeResultSchema>;

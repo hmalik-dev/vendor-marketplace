@@ -43,7 +43,7 @@ export type AuthSyncOutcome =
  * Neon Auth sends no `user.updated` or `user.deleted` (VEN-444, q4), so there
  * is no webhook: the reconcile pass reads the identities and hands each
  * difference here, and the row is **created** only by the acceptance gate. It
- * is idempotent all the same — the pass is re-runnable and two operators may
+ * is idempotent all the same — the pass is re-runnable and two admins may
  * run it at once — and an event for an unknown user is a no-op, not an error.
  *
  * It takes the full `AdminContext` rather than a database handle because a
@@ -118,7 +118,7 @@ export async function applyAuthSyncEvent(
    * collision is a fact about a different row and will be as true on the next
    * run.
    *
-   * `email_sync_failed_at` and `pending_email` are what an operator acts on —
+   * `email_sync_failed_at` and `pending_email` are what an admin acts on —
    * `/admin/customers?flag=email-stale` lists them — and this line is the same
    * class of report as the stranded-refund line below: something went wrong
    * after a committed operation, and only a person can finish it.
@@ -232,7 +232,7 @@ async function releaseStaleHolder(
 export type RetireIfGoneOutcome =
   /** Confirmed gone and retired through the deletion unwind. */
   | 'deleted'
-  /** Confirmed gone, but holding confirmed bookings: an operator was alerted, nothing was closed. */
+  /** Confirmed gone, but holding confirmed bookings: an admin was alerted, nothing was closed. */
   | 'flagged'
   /** The confirming lookup found the identity: the first answer was short, not a deletion. */
   | 'present'
@@ -253,7 +253,7 @@ export type RetireIfGoneOutcome =
  *
  * An account with future confirmed bookings is never closed here, even when
  * confirmed gone. Those refunds are money moving on the strength of an
- * automatic read, so the operator is told and closes it through the console,
+ * automatic read, so the admin is told and closes it through the console,
  * which runs the same `applyUserDeleted` unwind.
  */
 export async function retireIfConfirmedGone(
@@ -298,7 +298,7 @@ export async function retireIfConfirmedGone(
     if (!options.dryRun) {
       context.log.error(
         { userId: target.id, confirmedBookings: stranded.length },
-        'Neon Auth no longer has an account that holds confirmed bookings; an operator must close it',
+        'Neon Auth no longer has an account that holds confirmed bookings; an admin must close it',
       );
       context.alerts?.dispatch({
         kind: 'auth_identity_deleted',
@@ -406,7 +406,7 @@ async function applyUserDeleted(
   if (unwound.refundsFailed > 0 || unwound.bookingsLeftForReview > 0) {
     context.log.error(
       { userId: target.id, ...unwound },
-      'An account deletion left bookings confirmed; they need an operator',
+      'An account deletion left bookings confirmed; they need an admin',
     );
   } else {
     context.log.info({ userId: target.id, ...unwound }, 'Unwound a deleted account');

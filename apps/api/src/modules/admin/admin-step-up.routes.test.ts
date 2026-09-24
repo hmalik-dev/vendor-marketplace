@@ -32,7 +32,7 @@ const HOUR_MS = 60 * 60_000;
 
 /**
  * VEN-500: an irreversible admin route asks for a step-up the session token
- * cannot mint alone, and one operator can end only so many accounts an hour.
+ * cannot mint alone, and one admin can end only so many accounts an hour.
  */
 describe('admin step-up and destructive ceiling', () => {
   let harness: TestHarness;
@@ -151,7 +151,7 @@ describe('admin step-up and destructive ceiling', () => {
     return row!.isBanned;
   }
 
-  /** Completed bans by an operator, as the audit log records them. */
+  /** Completed bans by an admin, as the audit log records them. */
   async function seedBans(actorId: string, count: number, at: Date): Promise<void> {
     await harness.database.db.insert(adminActions).values(
       Array.from({ length: count }, () => ({
@@ -193,7 +193,7 @@ describe('admin step-up and destructive ceiling', () => {
 
   afterEach(async () => {
     now = START;
-    // The audit log is append-only; deleting the operators below cascades their rows.
+    // The audit log is append-only; deleting the admins below cascades their rows.
     await harness.database.db.delete(bookings);
     await harness.database.db.delete(bookingRequests);
     await harness.database.db.delete(vendorCategories);
@@ -201,7 +201,7 @@ describe('admin step-up and destructive ceiling', () => {
     await harness.database.db.delete(users);
     harness.stripe.refunds.length = 0;
     harness.email.sent.length = 0;
-    // Grants and pending codes went with the operators' rows, by cascade.
+    // Grants and pending codes went with the admins' rows, by cascade.
   });
 
   afterAll(async () => {
@@ -298,7 +298,7 @@ describe('admin step-up and destructive ceiling', () => {
       expect(response.json().error).toBe(ERROR_CODES.FORBIDDEN);
     });
 
-    it('emails the code to the operator and never returns it', async () => {
+    it('emails the code to the admin and never returns it', async () => {
       await signIn(ADMIN, true);
 
       const response = await harness.app.inject({
@@ -353,7 +353,7 @@ describe('admin step-up and destructive ceiling', () => {
       expect(again.json().error).toBe(ERROR_CODES.STEP_UP_REQUIRED);
     });
 
-    it('does not carry one operator’s step-up to another', async () => {
+    it('does not carry one admin’s step-up to another', async () => {
       await signIn(ADMIN, true);
       await signIn(OTHER_ADMIN, true);
       const target = await vendorWithBooking();
@@ -428,7 +428,7 @@ describe('admin step-up and destructive ceiling', () => {
   });
 
   describe('the hourly ceiling', () => {
-    it('refuses the N+1th ban with no refund, no state change and an operator alert', async () => {
+    it('refuses the N+1th ban with no refund, no state change and an admin alert', async () => {
       const adminId = await signIn(ADMIN, true);
       const target = await vendorWithBooking();
       await stepUp(ADMIN);
@@ -442,7 +442,7 @@ describe('admin step-up and destructive ceiling', () => {
       expect(harness.stripe.refunds).toHaveLength(0);
 
       await harness.flushEmail();
-      const alert = harness.email.sent.find((m) => m.to === 'operator@test.invalid');
+      const alert = harness.email.sent.find((m) => m.to === 'admin@test.invalid');
       expect(alert?.subject).toContain('ban');
       expect(alert?.text).toContain(adminId);
     });
@@ -516,7 +516,7 @@ describe('admin step-up and destructive ceiling', () => {
       expect(allowed.statusCode).toBe(200);
     });
 
-    it('is per operator: another admin is unaffected', async () => {
+    it('is per admin: another admin is unaffected', async () => {
       const adminId = await signIn(ADMIN, true);
       await signIn(OTHER_ADMIN, true);
       const target = await vendorWithBooking();

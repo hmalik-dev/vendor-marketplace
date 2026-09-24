@@ -152,7 +152,7 @@ describe('the checklist is a card inside the pane, not a rail beside it', () => 
 });
 
 /*
- * VEN-442: a storefront an operator took down is not a draft. The API now
+ * VEN-442: a storefront an admin took down is not a draft. The API now
  * reports `moderationHold`; the page has to name it rather than call the vendor's
  * listing unfinished, and withhold a checklist they cannot complete.
  */

@@ -18,6 +18,7 @@ import { siteOrigin } from '@/config/env';
 const VENDOR_SLUG = 'june-harlow';
 
 vi.mock('@/lib/api-client', () => ({
+  setRefusedTokenHandler: () => {},
   apiRequest: () =>
     Promise.resolve({
       items: [{ slug: VENDOR_SLUG }],

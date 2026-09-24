@@ -19,7 +19,7 @@ function settlement(overrides: Partial<Settlement> = {}): Settlement {
 /*
  * The three ways a request reaches `cancelled` read identically on the request
  * row, and one sentence covered all of them: first "You withdrew this
- * request." — false for a paid booking an operator unwound — and then "This
+ * request." — false for a paid booking an admin unwound — and then "This
  * request was cancelled.", which is never false and never says what happened
  * to the money (#415).
  */
@@ -45,13 +45,25 @@ describe('cancellationNarrative', () => {
      * whichever party it banned. A reinstated account reading its own booking
      * would otherwise be told the counterparty was suspended.
      */
-    it('names the operator without claiming which account was suspended', () => {
+    it('names the admin without claiming which account was suspended', () => {
       const unwound = settlement({ cancelledBy: 'admin' });
       const sentence = `${BRAND_NAME} cancelled this booking on June 1, 2026, because an account involved is no longer active.`;
 
       expect(cancellationNarrative(unwound, 'customer').what).toBe(sentence);
       expect(cancellationNarrative(unwound, 'vendor').what).toBe(sentence);
       expect(cancellationNarrative(unwound, 'customer').what).not.toContain('the other account');
+    });
+
+    it('tells each side that the vendor cancelled, and that the customer was refunded in full', () => {
+      const byVendor = settlement({ cancelledBy: 'vendor', paidOutAt: null });
+
+      expect(cancellationNarrative(byVendor, 'customer')).toEqual({
+        what: 'The vendor cancelled this booking on June 1, 2026, and you were refunded in full.',
+        money: 'You paid $1,450, and all of it was refunded to your original payment method.',
+      });
+      expect(cancellationNarrative(byVendor, 'vendor').what).toBe(
+        'You cancelled this booking on June 1, 2026.',
+      );
     });
 
     /*

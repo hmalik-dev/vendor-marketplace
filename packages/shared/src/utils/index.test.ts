@@ -8,6 +8,7 @@ import {
   addDays,
   calculateFees,
   calculateRefund,
+  vendorCancellationRefundCents,
   centsToDollars,
   dollarsToCents,
   expiryCountdown,
@@ -746,7 +747,7 @@ describe('isPayoutFailing', () => {
 
   /*
    * A dispute filed after a failed attempt is `held`, and that is a different
-   * thing to tell an operator — the distinction `payoutStatusOf` exists for.
+   * thing to tell an admin — the distinction `payoutStatusOf` exists for.
    */
   it('is false while a reported problem holds the payout', () => {
     expect(isPayoutFailing({ ...FAILING, status: 'disputed' })).toBe(false);
@@ -757,7 +758,7 @@ describe('isPayoutFailing', () => {
    *
    * A full refund rewrites `vendor_payout_cents` to `0` (D37) and leaves the
    * release null, so the sweep drops the row for ever. A flag reading the
-   * attempt count alone would keep it in the operator's failing list
+   * attempt count alone would keep it in the admin's failing list
    * permanently, under an alert saying the scheduled release keeps trying.
    */
   it('is false for a failed transfer that was then fully refunded', () => {
@@ -804,6 +805,17 @@ describe('isLegacyDestinationPayout', () => {
     ).toBe(false);
   });
 
+  it('is false for a modern payout whose whole amount went to repaying a lost chargeback (VEN-658)', () => {
+    expect(
+      isLegacyDestinationPayout({
+        status: 'confirmed',
+        payoutReleasedAt: new Date('2026-06-18T00:00:00Z'),
+        stripeTransferId: null,
+        debtNettedCents: 127_600,
+      }),
+    ).toBe(false);
+  });
+
   it('is false for a booking that has not been released at all', () => {
     expect(
       isLegacyDestinationPayout({
@@ -842,7 +854,7 @@ describe('payoutStatusOf when the payout amount is known (VEN-423)', () => {
 });
 
 describe('unwindFloorDate', () => {
-  it("is yesterday in UTC, so the operator's tomorrow is still ahead", () => {
+  it("is yesterday in UTC, so the admin's tomorrow is still ahead", () => {
     expect(unwindFloorDate(new Date('2026-10-08T01:00:00Z'))).toBe('2026-10-07');
   });
 
@@ -882,5 +894,17 @@ describe('expiryCountdown', () => {
   it('counts calendar days rather than elapsed 24-hour blocks', () => {
     expect(expiryCountdown(local(12, 1), local(10, 23))).toBe('expires in 2d');
     expect(expiryCountdown(local(17, 9), local(10, 9))).toBe('expires in 7d');
+  });
+});
+
+describe('vendorCancellationRefundCents', () => {
+  it('refunds the whole payment whatever the timing', () => {
+    expect(vendorCancellationRefundCents(145_000)).toBe(145_000);
+    expect(vendorCancellationRefundCents(0)).toBe(0);
+  });
+
+  it('refuses a total that is not whole non-negative cents', () => {
+    expect(() => vendorCancellationRefundCents(12.5)).toThrow(/whole|integer/);
+    expect(() => vendorCancellationRefundCents(-1)).toThrow(/non-negative/);
   });
 });

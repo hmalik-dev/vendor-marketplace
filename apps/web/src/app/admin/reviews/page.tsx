@@ -1,6 +1,7 @@
 import { REVIEW_TYPES } from '@vendor-marketplace/shared';
 import { AdminSurface } from '@/components/admin/admin-surface';
 import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
+import { OutOfRange } from '@/components/admin/out-of-range';
 import { FilteredEmpty } from '@/components/admin/filtered-empty';
 import { ReviewTable } from '@/components/admin/review-table';
 import { getAdminReviews } from '@/lib/admin-data';
@@ -59,6 +60,17 @@ export default async function AdminReviewsPage({
       <ReviewTable
         rows={reviews.items}
         filtered={Boolean(type)}
+        pastEnd={
+          reviews.items.length === 0 && reviews.total > 0 ? (
+            <OutOfRange
+              path={PATH}
+              params={{ type }}
+              page={reviews.page}
+              pageSize={reviews.pageSize}
+              total={reviews.total}
+            />
+          ) : undefined
+        }
         /*
          * One filter, so one counted way out (#454). `isPublic` is a moderation
          * state this table renders rather than a filter the bar offers, so

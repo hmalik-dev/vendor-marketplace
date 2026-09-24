@@ -12,7 +12,7 @@ import { CASE_ARRIVAL, CASE_PRESENTATION, caseSubject } from './case-presentatio
  *
  * Written when #436 added the third `origin`, because the two seams that
  * describe a case's provenance were both two-way branches on what had become a
- * three-member enum — and one of them shipped, telling an operator that an
+ * three-member enum — and one of them shipped, telling an admin that an
  * in-product report "arrived by Contact support" on the screen where they weigh
  * how much the account of events is worth. A wrong sentence stated confidently
  * is the failure this file exists to make impossible to reintroduce.
@@ -40,7 +40,7 @@ describe('case presentation', () => {
   /*
    * A report's topic is `trust-and-safety` by construction, so printing it
    * would label every report identically. The reason and the subject are what
-   * an operator triages on.
+   * an admin triages on.
    */
   it('reads a report as its reason and its subject, not as its topic', () => {
     expect(

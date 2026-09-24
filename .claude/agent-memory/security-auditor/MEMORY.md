@@ -11,7 +11,7 @@
 - [A new secret header has three registries](new-secret-header-has-three-registries.md) — pino `redact`, Sentry `CREDENTIAL_HEADER`, a self-failing placeholder
 - [The Resend secret's absence is refusal](resend-webhook-absence-is-refusal.md) — optional everywhere is correct
 - [CSP `'unsafe-inline'` is a recorded trade-off](csp-unsafe-inline-is-a-recorded-tradeoff.md) — never add script-src hosts
-- [Deploy pipeline secret handling](deploy-pipeline-secret-handling.md) — child env/argv redacted; tier fallback; Resend key full-access; VEN-660 clean
+- [Deploy pipeline secret handling](deploy-pipeline-secret-handling.md) — child env/argv redacted; tier fallback; VEN-634 dispatch gate runs inside the sha it gates
 - [CI e2e artifacts are public](ci-e2e-artifacts-are-public.md) — traces carry cookies, stripe-listen.log carries whsec
 - [`.auth/*.json` was outside the secret scan](auth-storage-state-is-outside-the-secret-scan.md) — `FORBIDDEN_PATHS` covers the path only
 - [A storage branch per lane, CI run and PR](neon-storage-branch-per-runner.md) — `NEON_API_KEY` is production-capable; keep it step-scoped
@@ -22,7 +22,7 @@
 
 - [Neon Auth cutover boundaries](neon-auth-cutover-boundaries.md) — role double-narrowed; VEN-642, VEN-635 clean
 - [The Terms gate is a five-state session](terms-gate-is-a-five-state-session.md) — `request.auth` null for a gated account; `requireAuthSubject` the exception
-- [The server session cache's key is the whole gate](server-session-cache-key-is-the-cookie.md) — a hit skips signature/revocation; VEN-628 cross-instance lag
+- [The server session cache's key is the whole gate](server-session-cache-key-is-the-cookie.md) — a hit skips signature/revocation; VEN-628 lag; VEN-717 refused-token re-mint clean
 - [`getCurrentUser`'s cache() is safe; route dynamism is borrowed](identity-read-is-cached-and-route-dynamism-is-inherited.md) — `/` has no `force-dynamic`
 - [Email is a label, the auth id is the key](email-uniqueness-is-partial-nothing-joins-by-email.md) — partial `lower(email)` index + lowercase CHECK (VEN-649)
 - [Closing an account releases its address, scrubs the row, deletes uploads](closed-account-address-is-released.md) — VEN-614/672/687 scrubs (0089/0093/0097) clean
@@ -51,7 +51,7 @@
 - [`canBook` is chrome, not a gate](canbook-is-chrome-not-a-gate.md) — three server checks refuse a vendor
 - [Vendor selection writes are transaction-only](vendor-selection-writes-are-transaction-only.md) — no self-transacting
 - [The `updatedAt` precondition is not a gate](edit-version-precondition-is-not-a-gate.md) — explicit `null` coerces to the epoch
-- [The vendor agreement gate has four definitions](vendor-agreement-gate-has-four-definitions.md) — payout takes any version; EXISTS needs `vendor_profiles` unaliased
+- [The vendor agreement gate has four definitions](vendor-agreement-gate-has-four-definitions.md) — payout takes any version; EXISTS needs `vendor_profiles` unaliased; VEN-708 bump clean
 - [Vendor invite gate checks before the row it creates](vendor-invite-gate-checks-before-the-row-it-creates.md) — an application row diverts `/accept-terms` for ever
 
 ## Money, bookings and background work
@@ -67,7 +67,7 @@
 - [The payout sweep is a second money mover](payout-sweep-is-a-second-money-mover.md) — it locks rows cancel/dispute do not
 - [`payoutOwedClauses` is shared with the sweep](payout-owed-clauses-is-shared-with-the-sweep.md) — widening the read widens the transfer claim
 - [Settlement is a fourth money projection](settlement-is-a-third-money-projection.md) — no ownership predicate; callers pre-authorize
-- [Legacy destination rows are guarded twice](legacy-destination-rows-guarded-in-one-place.md) — the deploy window is not
+- [Legacy destination rows are guarded twice](legacy-destination-rows-guarded-in-one-place.md) — VEN-658 zero-transfer release matches it; deploy window open
 - [Launch switches gate new intents, not open ones](launch-switches-gate-new-intents-not-open-ones.md) — an issued client secret survives
 - [Idempotency guards orphan their side effects](idempotency-guards-orphan-side-effects.md) — `ON CONFLICT DO NOTHING` fronts non-tx writes
 - [The background queue carries no session](background-work-queue-carries-no-session.md) — never close over `request.auth` or a `tx`
@@ -114,7 +114,7 @@
 - [`/ready` is unthrottled by design](ready-probe-is-unthrottled-and-now-reads-a-file.md) — presence booleans and RLS posture accepted
 - [Operator alert dedupe is attacker-armable](operator-alert-dedupe-is-attacker-armable.md) — a shed 429 costs a DB write
 - [The daily send cap's closure is sticky](email-send-cap-closure-is-sticky.md) — blocks step-up codes till midnight; [VEN-680 codes](self-closure-step-up-codes-are-essential-mail.md)
-- [Auth proxy parser differential](auth-proxy-parser-differential.md) — body-derived rate-limit key fails closed; no retry on credential refusal; VEN-677/685 notes
+- [Auth proxy parser differential](auth-proxy-parser-differential.md) — body-derived key fails closed; VEN-630/718 per-caller budgets are IP-rotatable to a 10x ceiling
 
 ## Data layer, seeds and tooling
 

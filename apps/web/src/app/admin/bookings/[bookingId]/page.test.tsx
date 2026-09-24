@@ -143,7 +143,7 @@ describe('AdminBookingDetailPage', () => {
       ['Payment intent', 'pi_test_money_story'],
       ['Paid', 'Sep 2, 2026, 10:00 UTC'],
       ['Completed', 'Oct 11, 2026, 09:00 UTC'],
-      ['Payout', "Awaiting release · vendor's payouts held by an operatorTransfer failing"],
+      ['Payout', "Awaiting release · vendor's payouts held by an adminTransfer failing"],
       ['Payout attempts', '2account_closed'],
       ['Refunded', '$600'],
       ['Cancelled', 'Sep 20, 2026, 15:30 UTC'],
@@ -161,7 +161,7 @@ describe('AdminBookingDetailPage', () => {
         payoutStatus: 'held',
         externalRefundCents: 10_000,
         disputeReason:
-          '$100 was refunded at Stripe outside the platform, so the payout is on hold until an operator rules',
+          '$100 was refunded at Stripe outside the platform, so the payout is on hold until an admin rules',
       }),
     );
 
@@ -171,7 +171,7 @@ describe('AdminBookingDetailPage', () => {
     expect(rows).toContainEqual(['Refunded outside the app', '$100']);
     expect(rows).toContainEqual([
       'Dispute reason',
-      '$100 was refunded at Stripe outside the platform, so the payout is on hold until an operator rules',
+      '$100 was refunded at Stripe outside the platform, so the payout is on hold until an admin rules',
     ]);
     expect(rows).toContainEqual(['Payout', 'Held']);
   });

@@ -17,7 +17,7 @@ export * from './notifications.js';
 export * from './email-deliveries.js';
 export * from './us-cities.js';
 export * from './support-cases.js';
-export * from './operator-alerts.js';
+export * from './admin-alerts.js';
 export * from './platform-settings.js';
 export * from './vendor-invites.js';
 export * from './refund-attempts.js';

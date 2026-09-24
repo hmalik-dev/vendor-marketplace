@@ -3,10 +3,10 @@ import { getServerSession } from './auth/server';
 import {
   adminActivityActorListSchema,
   adminCategoryListSchema,
-  adminOperatorListSchema,
+  adminAccountListSchema,
   type AdminActivityActorList,
   type AdminCategoryList,
-  type AdminOperatorList,
+  type AdminAccountList,
 } from '@vendor-marketplace/shared';
 import { redirect } from 'next/navigation';
 import type { z } from 'zod';
@@ -63,7 +63,7 @@ import {
  *
  * **Nothing here degrades to an empty result.** Every other surface in the
  * product has a defensible reason to render less rather than fail; a console an
- * operator moderates from does not. A read that silently answered `[]` would
+ * admin moderates from does not. A read that silently answered `[]` would
  * show "0 awaiting review" to somebody deciding whether anyone is waiting, and
  * that is worse than the error boundary.
  */
@@ -99,7 +99,7 @@ async function adminSession(): Promise<AdminSession> {
  * account; on `/admin` it is far more often a signed-in non-admin who typed the
  * URL, and sending them to a suspension notice would tell them their account
  * was disabled when it was not. `adminSession`'s `requireRole('admin')` bounces
- * those before any read runs (a suspended operator to `/suspended`, as the
+ * those before any read runs (a suspended admin to `/suspended`, as the
  * layout does), so a 403 reaching here is the narrow case of a role changing
  * mid-render — `/` is the honest destination for both.
  */
@@ -173,7 +173,7 @@ export async function getAdminCustomers(query: string): Promise<WireAdminCustome
 
 /**
  * One customer's record (VEN-400), or `null` when no customer has that id —
- * including an id that names a vendor or an operator, whose record is not
+ * including an id that names a vendor or an admin, whose record is not
  * this one. A point read reached by link, as `getAdminVendorDetail` rules.
  */
 export async function getAdminCustomerDetail(
@@ -196,7 +196,7 @@ export async function getAdminBookings(query: string): Promise<WireAdminBookingP
 
 /**
  * One booking's money story (VEN-399), or `null` when no booking has that id —
- * a point read an operator reaches by link, so a 404 is a wrong link rather
+ * a point read an admin reaches by link, so a 404 is a wrong link rather
  * than the error boundary, as `getAdminVendorDetail` rules.
  */
 export async function getAdminBookingDetail(
@@ -227,7 +227,7 @@ export async function getAdminPayments(query: string): Promise<WireAdminPaymentP
  *
  * Nothing here degrades to an empty page either — the module's own header
  * gives the reason, and this is the surface it applies to hardest: an
- * operator told "no open cases" by a failed read would conclude nobody is
+ * admin told "no open cases" by a failed read would conclude nobody is
  * waiting while a vendor's payout stays frozen.
  */
 export async function getAdminCases(query: string): Promise<WireAdminCasePage> {
@@ -270,7 +270,7 @@ export async function getAdminActivity(query: string): Promise<WireAdminActivity
   return adminRead(`/admin/activity${query}`, wireAdminActivityPageSchema);
 }
 
-/** The operators the log names — the `Actor ▾` facet (VEN-388). No dates, so no wire schema. */
+/** The admins the log names — the `Actor ▾` facet (VEN-388). No dates, so no wire schema. */
 export async function getAdminActivityActors(): Promise<AdminActivityActorList> {
   return adminRead('/admin/activity/actors', adminActivityActorListSchema);
 }
@@ -280,9 +280,9 @@ export async function getAdminPlatformSettings(): Promise<WireAdminPlatformSetti
   return adminRead('/admin/settings', wireAdminPlatformSettingsSchema);
 }
 
-/** Every operator who can be seen in the console, with who granted them (VEN-506). */
-export async function getAdminOperators(): Promise<AdminOperatorList> {
-  return adminRead('/admin/operators', adminOperatorListSchema);
+/** Every admin who can be seen in the console, with who granted them (VEN-506). */
+export async function getAdminAccounts(): Promise<AdminAccountList> {
+  return adminRead('/admin/admins', adminAccountListSchema);
 }
 
 /** The vendor waitlist, newest first (VEN-406). */

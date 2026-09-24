@@ -82,15 +82,46 @@ describe('starting payout onboarding twice at once, against a real Postgres', ()
     });
     expect(agreed.statusCode).toBe(200);
 
-    const responses = await Promise.all(
-      [1, 2].map(() =>
-        harness!.app.inject({
-          method: 'POST',
-          url: '/v1/vendor/stripe/connect',
-          headers: bearer(VENDOR),
-        }),
-      ),
-    );
+    /*
+     * Hold each call inside Stripe until both presses have read the vendor with
+     * no account yet. Without it the interleaving is the machine's: when one
+     * press finished and stored its account before the other loaded the vendor,
+     * the second skipped creation, only one key was sent, and this failed on a
+     * fast runner for reasons unrelated to the idempotency key it exists to
+     * check. The wait is bounded, so a press the API serialised behind the first
+     * fails on the assertions below instead of hanging.
+     */
+    const stripe = harness!.stripe;
+    const create = stripe.createRecipientAccount;
+    let arrived = 0;
+    let bothArrived: () => void = () => {};
+    const together = new Promise<void>((resolve) => {
+      bothArrived = resolve;
+    });
+    stripe.createRecipientAccount = async (input) => {
+      arrived += 1;
+      if (arrived === 2) {
+        bothArrived();
+      }
+      await Promise.race([together, new Promise((resolve) => setTimeout(resolve, 2_000))]);
+
+      return create(input);
+    };
+
+    let responses;
+    try {
+      responses = await Promise.all(
+        [1, 2].map(() =>
+          harness!.app.inject({
+            method: 'POST',
+            url: '/v1/vendor/stripe/connect',
+            headers: bearer(VENDOR),
+          }),
+        ),
+      );
+    } finally {
+      stripe.createRecipientAccount = create;
+    }
 
     expect(responses.map((response) => response.statusCode)).toEqual([200, 200]);
     const vendorId = profile.json().id;

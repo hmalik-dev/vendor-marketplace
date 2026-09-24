@@ -6,8 +6,12 @@ const call = vi.fn();
 
 vi.mock('next/navigation', () => ({ usePathname: () => pathname }));
 vi.mock('@/lib/use-api', () => ({ useApi: () => call }));
-vi.mock('@/lib/report-error', () => ({ reportSwallowedError: vi.fn() }));
+const reportSwallowedError = vi.fn();
+vi.mock('@/lib/report-error', () => ({
+  reportSwallowedError: (...args: unknown[]) => reportSwallowedError(...args),
+}));
 
+const { ApiClientError } = await import('@/lib/api-client');
 const { MessagesLink, CONVERSATIONS_CHANGED_EVENT } = await import('./messages-link');
 
 const page = (hasUnread: boolean): unknown => ({ items: [], nextBefore: null, hasUnread });
@@ -15,6 +19,7 @@ const page = (hasUnread: boolean): unknown => ({ items: [], nextBefore: null, ha
 beforeEach(() => {
   pathname = '/messages';
   call.mockReset().mockResolvedValue(page(false));
+  reportSwallowedError.mockReset();
 });
 
 afterEach(() => {
@@ -86,6 +91,31 @@ describe('MessagesLink', () => {
 
     await waitFor(() => expect(call).toHaveBeenCalledTimes(2));
     expect(screen.getByRole('link', { name: 'Messages, unread' })).toBeDefined();
+  });
+
+  it('reports a failed read once, by name', async () => {
+    call.mockRejectedValue(new Error('offline'));
+    render(<MessagesLink />);
+
+    await waitFor(() => expect(reportSwallowedError).toHaveBeenCalledTimes(1));
+    expect(reportSwallowedError).toHaveBeenCalledWith(
+      'header: reading the unread state failed',
+      expect.objectContaining({ message: 'offline' }),
+    );
+  });
+
+  it('says nothing when the Terms gate is the answer', async () => {
+    pathname = '/suspended';
+    call.mockRejectedValue(
+      new ApiClientError(403, 'TERMS_REQUIRED', 'Accept the Terms of Service to continue.'),
+    );
+    render(<MessagesLink />);
+
+    await waitFor(() => expect(call).toHaveBeenCalledTimes(1));
+    await act(async () => {});
+
+    expect(reportSwallowedError).not.toHaveBeenCalled();
+    expect(screen.getByRole('link', { name: 'Messages' })).toBeDefined();
   });
 
   it.each(['/accept-terms', '/vendors/apply'])('asks nothing on %s', (path) => {

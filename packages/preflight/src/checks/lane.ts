@@ -176,7 +176,7 @@ export function evaluateLaneBuild(
   /*
    * A lane comes up with no `apps/web` build — `lane:up` builds the workspace
    * packages only, deliberately. That is the normal state at the moment this
-   * gate runs, and failing on it would make the check noise every operator
+   * gate runs, and failing on it would make the check noise every admin
    * learns to skip.
    */
   if (builds.length === 0) {

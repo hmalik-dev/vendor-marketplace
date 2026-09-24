@@ -52,7 +52,7 @@ export const OPTIONAL_KEYS = {};
 /*
  * Rows the registry marks absent-able locally. Their placeholders are not
  * absent, though: the migrator prefers any `DATABASE_URL_UNPOOLED` it is
- * given, and the API's boot schema rejects `operator@...`. Empty is absent to
+ * given, and the API's boot schema rejects `admin@...`. Empty is absent to
  * both, so a created `.env` carries them empty.
  */
 export const OPTIONAL_PLACEHOLDER_KEYS = [
@@ -67,7 +67,7 @@ export const OPTIONAL_PLACEHOLDER_KEYS = [
   'RESEND_WEBHOOK_SECRET',
   // The second Stripe endpoint's key: locally one listener secret covers both streams.
   'STRIPE_CONNECT_WEBHOOK_SECRET',
-  'OPERATOR_ALERT_EMAIL',
+  'ADMIN_ALERT_EMAIL',
   // Error reporting (VEN-397). Optional off a deployment — a laptop reports
   // nothing rather than into the production project — and required on one.
   'SENTRY_DSN',

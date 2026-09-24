@@ -10,7 +10,18 @@ describe('the legal reading layout', () => {
 
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Terms of Service');
     expect(screen.getByText('Legal')).toBeTruthy();
-    expect(screen.getByText('4 June 2026')).toBeTruthy();
+    expect(screen.getByText('09/24/2026')).toBeTruthy();
+  });
+
+  it('renders the date as MM/DD/YYYY, zero-padded, whatever the day and month', () => {
+    const dated = (lastUpdated: string) => ({ ...legalDocument('terms'), lastUpdated });
+    const { unmount } = render(<LegalPage document={dated('2026-09-23')} />);
+
+    expect(screen.getByText('09/23/2026')).toBeTruthy();
+    unmount();
+    render(<LegalPage document={dated('2026-06-04')} />);
+
+    expect(screen.getByText('06/04/2026')).toBeTruthy();
   });
 
   it('renders the frontmatter note after the date, when there is one', () => {

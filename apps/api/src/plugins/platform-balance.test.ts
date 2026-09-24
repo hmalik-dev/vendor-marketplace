@@ -26,11 +26,11 @@ async function bootedApp(intervalMs: number): Promise<ReturnType<typeof Fastify>
   await app.register(
     fp(
       async (instance) => {
-        instance.decorate('operatorAlerts', { alertNow: async () => 'sent' } as never);
+        instance.decorate('adminAlerts', { alertNow: async () => 'sent' } as never);
         instance.decorate('db', {} as never);
         instance.decorate('stripe', {} as never);
       },
-      { name: 'operator-alerts' },
+      { name: 'admin-alerts' },
     ),
   );
   await app.register(platformBalancePlugin, {

@@ -1,4 +1,4 @@
-import { operatorAlerts, stripeWebhookFailures } from '@vendor-marketplace/db/schema';
+import { adminAlerts, stripeWebhookFailures } from '@vendor-marketplace/db/schema';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestHarness, TEST_ENV, type TestHarness } from '../../testing/test-server.js';
 
@@ -10,7 +10,7 @@ describe('Stripe webhook rate limiting', () => {
   });
 
   afterAll(async () => {
-    await harness.database.db.delete(operatorAlerts);
+    await harness.database.db.delete(adminAlerts);
     await harness.database.db.delete(stripeWebhookFailures);
     await harness.close();
   });
@@ -35,7 +35,7 @@ describe('Stripe webhook rate limiting', () => {
     expect(statuses).toEqual([...Array<number>(10).fill(200), 429, 429, 429]);
     expect(
       harness.email.sent
-        .filter((message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL)
+        .filter((message) => message.to === TEST_ENV.ADMIN_ALERT_EMAIL)
         .map((message) => message.subject),
     ).toEqual(['[Orla ops] Stripe webhook rate limited 3 times in 10 minutes']);
   });

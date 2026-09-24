@@ -210,7 +210,7 @@ export interface AvatarProps {
    * summary. A picture of a name that is already written is decoration.
    *
    * The exception is the operations header, where the avatar sits beside the
-   * operator's email address and nothing else says who they are.
+   * admin's email address and nothing else says who they are.
    */
   labelled?: boolean;
   className?: string;

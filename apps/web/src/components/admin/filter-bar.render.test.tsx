@@ -113,7 +113,7 @@ describe('the Refine bar submit', () => {
 
     /*
      * `?type=` is not the same URL as no `type` at all: `adminQueryString`
-     * drops empty values, so a bar that submitted one would send the operator
+     * drops empty values, so a bar that submitted one would send the admin
      * somewhere the dropdown never sends them.
      */
     expect(serialise(container)).toEqual({});
@@ -122,7 +122,7 @@ describe('the Refine bar submit', () => {
   it('carries a filter that has no control of its own', () => {
     /*
      * `/admin/activity`. Its identity filters are uuids that arrive from a
-     * clicked row and are drawn as dismiss chips — a list of every operator on
+     * clicked row and are drawn as dismiss chips — a list of every admin on
      * the platform is not a control — so they never pass through a
      * `FilterSelect`. They still have to survive the submit.
      */
@@ -168,7 +168,7 @@ describe('the Refine bar submit', () => {
     );
 
     /*
-     * One `q`, from the input the operator types into — a hidden field under
+     * One `q`, from the input the admin types into — a hidden field under
      * the same name would submit `?q=rose&q=rose`, and the whole point of the
      * search field is that it carries the *edited* value.
      */
@@ -474,7 +474,7 @@ describe('a Refine bar dropdown healing off the timer, not the transition settle
    * (AC2), and *both* dropped — the shape a diff-reviewer pass on this ticket
    * found the first version of this fix got wrong: a per-`FilterSelect` timer
    * checked only its own `from`/`to`, so `Actor`'s timer had no way to know
-   * `Action` had since become the operator's real, later intent, and would
+   * `Action` had since become the admin's real, later intent, and would
    * hard-navigate back to `Actor`'s stale target once its own deadline
    * elapsed — reintroducing the exact clobber VEN-576's `from` comparison
    * exists to prevent, just with a multi-second window instead of a
@@ -494,7 +494,7 @@ describe('a Refine bar dropdown healing off the timer, not the transition settle
           name="actor"
           label="Actor"
           value="a1"
-          options={[{ value: 'a2', label: 'Operator two' }]}
+          options={[{ value: 'a2', label: 'Admin two' }]}
         />
         <FilterSelect
           action="/admin/activity"
@@ -506,7 +506,7 @@ describe('a Refine bar dropdown healing off the timer, not the transition settle
       </FilterBar>,
     );
 
-    choose('Actor', 'Operator two');
+    choose('Actor', 'Admin two');
     vi.advanceTimersByTime(1000);
     choose('Action', 'Vendor suspended');
 

@@ -32,9 +32,9 @@ describe('legal content', () => {
    */
   it('loads all three documents with their own frontmatter date', () => {
     const dates: Record<(typeof LEGAL_DOCUMENT_SLUGS)[number], string> = {
-      terms: '2026-06-04',
-      privacy: '2026-09-22',
-      cookies: '2026-09-22',
+      terms: '2026-09-24',
+      privacy: '2026-09-24',
+      cookies: '2026-09-24',
     };
 
     for (const slug of LEGAL_DOCUMENT_SLUGS) {
@@ -162,7 +162,7 @@ describe('legal content', () => {
       'We measure page views with Vercel Web Analytics, which sets no cookies and does not follow you across sites. There are still no advertising networks and no data brokers.',
     );
     expect(legalMarkdownSource('cookies')).toContain(
-      'We set no cookies of our own and load no advertising or session-recording scripts. We load Vercel Web Analytics, which sets no cookies.',
+      'We set no cookies beyond those two and load no advertising or session-recording scripts. We load Vercel Web Analytics, which sets no cookies.',
     );
 
     const ANALYTICS_DENIALS = [
@@ -215,14 +215,19 @@ describe('legal content', () => {
     expect(blocks.at(-1)?.kind).toBe('note');
   });
 
-  it('names only the Neon Auth session cookie on the cookie notice', () => {
+  it('names exactly the two cookies the product sets on the cookie notice', () => {
     const table = legalDocument('cookies').lead.find((block) => block.kind === 'table');
+    const rows = (table?.rows ?? []).map((row) =>
+      row.map((cell) => cell.map((span) => span.text).join('')),
+    );
 
-    expect(table?.rows).toHaveLength(1);
-    expect(table?.rows[0].map((cell) => cell.map((span) => span.text).join(''))).toEqual([
-      '__Secure-neon-auth.session_token',
-      'Neon Auth',
-      'Strictly necessary — your sign-in.',
+    expect(rows).toEqual([
+      ['__Secure-neon-auth.session_token', 'Neon Auth', 'Strictly necessary — your sign-in.'],
+      [
+        'session-revoke-marker',
+        BRAND_NAME,
+        'Strictly necessary — set when you end other devices or change your password, so this device stays signed in. Lasts 20 minutes.',
+      ],
     ]);
   });
 });

@@ -199,11 +199,11 @@ describe('launch switches', () => {
     return addDays(START, dateOffset + 4);
   }
 
-  /** What the operator was emailed, once the background sends have settled. */
-  async function operatorMail(): Promise<{ subject: string; text: string }[]> {
+  /** What the admin was emailed, once the background sends have settled. */
+  async function adminMail(): Promise<{ subject: string; text: string }[]> {
     await harness.flushEmail();
 
-    return harness.email.sent.filter((message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL);
+    return harness.email.sent.filter((message) => message.to === TEST_ENV.ADMIN_ALERT_EMAIL);
   }
 
   function sweep(): ReturnType<typeof releaseDuePayouts> {
@@ -358,7 +358,7 @@ describe('launch switches', () => {
         });
       }
 
-      const alerts = await operatorMail();
+      const alerts = await adminMail();
       expect(alerts).toHaveLength(1);
       expect(alerts[0]!.subject).toContain('A launch switch was changed');
       expect(alerts[0]!.text).toContain('checkoutPaused: off → on');
@@ -403,7 +403,7 @@ describe('launch switches', () => {
   describe('the site-wide notice (VEN-616)', () => {
     const NOTICE = 'Payouts are delayed today. Nothing is lost.';
 
-    it('persists a notice, audits it, alerts the operator, and clears it again', async () => {
+    it('persists a notice, audits it, alerts the admin, and clears it again', async () => {
       await signInAsAdmin();
 
       const saved = await setSwitches({ noticeMessage: `  ${NOTICE}  `, noticeTone: 'warning' });
@@ -426,7 +426,7 @@ describe('launch switches', () => {
         { field: 'noticeTone', before: 'info', after: 'warning' },
       ]);
 
-      const alerts = await operatorMail();
+      const alerts = await adminMail();
       expect(alerts).toHaveLength(1);
       expect(alerts[0]!.subject).toContain('A launch switch was changed');
       expect(alerts[0]!.text).toContain(`noticeMessage: none → "${NOTICE}"`);
@@ -630,7 +630,7 @@ describe('launch switches', () => {
       });
       expect(hold.statusCode).toBe(200);
       expect(hold.json()).toEqual({ vendorId: held.vendorId, payoutHold: true });
-      const holdAlerts = await operatorMail();
+      const holdAlerts = await adminMail();
       expect(holdAlerts.map((message) => message.subject)).toEqual([
         expect.stringContaining("A vendor's payouts were put on hold"),
       ]);

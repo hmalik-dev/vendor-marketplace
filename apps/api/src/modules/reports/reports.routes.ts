@@ -22,7 +22,7 @@ export const reportRoutes: FastifyPluginAsyncZod<ReportRoutesOptions> = async (a
        * **Authenticated, unlike `/support/messages`.** That form is deliberately
        * open because the visitor most likely to need it is the one who cannot
        * get in; this control is the opposite. A report accuses somebody, and an
-       * anonymous accusation is one an operator cannot weigh, cannot follow up
+       * anonymous accusation is one an admin cannot weigh, cannot follow up
        * and cannot rate limit to a person rather than to a coffee shop's IP.
        */
       // `preParsing`, not `onRequest`: the route's own limiter is appended to
@@ -54,7 +54,7 @@ export const reportRoutes: FastifyPluginAsyncZod<ReportRoutesOptions> = async (a
     },
     /*
      * 200, not 201. A report creates a case, and the reporter cannot address
-     * it: the queue is the operator's screen and there is nothing here for a
+     * it: the queue is the admin's screen and there is nothing here for a
      * `Location` to point at. The same call `/support/messages` makes, for the
      * same reason, and the dialog says as much in words.
      */
@@ -65,7 +65,7 @@ export const reportRoutes: FastifyPluginAsyncZod<ReportRoutesOptions> = async (a
           email: app.email,
           log: request.log,
           to: options.supportEmailTo,
-          alerts: app.operatorAlerts,
+          alerts: app.adminAlerts,
         },
         authenticated(request.auth),
         request.body,

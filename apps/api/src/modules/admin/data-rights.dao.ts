@@ -74,7 +74,7 @@ export async function findVendorProfileRecord(
  * `or()` is typed `SQL | undefined`, and `.where(undefined)` is not a narrow
  * filter — it is *no* filter. Nowhere else would that matter much; here it
  * would turn one person's subject-access file into every booking, message and
- * review in the database, handed to an operator to forward. Both operands are
+ * review in the database, handed to an admin to forward. Both operands are
  * always defined today, so this cannot fire — which is exactly the argument
  * that was made everywhere a guard was later needed.
  * `findConfirmedBookingsToUnwind` guards the identical shape.

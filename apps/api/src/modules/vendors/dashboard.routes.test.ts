@@ -911,5 +911,31 @@ describe('/vendor/dashboard', () => {
 
       expect(((await read()).json() as DashboardBody).publishBlockers).toContain(blocker);
     });
+
+    /*
+     * VEN-652: the dashboard computes the gate for a live storefront too, which
+     * is how the vendor who went live before the name was required is asked for
+     * it. Gating the list on `isPublished` would hand that vendor `[]`.
+     */
+    it('names the missing name on a storefront that is already live', async () => {
+      const vendorId = await createProfile();
+      await addPackage();
+      await publish(vendorId);
+
+      const [profile] = await harness.database.db
+        .select({ userId: vendorProfiles.userId })
+        .from(vendorProfiles)
+        .where(eq(vendorProfiles.id, vendorId));
+
+      await harness.database.db
+        .update(users)
+        .set({ lastName: '' })
+        .where(eq(users.id, profile!.userId));
+
+      const body = (await read()).json() as DashboardBody;
+
+      expect(body.isPublished).toBe(true);
+      expect(body.publishBlockers).toContain('personalName');
+    });
   });
 });

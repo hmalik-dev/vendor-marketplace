@@ -6,7 +6,7 @@ import type { Locator, Page } from '@playwright/test';
 import { resolveE2EApiUrl } from './base-url';
 import { AUTH_DIR, expect } from './fixtures';
 
-/** The operator's address, from the environment or the gitignored `.env.e2e.local`. */
+/** The admin's address, from the environment or the gitignored `.env.e2e.local`. */
 function adminEmail(): string | undefined {
   const fromEnv = process.env.E2E_ADMIN_EMAIL?.trim();
   if (fromEnv) {
@@ -40,7 +40,7 @@ export async function completeStepUp(page: Page, dialog: Locator): Promise<void>
   const before = await page.request.get(url.href);
   const stale = before.ok() ? ((await before.json()) as { text: string }).text : null;
 
-  // The grant lasts ten minutes, so an earlier closure by this operator can already
+  // The grant lasts ten minutes, so an earlier closure by this admin can already
   // have let this one through: the dialog then closes and there is no code step.
   const send = dialog.getByRole('button', { name: 'Email me a code' });
   const asked = await expect

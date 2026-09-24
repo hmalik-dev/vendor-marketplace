@@ -42,7 +42,7 @@ export async function findAdminCategoryById(
  * rest of the transaction.
  *
  * The lock is what makes a reorder's "is this still the order you saw?" check
- * hold until the write lands: two operators reordering at once serialise here,
+ * hold until the write lands: two admins reordering at once serialise here,
  * and the second compares against the order the first has just written.
  */
 export async function lockCategoryPositions(

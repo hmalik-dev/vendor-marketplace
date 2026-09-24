@@ -231,7 +231,7 @@ function landingCategories(categories: readonly Category[]): Category[] {
 
 /**
  * What a reader with no bookings of their own has to show — a visitor, an
- * operator, and a customer whose hub could not be read.
+ * admin, and a customer whose hub could not be read.
  *
  * A value rather than a branch, so the strip and the trust band ask the same
  * question of the same shape whoever is looking: both reads degrade to an empty
@@ -277,7 +277,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
    * A vendor never reaches this line — the redirect above sends them to their
    * own dashboard, because roles are exclusive and `/` is a catalogue of other
    * vendors. So the reader here is a signed-out visitor, a customer, or an
-   * operator, and only the customer gets the signed-in composition: an admin
+   * admin, and only the customer gets the signed-in composition: an admin
    * has no bookings to summarise and is looking at the marketplace, not at
    * their own things.
    *

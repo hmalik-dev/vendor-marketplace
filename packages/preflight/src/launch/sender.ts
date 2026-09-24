@@ -15,7 +15,7 @@ const RESEND_SHARED_TEST_SENDER = 'onboarding@resend.dev';
  * verified: launch:check's `resend sending domain` probe, held to a release's
  * bar. An unverified sender is not a visible failure — Resend refuses each send
  * and the API only logs it, so booking email, the admin step-up code and the
- * operator pager all stop at once while the release reads green.
+ * admin pager all stop at once while the release reads green.
  *
  * `MANUAL` passes `launch:check`, where a person reads it; in the workflow
  * nobody does, so a key that cannot list domains fails like an unverified

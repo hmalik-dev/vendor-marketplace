@@ -276,7 +276,7 @@ describe('seedE2eFixtures', () => {
   });
 
   /**
-   * A database that predates the swap to Neon Auth holds the operator under
+   * A database that predates the swap to Neon Auth holds the admin under
    * an auth id. The identity Neon Auth now resolves has the same address, so an
    * upsert keyed on `auth_user_id` alone inserts a second row and dies on the
    * unique email — leaving `/admin` unreachable.
@@ -500,7 +500,7 @@ describe('seedE2eFixtures', () => {
       expect(await database.db.select().from(adminActions)).toHaveLength(1);
     });
 
-    it('seeds no audit row without an operator to have taken the action', async () => {
+    it('seeds no audit row without an admin to have taken the action', async () => {
       await seedE2eFixtures(database.db, INPUT);
 
       expect(await database.db.select().from(adminActions)).toHaveLength(0);
@@ -1173,7 +1173,7 @@ describe('seedE2eFixtures', () => {
       expect(row?.maxBookingCents).toBe(500_000);
     });
 
-    it('attributes the change to no operator, not to whoever last flipped it by hand', async () => {
+    it('attributes the change to no admin, not to whoever last flipped it by hand', async () => {
       const [admin] = await database.db
         .insert(users)
         .values({

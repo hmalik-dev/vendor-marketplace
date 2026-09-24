@@ -9,7 +9,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { useCallback } from 'react';
 import { apiBaseUrl } from '@/lib/api-base-url';
-import { getSessionToken } from './auth/client';
+import { getSessionToken, refreshRefusedSessionToken } from './auth/client';
 import { endSession } from './auth/session-ended';
 import { ApiClientError, apiRequest, type ApiRequestOptions } from './api-client';
 import { isNameGateExemptPath, isNameRequired, nameStepPath } from './name-gate-paths';
@@ -244,62 +244,80 @@ export function useImageUpload(): ImageUploader {
     const body = new FormData();
     body.append('file', file);
 
-    return new Promise<UploadedImage>((resolve, reject) => {
-      const request = new XMLHttpRequest();
-      request.open('POST', `${BASE_URL}/upload/image?prefix=${encodeURIComponent(prefix)}`);
-      if (token) {
-        request.setRequestHeader('authorization', `Bearer ${token}`);
-      }
+    const send = (bearer: string | null): Promise<UploadedImage> =>
+      new Promise<UploadedImage>((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        request.open('POST', `${BASE_URL}/upload/image?prefix=${encodeURIComponent(prefix)}`);
+        if (bearer) {
+          request.setRequestHeader('authorization', `Bearer ${bearer}`);
+        }
 
-      if (onProgress) {
-        request.upload.addEventListener('progress', (event) => {
-          if (event.lengthComputable && event.total > 0) {
-            onProgress(Math.round((event.loaded / event.total) * 100));
+        if (onProgress) {
+          request.upload.addEventListener('progress', (event) => {
+            if (event.lengthComputable && event.total > 0) {
+              onProgress(Math.round((event.loaded / event.total) * 100));
+            }
+          });
+        }
+
+        const abort = (): void => request.abort();
+        signal?.addEventListener('abort', abort);
+
+        request.addEventListener('loadend', () => {
+          signal?.removeEventListener('abort', abort);
+
+          // status 0 is the browser's report of a request that never completed
+          // — offline, DNS, TLS, or an abort. None of them blame the file.
+          if (request.status === 0) {
+            reject(new UploadTransportError());
+            return;
           }
+
+          if (request.status < 200 || request.status >= 300) {
+            reject(uploadError(request.status, request.responseText));
+            return;
+          }
+
+          let payload: unknown = null;
+          try {
+            payload = JSON.parse(request.responseText);
+          } catch {
+            payload = null;
+          }
+
+          const parsed = uploadedImageSchema.safeParse(payload);
+          if (!parsed.success) {
+            reject(
+              new ApiClientError(
+                request.status,
+                ERROR_CODES.INTERNAL_ERROR,
+                'Upload response did not match its schema',
+              ),
+            );
+            return;
+          }
+
+          resolve(parsed.data);
         });
-      }
 
-      const abort = (): void => request.abort();
-      signal?.addEventListener('abort', abort);
-
-      request.addEventListener('loadend', () => {
-        signal?.removeEventListener('abort', abort);
-
-        // status 0 is the browser's report of a request that never completed
-        // — offline, DNS, TLS, or an abort. None of them blame the file.
-        if (request.status === 0) {
-          reject(new UploadTransportError());
-          return;
-        }
-
-        if (request.status < 200 || request.status >= 300) {
-          reject(uploadError(request.status, request.responseText));
-          return;
-        }
-
-        let payload: unknown = null;
-        try {
-          payload = JSON.parse(request.responseText);
-        } catch {
-          payload = null;
-        }
-
-        const parsed = uploadedImageSchema.safeParse(payload);
-        if (!parsed.success) {
-          reject(
-            new ApiClientError(
-              request.status,
-              ERROR_CODES.INTERNAL_ERROR,
-              'Upload response did not match its schema',
-            ),
-          );
-          return;
-        }
-
-        resolve(parsed.data);
+        request.send(body);
       });
 
-      request.send(body);
-    });
+    try {
+      return await send(token);
+    } catch (error) {
+      // A token the API refused is re-minted once (VEN-717), as `apiRequest` does for JSON calls.
+      if (!token || !(error instanceof ApiClientError) || error.statusCode !== 401) {
+        throw error;
+      }
+
+      const fresh = await refreshRefusedSessionToken(token);
+
+      if (!fresh || fresh === token || cancelled()) {
+        throw error;
+      }
+
+      return await send(fresh);
+    }
   }, []);
 }

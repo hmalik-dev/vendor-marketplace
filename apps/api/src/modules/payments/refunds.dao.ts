@@ -98,7 +98,7 @@ export interface ExternalRefundFinding {
  * read before the Stripe round trip. The hold is the existing one, `status =
  * 'disputed'` through `applyBookingTransition`, and it is taken only where the
  * payout can still be stopped: a released payout and a cancelled booking are
- * recorded, and the caller tells the operator (a clawback is VEN-381's ruling).
+ * recorded, and the caller tells the admin (a clawback is VEN-381's ruling).
  */
 export async function recordExternalRefund(
   db: AppDatabase,
@@ -172,7 +172,7 @@ export async function recordExternalRefund(
  * Gives back the foreign refunds that did not land (VEN-499).
  *
  * `externalRefundCents` only ever grew, so a Dashboard refund that later failed
- * or was canceled kept the residual payout held until an operator ruled. What
+ * or was canceled kept the residual payout held until an admin ruled. What
  * is still foreign is what Stripe reports usable beyond our own marked refunds;
  * the recorded figure is lowered to that and never raised, so a delivery for
  * our own refund, or a duplicate, changes nothing.

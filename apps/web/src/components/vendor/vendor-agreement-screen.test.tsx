@@ -228,6 +228,36 @@ describe('the accepted record', () => {
     expect(screen.getByText(/by June Harlow, for June Harlow Photography/)).toBeDefined();
   });
 
+  /** VEN-708: legal dates are MM/DD/YYYY, zero-padded, in the header and in each row. */
+  it('renders the header date and each accepted-on date as MM/DD/YYYY', () => {
+    const older = { ...ACCEPTED, version: 'v0.9', acceptedAt: new Date('2026-05-01T10:00:00Z') };
+
+    render(
+      <VendorAgreementScreen
+        status={status({ accepted: ACCEPTED, isCurrent: true, history: [ACCEPTED, older] })}
+        agreement={{ ...AGREEMENT, lastUpdated: '2026-06-04' }}
+        payoutsLive
+      />,
+    );
+
+    const rows = screen.getAllByRole('row').slice(1);
+
+    expect(rows[0].textContent).toContain('06/08/2026');
+    expect(rows[1].textContent).toContain('05/01/2026');
+  });
+
+  it('renders the agreement header date as MM/DD/YYYY before it is accepted', () => {
+    render(
+      <VendorAgreementScreen
+        status={status()}
+        agreement={{ ...AGREEMENT, lastUpdated: '2026-06-04' }}
+        payoutsLive={false}
+      />,
+    );
+
+    expect(screen.getByText(/ · 06\/04\/2026$/)).toBeDefined();
+  });
+
   /** Acceptance 9, on the surface: a new version adds a row, it never replaces one. */
   it('lists every acceptance, newest first', () => {
     const older = { ...ACCEPTED, version: 'v0.9', acceptedAt: new Date('2026-05-01T10:00:00Z') };

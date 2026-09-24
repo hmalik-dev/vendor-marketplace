@@ -57,6 +57,7 @@ function detail(overrides: Partial<Record<keyof WireAdminVendorDetail, unknown>>
       isPublished: true,
       moderationHold: false,
       payoutHold: true,
+      debtOutstandingCents: 0,
     },
     packages: [
       {
@@ -204,7 +205,24 @@ describe('AdminVendorDetailPage', () => {
     const stripe = cardTitled(container, 'Stripe');
     expect(within(stripe).getByText('acct_1PqR3xKz9LmN4dTv').dataset.kind).toBe('mono');
     expect(within(stripe).getByText('company.verification.document')).toBeDefined();
-    expect(within(stripe).getByText('Held by an operator')).toBeDefined();
+    expect(within(stripe).getByText('Held by an admin')).toBeDefined();
+  });
+
+  it('shows what the vendor still owes for a lost chargeback, and nothing when they owe nothing (VEN-658)', async () => {
+    const owing = detail();
+    owing.vendor.debtOutstandingCents = 107_100;
+    const { container } = await renderPage(owing);
+    const owed = [...container.querySelectorAll('dt')].find(
+      (label) => label.textContent === 'Owed to the platform',
+    );
+
+    expect(owed?.nextElementSibling?.textContent).toBe('$1,071');
+
+    cleanup();
+    const clear = await renderPage(detail());
+    expect(
+      [...clear.container.querySelectorAll('dt')].map((label) => label.textContent),
+    ).not.toContain('Owed to the platform');
   });
 
   it('lists packages with a lever each and portfolio photos with Remove', async () => {

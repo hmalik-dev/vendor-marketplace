@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestDatabase, refusalOf, type TestDatabase } from './testing/test-db.js';
 
 /**
- * `users.role` changes only inside a transaction that names the operator-grant
+ * `users.role` changes only inside a transaction that names the admin-grant
  * setting, proved by attempting the writes against the engine rather than by
  * reading the DDL.
  */
@@ -37,7 +37,7 @@ describe('users.role guard', () => {
       `UPDATE users SET role = 'admin' WHERE id = '${USER}'`,
     );
 
-    expect(refusal).toContain('users.role can only change through the operator grant path');
+    expect(refusal).toContain('users.role can only change through the admin grant path');
     expect(await roleOf()).toBe('customer');
   });
 
@@ -54,7 +54,7 @@ describe('users.role guard', () => {
     await expect(
       testDb.db.transaction(async (tx) => {
         await tx.execute(sql.raw(`SET LOCAL app.role = 'admin'`));
-        await tx.execute(sql.raw(`SET LOCAL app.operator = 'true'`));
+        await tx.execute(sql.raw(`SET LOCAL app.admin = 'true'`));
         await tx.execute(sql.raw(`UPDATE users SET role = 'admin' WHERE id = '${USER}'`));
       }),
     ).rejects.toThrow();
@@ -65,7 +65,7 @@ describe('users.role guard', () => {
   it('does not accept the grant setting with any value but on', async () => {
     await expect(
       testDb.db.transaction(async (tx) => {
-        await tx.execute(sql.raw(`SET LOCAL app.operator_role_grant = 'off'`));
+        await tx.execute(sql.raw(`SET LOCAL app.admin_role_grant = 'off'`));
         await tx.execute(sql.raw(`UPDATE users SET role = 'admin' WHERE id = '${USER}'`));
       }),
     ).rejects.toThrow();
@@ -75,7 +75,7 @@ describe('users.role guard', () => {
 
   it('permits a role change inside a transaction that sets the grant setting', async () => {
     await testDb.db.transaction(async (tx) => {
-      await tx.execute(sql.raw(`SET LOCAL app.operator_role_grant = 'on'`));
+      await tx.execute(sql.raw(`SET LOCAL app.admin_role_grant = 'on'`));
       await tx.execute(sql.raw(`UPDATE users SET role = 'admin' WHERE id = '${USER}'`));
     });
 

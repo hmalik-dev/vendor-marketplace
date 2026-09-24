@@ -272,7 +272,7 @@ export function KeyValueList({
   );
 }
 
-/** A value an operator would paste: an identifier, a date, an amount. */
+/** A value an admin would paste: an identifier, a date, an amount. */
 export type ValueKind = 'text' | 'mono';
 
 /**

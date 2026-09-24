@@ -4,15 +4,15 @@ import type { StripeConnectGateway } from '../../lib/stripe.js';
 import {
   platformBalanceShortAlert,
   type AlertResult,
-  type OperatorAlerts,
-} from '../operator-alerts/operator-alerts.service.js';
-import { hasAlertFor } from '../operator-alerts/operator-alerts.dao.js';
+  type AdminAlerts,
+} from '../admin-alerts/admin-alerts.service.js';
+import { hasAlertFor } from '../admin-alerts/admin-alerts.dao.js';
 import { readPlatformLiabilities } from './payouts.dao.js';
 
 export interface PlatformBalanceDeps {
   db: AppDatabase;
   stripe: Pick<StripeConnectGateway, 'retrievePlatformBalance'>;
-  alerts: Pick<OperatorAlerts, 'alertNow'>;
+  alerts: Pick<AdminAlerts, 'alertNow'>;
   log: FastifyBaseLogger;
 }
 
@@ -27,7 +27,7 @@ export interface PlatformBalanceReconciliation {
  * The daily reconciliation (VEN-644): does the platform's Stripe balance,
  * available and pending, still cover the vendor payouts it has not sent and
  * what its bookings could still refund? What it has beyond that is commission
- * the operator may pay out (docs/runbook-platform-balance.md).
+ * the admin may pay out (docs/runbook-platform-balance.md).
  *
  * Under separate charges and transfers every customer's payment waits in this
  * balance until after the event, so a payout to the platform's bank — Stripe's

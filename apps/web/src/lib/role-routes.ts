@@ -39,7 +39,7 @@ export const DASHBOARD_PATH_BY_ROLE: Record<UserRole, string> = {
  * nowhere in the UI"* — a customer has no dashboard and never did.
  *
  * A vendor keeps `Dashboard`, because that is the word frame `08` puts on the
- * first row of their own rail for the same destination, and an operator gets
+ * first row of their own rail for the same destination, and an admin gets
  * the console's name. Each label names where the reader actually lands.
  */
 export const DASHBOARD_LABEL_BY_ROLE: Record<UserRole, string> = {
@@ -59,7 +59,7 @@ export const POST_SIGN_IN_PATH_BY_ROLE: Record<UserRole, string> = {
   customer: '/',
   vendor: DASHBOARD_PATH_BY_ROLE.vendor,
   /*
-   * An operator signs in to operate. Like a vendor, they have no use for a
+   * An admin signs in to operate. Like a vendor, they have no use for a
    * catalogue of vendors as a *starting* place, so this matches their dashboard
    * rather than the marketplace home.
    */
@@ -120,6 +120,18 @@ export const ROLE_ROUTE_RULES: ReadonlyArray<{
   { pattern: /^\/$/, roles: ['customer', 'admin'] },
   // `app/messages/layout.tsx` — `requireNonAdmin()`: an admin has no inbox (VEN-702).
   { pattern: /^\/messages(?:\/|$)/, roles: ['customer', 'vendor'] },
+  /*
+   * `app/account/settings/close/page.tsx` — `requireNonAdmin()`: an admin account
+   * is closed from the console, so the row and its page are not theirs.
+   */
+  { pattern: /^\/account\/settings\/close(?:\/|$)/, roles: ['customer', 'vendor'] },
+  /*
+   * The vendor application screens (VEN-512) serve a session with no account
+   * yet. Each page redirects an account holder of any role to their own home,
+   * so no role renders them and sign-in must not forward there (VEN-629).
+   * `app/sign-up/vendor-details`, `app/waitlist` and `app/vendors/apply`.
+   */
+  { pattern: /^\/(?:waitlist|vendors\/apply|sign-up\/vendor-details)(?:\/|$)/, roles: [] },
   // `/for-vendors` — `redirectVendorToDashboard`: its only ask is sign-up.
   { pattern: /^\/for-vendors\/?$/, roles: ['customer', 'admin'] },
 ];

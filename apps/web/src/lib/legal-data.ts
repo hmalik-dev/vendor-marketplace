@@ -34,7 +34,7 @@ export async function getTermsStatus(): Promise<WireTermsAcceptanceStatus> {
 
     /*
      * A suspended account reaches this screen two ways — typing the URL, or
-     * sitting at the gate when an operator bans it and reloading. The auth
+     * sitting at the gate when an admin bans it and reloading. The auth
      * plugin refuses it before any route runs, including this one, and letting
      * that 403 reach the render turns the page into the error boundary.
      * `web-route-boundaries.md` puts a 403 on the suspended surface, not there.

@@ -16,7 +16,7 @@ const VENDOR = 'user_vendor';
 const CUSTOMER = 'user_customer';
 
 /**
- * VEN-401 — an operator withdraws and reorders categories, and the public
+ * VEN-401 — an admin withdraws and reorders categories, and the public
  * reads follow: `/categories` (the landing pills and the search rail's list)
  * and the `/vendors` facet counts.
  */
@@ -418,15 +418,15 @@ describe('admin category management', () => {
       expect(await newActions()).toEqual([]);
     });
 
-    it('refuses a reorder built on an order another operator has since changed', async () => {
+    it('refuses a reorder built on an order another admin has since changed', async () => {
       const seen = (await categoryRows()).map((row) => row.id);
       const [first, second, third, ...rest] = seen;
 
-      // Operator A swaps the first two.
+      // Admin A swaps the first two.
       expect((await reorder([second!, first!, third!, ...rest], seen)).statusCode).toBe(200);
       const afterA = await categoryRows();
 
-      // Operator B, still looking at the original order, moves the third up.
+      // Admin B, still looking at the original order, moves the third up.
       const response = await reorder([first!, third!, second!, ...rest], seen);
 
       expect(response.statusCode).toBe(409);

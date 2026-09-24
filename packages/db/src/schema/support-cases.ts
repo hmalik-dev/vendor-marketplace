@@ -23,14 +23,14 @@ export const reportReasonEnum = pgEnum('report_reason', REPORT_REASONS);
  * customer's complaint lived in a support inbox (`POST /support/messages` sent
  * one email and stored nothing), the payout hold it justified lived in
  * `bookings.dispute_reason`, which no admin schema exposed, and the resolution
- * lived in an endpoint with no UI. An operator could filter
+ * lived in an endpoint with no UI. An admin could filter
  * `/admin/bookings?status=disputed` and see a pill; they could not see why, and
  * they could not act.
  *
  * **One table for both doors, and that is the design rather than a shortcut.** A
  * customer's report and a card network's chargeback are the same object to the
- * operator working them — both freeze a payout, both need a ruling — so the
- * origin is a column. Two tables would have been two queues, and an operator
+ * admin working them — both freeze a payout, both need a ruling — so the
+ * origin is a column. Two tables would have been two queues, and an admin
  * working two queues works neither. #436's in-product reports land here too.
  *
  * **It is not the audit log and must not be confused with one.** `admin_actions`
@@ -42,7 +42,7 @@ export const reportReasonEnum = pgEnum('report_reason', REPORT_REASONS);
  * **Nothing here is a second copy of the money.** The amounts, the refund and
  * the payout state stay on `bookings`; this row carries the booking's id and the
  * case detail joins for the rest. A case that cached the total would be a second
- * source for the one figure an operator rules on.
+ * source for the one figure an admin rules on.
  */
 export const supportCases = pgTable(
   'support_cases',
@@ -113,7 +113,7 @@ export const supportCases = pgTable(
      * same reason, as `admin_actions.subject_id`.
      *
      * The pair is also the key `GET /admin/conversations/:id/messages` reads:
-     * an operator may open a thread only where an **open** case names it, so
+     * an admin may open a thread only where an **open** case names it, so
      * this column is what turns a report into a scoped grant rather than a
      * free browse of every thread in the marketplace.
      */
@@ -127,7 +127,7 @@ export const supportCases = pgTable(
      * refusals are right for a customer's own report and neither is something a
      * card network's decision can be turned away by, so the hold is attempted
      * and its refusal is recorded rather than swallowed. A chargeback case
-     * sitting on a `completed` booking otherwise reads as an operator error
+     * sitting on a `completed` booking otherwise reads as an admin error
      * rather than as money that had already left.
      */
     holdRefusal: text('hold_refusal'),
@@ -137,7 +137,7 @@ export const supportCases = pgTable(
      * The send is what the whole chain exists for, and its failure already
      * unwinds the hold and answers 502 — but the row is written before the send
      * is attempted, so without this column a case would sit in the queue looking
-     * delivered. It is the one state an operator has to chase rather than work.
+     * delivered. It is the one state an admin has to chase rather than work.
      */
     emailFailedAt: timestamp('email_failed_at', { withTimezone: true }),
     /**
@@ -149,10 +149,10 @@ export const supportCases = pgTable(
      *
      * Recorded, and deliberately not acted on. Stripe's outcome and the
      * platform's disposition are different facts — `status` above stays the
-     * console's — and reconciling them is the operator's job.
+     * console's — and reconciling them is the admin's job.
      */
     networkOutcome: text('network_outcome'),
-    /** The operator who closed it. `set null` so the disposition outlives them. */
+    /** The admin who closed it. `set null` so the disposition outlives them. */
     resolvedBy: uuid('resolved_by').references(() => users.id, { onDelete: 'set null' }),
     resolvedAt: timestamp('resolved_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

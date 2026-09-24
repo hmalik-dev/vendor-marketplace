@@ -340,7 +340,7 @@ export type PayoutModel = (typeof PAYOUT_MODELS)[number];
  * Who ended a booking, recorded rather than inferred.
  *
  * A cancelled booking reaches the customer's screen by two routes that read
- * identically on the row — they cancelled it themselves, or an operator
+ * identically on the row — they cancelled it themselves, or an admin
  * unwound it when the other party was suspended — and the two need different
  * words. It was only ever distinguishable by string-matching
  * `cancellation_reason` against the sentence `admin.service.ts` happens to
@@ -350,7 +350,7 @@ export type PayoutModel = (typeof PAYOUT_MODELS)[number];
  * value here: it produces no `bookings` row at all, so its absence is what
  * names it.
  */
-export const BOOKING_CANCELLED_BY = ['customer', 'admin'] as const;
+export const BOOKING_CANCELLED_BY = ['customer', 'vendor', 'admin'] as const;
 export type BookingCancelledBy = (typeof BOOKING_CANCELLED_BY)[number];
 
 /**
@@ -597,7 +597,7 @@ export type EmailDeliveryOutcome = (typeof EMAIL_DELIVERY_OUTCOMES)[number];
  * `bounced` ranks highest because it is the one outcome that says something
  * about the *address* rather than about this message: every future
  * notification to that person is lost too, which is exactly the signal an
- * operator needs and the one that must never be overwritten. `complained`
+ * admin needs and the one that must never be overwritten. `complained`
  * outranks `delivered` because it can only ever follow one.
  *
  * `failed` sits just above `sent` and below every delivery outcome. Above
@@ -1226,7 +1226,7 @@ export const EXPIRY_SWEEP_INTERVAL_MS = 5 * 60_000;
 /**
  * How many consecutive ticks the expiry of an accepted request is held while its
  * payment intent is still processing or Stripe cannot return it (VEN-551). The
- * tick after the last one expires the request and tells the operator, because a
+ * tick after the last one expires the request and tells the admin, because a
  * date held forever costs the vendor bookings; the intent is left as it is and
  * never refunded automatically.
  */
@@ -1306,7 +1306,7 @@ export type PayoutStatus = (typeof PAYOUT_STATUSES)[number];
 export const HELD_PAYOUT_STATUSES = ['disputed'] as const;
 
 /**
- * Which way an operator settled a reported problem.
+ * Which way an admin settled a reported problem.
  *
  * Here rather than beside its Zod schema because `.claude/rules/shared-contracts.md`
  * has one home for a domain vocabulary, and `resolveDispute`'s parameter type
@@ -1362,7 +1362,7 @@ export const ADMIN_ACTIONS = [
   'support_case_resolved',
   'payout_retried',
   /**
-   * An operator produced a copy of everything the platform holds for one
+   * An admin produced a copy of everything the platform holds for one
    * person (#438), answering the privacy policy's *"ask us for a copy of what
    * we hold"*.
    *
@@ -1373,16 +1373,16 @@ export const ADMIN_ACTIONS = [
    */
   'user_data_exported',
   /**
-   * An operator closed an account on its holder's request (#438).
+   * An admin closed an account on its holder's request (#438).
    *
-   * Distinct from `user_banned`: a ban is a moderation decision the operator
+   * Distinct from `user_banned`: a ban is a moderation decision the admin
    * made and can reverse, and this is one the account holder asked for and
    * nobody can. Collapsing them would make *"how many accounts did we
    * suspend"* uncountable.
    */
   'user_closed',
   /**
-   * An operator closed **another operator's** account (VEN-391).
+   * An admin closed **another admin's** account (VEN-391).
    *
    * Its own value rather than `user_closed` with a flag in the detail, because
    * this is the one closure nothing inside the product can undo: `role =
@@ -1390,7 +1390,7 @@ export const ADMIN_ACTIONS = [
    * from the auth provider's dashboard. The immutability trigger means a row written under
    * the wrong value stays wrong, so the distinction is made at the writer.
    */
-  'operator_account_closed',
+  'admin_account_closed',
   /*
    * Graduated moderation (#435) — the levers that are not a ban.
    *
@@ -1413,7 +1413,7 @@ export const ADMIN_ACTIONS = [
    * Every other member here is a mutation, which is what the docstring above
    * says the enum is for. This one is here anyway because reading somebody's
    * private messages is the action that most needs a record: it changes
-   * nothing and it is the most invasive thing an operator can do. The route
+   * nothing and it is the most invasive thing an admin can do. The route
    * that writes it refuses any conversation no **open** case names, so the row
    * always has a case to point at, and it is written in the same transaction
    * as the read rather than best-effort — a read that could not be logged did
@@ -1444,22 +1444,22 @@ export const ADMIN_ACTIONS = [
   'vendor_application_declined',
   /*
    * Bulk reads of customer data (VEN-475), logged although they change nothing:
-   * an operator account is one password, so "who pulled the file, and how big"
+   * an admin account is one password, so "who pulled the file, and how big"
    * has to be answerable. `admin_exported` is one CSV request (detail: the
    * export, its filters and row count); `admin_data_read` is one look at a
-   * customer's record or the payments list, written at most once per operator
+   * customer's record or the payments list, written at most once per admin
    * per subject per hour so browsing does not flood the log.
    */
   'admin_exported',
   'admin_data_read',
   /**
-   * An operator gave another account operator access, or took it away (VEN-506).
+   * An admin gave another account admin access, or took it away (VEN-506).
    *
    * The detail carries the role the account held before the grant, which is
    * what a revoke restores; never the address, which the ids resolve to.
    */
-  'operator_granted',
-  'operator_revoked',
+  'admin_granted',
+  'admin_revoked',
   /**
    * An interrupted ban or closure was run to the end (VEN-478).
    *
@@ -1470,6 +1470,16 @@ export const ADMIN_ACTIONS = [
   'account_unwind_finished',
 ] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
+
+/**
+ * The stored strings for admin access changes, named once so the DAO and the
+ * closure writer cannot drift from the audit-row values.
+ */
+export const ADMIN_ACCESS_ACTIONS = {
+  granted: 'admin_granted',
+  revoked: 'admin_revoked',
+  accountClosed: 'admin_account_closed',
+} as const satisfies Record<string, AdminAction>;
 
 /**
  * What an action was taken *on* — the other half of the subject filter.
@@ -1515,7 +1525,7 @@ export const ADMIN_READ_AUDIT_WINDOW_MS = 60 * 60 * 1000;
 /**
  * The activity feed's date-range facet (VEN-388): how far back from the moment
  * of the request. Relative windows rather than two date fields, because the
- * question an operator brings is "what happened recently", and the database's
+ * question an admin brings is "what happened recently", and the database's
  * clock decides the cutoff so a pasted URL means the same window when reopened.
  */
 export const ADMIN_ACTIVITY_RANGES = ['24h', '7d', '30d'] as const;
@@ -1572,13 +1582,13 @@ export const MESSAGE_MAX_LENGTH = 5_000;
  *
  * In shared because two routes now page the same rows — the participant's
  * `/conversations/:id/messages` and the console's case-scoped read of a
- * reported thread (#436) — and a second copy of the number is how an operator
+ * reported thread (#436) — and a second copy of the number is how an admin
  * comes to see a different slice of a thread than the people in it.
  */
 export const MESSAGE_PAGE_SIZE = 50;
 
 /**
- * How many UTC calendar days of a reported thread an operator reads when the
+ * How many UTC calendar days of a reported thread an admin reads when the
  * case has no booking to date it by (VEN-412): the day the report was filed
  * and the six before it. A case with a booking reads the event date alone, as
  * Pattern C draws it; a report names no event, so the week leading up to the
@@ -1872,7 +1882,7 @@ export const MAX_TAG_SLUG_LENGTH = MAX_NAME_LENGTH + 28;
 
 /**
  * Whether a customer may still be sold to this vendor (VEN-559). `paused` is an
- * unpublish or a moderation hold, which an operator or the vendor can undo;
+ * unpublish or a moderation hold, which an admin or the vendor can undo;
  * `closed` is a ban or a retirement, which nothing undoes.
  */
 export const VENDOR_AVAILABILITIES = ['available', 'paused', 'closed'] as const;
@@ -1914,7 +1924,7 @@ export const ERROR_CODES = {
    * Its own code so the console opens the code prompt instead of `/suspended`.
    */
   STEP_UP_REQUIRED: 'STEP_UP_REQUIRED',
-  /** One operator has ended as many accounts this hour as the ceiling allows. */
+  /** One admin has ended as many accounts this hour as the ceiling allows. */
   ADMIN_CEILING_REACHED: 'ADMIN_CEILING_REACHED',
   NOT_FOUND: 'NOT_FOUND',
   CONFLICT: 'CONFLICT',
@@ -1934,7 +1944,7 @@ export const ERROR_CODES = {
    */
   SERVICE_BUSY: 'SERVICE_BUSY',
   /*
-   * The launch switches (VEN-404). Lowercase because the operator runbook and
+   * The launch switches (VEN-404). Lowercase because the admin runbook and
    * the ticket name them that way, and the web app branches on them to show
    * the paused notice instead of an error.
    */

@@ -1,11 +1,11 @@
 /**
- * The controls on an operator's irreversible actions (VEN-500).
+ * The controls on an admin's irreversible actions (VEN-500).
  *
  * Neon Auth has no second factor, so a stolen admin session used to be enough
  * to ban every vendor and refund every booking. Two limits stand in the way
  * until provider MFA is ruled on (`vendor-marketplace-decisions.md`, D-admin-2FA):
  * a step-up the session cannot mint alone, and a ceiling on how many accounts
- * one operator can end per hour.
+ * one admin can end per hour.
  */
 
 /** How long an emailed step-up code can be entered. */
@@ -30,6 +30,6 @@ export const ADMIN_DESTRUCTIVE_ACTIONS_PER_HOUR = 10;
 export const ADMIN_CEILING_ACTIONS = [
   'user_banned',
   'user_closed',
-  'operator_account_closed',
+  'admin_account_closed',
   'user_data_exported',
 ] as const;

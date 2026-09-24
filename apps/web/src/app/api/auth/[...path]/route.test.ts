@@ -6,12 +6,14 @@ const upstreamGet = vi.fn<(request: Request, context: Context) => Promise<Respon
 const afterTasks: Array<() => Promise<void>> = [];
 
 const forgetSessionsFor = vi.fn();
+const markSessionsRevoked = vi.fn();
 const mintedUserIdForCaller = vi.fn<() => Promise<string | undefined>>();
 const getSession = vi.fn();
 const authConfigured = vi.fn<() => boolean>();
 vi.mock('@/lib/auth/server', () => ({
   authConfigured: () => authConfigured(),
   forgetSessionsFor: (userId: string) => forgetSessionsFor(userId),
+  markSessionsRevoked: () => markSessionsRevoked(),
   mintedUserIdForCaller: () => mintedUserIdForCaller(),
   neonAuth: () => ({
     handler: () => ({ POST: upstreamPost, GET: upstreamGet }),
@@ -42,6 +44,7 @@ beforeEach(() => {
   authConfigured.mockReset().mockReturnValue(true);
   mintedUserIdForCaller.mockReset().mockResolvedValue(undefined);
   getSession.mockReset().mockResolvedValue({ data: null });
+  markSessionsRevoked.mockReset();
 });
 
 afterEach(() => {
@@ -141,18 +144,28 @@ describe('password reset through the auth proxy', () => {
     );
   });
 
-  it('throttles requests per address: the sixth from many callers looks the same but is not sent', async () => {
+  it('throttles requests per address and caller: the sixth from one caller looks the same but is not sent', async () => {
     upstreamPost.mockResolvedValue(Response.json({ success: true }));
 
     const statuses: number[] = [];
     for (let i = 0; i < 6; i++) {
-      const response = await call(REQUEST, { email: 'Known@Example.com' }, `9.9.9.${i}`);
+      const response = await call(REQUEST, { email: 'Known@Example.com' }, '9.9.9.9');
       statuses.push(response.status);
     }
     await drain();
 
     expect(statuses).toEqual([200, 200, 200, 200, 200, 200]);
     expect(upstreamPost).toHaveBeenCalledTimes(5);
+  });
+
+  it("does not let a stranger's five requests stop the owner's first from another caller (VEN-718)", async () => {
+    upstreamPost.mockResolvedValue(Response.json({ success: true }));
+
+    for (let i = 0; i < 6; i++) await call(REQUEST, { email: 'known@example.com' }, '9.9.9.9');
+    await call(REQUEST, { email: 'known@example.com' }, '2.2.2.2');
+    await drain();
+
+    expect(upstreamPost).toHaveBeenCalledTimes(6);
   });
 
   it('throttles requests per caller: the eleventh in a minute is a 429', async () => {
@@ -175,7 +188,7 @@ describe('password reset through the auth proxy', () => {
       const response = await call(
         RESET,
         { email: 'known@example.com', otp: '000000', password: 'a-long-password' },
-        `8.8.8.${i}`,
+        '8.8.8.8',
       );
       statuses.push(response.status);
     }
@@ -598,22 +611,34 @@ describe('sign-in through the auth proxy', () => {
     expect(statuses).toEqual(Array(12).fill(503));
   });
 
-  it('refuses the eleventh attempt once ten wrong passwords for one email came from ten addresses', async () => {
+  it('refuses the eleventh wrong password from one caller, in any casing of the email', async () => {
     upstreamPost.mockResolvedValue(Response.json({ code: 'INVALID' }, { status: 401 }));
 
     const statuses: number[] = [];
     for (let i = 0; i < 11; i++) {
-      const response = await call(
-        SIGN_IN,
-        { email: 'Victim@Example.com', password: 'guess' },
-        `7.7.7.${i}`,
-      );
-      statuses.push(response.status);
+      const email = i % 2 === 0 ? 'Victim@Example.com' : 'victim@example.com';
+      statuses.push((await call(SIGN_IN, { email, password: 'guess' }, '7.7.7.7')).status);
     }
 
     expect(statuses.slice(0, 10)).toEqual(Array(10).fill(401));
     expect(statuses[10]).toBe(429);
     expect(upstreamPost).toHaveBeenCalledTimes(10);
+  });
+
+  it('lets the owner sign in from another caller while a stranger has spent the address budget (VEN-630)', async () => {
+    upstreamPost.mockResolvedValue(Response.json({ code: 'INVALID' }, { status: 401 }));
+
+    for (let i = 0; i < 10; i++) {
+      await call(SIGN_IN, { email: 'owner@example.com', password: 'guess' }, '7.7.7.7');
+    }
+    expect(
+      (await call(SIGN_IN, { email: 'owner@example.com', password: 'guess' }, '7.7.7.7')).status,
+    ).toBe(429);
+
+    upstreamPost.mockResolvedValue(Response.json({ token: 't' }));
+    const owner = await call(SIGN_IN, { email: 'OWNER@example.com', password: 'right' }, '8.8.8.8');
+
+    expect(owner.status).toBe(200);
   });
 
   it('never locks out successful sign-ins, so naming an address cannot deny its owner', async () => {
@@ -655,13 +680,8 @@ describe('sign-in through the auth proxy', () => {
     const statuses: number[] = [];
     for (let i = 0; i < 6; i++) {
       statuses.push(
-        (
-          await call(
-            'email-otp/verify-email',
-            { email: 'c@example.com', otp: '123456' },
-            `6.6.6.${i}`,
-          )
-        ).status,
+        (await call('email-otp/verify-email', { email: 'c@example.com', otp: '123456' }, '6.6.6.6'))
+          .status,
       );
     }
 
@@ -902,6 +922,8 @@ describe('changing a password through the auth proxy (VEN-677)', () => {
     await call(CHANGE, PASSWORDS);
 
     expect(forgetSessionsFor).toHaveBeenCalledExactlyOnceWith('user-9');
+    // The surviving device carries a marker so no other instance serves it a pre-revoke token (VEN-713).
+    expect(markSessionsRevoked).toHaveBeenCalledOnce();
   });
 
   it('asks Neon Auth for the caller when nothing is cached for their cookie', async () => {
@@ -941,6 +963,7 @@ describe('changing a password through the auth proxy (VEN-677)', () => {
 
     expect(response.status).toBe(400);
     expect(forgetSessionsFor).not.toHaveBeenCalled();
+    expect(markSessionsRevoked).not.toHaveBeenCalled();
   });
 
   it('charges wrong current passwords to the account, whoever sends them, then throttles', async () => {
@@ -1071,12 +1094,12 @@ describe('the password floor and the body cap at the auth proxy (VEN-685)', () =
 
   it('spends no address budget on a refused short password', async () => {
     for (let i = 0; i < 8; i++) {
-      await call(RESET, { email: EMAIL, otp: '123456', password: SHORT }, `3.3.3.${i}`);
+      await call(RESET, { email: EMAIL, otp: '123456', password: SHORT }, '3.3.3.3');
     }
     upstreamPost.mockResolvedValue(Response.json({ success: true }));
 
     expect(
-      (await call(RESET, { email: EMAIL, otp: '123456', password: LONG }, '3.3.4.1')).status,
+      (await call(RESET, { email: EMAIL, otp: '123456', password: LONG }, '3.3.3.3')).status,
     ).toBe(200);
   });
 
@@ -1486,6 +1509,7 @@ describe('the devices an account is signed in on, through the auth proxy (VEN-68
     expect(response.status).toBe(404);
     expect(upstreamPost).not.toHaveBeenCalled();
     expect(forgetSessionsFor).not.toHaveBeenCalled();
+    expect(markSessionsRevoked).not.toHaveBeenCalled();
   });
 
   it('refuses to end the caller’s own session: that is sign-out', async () => {
@@ -1550,6 +1574,7 @@ describe('the devices an account is signed in on, through the auth proxy (VEN-68
       await call(path, body);
 
       expect(forgetSessionsFor).toHaveBeenCalledExactlyOnceWith('user-9');
+      expect(markSessionsRevoked).toHaveBeenCalledOnce();
       const bumps = fetchMock.mock.calls.filter(([url]) =>
         String(url).includes('/internal/session-generation'),
       );

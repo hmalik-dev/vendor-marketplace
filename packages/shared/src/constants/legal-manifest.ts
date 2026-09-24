@@ -49,13 +49,13 @@ export interface LegalDocumentManifestEntry {
 export const LEGAL_DOCUMENT_MANIFEST: readonly LegalDocumentManifestEntry[] = [
   {
     document: 'vendor_agreement',
-    version: 'v1.0',
-    sha256: 'f32236c9778dc6a20818fe74fb150ee9e7159b2519253b6686185fd6c60249f2',
+    version: 'v1.1',
+    sha256: 'd01b9ff2b738cb0b56ea74867b2b1f66c4b6d992aaebe315b7c7d37e28e94ba5',
   },
   {
     document: 'terms_of_service',
-    version: 'v1.0',
-    sha256: '22881eb55b50491bf58d6e2c427d28a07de72d2daeec5c28a0dda4687501f948',
+    version: 'v1.1',
+    sha256: '2b791a78b5dd278cc44484362ad535297d11dde7b8e9819f4d7cf3b8543d31de',
   },
 ];
 

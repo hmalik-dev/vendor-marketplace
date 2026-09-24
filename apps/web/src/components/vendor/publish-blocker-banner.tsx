@@ -51,7 +51,31 @@ export function PublishBlockerBanner({
   blockers,
   isPublished,
 }: PublishBlockerBannerProps): React.ReactElement | null {
-  if (isPublished || blockers.length === 0) {
+  if (isPublished) {
+    /*
+     * A storefront that went live before the name became a publish blocker
+     * (VEN-652) stays live and bookable, and the save rule that spares a live
+     * vendor blockers they did not introduce never asks for it. This is the
+     * only blocker a live vendor is told about: the others are theirs to have
+     * introduced, and telling them they are off search would be false.
+     */
+    return blockers.includes('personalName') ? (
+      <Banner
+        status="pending"
+        className="mb-4"
+        title="Add your name"
+        action={
+          <Button asChild size="sm">
+            <Link href={PROFILE_EDIT_PATH}>Add name</Link>
+          </Button>
+        }
+      >
+        {`${PUBLISH_BLOCKERS.personalName.message}.`}
+      </Banner>
+    ) : null;
+  }
+
+  if (blockers.length === 0) {
     return null;
   }
 

@@ -13,6 +13,9 @@ vi.mock('next/navigation', () => ({
   redirect: (path: string) => {
     throw new Error(`REDIRECT:${path}`);
   },
+  // The retry link on the unavailable screens (`RetryLink`).
+  useRouter: () => ({ refresh: vi.fn() }),
+  usePathname: () => `/bookings/${REQUEST_ID}/checkout`,
 }));
 const requireRole = vi.fn(async () => undefined);
 vi.mock('@/lib/current-user', () => ({ requireRole: () => requireRole() }));
@@ -44,6 +47,15 @@ describe('CheckoutPage', () => {
       CheckoutPage({ params: Promise.resolve({ requestId: REQUEST_ID }) }),
     ).rejects.toThrow('REDIRECT:/vendor/dashboard');
     expect(openCheckout).not.toHaveBeenCalled();
+  });
+
+  /* VEN-637: a request that became paid while the page loaded goes to its confirmation. */
+  it('redirects a request that turned paid mid-load to its confirmation', async () => {
+    openCheckout.mockResolvedValue({ state: 'paid' });
+
+    await expect(
+      CheckoutPage({ params: Promise.resolve({ requestId: REQUEST_ID }) }),
+    ).rejects.toThrow(`REDIRECT:/bookings/${REQUEST_ID}/confirmed`);
   });
 
   /*

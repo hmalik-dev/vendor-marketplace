@@ -208,7 +208,7 @@ export async function findUserById(db: AppDatabase, id: string): Promise<UserRow
  * `null` is the answer every caller already expects. If it is *not* in the
  * table, the arbiter was some other unique index, which means an address that
  * belongs to **somebody else**, and answering `null` there would report an
- * operator-actionable data problem as the ordinary "this identity has no
+ * admin-actionable data problem as the ordinary "this identity has no
  * account yet". So it throws instead.
  *
  * **The message carries the auth id because the 23505 it replaces carried
@@ -240,7 +240,7 @@ export async function findUserById(db: AppDatabase, id: string): Promise<UserRow
  * the new row from `inserted[0]` without ever reaching the reads below.
  *
  * Which leaves the live-account case as the only way here, and it is the one
- * that genuinely wants an operator. That is why the throw stays: it is not
+ * that genuinely wants an admin. That is why the throw stays: it is not
  * softened by the repair, it is *narrowed* to the case it was written for.
  */
 export async function insertUserIfAbsent(
@@ -266,7 +266,7 @@ export async function insertUserIfAbsent(
 
   /*
    * Read back who holds the address before giving up, because "which row holds
-   * this?" is the whole of the operator's question and neither the 23505 nor a
+   * this?" is the whole of the admin's question and neither the 23505 nor a
    * sentence answers it. Only on this path, which is the one that is about to
    * throw anyway.
    *
@@ -570,7 +570,7 @@ async function writeAuthPatch(
  * console — without touching a row. What is **not** repaired is their money:
  * those accounts still hold undeclined open requests and unrefunded confirmed
  * future bookings, and nothing revisits them, because no second `user.deleted`
- * will arrive. `/admin/bookings?flag=refund-stuck` lists them for an operator,
+ * will arrive. `/admin/bookings?flag=refund-stuck` lists them for an admin,
  * which is the whole of the answer; it is a pre-launch database and there is no
  * migration worth writing for it.
  */
@@ -590,7 +590,7 @@ export async function retireUserByAuthId(
 /**
  * The same retirement, addressed by the **local** id (#438).
  *
- * An operator closing an account on its holder's request has a `users.id` and
+ * An admin closing an account on its holder's request has a `users.id` and
  * not necessarily a usable auth identity, so it needs this door — but it must
  * not be a second implementation of the retirement. A closure requested through
  * the product and one that arrives as `user.deleted` have to leave the database
@@ -620,11 +620,11 @@ export async function retireUserById<B>(
 }
 
 /**
- * Any operator other than `userId` who can still sign in to the console: not
+ * Any admin other than `userId` who can still sign in to the console: not
  * retired and not banned. Takes the table so the same rule can be read on its
  * own and correlated inside a retirement predicate.
  */
-function isOtherLiveOperator(
+function isOtherLiveAdmin(
   table: Record<'role' | 'deletedAt' | 'isBanned' | 'id', AnyPgColumn>,
   userId: string,
 ): SQL | undefined {
@@ -636,38 +636,38 @@ function isOtherLiveOperator(
   );
 }
 
-/** Whether an operator other than `userId` would still hold the console. */
-export async function hasAnotherLiveOperator(db: AppDatabase, userId: string): Promise<boolean> {
+/** Whether an admin other than `userId` would still hold the console. */
+export async function hasAnotherLiveAdmin(db: AppDatabase, userId: string): Promise<boolean> {
   const rows = await db
     .select({ id: users.id })
     .from(users)
-    .where(isOtherLiveOperator(users, userId))
+    .where(isOtherLiveAdmin(users, userId))
     .limit(1);
 
   return rows.length > 0;
 }
 
-/** The one lock every operator retirement takes; exported for its contention test. */
-export const OPERATOR_RETIREMENT_LOCK = sql`select pg_advisory_xact_lock(hashtextextended('operator_retirement', 0))`;
+/** The one lock every admin retirement takes; exported for its contention test. */
+export const ADMIN_RETIREMENT_LOCK = sql`select pg_advisory_xact_lock(hashtextextended('admin_retirement', 0))`;
 
 /**
- * Retires an **operator** — refused when nobody else would hold the console
+ * Retires an **admin** — refused when nobody else would hold the console
  * (VEN-391).
  *
  * The check is the `UPDATE`'s own predicate, taken under one transaction-scoped
- * advisory lock every operator retirement shares. The predicate alone is not
- * enough under READ COMMITTED: two operators closing each other at once would
+ * advisory lock every admin retirement shares. The predicate alone is not
+ * enough under READ COMMITTED: two admins closing each other at once would
  * each see the other still live and both commit, leaving nobody. The lock makes
  * the second retirement start its statement after the first has committed, so
- * its snapshot sees one live operator fewer.
+ * its snapshot sees one live admin fewer.
  */
-export async function retireOperatorById<B>(
+export async function retireAdminById<B>(
   db: AppDatabase,
   userId: string,
   blockersOf?: RetirementBlockers<B>,
   audit?: RetirementAudit,
-): Promise<RetireOutcome<B> | 'last-operator' | null> {
-  const other = alias(users, 'other_operator');
+): Promise<RetireOutcome<B> | 'last-admin' | null> {
+  const other = alias(users, 'other_admin');
   const retired = await retireUserWhere(
     db,
     and(
@@ -677,10 +677,10 @@ export async function retireOperatorById<B>(
         db
           .select({ one: sql`1` })
           .from(other)
-          .where(isOtherLiveOperator(other, userId)),
+          .where(isOtherLiveAdmin(other, userId)),
       ),
     ),
-    OPERATOR_RETIREMENT_LOCK,
+    ADMIN_RETIREMENT_LOCK,
     blockersOf && { userId, blockersOf },
     audit,
   );
@@ -695,31 +695,31 @@ export async function retireOperatorById<B>(
     .where(and(eq(users.id, userId), notDeleted))
     .limit(1);
 
-  return live ? 'last-operator' : null;
+  return live ? 'last-admin' : null;
 }
 
 /**
- * Bans an **operator** — refused when nobody else would hold the console
+ * Bans an **admin** — refused when nobody else would hold the console
  * (VEN-417).
  *
- * A ban takes an operator out of the live set as surely as a retirement does,
+ * A ban takes an admin out of the live set as surely as a retirement does,
  * so it shares the retirement's lock and its predicate. Without the lock, one
- * operator banning the other while that one closes the first both commit, each
+ * admin banning the other while that one closes the first both commit, each
  * statement's snapshot still counting its own actor as live. It also takes a
  * held storefront down, as `setBanned` does, in the same transaction.
  *
  * `null` when the row was not ours to ban: gone, or already banned by a request
  * that won the claim.
  */
-export async function banOperatorById(
+export async function banAdminById(
   db: AppDatabase,
   userId: string,
   now: Date,
-): Promise<{ profileUnpublished: boolean } | 'last-operator' | null> {
+): Promise<{ profileUnpublished: boolean } | 'last-admin' | null> {
   return db.transaction(async (tx) => {
-    await tx.execute(OPERATOR_RETIREMENT_LOCK);
+    await tx.execute(ADMIN_RETIREMENT_LOCK);
 
-    const other = alias(users, 'other_operator');
+    const other = alias(users, 'other_admin');
     const banned = await tx
       .update(users)
       .set({ isBanned: true, bannedAt: now, updatedAt: now })
@@ -731,7 +731,7 @@ export async function banOperatorById(
             tx
               .select({ one: sql`1` })
               .from(other)
-              .where(isOtherLiveOperator(other, userId)),
+              .where(isOtherLiveAdmin(other, userId)),
           ),
         ),
       )
@@ -744,7 +744,7 @@ export async function banOperatorById(
         .where(and(eq(users.id, userId), eq(users.isBanned, false)))
         .limit(1);
 
-      return unbanned ? 'last-operator' : null;
+      return unbanned ? 'last-admin' : null;
     }
 
     const unpublished = await tx

@@ -23,7 +23,7 @@ const BOOT_JITTER_MS = 10_000;
  * Neon Auth sends no delete event, so a deleted identity reached the local row
  * only when someone ran `pnpm reconcile:auth`. This is that command on a timer.
  * It is safe on every instance at once: a retirement is a conditional claim,
- * and an operator alert is deduplicated per account. A deployment with no
+ * and an admin alert is deduplicated per account. A deployment with no
  * `NEON_AUTH_DATABASE_URL` (a lane on local Docker) has nothing to reconcile
  * against and does not schedule it.
  */
@@ -93,6 +93,6 @@ export const authReconcilePlugin = fp<AuthReconcilePluginOptions>(
   },
   {
     name: 'auth-reconcile',
-    dependencies: ['clock', 'operator-alerts', 'auth-directory'],
+    dependencies: ['clock', 'admin-alerts', 'auth-directory'],
   },
 );

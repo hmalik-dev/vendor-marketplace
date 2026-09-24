@@ -1,11 +1,8 @@
 import { formatPrice } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 import type { StripeConnectGateway } from '../../lib/stripe.js';
-import {
-  externalRefundAlert,
-  type OperatorAlerts,
-} from '../operator-alerts/operator-alerts.service.js';
-import { findBookingIdByPaymentIntent } from '../operator-alerts/operator-alerts.dao.js';
+import { externalRefundAlert, type AdminAlerts } from '../admin-alerts/admin-alerts.service.js';
+import { findBookingIdByPaymentIntent } from '../admin-alerts/admin-alerts.dao.js';
 import { recordExternalRefund, type ExternalRefundFinding } from './refunds.dao.js';
 
 export type RefundReconciliation = 'refund-unchanged' | 'refund-held' | 'refund-recorded';
@@ -13,17 +10,17 @@ export type RefundReconciliation = 'refund-unchanged' | 'refund-held' | 'refund-
 export interface RefundReconciliationDeps {
   db: AppDatabase;
   stripe: Pick<StripeConnectGateway, 'findRefund'>;
-  alerts?: Pick<OperatorAlerts, 'dispatch'>;
+  alerts?: Pick<AdminAlerts, 'dispatch'>;
 }
 
-/** The sentence the booking carries while it is held, and the operator reads on it. */
+/** The sentence the booking carries while it is held, and the admin reads on it. */
 export function externalRefundReason(externalCents: number): string {
-  return `${formatPrice(externalCents)} was refunded at Stripe outside the platform, so the payout is on hold until an operator rules`;
+  return `${formatPrice(externalCents)} was refunded at Stripe outside the platform, so the payout is on hold until an admin rules`;
 }
 
-/** Tells the operator, once per booking and total — the alert's own dedupe is the guard. */
+/** Tells the admin, once per booking and total — the alert's own dedupe is the guard. */
 export function announceExternalRefund(
-  alerts: Pick<OperatorAlerts, 'dispatch'> | undefined,
+  alerts: Pick<AdminAlerts, 'dispatch'> | undefined,
   bookingId: string,
   finding: ExternalRefundFinding,
 ): void {

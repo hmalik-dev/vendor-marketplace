@@ -29,7 +29,7 @@ export const STUCK_REFUNDS_PATH = '/admin/bookings?flag=refund-stuck';
  * What a suspension does, in one place.
  *
  * The bulk bar and the row control both name the consequence, and a destructive
- * dialog that describes the same action two different ways is how an operator
+ * dialog that describes the same action two different ways is how an admin
  * learns not to read them. `subject` is the only word that legitimately differs
  * — one dialog is about several accounts, the other about one.
  *
@@ -54,7 +54,7 @@ export function SuspensionConsequence({ subject }: { subject: string }): React.R
  *
  * **This dialog exists to be impossible to confuse with the suspension one**
  * (#435, acceptance 3). The two controls sit in the same menu, on the same row,
- * and one of them destroys a business: an operator who reads this and acts as
+ * and one of them destroys a business: an admin who reads this and acts as
  * though they had suspended the account has been misled by the copy, not by the
  * API. So it names the three unwinds a ban performs and says none of them
  * happens here, in the same register the suspension copy uses.
@@ -65,7 +65,7 @@ export function SuspensionConsequence({ subject }: { subject: string }): React.R
  * because the vendor could no longer put the storefront back. A consequence line
  * that contradicts the consequence is worse than no line, and this is the one
  * string in the product read at the instant the button is pressed. The sentence
- * keeps what was still true — an operator undoes this from here — and states
+ * keeps what was still true — an admin undoes this from here — and states
  * what changed. `31-content-voice.md` carries the ruling.
  */
 export function UnpublishConsequence({ subject }: { subject: string }): React.ReactElement {
@@ -84,7 +84,7 @@ export function UnpublishConsequence({ subject }: { subject: string }): React.Re
  * The other direction, its one condition, and the thing the row cannot tell you.
  *
  * **`is_published` records that a storefront is down, never who put it down.**
- * An operator moderating it and a vendor pausing their own trading write the
+ * An admin moderating it and a vendor pausing their own trading write the
  * same column, and nothing on the row distinguishes them — so "Publish" on an
  * unpublished row may be undoing your colleague's moderation or overriding the
  * owner's own choice, and the console cannot say which. Naming that is the
@@ -120,12 +120,15 @@ export interface VendorTableProps {
    * them; this component still owns the true empty below.
    */
   filteredEmpty?: React.ReactNode;
+  /** A page past the last one, supplied by the page; shown before either empty state. */
+  pastEnd?: React.ReactNode;
 }
 
 export function VendorTable({
   rows,
   filtered,
   filteredEmpty,
+  pastEnd,
 }: VendorTableProps): React.ReactElement {
   const router = useRouter();
   const call = useApi();
@@ -168,7 +171,7 @@ export function VendorTable({
    * The dialog promises every future booking is "cancelled and refunded in
    * full". When Stripe refuses one, the ban still removes the account and
    * unwinds the rest — but that booking stays **confirmed**, neither party is
-   * told, and before #400 only a log line recorded it while the operator saw
+   * told, and before #400 only a log line recorded it while the admin saw
    * the same clean success they get when everything works.
    *
    * Reported as a warning above the table rather than thrown into
@@ -195,7 +198,7 @@ export function VendorTable({
    * silently removed the notice about money still sitting at Stripe.
    *
    * It still does not survive a reload, and no longer needs to: the bookings
-   * it names are now a list the operator can go back to (#415), and this
+   * it names are now a list the admin can go back to (#415), and this
    * points at it. The banner is the moment's notice; the list is the record.
    */
   function reportStuckRefunds(count: number, accounts: number): void {
@@ -249,7 +252,7 @@ export function VendorTable({
       ) : null}
       {/*
         Bulk actions appear only when rows are selected (`22-admin.md`). A bar
-        that is always present, greyed out, teaches an operator to ignore it.
+        that is always present, greyed out, teaches an admin to ignore it.
 
         It **floats over** the table rather than sitting above it. Displacing
         the table cost two of the fifteen rows the frame fits — in the very
@@ -295,7 +298,7 @@ export function VendorTable({
                * failure halfway through with no record of where it stopped.
                */
               /*
-               * One refusal — another operator got there first, a 409 — does not
+               * One refusal — another admin got there first, a 409 — does not
                * end the run (VEN-423). An abort discarded the earlier bans'
                * stuck-refund count and left every later row unsuspended and
                * unreachable from this dialog. The run finishes, the successes
@@ -344,7 +347,9 @@ export function VendorTable({
         rows={rows}
         rowKey={(row) => row.id}
         empty={
-          filtered && filteredEmpty ? (
+          pastEnd ? (
+            pastEnd
+          ) : filtered && filteredEmpty ? (
             filteredEmpty
           ) : (
             <EmptyState
@@ -457,7 +462,7 @@ export function VendorTable({
  *
  * A component rather than an inline cell because each row now holds **state** —
  * which of its dialogs is open — and because the whole risk of this ticket is
- * an operator reaching for the wrong one. Suspension is red and irreversible in
+ * an admin reaching for the wrong one. Suspension is red and irreversible in
  * substance; unpublishing is neither, and they sit two items apart.
  *
  * A suspended account is offered only the lift: `PUT .../publish` answers 409
@@ -509,7 +514,7 @@ function VendorRowActions({
 
     They used to be one, labelled from `status === 'live'`, which meant an
     already-down storefront offered only **Publish profile** — and Unpublish is
-    now the control that sets the moderation hold. So the one vendor an operator
+    now the control that sets the moderation hold. So the one vendor an admin
     could not moderate was the one who had taken themselves down first, which is
     the wrong half of the population and the evasion the hold exists to close.
 
@@ -615,9 +620,9 @@ function VendorRowActions({
                 await setPublished(!unpublishing);
                 /*
                   The confirmation the vendor gets for the same change (VEN-395,
-                  `40-states.md`): a state change the operator caused says so.
+                  `40-states.md`): a state change the admin caused says so.
                   Same verbs as the vendor's own toggle, naming the storefront
-                  because an operator is not its owner.
+                  because an admin is not its owner.
                 */
                 toast.success(
                   unpublishing

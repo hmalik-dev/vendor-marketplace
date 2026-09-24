@@ -27,7 +27,7 @@ export const signUpRoles = pgTable(
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   },
   (table) => [
-    // `admin` is granted by an operator, never chosen at sign-up.
+    // `admin` is granted by an admin, never chosen at sign-up.
     check('sign_up_roles_role_is_a_sign_up_role', sql`${table.role} IN ('customer', 'vendor')`),
   ],
 ).enableRLS();

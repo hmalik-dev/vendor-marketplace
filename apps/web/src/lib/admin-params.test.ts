@@ -119,11 +119,11 @@ describe('droppedKeys and droppedFiltersLine', () => {
 describe('every console screen can say what it ignored', () => {
   /*
    * The rule is "drop it **and say so**". Silently rendering the unfiltered
-   * list tells an operator the platform holds data it does not — which on a
+   * list tells an admin the platform holds data it does not — which on a
    * moderation queue is the difference between "nothing is waiting" and "your
    * URL was wrong".
    */
-  it('reports the key an operator supplied and the screen could not use', () => {
+  it('reports the key an admin supplied and the screen could not use', () => {
     const raw = { status: 'nonsense', page: '2' };
     const parsed = { status: undefined };
 
@@ -184,7 +184,7 @@ describe('uuidParam', () => {
    * The reason this defers to the shared `uuidSchema` rather than carrying a
    * regex of its own: a hand-rolled pattern rejected these two, which
    * `z.uuid()` accepts. The screen would then have dropped a value the API
-   * would have taken, and told the operator — wrongly — that it was not
+   * would have taken, and told the admin — wrongly — that it was not
    * something this list can filter by.
    */
   it('accepts the edge uuids the API accepts', () => {

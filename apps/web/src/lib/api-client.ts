@@ -85,6 +85,8 @@ export interface ApiRequestOptions<T> {
   body?: unknown;
   /** Session bearer token. `null` sends the request unauthenticated. */
   token?: string | null;
+  /** Set by the one retry after a 401, so a refusal of the fresh token is final. */
+  retried?: boolean;
   signal?: AbortSignal;
   /**
    * Seconds to cache this response on the server, for **public reference data
@@ -177,6 +179,45 @@ async function visitorHeaders(secret: string): Promise<Record<string, string>> {
     // Outside a request scope (a build-time render, a script): nobody to name.
     return {};
   }
+}
+
+/**
+ * How a 401 on a session token is answered (VEN-717): this side's owner of the
+ * token returns a freshly minted one, or `null` when the session is gone. The
+ * server (`auth/server.ts`) and the browser (`auth/client.ts`) each register
+ * theirs; without one a 401 is thrown as before.
+ */
+export type RefusedTokenHandler = (refused: string) => Promise<string | null>;
+
+let refusedTokenHandler: RefusedTokenHandler | null = null;
+
+export function setRefusedTokenHandler(handler: RefusedTokenHandler): void {
+  refusedTokenHandler = handler;
+}
+
+/**
+ * Retries once, with a re-minted token, a request the API refused as 401. A
+ * refusal is decided before the route runs, so replaying a write is safe. A
+ * handler that has nothing new (session ended, same token) leaves the 401 as is.
+ */
+async function retryWithFreshToken<T>(
+  path: string,
+  options: ApiRequestOptions<T>,
+  error: ApiClientError,
+): Promise<T> {
+  const { token } = options;
+
+  if (error.statusCode !== 401 || !token || !refusedTokenHandler || options.retried) {
+    throw error;
+  }
+
+  const fresh = await refusedTokenHandler(token);
+
+  if (!fresh || fresh === token) {
+    throw error;
+  }
+
+  return apiRequest(path, { ...options, token: fresh, retried: true });
 }
 
 /**
@@ -298,7 +339,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions<T>)
       throw await toClientError(response);
     } catch (error) {
       if (error instanceof ApiClientError) {
-        throw error;
+        return retryWithFreshToken(path, options, error);
       }
 
       throw new ApiClientError(

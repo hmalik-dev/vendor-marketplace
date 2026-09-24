@@ -21,7 +21,7 @@ export const ERROR_REPORTING_SAMPLING = {
 } as const;
 
 /**
- * The tags a payment failure carries, which the operator's Sentry alert rule
+ * The tags a payment failure carries, which the admin's Sentry alert rule
  * filters on. A payment error is the class of failure where a customer has been
  * charged, or a vendor not paid, and nobody else will notice.
  */

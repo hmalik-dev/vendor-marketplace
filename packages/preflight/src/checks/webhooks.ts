@@ -12,7 +12,7 @@ export type CommandRunner = (command: string, args: readonly string[]) => Promis
  * `stripe listen --print-secret` mints — or reads back — the signing secret
  * for the current listener without starting one, and it need not agree with
  * whatever is sitting in `.env`: the CLI can mint a fresh one on a config
- * change, a re-login, or a second operator's own listener. When it drifts,
+ * change, a re-login, or a second admin's own listener. When it drifts,
  * every webhook Stripe delivers locally fails signature verification and
  * answers 401, which reads exactly like a bug in the route under test rather
  * than a stale value one `stripe listen` copy-paste away from fixed.

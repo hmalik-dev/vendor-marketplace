@@ -17,7 +17,7 @@ export const adminActionSubjectEnum = pgEnum('admin_action_subject', ADMIN_ACTIO
  * The console reads and writes other people's accounts and money by design.
  * Before this table the whole record of that was two `log.info` lines — one for
  * a ban, one for a review deletion — and three of the six mutating routes were
- * never even passed the acting operator's id. "Which operator suspended this
+ * never even passed the acting admin's id. "Which admin suspended this
  * account, and when" had no queryable answer anywhere, which is the
  * accountability gap under every later moderation feature.
  *
@@ -26,14 +26,14 @@ export const adminActionSubjectEnum = pgEnum('admin_action_subject', ADMIN_ACTIO
  * method. A rule kept in application code is one every new writer has to
  * remember, and an audit log that the code writing to it can also rewrite
  * records nothing. The invariant is `0029_sad_storm.sql`'s, exactly: **a row
- * can never be altered, and can never be removed while the operator it is
+ * can never be altered, and can never be removed while the admin it is
  * about still exists.**
  *
  * Three deliberate consequences of that:
  *
- * - `actor_id` is `restrict` (VEN-463): a `users` row an operator's log points
+ * - `actor_id` is `restrict` (VEN-463): a `users` row an admin's log points
  *   at cannot be hard-deleted at all. It used to cascade, which made erasing the
- *   operator the one way to erase their history; `users` rows are **retired,
+ *   admin the one way to erase their history; `users` rows are **retired,
  *   never removed** (`deleted_at`), and now the database says so too. The
  *   trigger's delete allowance for an absent actor is what remains of that
  *   design, and no foreign-key path reaches it.
@@ -58,7 +58,7 @@ export const adminActions = pgTable(
     id: uuid('id')
       .primaryKey()
       .default(sql`gen_random_uuid()`),
-    /** The operator. `restrict`: a user row with a log behind it cannot be deleted. */
+    /** The admin. `restrict`: a user row with a log behind it cannot be deleted. */
     actorId: uuid('actor_id')
       .notNull()
       .references(() => users.id, { onDelete: 'restrict' }),
@@ -86,7 +86,7 @@ export const adminActions = pgTable(
 
     /* The unfiltered feed: newest first, which is the only order this is read in. */
     index('admin_actions_created_at_idx').on(table.createdAt.desc()),
-    /* "What did this operator do." */
+    /* "What did this admin do." */
     index('admin_actions_actor_idx').on(table.actorId, table.createdAt.desc()),
     /*
      * "What did the console do to this account." Subject id first: it is the

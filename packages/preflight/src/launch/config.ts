@@ -9,7 +9,7 @@ import {
   type Probe,
 } from './types.js';
 
-const NON_PLACEHOLDER_KEYS = ['SENTRY_DSN', 'OPERATOR_ALERT_EMAIL', 'SUPPORT_EMAIL_TO'] as const;
+const NON_PLACEHOLDER_KEYS = ['SENTRY_DSN', 'ADMIN_ALERT_EMAIL', 'SUPPORT_EMAIL_TO'] as const;
 /**
  * Requests per minute per IP. Below the floor a page load that fans out to a
  * dozen API calls trips it; above the ceiling it no longer limits anything.
@@ -50,7 +50,7 @@ function storageResult(env: NodeJS.ProcessEnv): LaunchResult {
 }
 
 /**
- * Printed values are the registry's own placeholders, never what the operator
+ * Printed values are the registry's own placeholders, never what the admin
  * set. A registry default is not refused: `support@<BRAND_DOMAIN>` can be the
  * real monitored address, and production must only state it.
  */

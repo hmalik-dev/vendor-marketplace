@@ -27,7 +27,7 @@ const getFeaturedVendors = vi.fn<() => Promise<VendorCardData[]>>();
 /*
  * The page's composition turns on the *role*, not only on whether a session
  * exists: a signed-in customer gets the status strip and loses the acquisition
- * sections, while an operator — who also holds a session — gets the visitor's
+ * sections, while an admin — who also holds a session — gets the visitor's
  * page. Mocked separately from `authState` above for the same reason
  * `site-footer.test.tsx` does it: the two can disagree, and the page has to
  * follow the record rather than the session.
@@ -1029,11 +1029,11 @@ describe('HomePage, signed in as a customer', () => {
   });
 
   /*
-   * An operator holds a session too, and gets the *visitor's* page: they have
+   * An admin holds a session too, and gets the *visitor's* page: they have
    * no bookings to summarise and are looking at the marketplace rather than at
    * their own things. The band still goes, because that is a session question.
    */
-  it('gives an operator the visitor composition, minus the band', async () => {
+  it('gives an admin the visitor composition, minus the band', async () => {
     currentRole = 'admin';
 
     render(await HomePage());

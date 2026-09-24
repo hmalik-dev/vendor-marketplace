@@ -83,7 +83,7 @@ describe('the payments table', () => {
 
   /**
    * The flag replaces the state pill rather than sitting beside it, and carries
-   * the count and Stripe's reason — an operator scanning the unfiltered table
+   * the count and Stripe's reason — an admin scanning the unfiltered table
    * has to find these without knowing the filter exists (#415's lesson).
    */
   it('replaces the state pill with the failing flag, and says how often and why', () => {
@@ -187,7 +187,7 @@ describe('retryNotice', () => {
     expect(notice.message).toBe('Sunlit Studio has been paid $1,276.');
   });
 
-  /* And a hold is not a release the operator should be told to wait for. */
+  /* And a hold is not a release the admin should be told to wait for. */
   it('reports a hold rather than promising a release that will never run', () => {
     const notice = retryNotice(
       FAILING,
@@ -227,7 +227,7 @@ describe('retryNotice', () => {
   /*
    * Every branch names the vendor. The filter exists to put several failing
    * rows on screen at once, so a banner about no particular row is one an
-   * operator can misread as the answer for the row they just acted on.
+   * admin can misread as the answer for the row they just acted on.
    */
   it('names the vendor on every branch', () => {
     const outcomes: WireAdminPayoutRetryResult[] = [

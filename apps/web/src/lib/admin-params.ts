@@ -85,7 +85,7 @@ export function pageNumber(value: RawParam): number {
  * side, so the two ends of one filter cannot disagree about what a uuid is. A
  * hand-rolled pattern here already did disagree — it rejected the all-zero and
  * all-`f` ids that `z.uuid()` accepts, so the screen would have dropped a value
- * the API would have taken and then told the operator, wrongly, that it was
+ * the API would have taken and then told the admin, wrongly, that it was
  * "not a value this list can filter by".
  *
  * Shape only. Whether the id names anything is the query's answer, and an id
@@ -102,9 +102,9 @@ export function uuidParam(value: RawParam): string | undefined {
  * The line the screen shows when it ignored something in the URL.
  *
  * `web-route-boundaries.md` asks for the filter to be dropped **and said** —
- * rendering the unfiltered list in silence tells an operator the platform holds
+ * rendering the unfiltered list in silence tells an admin the platform holds
  * data it does not. `/search` says the same thing through
- * `clearedParamsLine`; this is the console's version, worded for an operator
+ * `clearedParamsLine`; this is the console's version, worded for an admin
  * rather than a customer.
  */
 export function droppedFiltersLine(dropped: readonly string[]): string | null {

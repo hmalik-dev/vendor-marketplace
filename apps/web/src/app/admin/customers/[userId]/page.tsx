@@ -53,7 +53,7 @@ function sliceNote(total: number, shown: number): string | undefined {
  * A review's columns, one direction or the other.
  *
  * `is_public = false` is two different facts, as on `/admin/reviews`: an
- * operator hid a customer's review of a vendor, while a vendor chose to keep a
+ * admin hid a customer's review of a vendor, while a vendor chose to keep a
  * note about a customer private. The pill says which.
  */
 function reviewColumns(direction: 'written' | 'received'): CardTableColumn<Review>[] {
@@ -326,7 +326,7 @@ export default async function AdminCustomerDetailPage({
               </li>
               <li>
                 <Link href={`/admin/activity?subject=${customer.id}`} className={LINK}>
-                  Activity · what operators did to this account
+                  Activity · what admins did to this account
                 </Link>
               </li>
             </ul>

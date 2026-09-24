@@ -16,7 +16,7 @@ function apiError(
 describe('userFacingError', () => {
   /*
    * VEN-404: a launch switch answers a deliberate 503, and the customer is owed
-   * the operator's sentence rather than the connection fallback every other
+   * the admin's sentence rather than the connection fallback every other
    * 5xx gets.
    */
   it.each([['bookings_paused' as const], ['checkout_paused' as const]])(

@@ -5,6 +5,7 @@ import {
   cancelledBookingSchema,
   checkoutIntentSchema,
   uuidSchema,
+  vendorCancelBookingSchema,
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
@@ -144,6 +145,29 @@ export const paymentRoutes: FastifyPluginAsyncZod<PaymentRoutesOptions> = async 
         request.body.reason,
         app.clock(),
         request.body.expectedRefundCents,
+      ),
+  );
+
+  /** The refund is always the whole payment, so the body carries no amount to confirm. */
+  app.put(
+    '/vendor/bookings/:bookingId/cancel',
+    {
+      onRequest: requireAuthBeforeValidation,
+      schema: {
+        params: bookingParamsSchema,
+        body: vendorCancelBookingSchema,
+        response: { 200: cancelledBookingSchema },
+      },
+    },
+    async (request) =>
+      cancelBooking(
+        contextFor(request.log),
+        authenticated(request.auth),
+        request.params.bookingId,
+        request.body.reason,
+        app.clock(),
+        undefined,
+        'vendor',
       ),
   );
 };

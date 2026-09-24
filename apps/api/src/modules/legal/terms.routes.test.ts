@@ -321,6 +321,30 @@ describe('the Terms of Service acceptance gate', () => {
      * makes acceptances 5 and 6 mean anything — without it the gate only ever
      * fires on "no row at all" and a version bump would re-gate nobody.
      */
+    it('re-asks an account that accepted v1.0 once v1.1 is in force, and accepting v1.1 clears it', async () => {
+      await harness.database.db.insert(legalAcceptances).values({
+        vendorId: null,
+        document: 'terms_of_service',
+        version: 'v1.0',
+        documentSha256: 'c'.repeat(64),
+        acceptanceMethod: 'clickwrap_checkbox',
+        acceptedByUserId: WEBHOOK_USER,
+        acceptedByName: 'Ada Reyes',
+        businessName: null,
+        ip: null,
+        userAgent: null,
+      });
+      const read = () =>
+        harness.app.inject({ method: 'GET', url: '/v1/users/me', headers: bearer(CUSTOMER) });
+
+      expect(CURRENT_TERMS_VERSION).toBe('v1.1');
+      expect((await read()).json().error).toBe('TERMS_REQUIRED');
+
+      await accept(CUSTOMER);
+
+      expect((await read()).statusCode).toBe(200);
+    });
+
     it('still gates an account whose only acceptance is a superseded version', async () => {
       await harness.database.db.insert(legalAcceptances).values({
         vendorId: null,
@@ -349,7 +373,10 @@ describe('the Terms of Service acceptance gate', () => {
       // And accepting the current version adds a row beside the old one.
       await accept(CUSTOMER);
 
-      expect((await termsRows()).map((row) => row.version).sort()).toEqual(['v0.9', 'v1.0']);
+      expect((await termsRows()).map((row) => row.version).sort()).toEqual([
+        'v0.9',
+        CURRENT_TERMS_VERSION,
+      ]);
     });
   });
 
@@ -506,7 +533,7 @@ describe('the Terms of Service acceptance gate', () => {
 
       const rows = await termsRows();
 
-      expect(rows.map((row) => row.version).sort()).toEqual(['v1.0', 'v2.0']);
+      expect(rows.map((row) => row.version).sort()).toEqual([CURRENT_TERMS_VERSION, 'v2.0']);
       expect(rows.find((row) => row.version === CURRENT_TERMS_VERSION)?.documentSha256).toBe(
         legalDocumentSha256('terms_of_service'),
       );

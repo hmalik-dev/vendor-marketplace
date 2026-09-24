@@ -41,7 +41,7 @@ describe('the counted filtered-empty routes on /admin/cases', () => {
       authUserId: ADMIN,
       email: `${ADMIN}@example.com`,
       firstName: 'Ops',
-      lastName: 'Operator',
+      lastName: 'Admin',
       roleHint: 'admin',
       avatarUrl: null,
     });
@@ -82,7 +82,7 @@ describe('the counted filtered-empty routes on /admin/cases', () => {
    * The empty platform: no rows at all, so **no widening exists**.
    *
    * This is the true-empty state the delta says carries no button — nothing an
-   * operator does creates a case, so a control there would offer an action that
+   * admin does creates a case, so a control there would offer an action that
    * cannot help. The API is what lets the surface tell the two states apart.
    */
   it('offers no route at all when the queue is genuinely empty', async () => {
@@ -164,7 +164,7 @@ describe('the counted filtered-empty routes on /admin/cases', () => {
    *
    * `rows.length === 0` is true there too, and treating it as the empty state
    * printed "no rows match" over a filter that is matching plenty — with a
-   * widening count beside it describing rows the operator can already see on
+   * widening count beside it describing rows the admin can already see on
    * page one.
    */
   it('offers no route on a page past the last one', async () => {

@@ -48,7 +48,8 @@ const PAYOUT_MODEL_LABELS: Record<PayoutModel, string> = {
 
 const CANCELLED_BY_LABELS: Record<BookingCancelledBy, string> = {
   customer: 'The customer',
-  admin: 'An operator',
+  vendor: 'The vendor',
+  admin: 'An admin',
 };
 
 function Stamp({ at }: { at: Date }): React.ReactElement {
@@ -156,10 +157,7 @@ export default async function AdminBookingDetailPage({
                 {vendor.payoutHold &&
                 booking.payoutStatus !== 'released' &&
                 booking.payoutStatus !== 'not-owed' ? (
-                  <span className="text-gold-600">
-                    {' '}
-                    · vendor&apos;s payouts held by an operator
-                  </span>
+                  <span className="text-gold-600"> · vendor&apos;s payouts held by an admin</span>
                 ) : null}
                 {booking.payoutFailing && !booking.payoutStranded ? (
                   <span className="ml-2 align-middle">
