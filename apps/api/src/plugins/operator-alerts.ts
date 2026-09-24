@@ -54,6 +54,7 @@ export const operatorAlertsPlugin = fp<OperatorAlertsPluginOptions>(
       clock: app.clock,
       to: options.to,
       webOrigin: options.webOrigin,
+      reporter: options.reporter,
       wait: options.wait ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
     };
 

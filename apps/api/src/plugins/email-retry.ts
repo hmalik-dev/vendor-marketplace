@@ -49,7 +49,10 @@ export const emailRetryPlugin = fp<EmailRetryPluginOptions>(
             };
 
             await retryFailedEmails(
-              { notifications: shared, invites: { ...shared, now: app.clock } },
+              {
+                notifications: { ...shared, reporter: options.reporter },
+                invites: { ...shared, now: app.clock },
+              },
               app.clock,
             );
           },

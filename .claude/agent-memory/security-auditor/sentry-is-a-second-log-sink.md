@@ -42,6 +42,11 @@ ticket was probed through `request.url`, breadcrumb and span `url.full`,
   dotted-digit string, 0.94 s on 50 KB of letters, and `extra`/span strings are
   not capped by `maxValueLength`. The IP and path regexes cost <20 ms there.
 
+Background captures (VEN-608, audited clean): a lost email or unsent operator
+alert is reported as `new Error(\`...: ${type|kind}\`)` with empty context —
+server-written type/kind only; recipient, summary and details stay out on
+purpose. A capture that interpolates any of those is the regression.
+
 Settled, do not re-report: `beforeSendTransaction` is registered beside
 `beforeSend` in both apps; `sendDefaultPii: false` everywhere; `user` is reduced
 to a bare id.

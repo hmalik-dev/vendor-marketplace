@@ -178,9 +178,6 @@ wanted here.
   and `production` are never a local target; Neon `dev` serves auth and storage
   only. `neon connection-string --branch-id` defaults to production, so name the
   branch positionally.
-- A staging instance must not email a real address. Until the non-production
-  email sink lands (VEN-489), keep real-looking addresses out of staging's
-  database.
 - Seal secrets in Railway (and mark them sensitive in Vercel) only after the
   service boots and `/ready` answers, and keep each secret at its origin first:
   a sealed value cannot be read back.
