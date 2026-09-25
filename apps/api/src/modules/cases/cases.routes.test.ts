@@ -380,6 +380,18 @@ describe('the operations case queue (#431)', () => {
     expect(unmatched.json().widenings).toEqual([{ key: 'q', count: 1 }]);
   });
 
+  it('finds the case a booking id was pasted for, and only that one', async () => {
+    const fixture = await seed();
+    const onBooking = await report({ bookingId: fixture.bookingId });
+    const elsewhere = await report({ topic: 'something-else' });
+    expect(onBooking.statusCode).toBe(200);
+    expect(elsewhere.statusCode).toBe(200);
+
+    const found = await readCases(`?q=${fixture.bookingId.slice(0, 8)}`);
+
+    expect(found.items.map((row) => row.reference)).toEqual([onBooking.json().reference]);
+  });
+
   it('shows every money field on the case the booking is under dispute on', async () => {
     const fixture = await seed();
     expect((await report({ bookingId: fixture.bookingId })).statusCode).toBe(200);

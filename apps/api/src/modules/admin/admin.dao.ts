@@ -1156,19 +1156,36 @@ export interface AdminBookingListProjection extends AdminBookingProjection {
 export interface AdminBookingFilters {
   status?: BookingStatus | undefined;
   flag?: AdminBookingFlag | undefined;
+  q?: string | undefined;
   /** The unwind floor date, for the one filter that is bounded by the event date. */
   floorDate: string;
+}
+
+/**
+ * The customer's name and address and the vendor's business name, which every
+ * list of bookings joins (`users` is the customer, `vendorProfiles` the vendor).
+ * The booking id is cast to text so an admin can paste the start of one.
+ */
+function bookingSearchCondition(term: string, extra: (SQL | undefined)[]): SQL | undefined {
+  return or(
+    containsInsensitive(sql`${bookings.id}::text`, term),
+    containsInsensitive(sql`concat_ws(' ', ${users.firstName}, ${users.lastName})`, term),
+    containsInsensitive(users.email, term),
+    containsInsensitive(vendorProfiles.businessName, term),
+    ...extra,
+  );
 }
 
 function bookingFilterCondition(filters: AdminBookingFilters): SQL | undefined {
   return and(
     filters.status ? eq(bookings.status, filters.status) : undefined,
     filters.flag === 'refund-stuck' ? refundStuck(filters.floorDate) : undefined,
+    filters.q ? bookingSearchCondition(filters.q, []) : undefined,
   );
 }
 
-/** The two filters the bookings table can be narrowed by. */
-export const BOOKING_FILTER_KEYS = ['status', 'flag'] as const;
+/** The three filters the bookings table can be narrowed by. */
+export const BOOKING_FILTER_KEYS = ['status', 'flag', 'q'] as const;
 export type BookingFilterKey = (typeof BOOKING_FILTER_KEYS)[number];
 
 /**
@@ -1245,6 +1262,11 @@ export async function countAdminBookings(
   return rows?.[0]?.total ?? 0;
 }
 
+export interface AdminPaymentFilters {
+  flag?: AdminPaymentFlag | undefined;
+  q?: string | undefined;
+}
+
 /**
  * The Payments view is the same rows read for the money rather than the event,
  * so it filters to bookings that were actually paid and orders by when the
@@ -1258,31 +1280,36 @@ export async function countAdminBookings(
  * predicate: a pager whose total came from a different `WHERE` than its rows is
  * the same class of defect as two definitions of "held".
  */
-function paymentFilterCondition(flag: AdminPaymentFlag | undefined): SQL | undefined {
+function paymentFilterCondition(filters: AdminPaymentFilters): SQL | undefined {
   return and(
     sql`${bookings.paidAt} is not null`,
-    ...(flag === 'payout-failing' ? payoutFailingClauses() : []),
+    ...(filters.flag === 'payout-failing' ? payoutFailingClauses() : []),
+    filters.q
+      ? bookingSearchCondition(filters.q, [
+          containsInsensitive(bookings.stripePaymentIntentId, filters.q),
+        ])
+      : undefined,
   );
 }
 
 /**
- * The one filter the payments table can be narrowed by.
+ * The two filters the payments table can be narrowed by.
  *
  * `paid_at is not null` is not on this list and must not be: it is the screen's
  * *domain* rather than a filter an admin applied, so offering to widen past
  * it would offer a payments list containing bookings nobody has paid for.
  */
-export const PAYMENT_FILTER_KEYS = ['flag'] as const;
+export const PAYMENT_FILTER_KEYS = ['flag', 'q'] as const;
 export type PaymentFilterKey = (typeof PAYMENT_FILTER_KEYS)[number];
 
-/** How many payments dropping the flag would reveal, in one scan (#454). */
+/** How many payments dropping each single filter would reveal, in one scan (#454). */
 export async function countPaymentWidenings(
   db: AppDatabase,
-  flag: AdminPaymentFlag | undefined,
+  filters: AdminPaymentFilters,
 ): Promise<FilterWidening[]> {
   return countWidenings<PaymentFilterKey>({
-    active: flag === undefined ? [] : PAYMENT_FILTER_KEYS,
-    conditionWithout: () => paymentFilterCondition(undefined),
+    active: PAYMENT_FILTER_KEYS.filter((key) => filters[key] !== undefined),
+    conditionWithout: (dropped) => paymentFilterCondition({ ...filters, [dropped]: undefined }),
     scan: (selection) =>
       db
         .select(selection)
@@ -1294,7 +1321,7 @@ export async function countPaymentWidenings(
 
 export async function findAdminPayments(
   db: AppDatabase,
-  flag: AdminPaymentFlag | undefined,
+  filters: AdminPaymentFilters,
   limit: number,
   offset: number,
 ): Promise<AdminBookingProjection[]> {
@@ -1304,7 +1331,7 @@ export async function findAdminPayments(
     .innerJoin(users, eq(users.id, bookings.customerId))
     .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookings.vendorId))
     .innerJoin(vendorOwner, eq(vendorOwner.id, vendorProfiles.userId))
-    .where(paymentFilterCondition(flag))
+    .where(paymentFilterCondition(filters))
     .orderBy(desc(bookings.paidAt))
     .limit(limit)
     .offset(offset);
@@ -1312,12 +1339,19 @@ export async function findAdminPayments(
 
 export async function countAdminPayments(
   db: AppDatabase,
-  flag: AdminPaymentFlag | undefined,
+  filters: AdminPaymentFilters,
 ): Promise<number> {
+  /*
+   * The two joins the search reads (`users` for the customer, `vendorProfiles`
+   * for the vendor). Inner joins on non-null foreign keys, so they cannot
+   * change the count — only let the predicate name their columns.
+   */
   const rows = await db
     .select({ total: sql<number>`count(*)::int` })
     .from(bookings)
-    .where(paymentFilterCondition(flag));
+    .innerJoin(users, eq(users.id, bookings.customerId))
+    .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookings.vendorId))
+    .where(paymentFilterCondition(filters));
 
   return rows?.[0]?.total ?? 0;
 }

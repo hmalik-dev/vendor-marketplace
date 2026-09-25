@@ -1,7 +1,7 @@
 import { ADMIN_PAYMENT_FLAGS, formatPrice } from '@vendor-marketplace/shared';
 import { AdminSurface } from '@/components/admin/admin-surface';
 import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
-import { FilteredEmpty } from '@/components/admin/filtered-empty';
+import { FilteredEmpty, type ActiveFilter } from '@/components/admin/filtered-empty';
 import { OutOfRange } from '@/components/admin/out-of-range';
 import { PaymentTable } from '@/components/admin/payment-table';
 import { PAYOUT_FAILING_LABEL } from '@/lib/booking-entries';
@@ -9,6 +9,7 @@ import { TaxYearDownloads } from '@/components/admin/tax-year-downloads';
 import { getAdminPayments, getAdminTaxYears } from '@/lib/admin-data';
 import {
   adminQueryString,
+  boundedText,
   droppedKeys,
   oneOf,
   pageNumber,
@@ -27,13 +28,15 @@ const PATH = '/admin/payments';
 export default async function AdminPaymentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ flag?: RawParam; page?: RawParam }>;
+  searchParams: Promise<{ flag?: RawParam; q?: RawParam; page?: RawParam }>;
 }): Promise<React.ReactElement> {
   const raw = await searchParams;
   const flag = oneOf(raw.flag, ADMIN_PAYMENT_FLAGS);
+  const q = boundedText(raw.q);
+  const params = { flag, q };
   const dropped = droppedKeys(raw, { flag });
   const [payments, taxYears] = await Promise.all([
-    getAdminPayments(adminQueryString({ flag, page: pageNumber(raw.page) })),
+    getAdminPayments(adminQueryString({ ...params, page: pageNumber(raw.page) })),
     getAdminTaxYears(),
   ]);
 
@@ -63,6 +66,12 @@ export default async function AdminPaymentsPage({
         description: "A payment appears here the moment a customer's card is charged.",
       };
 
+  const matched = [q && `"${q}"`, flag && `"${PAYOUT_FAILING_LABEL}"`].filter(Boolean);
+  const active: ActiveFilter[] = [
+    ...(flag ? [{ key: 'flag', widening: 'Every payment', carried: { q } }] : []),
+    ...(q ? [{ key: 'q', widening: 'Clear the search', carried: { flag } }] : []),
+  ];
+
   return (
     <AdminSurface
       heading="Payments"
@@ -73,7 +82,12 @@ export default async function AdminPaymentsPage({
       dropped={dropped}
       filters={
         <>
-          <FilterBar action={PATH} params={{ flag }}>
+          <FilterBar
+            action={PATH}
+            params={params}
+            searchPlaceholder="Search booking, customer, vendor or payment…"
+            searchValue={q}
+          >
             {/*
             The state this screen could not show (#432). Both columns behind it
             were written by the release sweep and read by nothing, so a vendor
@@ -93,7 +107,7 @@ export default async function AdminPaymentsPage({
       }
       pager={{
         path: PATH,
-        params: { flag },
+        params,
         page: payments.page,
         pageSize: payments.pageSize,
         total: payments.total,
@@ -112,16 +126,16 @@ export default async function AdminPaymentsPage({
           pastEnd ? (
             <OutOfRange
               path={PATH}
-              params={{ flag }}
+              params={params}
               page={payments.page}
               pageSize={payments.pageSize}
               total={payments.total}
             />
-          ) : flag ? (
+          ) : active.length > 0 ? (
             <FilteredEmpty
-              headline={`No payments match "${PAYOUT_FAILING_LABEL}"`}
+              headline={`No payments match ${matched.join(' and ')}`}
               path={PATH}
-              filters={[{ key: 'flag', widening: 'Every payment', carried: {} }]}
+              filters={active}
               widenings={payments.widenings}
             />
           ) : undefined

@@ -306,6 +306,16 @@ const freeText = () =>
 const trimmedString = (max: number, min = 1) => freeText().min(min).max(max);
 
 /**
+ * An admin list's search term: capped at `MAX_NAME_LENGTH`, and an empty (or
+ * all-blank) one means no search rather than a 400 — the search box submits
+ * `?q=` when it is left blank, which is not a mistake.
+ */
+const adminSearchTerm = freeText()
+  .max(MAX_NAME_LENGTH)
+  .transform((term) => term || undefined)
+  .optional();
+
+/**
  * Integer cents within the platform's $25–$100,000 price band.
  *
  * The band is stored in cents and spoken in dollars. These messages are shown
@@ -2715,7 +2725,7 @@ export type AdminVendorRow = z.infer<typeof adminVendorRowSchema>;
 export const adminVendorQuerySchema = z.object({
   ...adminPaginationShape,
   /** Matches business name, slug or the owner's email. */
-  q: trimmedString(MAX_NAME_LENGTH).optional(),
+  q: adminSearchTerm,
   category: z.string().trim().max(MAX_NAME_LENGTH).optional(),
   city: z.string().trim().max(MAX_NAME_LENGTH).optional(),
   payouts: adminPayoutFilterSchema.optional(),
@@ -2798,7 +2808,7 @@ export type AdminCustomerRow = z.infer<typeof adminCustomerRowSchema>;
 
 export const adminCustomerQuerySchema = z.object({
   ...adminPaginationShape,
-  q: trimmedString(MAX_NAME_LENGTH).optional(),
+  q: adminSearchTerm,
   status: adminCustomerStatusSchema.optional(),
   flag: adminCustomerFlagSchema.optional(),
 });
@@ -3153,6 +3163,8 @@ export const adminBookingQuerySchema = z.object({
   ...adminPaginationShape,
   status: bookingStatusSchema.optional(),
   flag: adminBookingFlagSchema.optional(),
+  /** Matches the booking id, the customer's name or email, or the vendor's business name. */
+  q: adminSearchTerm,
 });
 export type AdminBookingQuery = z.infer<typeof adminBookingQuerySchema>;
 export const adminBookingPageSchema = paginatedSchema(adminBookingRowSchema).extend(wideningShape);
@@ -3170,6 +3182,8 @@ export type AdminPaymentFlag = (typeof ADMIN_PAYMENT_FLAGS)[number];
 export const adminPaymentQuerySchema = z.object({
   ...adminPaginationShape,
   flag: adminPaymentFlagSchema.optional(),
+  /** Matches the booking id, the customer's email, the vendor's business name or the payment intent. */
+  q: adminSearchTerm,
 });
 export type AdminPaymentQuery = z.infer<typeof adminPaymentQuerySchema>;
 export const adminPaymentPageSchema = paginatedSchema(adminPaymentRowSchema).extend(wideningShape);
@@ -4026,7 +4040,7 @@ export const adminCaseQuerySchema = z.object({
   status: supportCaseStatusSchema.default('open'),
   booking: adminCaseBookingFilterSchema.optional(),
   /** Matches the reference, or the sender's name or address (VEN-388). */
-  q: trimmedString(MAX_NAME_LENGTH).optional(),
+  q: adminSearchTerm,
 });
 export type AdminCaseQuery = z.infer<typeof adminCaseQuerySchema>;
 

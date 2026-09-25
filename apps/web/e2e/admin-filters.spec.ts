@@ -303,3 +303,54 @@ test.describe('the console Refine bar', () => {
     await expect(adminPage).toHaveURL(FILTERED);
   });
 });
+
+/*
+ * The search box and its chip (VEN-743), one journey per list that has one
+ * here. A term nothing matches, so the assertion does not depend on which rows
+ * the lane happens to hold: the URL carries `q`, the field keeps it, the bar
+ * says the view is narrowed, and the chip's × is a real link that lifts it.
+ */
+const SEARCHED_LISTS = ['bookings', 'payments', 'cases'] as const;
+const NO_SUCH_TERM = 'zz-no-such-term-743';
+
+for (const list of SEARCHED_LISTS) {
+  const path = `/admin/${list}`;
+
+  test.describe(`the ${list} search`, () => {
+    test('Enter submits the term, the chip names it, and its × removes it', async ({
+      adminPage,
+    }) => {
+      await adminPage.setViewportSize({ width: 1440, height: 900 });
+      await adminPage.goto(path);
+      await waitForHydration(
+        adminPage,
+        'form button[aria-haspopup="listbox"], form input[name="q"]',
+      );
+
+      const search = adminPage.getByRole('searchbox', { name: 'Search' });
+      await search.fill(NO_SUCH_TERM);
+      await search.press('Enter');
+
+      await expect(adminPage).toHaveURL(new RegExp(`[?&]q=${NO_SUCH_TERM}`));
+      await expect(adminPage.getByRole('searchbox', { name: 'Search' })).toHaveValue(NO_SUCH_TERM);
+      await expect(adminPage.getByText(`Search: ${NO_SUCH_TERM}`)).toBeVisible();
+
+      await adminPage.getByRole('link', { name: `Remove Search filter: ${NO_SUCH_TERM}` }).click();
+      await expect(adminPage).not.toHaveURL(/[?&]q=/);
+      await expect(adminPage.getByRole('searchbox', { name: 'Search' })).toHaveValue('');
+    });
+
+    test('with JavaScript off, typing then Enter submits the search', async ({
+      scriptlessAdminPage,
+    }) => {
+      await scriptlessAdminPage.goto(path);
+
+      const search = scriptlessAdminPage.getByRole('searchbox', { name: 'Search' });
+      await search.fill(NO_SUCH_TERM);
+      await search.press('Enter');
+
+      await expect(scriptlessAdminPage).toHaveURL(new RegExp(`[?&]q=${NO_SUCH_TERM}`));
+      await expect(scriptlessAdminPage.getByText(`Search: ${NO_SUCH_TERM}`)).toBeVisible();
+    });
+  });
+}
