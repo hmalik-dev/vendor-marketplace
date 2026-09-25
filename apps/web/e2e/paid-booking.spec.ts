@@ -115,7 +115,7 @@ function recordTraffic(page: Page, label: string, lines: string[]): void {
   });
 }
 
-for (const round of [1, 2, 3]) {
+for (const round of [1, 2, 3, 4, 5, 6, 7, 8]) {
   test.describe(`paid booking round ${round}`, () => {
     const traffic: string[] = [];
     test.beforeEach(({ customerPage, vendorPage }) => {
