@@ -250,7 +250,7 @@ const DROPPED_FIELD_LABELS: Record<DroppedSearchField, string> = {
   minPriceCents: 'minimum price',
   maxPriceCents: 'maximum price',
   minRating: 'rating',
-  tags: 'tags',
+  tags: 'tag filter',
   sort: 'sort order',
   page: 'page',
 };
@@ -375,7 +375,7 @@ export function clearedParamsLine(dropped: readonly DroppedSearchField[]): strin
       ? `That ${labels[0]} isn't valid, so we cleared it`
       : `The ${labels.slice(0, -1).join(', ')} and ${labels.at(-1)} aren't valid, so we cleared them`;
 
-  return `${subject}. Your other filters still apply.`;
+  return `${subject}. The rest of your search still applies.`;
 }
 
 /**
@@ -460,7 +460,7 @@ export function droppedTagGroupsLine(
   const named =
     labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(', ')} and ${labels.at(-1)}`;
 
-  return `${named} filters don't apply to ${vendorNounFor(category, 2)}, so we cleared them. Your other filters still apply.`;
+  return `${named} filters don't apply to ${vendorNounFor(category, 2)}, so we cleared them. The rest of your search still applies.`;
 }
 
 /** The three values the search bar owns. Never rendered as Refine chips. */

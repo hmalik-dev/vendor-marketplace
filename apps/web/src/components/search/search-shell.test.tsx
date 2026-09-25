@@ -953,7 +953,7 @@ describe('a tag filter the searched category cannot answer', () => {
     await waitFor(() =>
       expect(
         screen.getByText(
-          "Dietary filters don't apply to photographers, so we cleared them. Your other filters still apply.",
+          "Dietary filters don't apply to photographers, so we cleared them. The rest of your search still applies.",
         ),
       ).toBeDefined(),
     );
