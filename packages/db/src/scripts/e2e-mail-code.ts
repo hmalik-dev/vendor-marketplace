@@ -26,7 +26,11 @@ const SERVER_VARIABLE = 'E2E_MAIL_SERVER';
 const SERVER_ID = /^[a-z0-9]+$/;
 const MESSAGE_ID = /^[a-z0-9-]+$/i;
 const LOCAL_PART = /^[a-z0-9._+-]+$/i;
-const CODE = /(?<!\d)\d{6}(?!\d)/;
+const CODE = /(?<!\d)(\d{6})(?!\d)/;
+/** Six digits that are the first digits after the word "code" (or "otp", "passcode"). */
+const LABELLED_CODE = /\b(?:code|otp|passcode)\b\D{0,40}(\d{6})(?!\d)/;
+const LISTED_CODE = /^\d{6}$/;
+const MARKUP = /<(style|script)\b[\s\S]*?<\/\1>|<[^>]*>|&#?\w+;/g;
 
 interface MailPart {
   body?: unknown;
@@ -69,21 +73,39 @@ export function parseArgs(argv: readonly string[]): MailCodeRequest {
   return { address, after: new Date(after).toISOString() };
 }
 
-function codeIn(part: MailPart | undefined): string | null {
-  const body = typeof part?.body === 'string' ? part.body : '';
+/** Mailosaur's extracted codes: six digits and nothing else. */
+function listedCodes(part: MailPart | undefined): string[] {
   const codes = Array.isArray(part?.codes) ? (part.codes as unknown[]) : [];
-  const listed = codes
-    .map((entry) => (entry as { value?: unknown } | null)?.value)
-    .find((value): value is string => typeof value === 'string' && CODE.test(value));
 
-  return CODE.exec(body)?.[0] ?? listed ?? null;
+  return codes
+    .map((entry) => (entry as { value?: unknown } | null)?.value)
+    .filter((value): value is string => typeof value === 'string' && LISTED_CODE.test(value));
 }
 
-function pickCode(message: MailMessage): string | null {
-  const subject = typeof message.subject === 'string' ? message.subject : '';
+/**
+ * Lowercased, with tags, style and script blocks, entities and the recipient
+ * address blanked out: an attribute (`24px`), a colour (`#333333`), an entity
+ * (`&#160;`) or an address carrying six digits is never read as the code.
+ */
+function scannable(value: unknown, address: string): string {
+  return typeof value === 'string'
+    ? value.toLowerCase().replace(MARKUP, ' ').replaceAll(address, ' ')
+    : '';
+}
 
-  // Plain text wins, then the HTML part (a mail may carry only one), then the subject.
-  return codeIn(message.text) ?? codeIn(message.html) ?? CODE.exec(subject)?.[0] ?? null;
+function pickCode(message: MailMessage, address: string): string | null {
+  // Plain text, then the HTML part (a mail may carry only one), then the subject.
+  const texts = [message.text?.body, message.html?.body, message.subject].map((value) =>
+    scannable(value, address),
+  );
+  const firstMatch = (pattern: RegExp): string | undefined =>
+    texts.map((text) => pattern.exec(text)?.[1]).find((code) => code !== undefined);
+  const listed = [...listedCodes(message.text), ...listedCodes(message.html)].find(
+    (code) => !address.includes(code),
+  );
+
+  // A code named as one wins, then Mailosaur's own extraction, then the first bare run.
+  return firstMatch(LABELLED_CODE) ?? listed ?? firstMatch(CODE) ?? null;
 }
 
 /** A 404 from search means nothing matched at this poll; treated as no match, not a refusal. */
@@ -233,7 +255,7 @@ export async function readMailCode(
     await send(`/api/messages/${id}`, { method: 'GET' }),
   )) as MailMessage;
 
-  const code = pickCode(message);
+  const code = pickCode(message, address);
 
   if (!code) {
     throw new MailCodeError('The message carried no six-digit code.');

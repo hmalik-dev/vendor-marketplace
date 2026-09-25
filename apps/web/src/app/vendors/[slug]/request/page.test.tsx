@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const getPublicVendorProfile = vi.fn();
 const getPublicVendorAvailability = vi.fn();
 const getVendorSlugSuccessor = vi.fn();
+const getCurrentUser = vi.fn();
 
 vi.mock('next/navigation', () => ({
   notFound: () => {
@@ -17,6 +18,10 @@ vi.mock('@/lib/vendor-data', () => ({
   getVendorSlugSuccessor: (slug: string) => getVendorSlugSuccessor(slug),
   getPublicVendorProfile: (slug: string) => getPublicVendorProfile(slug),
   getPublicVendorAvailability: (slug: string) => getPublicVendorAvailability(slug),
+}));
+
+vi.mock('@/lib/current-user', () => ({
+  getCurrentUser: () => getCurrentUser(),
 }));
 
 vi.mock('@/components/booking/booking-request-screen', () => ({
@@ -46,6 +51,7 @@ describe('BookingRequestPage', () => {
   beforeEach(() => {
     getPublicVendorProfile.mockResolvedValue(VENDOR);
     getPublicVendorAvailability.mockResolvedValue([]);
+    getCurrentUser.mockResolvedValue({ id: 'customer-1', role: 'customer' });
   });
 
   afterEach(() => {
@@ -58,7 +64,12 @@ describe('BookingRequestPage', () => {
       searchParams: Promise.resolve({}),
     });
 
-    expect(element.props).toMatchObject({ vendorId: 'vendor-1', vendorSlug: 'sunlit-studio' });
+    // VEN-617: the draft is keyed by the signed-in customer, read from the same gate the layout runs.
+    expect(element.props).toMatchObject({
+      userId: 'customer-1',
+      vendorId: 'vendor-1',
+      vendorSlug: 'sunlit-studio',
+    });
     expect(getPublicVendorAvailability).toHaveBeenCalledWith('sunlit-studio');
   });
 
