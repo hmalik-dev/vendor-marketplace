@@ -250,8 +250,8 @@ export function PaymentTable({
               row.payoutStranded ? (
                 <StatusPill tone="failed">{PAYOUT_STRANDED_LABEL}</StatusPill>
               ) : row.payoutFailing ? (
-                <span className="flex flex-col items-start gap-1">
-                  <span className="flex items-center gap-2">
+                <span className="flex flex-col items-start gap-1 py-1.5">
+                  <span className="flex flex-wrap items-center gap-2">
                     <StatusPill tone="failed">{PAYOUT_FAILING_LABEL}</StatusPill>
                     {canRetryPayout(row) ? (
                       <ConfirmAction
