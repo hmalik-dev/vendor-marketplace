@@ -1,10 +1,15 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { E2E_VENDOR_SLUG } from './fixtures-data.js';
-import { enumerateRouteTargets, SAMPLE_ID, type RouteTargetRoots } from './route-targets.js';
+import {
+  enumerateRouteTargets,
+  refusesWithoutSession,
+  SAMPLE_ID,
+  type RouteTargetRoots,
+} from './route-targets.js';
 
 /** Vitest runs with `apps/web` as cwd. */
 const REPO_ROOT = resolve(process.cwd(), '../..');
@@ -137,5 +142,70 @@ describe('enumerateRouteTargets over this repository', () => {
 
   it('names the role table as a source of the dashboard destinations', () => {
     expect(byPath.get('/vendor/dashboard')?.sources).toContain('apps/web/src/lib/role-routes.ts');
+  });
+
+  /*
+   * VEN-590: the three VEN-512 screens gate with `getServerSession()` and an
+   * `if (!session) redirect(…)`, not a helper. The root layout, `/` and
+   * `/account/settings/close` read the session without refusing on it, and
+   * `/support` reads the identity without refusing, so these three
+   * segment files match — a detector keyed on the call alone would flag them all.
+   */
+  it('reads the hand-rolled session gate out of the pages that refuse on it, not the ones that only read it', () => {
+    const matching = targets
+      .filter((target) => target.kinds.includes('segment'))
+      .filter((target) =>
+        refusesWithoutSession(readFileSync(join(REPO_ROOT, target.sources[0] ?? ''), 'utf8')),
+      )
+      .map((target) => target.path);
+
+    expect(matching).toEqual(
+      expect.arrayContaining(['/waitlist', '/vendors/apply', '/sign-up/vendor-details']),
+    );
+    expect(matching).not.toContain('/');
+    expect(matching).not.toContain('/support');
+    expect(matching).not.toContain('/account/settings/close');
+  });
+});
+
+describe('refusesWithoutSession', () => {
+  it.each([
+    ['requireRole', "await requireRole('vendor');"],
+    ['requireCurrentUser', 'const user = await requireCurrentUser();'],
+    [
+      'a bound session refused with a block',
+      'const session = await getServerSession();\n\n  if (!session) {\n    redirect(VENDOR_SIGN_UP_PATH);\n  }',
+    ],
+    [
+      'a bound session refused on one line',
+      "const s = await getServerSession();\nif (!s) redirect('/sign-in');",
+    ],
+    [
+      'a bound session compared to null and returned',
+      "let current = await getServerSession();\nif (current === null) return redirect('/sign-in');",
+    ],
+    ['an inline read', "if (!(await getServerSession())) redirect('/sign-in');"],
+    ['a braced inline read', "if (!(await getServerSession())) {\n  redirect('/sign-in');\n}"],
+  ])('matches %s', (_, code) => {
+    expect(refusesWithoutSession(code)).toBe(true);
+  });
+
+  it.each([
+    [
+      'a session read for the header',
+      'const session = await getServerSession();\nreturn <Header session={session} />;',
+    ],
+    ['a token read', 'const token = (await getServerSession())?.token ?? null;'],
+    ['a signed-out flag', 'const signedOut = (await getServerSession()) === null;'],
+    [
+      'a refusal on a different binding',
+      "const session = await getServerSession();\nif (!account) redirect('/sign-in');",
+    ],
+    [
+      'a gate quoted in a comment',
+      "// const session = await getServerSession(); if (!session) redirect('/x');\n/* requireRole('admin') */",
+    ],
+  ])('ignores %s', (_, code) => {
+    expect(refusesWithoutSession(code)).toBe(false);
   });
 });

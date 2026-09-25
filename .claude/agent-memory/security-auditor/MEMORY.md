@@ -131,6 +131,7 @@
 - [launch:check bearer hosts are fixed](launch-check-bearer-hosts-are-fixed.md) — reopen if `bearer()` meets an env URL
 - [Admin booking detail, requests funnel, list search](admin-booking-detail-and-requests-reads.md) — PASS; VEN-743/749 `q` needs joins in every scan
 - [Admin vendor detail is a gated aggregate](admin-vendor-detail-is-a-gated-aggregate.md) — notification `body` bypasses the case grant
+- [Route-landing sweep strictness sources](route-landing-sweep-strictness-sources.md) — role table does the work; helper gates invisible to `isSessionGated`
 - [The staging probe spec's guard is the URL, not DEPLOY_ENV](staging-probe-spec-guard.md) — required `STAGING_WEB_URL`
 - [Admin category writes](admin-category-writes.md) — PASS; toggle can double-write audit
 - [RLS is enabled, never forced](rls-is-enabled-not-forced-owner-bypasses.md) — owner bypasses; a non-owner role reads zero rows (VEN-751 says `messages` now forces it)
