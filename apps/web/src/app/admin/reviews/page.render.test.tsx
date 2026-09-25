@@ -55,4 +55,26 @@ describe('the reviews page search', () => {
     expect(screen.getByText('No reviews match "golden"')).toBeDefined();
     expect(screen.queryByText('No reviews yet')).toBeNull();
   });
+
+  // A JavaScript-off `Apply filters` submits the empty field too (VEN-752).
+  it('treats an empty q as no search, and carries it into no link', async () => {
+    getAdminReviews.mockResolvedValue({ ...EMPTY, widenings: [] });
+
+    render(
+      await AdminReviewsPage({
+        searchParams: Promise.resolve({ type: 'vendor_to_customer', q: '' }),
+      }),
+    );
+
+    expect(getAdminReviews).toHaveBeenCalledWith('?type=vendor_to_customer&page=1');
+    expect(screen.queryByText(/^Search:/)).toBeNull();
+    expect(screen.queryByText(/Ignored/)).toBeNull();
+    expect(screen.queryByText(/No reviews match "/)).toBeNull();
+    expect(screen.getByText(/^One filter is narrowing this\./)).toBeDefined();
+    expect(
+      screen
+        .getByRole('link', { name: 'Remove Direction filter: About a customer' })
+        .getAttribute('href'),
+    ).toBe('/admin/reviews');
+  });
 });
