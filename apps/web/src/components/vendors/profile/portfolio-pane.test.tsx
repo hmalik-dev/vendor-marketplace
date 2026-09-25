@@ -81,6 +81,22 @@ describe('PortfolioPane lightbox', () => {
     expect(lightbox().contains(document.activeElement)).toBe(true);
   });
 
+  it('sizes each control to the 48px circle, over the 44x44 icon-button floor (VEN-731)', async () => {
+    const user = userEvent.setup();
+    pane();
+
+    await user.click(screen.getByRole('button', { name: 'Photograph 1' }));
+
+    // Class-level only: jsdom performs no layout, so the rendered 48x48 box is
+    // measured in a browser pass, not here. `p-2` around a `size-5` icon drew
+    // 36x36; the box now states its own extent and centres the icon.
+    for (const control of Array.from(lightbox().querySelectorAll('button'))) {
+      const classes = control.className.split(/\s+/);
+      expect(classes).toEqual(expect.arrayContaining(['size-12', 'grid', 'place-items-center']));
+      expect(classes).not.toContain('p-2');
+    }
+  });
+
   it('wraps backwards off the first control too', async () => {
     const user = userEvent.setup();
     pane();

@@ -1,3 +1,4 @@
+- [browser_snapshot can close an open dialog](browser-snapshot-can-close-an-open-dialog.md) — its ref-resolution hover can trigger click-outside-close mid focus-trap test; use browser_evaluate between key presses instead
 - [Mid-task descope message still needs raw observation](midtask-descope-message-still-needs-raw-observation.md) — "skip judging X" means report the value unjudged, not omit it; respect any "don't rebuild" clause too
 - [Admin close-account needs an email step-up, read from the lane mailbox](admin-close-account-requires-email-stepup.md) — one confirm click 403s STEP_UP_REQUIRED; get the code from GET /__lane/mailbox/latest, not a real inbox
 - [E2E seed has only one pending booking request](e2e-seed-has-only-one-pending-booking-request.md) — no payable/accepted booking exists; clicking Accept to make one is denied by auto-mode as a shared-resource mutation UNLESS the ticket itself names the sequence (amended VEN-647)
