@@ -28,7 +28,7 @@ export default async function VendorPackagesPage(): Promise<React.ReactElement> 
     <VendorSurface
       eyebrow="Your business"
       heading="Packages"
-      description="What a customer books, and what it costs. At least one bookable package is needed before your profile can go live."
+      description="What a customer books, and what it costs. Your profile needs at least one bookable package to go live."
       fills
       aside={
         <p className="rounded-md bg-stone-100 px-3 py-2 text-sm text-stone-700">

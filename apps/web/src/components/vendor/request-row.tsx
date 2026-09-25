@@ -285,7 +285,7 @@ export function RequestRow({ request, isFirst }: RequestRowProps): React.ReactEl
       */}
       {isPackage ? (
         <p id={`quote-locked-${request.id}`} className="mt-2.5 text-xs text-stone-600">
-          Priced by its package, so the amount is fixed. Decline if you cannot honor it.
+          The package sets the price. Decline if you cannot honor it.
         </p>
       ) : null}
 
@@ -356,8 +356,8 @@ export function RequestRow({ request, isFirst }: RequestRowProps): React.ReactEl
             */}
             <DialogTitle>Decline {customerName}&apos;s request?</DialogTitle>
             <DialogDescription>
-              {declineConsequence(request)} You can&apos;t undo this or accept the request
-              afterwards. If you&apos;re unsure, send a quote or message them instead.
+              {declineConsequence(request)} You can&apos;t undo this. If you&apos;re unsure, send a
+              quote or message them.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -387,9 +387,9 @@ export function RequestRow({ request, isFirst }: RequestRowProps): React.ReactEl
   );
 }
 
-/** "They asked about Sun Jun 14, and will be told the date is free again." */
+/** "They asked about Sun Jun 14. We'll tell them the date is free again." */
 function declineConsequence(request: WireBookingRequest): string {
   const date = ROW_DATE.format(new Date(`${request.eventDate}T00:00:00Z`)).replace(',', '');
 
-  return `They asked about ${date}, and will be told the date is free again.`;
+  return `They asked about ${date}. We'll tell them the date is free again.`;
 }

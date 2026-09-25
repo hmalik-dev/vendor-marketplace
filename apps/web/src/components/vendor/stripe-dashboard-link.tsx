@@ -52,7 +52,7 @@ export function StripeDashboardLink(): React.ReactElement {
       </Button>
       {failed ? (
         <span role="alert" className="block text-sm text-error-500">
-          We could not reach Stripe just then. Try again.
+          We could not reach Stripe. Try again.
         </span>
       ) : null}
     </>

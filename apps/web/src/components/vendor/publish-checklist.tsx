@@ -131,8 +131,7 @@ export function PublishChecklist({ dashboard }: PublishChecklistProps): React.Re
         that costs rather than that something is wrong.
       */}
       <p className="rounded-xl bg-gold-50 px-3.25 py-3.25 text-sm leading-[1.55] text-gold-600">
-        Customers cannot find you until your profile is published. Nothing on this list takes more
-        than a few minutes.
+        Customers cannot find you until your profile is published.
       </p>
     </aside>
   );

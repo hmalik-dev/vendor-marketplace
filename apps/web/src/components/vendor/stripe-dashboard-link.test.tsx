@@ -49,7 +49,7 @@ describe('StripeDashboardLink', () => {
     await userEvent.click(screen.getByRole('button'));
 
     const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toBe('We could not reach Stripe just then. Try again.');
+    expect(alert.textContent).toBe('We could not reach Stripe. Try again.');
     expect(assign).not.toHaveBeenCalled();
     expect(screen.getByRole('button').textContent).toBe('Open your Stripe dashboard');
   });
