@@ -119,7 +119,7 @@ export function ConfirmAction({
   let typedStateMessage: string | undefined;
   if (typedConfirmation) {
     if (typed === '') {
-      typedStateMessage = `${confirmLabel} stays unavailable until this matches.`;
+      typedStateMessage = `${confirmLabel} unlocks once this matches.`;
     } else if (typedMatches) {
       typedStateMessage = 'Matches.';
     } else {

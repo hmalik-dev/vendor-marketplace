@@ -21,6 +21,7 @@ import {
 } from '@vendor-marketplace/shared';
 import { ConfirmAction } from '@/components/admin/confirm-action';
 import {
+  LIFT_SUSPENSION_CONSEQUENCE,
   RepublishConsequence,
   STUCK_REFUNDS_PATH,
   SuspensionConsequence,
@@ -96,15 +97,15 @@ export function VendorDetailActions({ vendor }: { vendor: Vendor }): React.React
           <Link href={`/admin/users/${vendor.userId}`}>Open data rights</Link>
         </Button>
         <p className={CONSEQUENCE}>
-          What {BRAND_NAME} still holds about this account, its legal acceptances, and the export.
-          Opening it changes nothing.
+          What {BRAND_NAME} holds about this account, its legal acceptances and the export. Opening
+          it changes nothing.
         </p>
       </Tier>
 
       {retired ? (
         <p className={CONSEQUENCE}>
-          This account is closed. Its bookings were unwound when it closed, so there is nothing left
-          to publish, hold or suspend.
+          This account is closed and its bookings were unwound. There is nothing to publish, hold or
+          suspend.
         </p>
       ) : (
         <>
@@ -145,7 +146,7 @@ export function VendorDetailActions({ vendor }: { vendor: Vendor }): React.React
                     />
                     <p className={CONSEQUENCE}>
                       {publishing
-                        ? 'Puts it back on search once the profile is complete. Confirms first.'
+                        ? 'Puts it back on search once the profile is complete.'
                         : 'Removes it from search and browse. Existing bookings stand; the vendor keeps their dashboard.'}
                     </p>
                   </div>
@@ -169,7 +170,7 @@ export function VendorDetailActions({ vendor }: { vendor: Vendor }): React.React
               }
               description={
                 vendor.payoutHold
-                  ? 'Their due payouts release on the next sweep. Nothing else about the account changes.'
+                  ? 'Their due payouts release on the next sweep.'
                   : 'The sweep skips their payouts until the hold is released. Payouts stay due, bookings stand and no customer is refunded.'
               }
               confirmLabel={vendor.payoutHold ? 'Release hold' : 'Hold payouts'}
@@ -220,7 +221,7 @@ export function VendorDetailActions({ vendor }: { vendor: Vendor }): React.React
               }
               description={
                 flagged ? (
-                  'They can sign in again straight away. Their storefront stays unpublished until they publish it themselves, and the bookings cancelled by the suspension are not restored.'
+                  LIFT_SUSPENSION_CONSEQUENCE
                 ) : (
                   <SuspensionConsequence subject="Their storefront" />
                 )
@@ -237,8 +238,8 @@ export function VendorDetailActions({ vendor }: { vendor: Vendor }): React.React
             />
             <p className={CONSEQUENCE}>
               {flagged
-                ? 'Lets them sign in again. Cancelled bookings are not restored.'
-                : 'Declines every open request and cancels every future confirmed booking, refunded in full from the platform balance, with no payout to the vendor. Confirms first.'}
+                ? 'Lets them sign in again. Canceled bookings are not restored.'
+                : 'Declines every open request and cancels every future confirmed booking, refunded in full from the platform balance, with no payout to the vendor.'}
             </p>
           </Tier>
         </>
@@ -341,7 +342,7 @@ function BackupWithholdingControl({ vendor }: { vendor: Vendor }): React.ReactEl
       <p className={CONSEQUENCE}>
         {on
           ? `Kept for the IRS: ${WITHHOLDING_PERCENT}% of each payout. Clearing needs the date the corrected TIN or W-9 arrived.`
-          : `Keeps ${WITHHOLDING_PERCENT}% of each payout for the IRS once it is switched on, from an IRS notice or a missing TIN.`}
+          : `Keeps ${WITHHOLDING_PERCENT}% of each payout for the IRS. Used after an IRS notice or for a missing TIN.`}
       </p>
     </>
   );
@@ -391,7 +392,7 @@ export function PackageActiveControl({
         });
         toast.success(
           result.vendorUnpublished
-            ? `${pkg.name} is deactivated, and ${businessName}'s profile is hidden because it has no bookable package left.`
+            ? `${pkg.name} is deactivated. ${businessName}'s profile is hidden: it has no bookable package left.`
             : `${pkg.name} is ${activating ? 'active' : 'deactivated'}.`,
         );
         router.refresh();
@@ -426,7 +427,7 @@ export function PortfolioRemoveControl({
         </button>
       }
       title={`Remove ${name}?`}
-      description="It comes off the storefront and the image is deleted from storage. This cannot be undone; the vendor would have to upload it again."
+      description="It comes off the storefront and the image is deleted. This can't be undone."
       confirmLabel="Remove photo"
       onConfirm={async () => {
         await call(`/admin/portfolio-items/${item.id}`, { method: 'DELETE', schema: NO_CONTENT });

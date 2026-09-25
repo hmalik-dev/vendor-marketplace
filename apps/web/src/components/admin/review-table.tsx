@@ -215,10 +215,9 @@ function ReviewRowActions({
               description={
                 row.isPublic ? (
                   <>
-                    It comes off every public page and stops counting toward{' '}
-                    <strong className="font-semibold">{row.vendorName}</strong>&apos;s rating, which
-                    is recalculated without it. Nothing is deleted, and you can unhide it again from
-                    here.
+                    It comes off every public page and{' '}
+                    <strong className="font-semibold">{row.vendorName}</strong>&apos;s rating is
+                    recalculated without it. Nothing is deleted. You can unhide it here.
                   </>
                 ) : (
                   <>
@@ -256,10 +255,9 @@ function ReviewRowActions({
           */
                 row.type === 'customer_to_vendor' ? (
                   <>
-                    It is removed permanently and{' '}
-                    <strong className="font-semibold">{row.vendorName}</strong>&apos;s public rating
-                    is recalculated from the reviews that remain. There is no undo —{' '}
-                    <strong className="font-semibold">hide it instead</strong> if it might need to
+                    It is deleted and <strong className="font-semibold">{row.vendorName}</strong>
+                    &apos;s public rating is recalculated without it. There is no undo.{' '}
+                    <strong className="font-semibold">Hide it instead</strong> if it might need to
                     come back.
                   </>
                 ) : (

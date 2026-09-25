@@ -89,8 +89,8 @@ export function AdminsPanel({
             title="Make this account an admin?"
             description={
               <>
-                <strong className="font-semibold">{email.trim()}</strong> will be able to sign in to
-                this console and take every action an admin can, from their next request.
+                <strong className="font-semibold">{email.trim()}</strong> can sign in to this
+                console and take every admin action from their next request.
               </>
             }
             confirmLabel="Grant access"
@@ -154,7 +154,7 @@ export function AdminsPanel({
                     </Button>
                   }
                   title={`Remove ${admin.firstName} ${admin.lastName}'s admin access?`}
-                  description="They go back to the role they had before, and can no longer sign in to this console. The last admin who can sign in cannot be removed."
+                  description="They go back to their previous role and can no longer sign in to this console. The last admin who can sign in can't be removed."
                   confirmLabel="Revoke access"
                   onConfirm={() => revoke(admin)}
                 />

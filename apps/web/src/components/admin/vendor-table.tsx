@@ -41,10 +41,10 @@ export const STUCK_REFUNDS_PATH = '/admin/bookings?flag=refund-stuck';
 export function SuspensionConsequence({ subject }: { subject: string }): React.ReactElement {
   return (
     <>
-      Their open requests are declined and every confirmed booking in the future is cancelled and{' '}
-      <strong className="font-semibold">refunded in full</strong> from the platform balance, and no
-      payout is made to the vendor for them. {subject} comes down. Suspension can be lifted, but the
-      bookings are not restored.
+      Their open requests are declined. Every future confirmed booking is canceled and{' '}
+      <strong className="font-semibold">refunded in full</strong> from the platform balance, with no
+      payout to the vendor. {subject} comes down. Suspension can be lifted, but the bookings are not
+      restored.
     </>
   );
 }
@@ -72,7 +72,7 @@ export function UnpublishConsequence({ subject }: { subject: string }): React.Re
   return (
     <>
       {subject} comes off search and its page stops loading.{' '}
-      <strong className="font-semibold">Nothing is cancelled and no money moves</strong>: open
+      <strong className="font-semibold">Nothing is canceled and no money moves</strong>: open
       requests stand, confirmed bookings stand, and no refund is issued. They can still sign in and
       run the bookings they have. Only this menu can publish it again — the vendor cannot put it
       back themselves.
@@ -94,9 +94,8 @@ export function UnpublishConsequence({ subject }: { subject: string }): React.Re
 export function RepublishConsequence({ subject }: { subject: string }): React.ReactElement {
   return (
     <>
-      {subject} goes back on search and its page loads again. Their profile has to be complete
-      enough to publish — a category, a bio, a reply time and one bookable package — or this is
-      refused and says what is missing.{' '}
+      {subject} goes back on search and its page loads again. It needs a category, a bio, a reply
+      time and one bookable package, or this is refused with what is missing.{' '}
       <strong className="font-semibold">
         Check why it came down first: a vendor can unpublish their own storefront, and this puts it
         back whether it was moderated or paused by its owner.
@@ -104,6 +103,10 @@ export function RepublishConsequence({ subject }: { subject: string }): React.Re
     </>
   );
 }
+
+/** What lifting a suspension does, in the row menu and on the vendor detail alike. */
+export const LIFT_SUSPENSION_CONSEQUENCE =
+  'They can sign in again at once. Their storefront stays unpublished until they publish it. Bookings the suspension canceled are not restored.';
 
 export interface VendorTableProps {
   rows: readonly WireAdminVendorRow[];
@@ -581,7 +584,7 @@ function VendorRowActions({
               }
               description={
                 flagged ? (
-                  'They can sign in again straight away. Their storefront stays unpublished until they publish it themselves, and the bookings cancelled by the suspension are not restored.'
+                  LIFT_SUSPENSION_CONSEQUENCE
                 ) : (
                   <SuspensionConsequence subject="Their storefront" />
                 )

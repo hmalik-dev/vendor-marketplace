@@ -83,7 +83,7 @@ export function retryNotice(
   if (result.payoutStatus === 'held') {
     return {
       status: 'pending',
-      message: `A problem was reported on ${row.vendorName}'s booking, so the payout is on hold.`,
+      message: `A problem was reported on ${row.vendorName}'s booking. The payout is on hold.`,
     };
   }
 
@@ -98,7 +98,7 @@ export function retryNotice(
     status: 'failed',
     message: `Stripe refused ${row.vendorName}'s transfer again: ${
       result.payoutFailureReason ?? 'no reason given'
-    }. That is attempt ${result.payoutAttempts}.`,
+    }. Attempt ${result.payoutAttempts}.`,
   };
 }
 
@@ -263,10 +263,8 @@ export function PaymentTable({
                         title="Retry this payout?"
                         description={
                           <>
-                            Another attempt will be made to send{' '}
-                            {formatPrice(row.vendorPayoutCents)} to {row.vendorName}. It is a fresh
-                            request rather than a repeat of the last one, so Stripe answers it anew.
-                            The scheduled release keeps retrying either way — this only asks now.
+                            This asks Stripe now to send {formatPrice(row.vendorPayoutCents)} to{' '}
+                            {row.vendorName}. The scheduled release keeps retrying either way.
                           </>
                         }
                         confirmLabel="Retry payout"

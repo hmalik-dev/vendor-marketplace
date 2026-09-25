@@ -264,7 +264,7 @@ export function VendorApplicationsPanel({
                     </Button>
                   }
                   title={`Invite ${selectedIds.length} ${selectedIds.length === 1 ? 'vendor' : 'vendors'}?`}
-                  description={`Each address gets its own invite email, exactly as if it were invited one at a time.`}
+                  description="Each address gets its own invite email."
                   confirmLabel="Invite selected"
                   onConfirm={bulkInvite}
                 />

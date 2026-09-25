@@ -196,7 +196,7 @@ export default async function AdminBookingDetailPage({
                 </KeyValue>
               ) : null}
               {booking.cancelledAt ? (
-                <KeyValue label="Cancelled" kind="mono">
+                <KeyValue label="Canceled" kind="mono">
                   <Stamp at={booking.cancelledAt} />
                 </KeyValue>
               ) : null}
@@ -204,7 +204,7 @@ export default async function AdminBookingDetailPage({
                 <KeyValue label="Cancellation reason">{booking.cancellationReason}</KeyValue>
               ) : null}
               {booking.cancelledBy ? (
-                <KeyValue label="Cancelled by">{CANCELLED_BY_LABELS[booking.cancelledBy]}</KeyValue>
+                <KeyValue label="Canceled by">{CANCELLED_BY_LABELS[booking.cancelledBy]}</KeyValue>
               ) : null}
               {booking.disputeReason ? (
                 <KeyValue label="Dispute reason">{booking.disputeReason}</KeyValue>

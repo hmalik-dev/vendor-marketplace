@@ -35,7 +35,7 @@ const SWEEP_DATE = new Intl.DateTimeFormat('en-US', {
  */
 const CUSTOMER_CAUTION = "Refunds reach the customer's bank on the card issuer's own schedule.";
 const VENDOR_CAUTION =
-  "Stripe's dispute stays open until the bank closes it. Releasing the payout is the platform's ruling, not the network's — if the bank later finds for the customer, the money comes back out of the platform.";
+  "Stripe's dispute stays open until the bank closes it. If the bank later finds for the customer, the platform pays it back.";
 
 /**
  * "Cancel" on this screen is a verb about money, so the escape names the state
@@ -97,7 +97,7 @@ export function CaseResolution({ supportCase }: CaseResolutionProps): React.Reac
     return (
       <p className="text-sm text-stone-600">
         Resolved{supportCase.resolvedByName ? ` by ${supportCase.resolvedByName}` : ''}. A resolved
-        case cannot be reopened — file a new one if the story has changed.
+        case can&apos;t be reopened. File a new one if something changed.
       </p>
     );
   }
@@ -113,8 +113,8 @@ export function CaseResolution({ supportCase }: CaseResolutionProps): React.Reac
       <div className="flex flex-col gap-2.5">
         <p className="text-sm text-stone-700">
           {booking
-            ? 'This booking is not on hold, so there is no payout to move. Closing the case records that it was dealt with.'
-            : 'Nothing is on hold. Closing the case records that it was dealt with.'}
+            ? 'This booking is not on hold. There is no payout to move. Closing the case records it as handled.'
+            : 'Nothing is on hold. Closing the case records it as handled.'}
         </p>
         <ConfirmAction
           trigger={
@@ -122,8 +122,8 @@ export function CaseResolution({ supportCase }: CaseResolutionProps): React.Reac
               Mark resolved
             </Button>
           }
-          title="Mark this case resolved"
-          description="It leaves the open queue and the oldest-open figure stops counting it. Nothing moves."
+          title="Mark this case resolved?"
+          description="It leaves the open queue and the oldest-open figure. No money moves."
           confirmLabel="Mark resolved"
           cancelLabel={KEEP_OPEN}
           onConfirm={close}
@@ -142,7 +142,7 @@ export function CaseResolution({ supportCase }: CaseResolutionProps): React.Reac
   const lost = chargeback && supportCase.networkOutcome === 'lost';
   const refundBlocked = chargeback && (supportCase.networkOutcome === null || lost);
   const lostNote =
-    'The card network ruled against the platform and has already taken this payment back. Recovering it is a conversation with the vendor through support, not a ruling here.';
+    'The card network ruled against the platform and took this payment back. Recover it from the vendor through support.';
 
   const payout = formatPrice(booking.vendorPayoutCents);
   const total = formatPrice(booking.totalAmountCents);
@@ -209,7 +209,7 @@ export function CaseResolution({ supportCase }: CaseResolutionProps): React.Reac
                     The payout hold comes off and{' '}
                     <strong className="font-semibold">{payout}</strong> goes to {booking.vendorName}{' '}
                     on the next sweep, <strong className="font-semibold">{sweep}</strong>. The
-                    booking stands, so <span className="font-mono">cancelled_by</span> is not
+                    booking stands and <span className="font-mono">cancelled_by</span> is not
                     written.
                   </p>
                   <p className="mt-2">
@@ -233,7 +233,7 @@ export function CaseResolution({ supportCase }: CaseResolutionProps): React.Reac
         <p className="text-base font-semibold text-stone-900">Resolve for the customer</p>
         <p className="mt-1.5 flex-1 text-sm leading-prose text-stone-700">
           <span className="font-mono">{total}</span> is refunded to {booking.customerName} and the
-          booking is cancelled. {booking.vendorName} receives{' '}
+          booking is canceled. {booking.vendorName} receives{' '}
           <span className="font-mono">{nothing}</span>; the <span className="font-mono">{fee}</span>{' '}
           platform fee is returned too.
         </p>
@@ -241,7 +241,7 @@ export function CaseResolution({ supportCase }: CaseResolutionProps): React.Reac
           <p className="mt-3 text-sm text-stone-600">
             {lost
               ? lostNote
-              : 'A chargeback is still open on this payment and Stripe will not refund a disputed charge. This position opens when the network decides it.'}
+              : 'A chargeback is open on this payment, and Stripe will not refund a disputed charge. This opens when the network decides.'}
           </p>
         ) : (
           <div className="mt-3">
@@ -274,14 +274,13 @@ export function CaseResolution({ supportCase }: CaseResolutionProps): React.Reac
                     {booking.customerName} is refunded{' '}
                     <strong className="font-semibold">{total}</strong>, including the{' '}
                     <strong className="font-semibold">{fee}</strong> platform fee. The booking is
-                    cancelled with <span className="font-mono">cancelled_by = admin</span>.
+                    canceled with <span className="font-mono">cancelled_by = admin</span>.
                   </p>
                   <p className="mt-2">
                     {booking.vendorName} receives{' '}
-                    <strong className="font-semibold">{nothing}</strong> for this booking. The
-                    payout hold is released as cancelled rather than paid, so nothing reaches them
-                    on the <strong className="font-semibold">{sweep}</strong> sweep or any later
-                    one, and they are notified with the reason.
+                    <strong className="font-semibold">{nothing}</strong> for this booking. Nothing
+                    reaches them on the <strong className="font-semibold">{sweep}</strong> sweep or
+                    any later one. They are told why.
                   </p>
                   <p className="mt-2">
                     Case <span className="font-mono">{supportCase.reference}</span> closes as{' '}
@@ -299,8 +298,8 @@ export function CaseResolution({ supportCase }: CaseResolutionProps): React.Reac
       </div>
 
       <p className="text-sm text-stone-600 sm:col-span-2">
-        Neither position can be undone from this screen. A resolved case reopens only by a new case
-        on the same booking.
+        Neither position can be undone here. A resolved case reopens only as a new case on the same
+        booking.
       </p>
     </div>
   );
