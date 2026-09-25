@@ -23,7 +23,7 @@
 - [Neon Auth cutover boundaries](neon-auth-cutover-boundaries.md) — role double-narrowed; VEN-642, VEN-635 clean
 - [The Terms gate is a five-state session](terms-gate-is-a-five-state-session.md) — `request.auth` null for a gated account; `requireAuthSubject` the exception
 - [The server session cache's key is the whole gate](server-session-cache-key-is-the-cookie.md) — a hit skips signature/revocation; VEN-628 lag; VEN-717 refused-token re-mint clean
-- [`getCurrentUser`'s cache() is safe; route dynamism is borrowed](identity-read-is-cached-and-route-dynamism-is-inherited.md) — `/` has no `force-dynamic`
+- [`getCurrentUser`'s cache() is safe; route dynamism is borrowed](identity-read-is-cached-and-route-dynamism-is-inherited.md) — `/` has no `force-dynamic`; VEN-745 client store clean
 - [Email is a label, the auth id is the key](email-uniqueness-is-partial-nothing-joins-by-email.md) — partial `lower(email)` index + lowercase CHECK (VEN-649)
 - [Closing an account releases its address, scrubs the row, deletes uploads](closed-account-address-is-released.md) — VEN-614/672/687 scrubs (0089/0093/0097) clean
 - [The sign-up role is recorded server-side, first write wins](signup-role-is-confirmed-not-narrowed.md) — VEN-662: a squatter fixes the victim's role (Low)

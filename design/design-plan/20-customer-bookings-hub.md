@@ -77,7 +77,11 @@ panels for softer nudges. Drawn from all bookings.
 
 ## Sidebar
 
-My bookings (count, active) · Messages (unread dot) · Saved vendors · My profile.
+My bookings (count, active) · Messages (unread dot). Shared by `/bookings` and
+`/messages` for customers (VEN-745); hidden below `lg`. Frame `07` draws four
+rows — it also draws **Saved vendors** and **My profile** — and the app omits
+both by the account holder's ruling of 2026-09-24: Saved vendors has no feature
+behind it, and My profile stays in the account menu.
 Bottom card: "Booking for something new? Search by vendor type, city and date —
 availability is live." → **Find a vendor**.
 

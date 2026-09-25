@@ -839,7 +839,7 @@ export function MessagesScreen({
   }, [markRead, refreshConversations]);
 
   return (
-    <div className="flex h-[calc(100dvh-var(--header-height))] overflow-hidden">
+    <div className="flex h-full overflow-hidden">
       <aside
         className={cn(
           'flex w-[300px] shrink-0 flex-col border-r border-stone-300 bg-stone-0',

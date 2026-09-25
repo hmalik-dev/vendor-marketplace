@@ -149,9 +149,31 @@ describe('frame 08 — the vendor rail', () => {
 });
 
 /*
- * Frame `07` draws a customer sidebar that VEN-706 supersedes: Messages and
- * Bookings sit in the header, so the customer has no rail to match.
+ * Frame `07`'s customer sidebar draws four rows; the app builds two, by the
+ * account holder's ruling of 2026-09-24 (VEN-745, reversing VEN-706's removal of
+ * the whole sidebar). Asserted as a difference in both directions, so the two
+ * omissions cannot be "fixed" back in and a third row cannot be added unnoticed.
  */
+describe('frame 07 — the customer sidebar', () => {
+  const drawn = sidebarRows('07 Customer bookings hub');
+  const built = labelsIn(read('src/components/bookings/bookings-sidebar.tsx'));
+
+  it('reads the frame at all', () => {
+    expect(drawn).toEqual(['My bookings', 'Messages', 'Saved vendors', 'My profile']);
+  });
+
+  it('builds My bookings then Messages, in the frame order and nothing else', () => {
+    expect(built).toEqual(['My bookings', 'Messages']);
+    expect(built).toEqual(drawn.filter((label) => built.includes(label)));
+  });
+
+  it('leaves out only the two rows the account holder struck', () => {
+    expect(drawn.filter((label) => !built.includes(label))).toEqual([
+      'Saved vendors',
+      'My profile',
+    ]);
+  });
+});
 
 /**
  * Frame `19` draws a *different* rail around the same hub — a `Booking` section

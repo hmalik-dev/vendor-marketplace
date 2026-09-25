@@ -55,5 +55,13 @@ and the role-derived boolean is baked into it. Any such page needs its own
 `export const dynamic = 'force-dynamic'` — most protected pages already declare
 one; the public ones deliberately do not.
 
+**The same holds for other zero-arg `cache()` reads and module-level client
+stores (VEN-745, clean):** `readOwnBookingEntries` is per request like
+`getCurrentUser`. `unread-messages-store.ts` is module state in the browser,
+but its server snapshot is a constant `false` and only client callbacks write it.
+Every sign-out path (`endSession`, `location.assign`) is a full navigation, so
+the state does not carry from one account to the next in a tab. Treat a
+module-level store as a finding only if a sign-out becomes a `router.push`.
+
 Related: [[client-component-props-are-public-html]],
 [[route-handlers-do-not-inherit-layout-gates]].

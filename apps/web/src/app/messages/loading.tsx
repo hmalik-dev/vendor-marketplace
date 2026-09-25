@@ -13,7 +13,7 @@ import { MessageBubbleSkeleton, Skeleton } from '@/components/ui/skeleton';
  */
 export default function MessagesLoading(): React.ReactElement {
   return (
-    <div className="flex h-[calc(100dvh-var(--header-height))] overflow-hidden">
+    <div className="flex h-full overflow-hidden">
       <aside className="flex w-[300px] shrink-0 flex-col border-r border-stone-300 bg-stone-0 max-md:hidden">
         <div className="flex items-center justify-between border-b border-stone-200 px-4.5 py-3.5">
           <h1 className="text-md font-semibold text-stone-900">Messages</h1>

@@ -60,11 +60,11 @@ describe('the bookings hub reads', () => {
 });
 
 /*
- * VEN-706. The customer's `Your account` sidebar is gone: Messages and Bookings
- * are one click apart in the header, so the hub is a bookings page and nothing
- * else.
+ * VEN-745. The sidebar is the layout's (`layout.test.tsx`), so the page draws
+ * only the hub and the rail, and fills the shell around them rather than
+ * claiming the viewport a second time.
  */
-describe('the bookings hub chrome', () => {
+describe('the bookings hub root', () => {
   beforeEach(() => {
     getOwnBookingRequests.mockReset().mockResolvedValue([]);
     getOwnBookings.mockReset().mockResolvedValue([]);
@@ -72,10 +72,13 @@ describe('the bookings hub chrome', () => {
 
   afterEach(cleanup);
 
-  it('renders no navigation labelled Your account', async () => {
-    render(await BookingsPage({ searchParams }));
+  it('fills its shell, draws no nav of its own and leaves scrolling to its panes', async () => {
+    const { container } = render(await BookingsPage({ searchParams }));
+    const classes = (container.firstElementChild as HTMLElement).className.split(' ');
 
     expect(screen.getByRole('region', { name: 'Bookings' })).toBeDefined();
     expect(screen.queryByRole('navigation', { name: 'Your account' })).toBeNull();
+    expect(classes).toEqual(expect.arrayContaining(['h-full', 'overflow-hidden']));
+    expect(classes).not.toContain('h-[calc(100dvh-var(--header-height))]');
   });
 });

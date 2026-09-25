@@ -13,6 +13,8 @@ vi.mock('@/lib/report-error', () => ({
 
 const { ApiClientError } = await import('@/lib/api-client');
 const { MessagesLink, CONVERSATIONS_CHANGED_EVENT } = await import('./messages-link');
+const { MessagesUnreadDot } = await import('@/components/bookings/messages-unread-dot');
+const { setUnreadMessages } = await import('@/lib/unread-messages-store');
 
 const page = (hasUnread: boolean): unknown => ({ items: [], nextBefore: null, hasUnread });
 
@@ -24,6 +26,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  act(() => setUnreadMessages(false));
 });
 
 describe('MessagesLink', () => {
@@ -45,6 +48,28 @@ describe('MessagesLink', () => {
 
     await waitFor(() => expect(screen.queryByTestId('messages-unread-dot')).toBeNull());
     expect(screen.getByRole('link', { name: 'Messages' })).toBeDefined();
+  });
+
+  /*
+   * VEN-745. The customer sidebar's dot draws from what this link read, so it
+   * costs no second fetch: one `/conversations` call lights both.
+   */
+  it('publishes what it read, so the sidebar dot follows without a fetch of its own', async () => {
+    call.mockResolvedValue(page(true));
+    render(
+      <>
+        <MessagesLink />
+        <MessagesUnreadDot />
+      </>,
+    );
+
+    await screen.findByTestId('sidebar-unread-dot');
+    expect(call).toHaveBeenCalledTimes(1);
+
+    call.mockResolvedValue(page(false));
+    window.dispatchEvent(new Event(CONVERSATIONS_CHANGED_EVENT));
+
+    await waitFor(() => expect(screen.queryByTestId('sidebar-unread-dot')).toBeNull());
   });
 
   it('lights the dot when told the conversations changed', async () => {
