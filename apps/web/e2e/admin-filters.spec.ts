@@ -354,3 +354,16 @@ for (const list of SEARCHED_LISTS) {
     });
   });
 }
+
+// The selects reach the client bar through a Server Component's children, so this fails if chips key on the component's type.
+test('a chosen select shows as a labelled chip, and a select with no Any choice shows none', async ({
+  adminPage,
+}) => {
+  await adminPage.goto('/admin/bookings?status=confirmed');
+  await expect(
+    adminPage.getByRole('link', { name: 'Remove Status filter: Confirmed' }),
+  ).toBeVisible();
+
+  await adminPage.goto('/admin/cases?status=resolved');
+  await expect(adminPage.getByRole('list', { name: 'Active filters' })).toHaveCount(0);
+});
