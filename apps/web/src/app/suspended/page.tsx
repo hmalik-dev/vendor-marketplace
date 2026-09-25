@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
-import { BRAND_NAME, pageTitle } from '@vendor-marketplace/shared';
+import { pageTitle, SUPPORT_PATH } from '@vendor-marketplace/shared';
 import Link from 'next/link';
+import { SignOutLink } from '@/components/sign-out-link';
 import { Button } from '@/components/ui/button';
 
 export const metadata: Metadata = { title: pageTitle('Account suspended') };
@@ -25,12 +26,18 @@ export default function SuspendedPage(): React.ReactElement {
         than the default being widened back for everything.
       */}
       <p className="mt-4 leading-prose text-stone-600">
-        You can&apos;t book or list services while your account is suspended. Think this is a
-        mistake? Reply to any {BRAND_NAME} email.
+        You can&apos;t book, message or take bookings while it&apos;s suspended.
       </p>
-      <Button variant="secondary" className="mt-8" asChild>
-        <Link href="/">Back to home</Link>
+      {/*
+        Frame 53's way out. `/support` is exempt from the suspension redirect,
+        so the primary works; `Back to home` would only bounce here again.
+      */}
+      <Button variant="primary" className="mt-8" asChild>
+        <Link href={SUPPORT_PATH}>Contact support</Link>
       </Button>
+      <div className="mt-4">
+        <SignOutLink />
+      </div>
     </div>
   );
 }

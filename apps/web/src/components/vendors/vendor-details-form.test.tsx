@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import type { Category, MyVendorApplication } from '@vendor-marketplace/shared';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,6 +9,8 @@ const requestMock = vi.fn();
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push, replace }) }));
 vi.mock('@/lib/use-api', () => ({ useApi: () => requestMock }));
+const signOut = vi.fn<() => Promise<void>>();
+vi.mock('@/lib/auth/auth-requests', () => ({ signOut: () => signOut() }));
 
 const { VendorDetailsForm } = await import('./vendor-details-form');
 
@@ -98,5 +101,28 @@ describe('VendorDetailsForm', () => {
 
     expect(screen.getByDisplayValue('Wildbloom Florals')).toBeDefined();
     expect(screen.getByDisplayValue('Austin')).toBeDefined();
+  });
+});
+
+/* VEN-763, frame 36: a mandatory step is not a trap. */
+describe('the way out', () => {
+  it('draws one Sign out after the submit, which signs out once and lands home', async () => {
+    signOut.mockResolvedValue(undefined);
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign });
+    const user = userEvent.setup();
+    render(<VendorDetailsForm application={APPLICATION} categories={CATEGORIES} />);
+
+    const buttons = screen.getAllByRole('button').map((button) => button.textContent);
+    expect(buttons.filter((label) => label === 'Sign out')).toHaveLength(1);
+    expect(buttons.at(-1)).toBe('Sign out');
+    expect(buttons.at(-2)).toBe('Add me to the waitlist');
+
+    await user.click(screen.getByRole('button', { name: 'Sign out' }));
+
+    expect(signOut).toHaveBeenCalledTimes(1);
+    expect(assign).toHaveBeenCalledWith('/');
+    expect(requestMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 });

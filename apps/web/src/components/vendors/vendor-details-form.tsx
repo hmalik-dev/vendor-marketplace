@@ -18,6 +18,7 @@ import { US_STATE_OPTIONS, usStateName } from '@/lib/us-states';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { SignOutLink } from '@/components/sign-out-link';
 import { SingleSelectDropdown } from '@/components/ui/dropdown-select';
 import { StatusPill } from '@/components/ui/status-pill';
 import { useApi } from '@/lib/use-api';
@@ -232,6 +233,9 @@ export function VendorDetailsForm({
       <Button type="submit" variant="primary" size="lg" disabled={saving} loading={saving}>
         {saving ? 'Saving…' : 'Add me to the waitlist'}
       </Button>
+
+      {/* Frame 36: a mandatory step is not a trap (VEN-701). */}
+      <SignOutLink disabled={saving} />
     </form>
   );
 }

@@ -293,4 +293,18 @@ describe('the accepted record', () => {
     expect(screen.getByText('Payouts not connected')).toBeDefined();
     expect(screen.queryByText('Payouts live')).toBeNull();
   });
+
+  /* VEN-763, frame 32: the accepted banner links to the agreement itself. */
+  it('links the accepted agreement to its legal page', () => {
+    render(
+      <VendorAgreementScreen
+        status={status({ accepted: ACCEPTED, isCurrent: true, history: [ACCEPTED] })}
+        agreement={AGREEMENT}
+        payoutsLive={false}
+      />,
+    );
+
+    const link = screen.getByRole('link', { name: 'View agreement' });
+    expect(link.getAttribute('href')).toBe('/legal/vendor-agreement');
+  });
 });
