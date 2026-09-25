@@ -304,7 +304,7 @@ export function PackageManager({
               </p>
               <p className="max-w-sm text-sm leading-prose text-stone-600">
                 {packages.length === 0
-                  ? 'A package is what a customer books. You need at least one bookable package before your profile can go live.'
+                  ? 'A package is what a customer books. Your profile needs at least one to go live.'
                   : 'Choose one from the list, or add another.'}
               </p>
             </div>
@@ -336,8 +336,7 @@ export function PackageManager({
           <DialogHeader>
             <DialogTitle>Hide your last bookable package?</DialogTitle>
             <DialogDescription>
-              Your profile will come off the marketplace until you have at least one bookable
-              package again. Nothing else about it changes.
+              Your profile comes off the marketplace until a package is bookable again.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

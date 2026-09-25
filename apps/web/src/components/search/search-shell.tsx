@@ -389,7 +389,7 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
   const clearedLines = [
     droppedPastDate === null
       ? null
-      : `${AVAILABILITY_DATE_FORMATTER.format(new Date(`${droppedPastDate}T00:00:00Z`))} has already passed, so the date was cleared — pick a new one to check availability.`,
+      : `${AVAILABILITY_DATE_FORMATTER.format(new Date(`${droppedPastDate}T00:00:00Z`))} has passed, so we cleared it. Pick a new date to check availability.`,
     clearedParamsLine([
       ...dropped,
       // Named per bound, so a Min the panel could not read does not announce
@@ -400,7 +400,7 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
     /*
      * Its own sentence rather than another `dropped` field: those params could
      * not be *read*, and this one was read perfectly well and simply does not
-     * apply here. Saying "that tag isn't one we can use" of `Halal` would be
+     * apply here. Saying "that tag isn't valid" of `Halal` would be
      * untrue — it is a tag, on the wrong search.
      */
     droppedTags === null ? null : droppedTagGroupsLine(droppedTags.groups, droppedTags.category),

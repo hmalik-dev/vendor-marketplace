@@ -49,7 +49,7 @@ export interface TrustCopy {
 export const GENERIC_TRUST_COPY: readonly TrustCopy[] = [
   {
     title: 'Reviews from real bookings',
-    body: 'Every review comes from a booking that actually happened. There is no other way to leave one.',
+    body: 'Every review comes from a real booking.',
   },
   {
     title: 'Payment held until the event',
@@ -57,7 +57,7 @@ export const GENERIC_TRUST_COPY: readonly TrustCopy[] = [
   },
   {
     title: 'No service fee',
-    body: 'Vendors publish what they charge, and nothing is added on top of it at checkout.',
+    body: 'Vendors publish what they charge. Nothing is added at checkout.',
   },
 ] as const;
 

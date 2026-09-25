@@ -141,7 +141,7 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
         */
         description={
           dashboard.isPublished
-            ? 'Requests land here the moment a customer sends one. Keeping your calendar current is what puts you in their search.'
+            ? 'Requests land here the moment a customer sends one. Keep your calendar current to show up in search.'
             : dashboard.moderationHold
               ? 'Nothing can come in while your storefront is off search.'
               : 'Nothing has come in because your listing is still a draft.'

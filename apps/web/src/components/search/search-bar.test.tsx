@@ -217,7 +217,7 @@ describe('SearchBar — the event date cannot be in the past', () => {
 
     expect(onSubmit).not.toHaveBeenCalled();
     expect(screen.getByRole('alert').textContent).toBe(
-      'That date has already passed — pick today or a later date.',
+      'That date has passed. Pick today or later.',
     );
     expect(dateField().getAttribute('aria-describedby')).toBe(
       screen.getByRole('alert').getAttribute('id'),

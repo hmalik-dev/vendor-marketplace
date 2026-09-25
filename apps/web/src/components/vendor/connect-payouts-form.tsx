@@ -68,7 +68,7 @@ export function ConnectPayoutsForm({ isResuming }: ConnectPayoutsFormProps): Rea
     <div className="flex flex-col items-start gap-3.5">
       {failed ? (
         <Banner status="failed" title="Stripe did not answer">
-          We could not reach Stripe just then. Nothing has changed &mdash; try again.
+          We could not reach Stripe. Nothing has changed. Try again.
         </Banner>
       ) : null}
       {/*
