@@ -247,7 +247,7 @@ describe('BookingCard', () => {
 
 /*
  * #400: the pill was chosen on `booking !== null`, so a cancelled booking put a
- * sage `Booked` beside the red `Cancelled` from `CompleteBooking` — two
+ * sage `Booked` beside the red `Canceled` from `CompleteBooking` — two
  * contradictory claims on one row, above contact details for a date the vendor
  * no longer holds.
  */

@@ -298,7 +298,7 @@ describe('AdminCasePage', () => {
       'Paid at': 'mono',
       'Payout released': 'mono',
       'Refund amount': 'mono',
-      'Cancelled by': 'text',
+      'Canceled by': 'text',
       'Dispute reason': 'text',
       Chargeback: 'mono',
       'Network outcome': 'text',

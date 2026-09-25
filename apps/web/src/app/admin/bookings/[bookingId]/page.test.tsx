@@ -146,9 +146,9 @@ describe('AdminBookingDetailPage', () => {
       ['Payout', "Awaiting release · vendor's payouts held by an adminTransfer failing"],
       ['Payout attempts', '2account_closed'],
       ['Refunded', '$600'],
-      ['Cancelled', 'Sep 20, 2026, 15:30 UTC'],
+      ['Canceled', 'Sep 20, 2026, 15:30 UTC'],
       ['Cancellation reason', 'The couple moved the wedding abroad.'],
-      ['Cancelled by', 'The customer'],
+      ['Canceled by', 'The customer'],
       ['Dispute reason', 'Deposit terms were unclear.'],
     ]);
     expect(screen.getByText('account_closed').className.split(/\s+/)).toContain('text-error-500');
