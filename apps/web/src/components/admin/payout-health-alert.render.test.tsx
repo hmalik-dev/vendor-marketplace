@@ -53,7 +53,7 @@ describe('the payout health alert', () => {
     render(<PayoutHealthAlert blockedVendors={1} failingBookings={1} />);
 
     expect(screen.getByRole('status').textContent).toContain(
-      'The scheduled release keeps trying, so this clears itself once the accounts are in order.',
+      'The scheduled release keeps trying. This clears once the accounts are in order.',
     );
   });
 });

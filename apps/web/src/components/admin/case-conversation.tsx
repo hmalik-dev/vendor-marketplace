@@ -37,15 +37,12 @@ export const THREAD_CHIP = 'Case-scoped read';
  * come from the response (VEN-412), so until there is one the line says what
  * is always true of the window without inventing which days it covers.
  */
-export const THREAD_SCOPE =
-  "Read-only, and scoped to the dates the case is about. Admins see those messages, not the relationship's whole history.";
+export const THREAD_SCOPE = 'Read-only. Only messages from the dates the case is about.';
 
 /** Pattern C's footer, for the window the server actually applied. */
 export const WINDOW_SCOPE: Record<ThreadWindow['basis'], string> = {
-  event_date:
-    "Read-only, and scoped to the event date. Admins see the messages the case is about, not the relationship's whole history.",
-  report_filed:
-    "Read-only, and scoped to the week the report was filed. Admins see the messages the case is about, not the relationship's whole history.",
+  event_date: 'Read-only. Only messages from the event date.',
+  report_filed: 'Read-only. Only messages from the week the report was filed.',
 };
 
 /** `12 Sep only` for one day; `6–12 Sep`, or `29 May – 4 Jun` across a month. */
@@ -162,7 +159,7 @@ export function CaseConversation({
       THREAD_CHIP,
       <div className="flex flex-1 flex-col px-4 py-3">
         <p className="text-sm text-stone-600">
-          Opening this thread is recorded against your account, with the case it was read under.
+          Opening this thread is recorded under your name, with this case.
         </p>
         <div className="mt-3">
           <Button variant="secondary" size="sm" loading={loading} onClick={() => void read()}>

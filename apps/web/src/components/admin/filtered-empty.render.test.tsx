@@ -178,7 +178,7 @@ describe('the counted filtered-empty state', () => {
     draw([]);
 
     expect(screen.getByText(/narrowing this/).textContent).toContain(
-      'Widening any single one of them still finds nothing.',
+      'Widening any one of them still finds nothing.',
     );
     expect(widenNames()).toEqual([]);
     expect(screen.getByRole('link', { name: 'Clear all filters' }).getAttribute('href')).toBe(
@@ -211,7 +211,7 @@ describe('the counted filtered-empty state', () => {
         const nothing =
           active === 1
             ? 'Widening it still finds nothing.'
-            : 'Widening any single one of them still finds nothing.';
+            : 'Widening any one of them still finds nothing.';
         expect(screen.getByText(/narrowing this/).textContent).toBe(
           productive === 0 ? `${narrowing} ${nothing}` : narrowing,
         );

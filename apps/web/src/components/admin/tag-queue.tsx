@@ -80,7 +80,7 @@ export function TagQueue({ suggestions, tags, showActions }: TagQueueProps): Rea
         <EmptyState
           panel
           headline="Nothing waiting"
-          description="Vendors suggest a tag when the list does not describe them. Approved tags become search filters, so the queue is worth keeping short."
+          description="Vendors suggest a tag when the list does not describe them. Approved tags become search filters."
         />
       ) : (
         <ul className="flex flex-col gap-2.5">
@@ -187,7 +187,7 @@ function SuggestionCard({
                 value={note}
                 maxLength={MAX_ADMIN_NOTE_LENGTH}
                 onChange={(event) => setNote(event.target.value)}
-                placeholder="Required to reject — why this one was turned down"
+                placeholder="Why it was turned down (required to reject)"
                 className="rounded-lg border border-stone-300 bg-stone-0 px-3 py-2 text-base text-stone-900 placeholder:text-stone-600"
               />
             </label>
