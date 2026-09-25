@@ -21,6 +21,7 @@ export function activityParams(raw: Partial<Record<string, RawParam>>) {
     range: oneOf(raw.range, ADMIN_ACTIVITY_RANGES),
     action: oneOf(raw.action, ADMIN_ACTIONS),
     subject: uuidParam(raw.subject),
+    q: boundedText(raw.q),
   };
 }
 

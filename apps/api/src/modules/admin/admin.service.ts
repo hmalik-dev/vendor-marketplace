@@ -949,8 +949,8 @@ export async function listReviews(
 ): Promise<AdminReviewPage> {
   const offset = offsetOf(query);
   const [rows, total] = await Promise.all([
-    findAdminReviews(db, query.type, query.pageSize, offset),
-    countAdminReviews(db, query.type),
+    findAdminReviews(db, query, query.pageSize, offset),
+    countAdminReviews(db, query),
   ]);
 
   /*
@@ -960,7 +960,7 @@ export async function listReviews(
    * `Promise.all` above.
    */
   const widenings =
-    rows.length === 0 && query.page === 1 ? await countReviewWidenings(db, query.type) : [];
+    rows.length === 0 && query.page === 1 ? await countReviewWidenings(db, query) : [];
 
   return {
     widenings,

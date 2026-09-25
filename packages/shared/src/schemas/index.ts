@@ -3231,6 +3231,8 @@ export type AdminPayoutRetryResult = z.infer<typeof adminPayoutRetryResultSchema
 
 export const adminReviewQuerySchema = z.object({
   ...adminPaginationShape,
+  /** Matches the author's name, the vendor's business name, or the review's title or text. */
+  q: adminSearchTerm,
   type: reviewTypeSchema.optional(),
 });
 export type AdminReviewQuery = z.infer<typeof adminReviewQuerySchema>;
@@ -3331,6 +3333,8 @@ export type AdminActivityRow = z.infer<typeof adminActivityRowSchema>;
  */
 export const adminActivityQuerySchema = z.object({
   ...adminPaginationShape,
+  /** Matches the actor's name or email, or a subject id (VEN-749). */
+  q: adminSearchTerm,
   actor: uuidSchema.optional(),
   subject: uuidSchema.optional(),
   action: adminActionSchema.optional(),
@@ -3900,6 +3904,8 @@ export type AdminRequestRow = z.infer<typeof adminRequestRowSchema>;
 
 export const adminRequestQuerySchema = z.object({
   ...adminPaginationShape,
+  /** Matches the customer's name or email, or the vendor's business name. */
+  q: adminSearchTerm,
   group: adminRequestGroupSchema.optional(),
   status: bookingRequestStatusSchema.optional(),
 });

@@ -1942,6 +1942,170 @@ describe('admin routes', () => {
     });
   });
 
+  describe('requests and reviews search (VEN-749)', () => {
+    /**
+     * Two requests on one vendor, each with a review, that differ only in the
+     * customer and the review text. A match on the vendor's name takes both,
+     * so a route that ignored `q` could not pass a narrowing assertion.
+     */
+    async function twoOfEach(): Promise<{
+      requests: { mine: string; theirs: string };
+      reviews: { mine: string; theirs: string };
+    }> {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+      const otherCustomerId = await signIn(OTHER_ADMIN);
+      await signIn(VENDOR);
+      const vendor = await createVendorProfile({ isPublished: true });
+      const bookingIds = [
+        await createFutureBooking(customerId, vendor.profileId),
+        await createFutureBooking(otherCustomerId, vendor.profileId),
+      ];
+      const [mine, theirs] = await Promise.all(
+        [
+          {
+            reviewerId: customerId,
+            title: 'Worth every penny',
+            content: 'The lighting was golden all evening.',
+          },
+          { reviewerId: otherCustomerId, content: 'Arrived late but the album was lovely.' },
+        ].map(async (review, index) => {
+          const rows = await harness.database.db
+            .insert(reviews)
+            .values({
+              ...review,
+              bookingId: bookingIds[index]!,
+              vendorId: vendor.profileId,
+              type: 'customer_to_vendor',
+              rating: 4,
+            })
+            .returning({ id: reviews.id });
+
+          return rows[0]!.id;
+        }),
+      );
+      const requestRows = await harness.database.db
+        .select({ id: bookingRequests.id, customerId: bookingRequests.customerId })
+        .from(bookingRequests);
+      const requestOf = (id: string) => requestRows.find((row) => row.customerId === id)!.id;
+
+      return {
+        requests: { mine: requestOf(customerId), theirs: requestOf(otherCustomerId) },
+        reviews: { mine: mine!, theirs: theirs! },
+      };
+    }
+
+    async function ids(url: string): Promise<string[]> {
+      const response = await harness.app.inject({ method: 'GET', url, headers: bearer(ADMIN) });
+      expect(response.statusCode, url).toBe(200);
+      const body = response.json();
+      expect(body.total, url).toBe(body.items.length);
+
+      return body.items.map((row: { id: string }) => row.id).sort();
+    }
+
+    it('narrows requests by customer email, customer name and vendor name', async () => {
+      const { requests } = await twoOfEach();
+      await harness.database.db
+        .update(users)
+        .set({ firstName: 'Marguerite', lastName: 'Okonkwo' })
+        .where(eq(users.authUserId, OTHER_ADMIN));
+
+      expect(await ids('/v1/admin/requests?q=user_customer@')).toEqual([requests.mine]);
+      expect(await ids('/v1/admin/requests?q=USER_ADMIN_TWO')).toEqual([requests.theirs]);
+      expect(await ids('/v1/admin/requests?q=marguerite%20okon')).toEqual([requests.theirs]);
+      expect(await ids('/v1/admin/requests?q=sunlit')).toEqual(
+        [requests.mine, requests.theirs].sort(),
+      );
+      expect(await ids('/v1/admin/requests?q=nobody-by-that-name')).toEqual([]);
+      // Combined with a filter: both are `accepted`, which reads as `closed`.
+      expect(await ids('/v1/admin/requests?q=user_customer@&group=closed')).toEqual([
+        requests.mine,
+      ]);
+      expect(await ids('/v1/admin/requests?q=user_customer@&group=live')).toEqual([]);
+    });
+
+    it('narrows reviews by author name, vendor name and review text', async () => {
+      const { reviews: written } = await twoOfEach();
+      await harness.database.db
+        .update(users)
+        .set({ firstName: 'Marguerite', lastName: 'Okonkwo' })
+        .where(eq(users.authUserId, OTHER_ADMIN));
+
+      expect(await ids('/v1/admin/reviews?q=marguerite%20okon')).toEqual([written.theirs]);
+      expect(await ids('/v1/admin/reviews?q=GOLDEN')).toEqual([written.mine]);
+      expect(await ids('/v1/admin/reviews?q=album')).toEqual([written.theirs]);
+      expect(await ids('/v1/admin/reviews?q=PENNY')).toEqual([written.mine]);
+      expect(await ids('/v1/admin/reviews?q=sunlit')).toEqual(
+        [written.mine, written.theirs].sort(),
+      );
+      expect(await ids('/v1/admin/reviews?q=nobody-by-that-name')).toEqual([]);
+      expect(await ids('/v1/admin/reviews?q=golden&type=vendor_to_customer')).toEqual([]);
+      expect(await ids('/v1/admin/reviews?q=golden&type=customer_to_vendor')).toEqual([
+        written.mine,
+      ]);
+    });
+
+    it('treats % and _ literally and ignores an empty term', async () => {
+      const { requests, reviews: written } = await twoOfEach();
+      const everything = {
+        requests: [requests.mine, requests.theirs].sort(),
+        reviews: [written.mine, written.theirs].sort(),
+      };
+
+      for (const route of ['requests', 'reviews'] as const) {
+        // As wildcards these would match `Sunlit Studio`; literally, nothing is named so.
+        expect(await ids(`/v1/admin/${route}?q=sun%25studio`), route).toEqual([]);
+        expect(await ids(`/v1/admin/${route}?q=sunli_`), route).toEqual([]);
+        expect(await ids(`/v1/admin/${route}?q=%25`), route).toEqual([]);
+        expect(await ids(`/v1/admin/${route}?q=`), route).toEqual(everything[route]);
+        expect(await ids(`/v1/admin/${route}?q=%20%20`), route).toEqual(everything[route]);
+      }
+    });
+
+    it('names the search as a widening when it empties the list', async () => {
+      await twoOfEach();
+
+      for (const url of [
+        '/v1/admin/requests?q=user_customer@&group=live',
+        '/v1/admin/reviews?q=golden&type=vendor_to_customer',
+      ]) {
+        const response = await harness.app.inject({ method: 'GET', url, headers: bearer(ADMIN) });
+        const widenings = response.json().widenings as { key: string; count: number }[];
+
+        expect(response.json().items, url).toEqual([]);
+        // Dropping the search reveals nothing under that filter; dropping the filter reveals one.
+        expect(widenings.find((widening) => widening.key === 'q')?.count, url).toBeUndefined();
+        expect(widenings.find((widening) => widening.key !== 'q')?.count, url).toBe(1);
+      }
+    });
+
+    it('refuses a term past MAX_NAME_LENGTH with 400', async () => {
+      await signIn(ADMIN, true);
+
+      for (const route of ['requests', 'reviews']) {
+        const over = await harness.app.inject({
+          method: 'GET',
+          url: `/v1/admin/${route}?q=${'a'.repeat(MAX_NAME_LENGTH + 1)}`,
+          headers: bearer(ADMIN),
+        });
+        const at = await harness.app.inject({
+          method: 'GET',
+          url: `/v1/admin/${route}?q=${'a'.repeat(MAX_NAME_LENGTH)}`,
+          headers: bearer(ADMIN),
+        });
+
+        expect(over.statusCode, route).toBe(400);
+        expect(over.json(), route).toMatchObject({
+          statusCode: 400,
+          error: ERROR_CODES.VALIDATION_ERROR,
+          message: 'Request validation failed',
+        });
+        expect(at.statusCode, route).toBe(200);
+      }
+    });
+  });
+
   describe('payments name what happened to the money', () => {
     /*
      * `cancelBooking` never clears `paid_at`, so a refunded booking stays on
