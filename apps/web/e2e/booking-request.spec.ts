@@ -104,7 +104,9 @@ test.describe('booking request', () => {
      * it. `#68` records that this exact reassurance shipped while the flow
      * behind it was unreachable.
      */
-    await expect(customerPage.getByText(/no card has been charged/i)).toBeVisible();
+    await expect(
+      customerPage.getByText(/You won't be charged until you approve a price\./),
+    ).toBeVisible();
 
     /*
      * Persistence, which the confirmation alone does not prove: follow the link
