@@ -117,3 +117,19 @@ its centre is higher by half the footer's height.
 `sage-300`, radius 12, weight 400) where frame `16` draws it borderless at
 radius 10, weight 500 with `11px 16px` padding: ruled 2026-09-06 (#372) in
 `03-components.md`, one `Banner` for every screen.
+
+## Resync 2026-09-25
+
+The frames were brought into line with the shipped app. Where this section and older text above disagree, this section wins.
+
+- Frame 05 (D33): the left column is Stripe's Payment Element: Card / Bank / Klarna tabs, plus Link.
+- Rail order: summary card, ending at "Total today" (not "Due today"). Under the total: "Held by {BRAND_NAME} until <event>, then released to <vendor> on <event + 72h>".
+- Next comes the refund schedule block: five rows, stated as exact times with the time zone:
+  - Until <event − 48h>: full refund
+  - Until <event start>: 50% back
+  - From <event start>: online cancellation closes
+  - After <event>: payment released
+  - If <vendor> cancels: full refund
+- Then the pay button, a sibling of the card rather than inside it. Under it: "By paying you accept the Terms and the refund schedule above."
+- The 1024 view follows the same order.
+- **Unreconciled:** the brief asks for the vendor-cancels row to read "through support". The shipped `refund-schedule-block.tsx` renders "Full refund, whenever it happens", and its test asserts "through support" is absent. The frame follows the code.

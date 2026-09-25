@@ -137,3 +137,10 @@ The two **lucide** icons D25 deliberately left alone (`ui/select.tsx`,
 `tags/tag-category-section.tsx`) are still in scope for nobody: removing an icon
 from a shadcn primitive is a different decision on frames that ruling never
 opened.
+
+## Resync 2026-09-25
+
+The frames were brought into line with the shipped app. Where this section and older text above disagree, this section wins.
+
+- The unicode ▾ is gone from every trigger (D25). The vendor-type picker keeps it.
+- The repo also keeps it on the date picker's month title (VEN-710); the frames don't draw that title.

@@ -144,3 +144,10 @@ and can never contain payouts. Frame `09` now reads **"1 thing left before you c
 publish — response time"**; the 768 frame's bar states the count without naming
 the blockers, and reads **"1 thing left before you can publish"**. See `16-vendor-dashboard.md` for the full one-list
 ruling; this is the same list on a different surface.
+
+## Resync 2026-09-25
+
+The frames were brought into line with the shipped app. Where this section and older text above disagree, this section wins.
+
+- The nav legend "Gold dots block publishing" is removed. The Payouts dot stays but does not block publishing.
+- Preview cards draw no availability chip.

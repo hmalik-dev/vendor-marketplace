@@ -200,3 +200,10 @@ Notes that matter to the build:
 
 The customer-side date picker (section 42) inherits these marks exactly — one
 visual language for dates on both sides of the product.
+
+## Resync 2026-09-25
+
+The frames were brought into line with the shipped app. Where this section and older text above disagree, this section wins.
+
+- The blocked-cell hatch is now `#F1ECE4` with 1.5px `#8E8578` lines, so it passes 3:1.
+- The rail note "every state carries a shape" does not ship.

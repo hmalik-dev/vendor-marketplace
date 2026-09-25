@@ -688,20 +688,18 @@ describe('the title row and the Refine bar', () => {
   });
 
   it('puts the filters in the bar rather than behind a modal', () => {
-    for (const trigger of ['Category ▾', 'City ▾', 'Payouts ▾']) {
-      expect(frame, trigger).toContain(trigger);
+    for (const trigger of ['Category', 'City', 'Payouts']) {
+      expect(frame, trigger).toContain(`border-radius:8px">${trigger}</span>`);
     }
     const filterBar = read('src/components/admin/filter-bar.tsx');
     expect(filterBar).toContain('method="get"');
     /*
-     * The frame draws the caret and the app does not — **D25**, a user override
-     * of the design contract rather than a parity failure. This assertion used
-     * to read `toContain('▾')`, which is why it is inverted here rather than
-     * deleted: an inverted assertion is the override stated as a check, so a
-     * later parity pass restoring the glyph from the frame goes red instead of
-     * quietly re-landing it. The frame half above is unchanged, because the
-     * frame genuinely still draws it.
+     * No caret, in the app or the frame — **D25**. This assertion used to read
+     * `toContain('▾')`, which is why it is inverted here rather than deleted: a
+     * later parity pass restoring the glyph goes red instead of quietly
+     * re-landing it. The 2026-09-25 resync took the caret out of the frame too.
      */
+    expect(frame).not.toContain('Category ▾');
     expect(filterBar).not.toContain('▾');
     // A `<dialog>` or a Radix modal anywhere in the bar would be the defect.
     expect(filterBar).not.toContain('Dialog');
