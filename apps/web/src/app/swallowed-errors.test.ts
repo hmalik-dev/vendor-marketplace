@@ -36,13 +36,25 @@ function sourceFiles(directory: string): string[] {
 
 /**
  * A handler that discards its argument and does nothing observable:
- * `.catch(() => {})`, `.catch(() => undefined)`, `.catch(() => null)`.
+ * `.catch(() => {})`, `.catch(() => undefined)`, `.catch(() => null)`,
+ * `.catch(function () {})`. It is matched with comments removed, so a comment
+ * in the body (`.catch(() => { /* fine *\/ })`) does not hide it (VEN-694).
  *
  * Deliberately narrow. A handler that takes the error and calls something is
  * not matched, because that is the shape being asked for — the point is to
  * catch the *empty* body, not to police every catch in the codebase.
  */
-const SILENT_CATCH = /\.catch\(\s*\(\s*\)\s*=>\s*(\{\s*\}|undefined|null)\s*\)/;
+const SILENT_CATCH =
+  /\.catch\(\s*(\(\s*\)\s*=>\s*(\{\s*\}|undefined|null)|function\s*\(\s*\)\s*\{\s*\})\s*\)/;
+
+/** The same stripping as the API's error-message guard. */
+function withoutComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/.*$/gm, '$1');
+}
+
+function swallowsSilently(source: string): boolean {
+  return SILENT_CATCH.test(withoutComments(source));
+}
 
 function relative(path: string): string {
   return path.replace(`${process.cwd()}/`, '');
@@ -51,7 +63,7 @@ function relative(path: string): string {
 describe('swallowed errors', () => {
   it('leaves no rejection handler that discards the failure entirely', () => {
     const offenders = sourceFiles(SOURCE_ROOT).filter((path) =>
-      SILENT_CATCH.test(readFileSync(path, 'utf8')),
+      swallowsSilently(readFileSync(path, 'utf8')),
     );
 
     expect(
@@ -60,6 +72,23 @@ describe('swallowed errors', () => {
         'call reportSwallowedError from @/lib/report-error and say beside it why ' +
         'the screen stays quiet',
     ).toEqual([]);
+  });
+
+  it.each([
+    ['an empty arrow', 'load().catch(() => {});'],
+    ['an arrow returning undefined', 'load().catch(() => undefined);'],
+    ['an arrow returning null', 'load().catch(() => null);'],
+    ['an arrow whose body is only a block comment', 'load().catch(() => { /* fine */ });'],
+    ['an arrow whose body is only a line comment', 'load().catch(() => {\n  // fine\n});'],
+    ['an empty function expression', 'load().catch(function () {});'],
+  ])('matches %s', (_label, source) => {
+    expect(swallowsSilently(source)).toBe(true);
+  });
+
+  it('does not match a handler that reports', () => {
+    expect(swallowsSilently('load().catch((error) => reportSwallowedError(error, "band"));')).toBe(
+      false,
+    );
   });
 
   /*

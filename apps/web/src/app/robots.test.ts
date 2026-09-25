@@ -1,3 +1,5 @@
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { join, relative, sep } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/config/env', () => ({ siteOrigin: () => 'https://orla.example.com' }));
@@ -5,6 +7,43 @@ vi.mock('@/config/env', () => ({ siteOrigin: () => 'https://orla.example.com' })
 const { default: robots } = await import('./robots');
 
 afterEach(() => vi.unstubAllEnvs());
+
+const APP_ROOT = join(process.cwd(), 'src/app');
+
+/**
+ * Noindex routes a visitor reaches without an account, so disallowing them
+ * would not save the crawl budget this file is about.
+ */
+const PUBLICLY_REACHABLE_NOINDEX = [
+  // The request form hangs off a public profile; its own noindex keeps it out.
+  '/vendors/[slug]/request',
+];
+
+/** The URL of every page or layout under `src/app` whose metadata says `index: false`. */
+function noindexRoutes(directory = APP_ROOT): string[] {
+  return readdirSync(directory).flatMap((entry) => {
+    const path = join(directory, entry);
+    if (statSync(path).isDirectory()) {
+      return noindexRoutes(path);
+    }
+    if (
+      !/^(page|layout)\.tsx$/.test(entry) ||
+      !/\bindex:\s*false\b/.test(readFileSync(path, 'utf8'))
+    ) {
+      return [];
+    }
+    const segments = relative(APP_ROOT, directory)
+      .split(sep)
+      .filter((segment) => segment && !/^\(.*\)$/.test(segment));
+    return [`/${segments.join('/')}`];
+  });
+}
+
+function disallowedPaths(): string[] {
+  const rules = robots().rules;
+  const disallow = (Array.isArray(rules) ? rules[0]?.disallow : rules.disallow) ?? [];
+  return Array.isArray(disallow) ? disallow : [disallow];
+}
 
 /*
  * VEN-606: staging answered `Allow: /` and advertised its sitemap, so a crawler
@@ -40,6 +79,28 @@ describe('robots in production', () => {
     for (const path of ['/vendor/', '/customer/', '/dashboard']) {
       expect(rule?.disallow).toContain(path);
     }
+  });
+
+  /*
+   * VEN-694: `/bookings`, `/messages` and `/account` were signed-in-only and
+   * `noindex`, yet missing here, because the list was written by hand. The
+   * expectation is read from the routes themselves, so a new gated screen that
+   * marks itself `index: false` cannot be forgotten.
+   */
+  it('disallows every route that marks itself noindex', () => {
+    const disallowed = disallowedPaths();
+    const uncovered = noindexRoutes()
+      .filter((route) => !PUBLICLY_REACHABLE_NOINDEX.includes(route))
+      .filter((route) => !disallowed.some((prefix) => route.startsWith(prefix)));
+
+    expect(uncovered).toEqual([]);
+  });
+
+  // A walk that finds nothing would pass the check above vacuously.
+  it('reads the gated routes from the tree', () => {
+    expect(noindexRoutes()).toEqual(
+      expect.arrayContaining(['/admin', '/bookings', '/messages', '/account/settings']),
+    );
   });
 
   it('allows the public surfaces', () => {

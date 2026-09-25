@@ -23,6 +23,9 @@ const PRIVATE_PATHS = [
   '/suspended',
   '/sign-in',
   '/sign-up',
+  '/bookings',
+  '/messages',
+  '/account',
 ];
 
 export default function robots(): MetadataRoute.Robots {
