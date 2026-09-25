@@ -93,16 +93,22 @@ function filesUnder(dir: string, pattern: RegExp): string[] {
   return found;
 }
 
-/** Same reading as `apostrophe-form.test.ts`: what a reader could see. */
+/**
+ * What a reader could see. Whole-line `//` comments go first, so a `/*` inside
+ * one cannot open a block; a block comment then starts only where a comment can,
+ * so `'https://*.js.stripe.com'` and `${base}/**` inside code stay code.
+ */
 function withoutComments(source: string): string {
   return source
-    .replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ' '))
     .split('\n')
-    .map((line) => {
-      const trimmed = line.trimStart();
-
-      return trimmed.startsWith('//') || trimmed.startsWith('*') ? '' : line;
-    })
+    .map((line) => (line.trimStart().startsWith('//') ? '' : line))
+    .join('\n')
+    .replace(
+      /(^|[\s{(;,])\/\*[\s\S]*?\*\//g,
+      (block, lead: string) => lead + block.slice(lead.length).replace(/[^\n]/g, ' '),
+    )
+    .split('\n')
+    .map((line) => (line.trimStart().startsWith('*') ? '' : line))
     .join('\n');
 }
 
@@ -159,6 +165,14 @@ describe('US English', () => {
       { where: 'x.ts:1', word: 'recognised' },
     ]);
     expect(sightings('x.ts', 'honourVendorHold: true', BRITISH_WORDS)).toEqual([]);
+  });
+
+  it('keeps code that follows a glob-like string, and drops a real comment', () => {
+    const source = "const hosts = ['https://*.js.stripe.com', 'colour'];\n/* colour */\n// colour";
+
+    expect(sightings('x.ts', withoutComments(source), BRITISH_WORDS)).toEqual([
+      { where: 'x.ts:1', word: 'colour' },
+    ]);
   });
 
   it('has no British spelling in the legal pages', () => {
