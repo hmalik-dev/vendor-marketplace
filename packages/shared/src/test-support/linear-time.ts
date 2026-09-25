@@ -6,10 +6,11 @@ import { expect } from 'vitest';
  */
 const HOSTILE_SIZE = 200_000;
 /**
- * Linear work on `HOSTILE_SIZE` characters takes well under a millisecond, so
- * this budget is a thousandfold margin a loaded runner cannot eat, while the
- * quadratic readings above miss it several times over. A ratio of two timings
- * would be tighter and flaked a release at 24.0013 against 24 (VEN-758).
+ * The slowest linear caller, the full error scrubber, takes about 27 ms on
+ * `HOSTILE_SIZE` characters and the trims well under one, so this budget is a
+ * margin of over 35 times a loaded runner cannot eat, while quadratic work
+ * misses it several times over. Tightening it narrows that margin: a ratio of
+ * two timings was tighter and flaked a release at 24.0013 against 24 (VEN-758).
  */
 const BUDGET_MS = 1_000;
 
