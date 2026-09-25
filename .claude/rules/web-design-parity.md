@@ -329,7 +329,7 @@ design pass, not by a ticket.
 `15` draws "…taken their listing down. Nothing is wrong with your account." and
 frame `16` draws "This wasn't anything you did. We've been notified and we're
 looking at it." The copy audit dropped both reassurances: the 404 reads "The
-link may be old, or the vendor took their listing down." and the 500 reads
+link may be old, or a vendor took their listing down." and the 500 reads
 "We've been alerted and we're looking into it." A parity pass reading the old
 sentences is reading this ruling.
 

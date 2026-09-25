@@ -170,7 +170,7 @@ export function connectionFailure(): UploadFailure {
     kind: 'connection-dropped',
     tone: 'red',
     reason: 'The connection dropped.',
-    fix: 'Send it again.',
+    fix: 'The file is fine. Send it again.',
     retryable: true,
   };
 }

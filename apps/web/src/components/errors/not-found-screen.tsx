@@ -49,7 +49,7 @@ export async function NotFoundScreen(): Promise<React.ReactElement> {
         12.5 (VEN-418).
       */}
       <p className="mt-3 max-w-[440px] text-cta leading-[1.65] text-stone-700">
-        The link may be old, or the vendor took their listing down.
+        The link may be old, or a vendor took their listing down.
       </p>
 
       <div className="mt-6.5 flex flex-wrap justify-center gap-3">
