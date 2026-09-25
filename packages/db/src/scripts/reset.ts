@@ -202,7 +202,7 @@ export interface SchemaTable {
 }
 
 export function schemaTables(): SchemaTable[] {
-  return Object.values(schema)
+  return (Object.values(schema) as unknown[])
     .filter((value): value is PgTable => is(value, PgTable))
     .map((table) => {
       const config = getTableConfig(table);
@@ -522,7 +522,8 @@ export async function runResetCli(
       host: host.replace(/^\[|\]$/g, ''),
       port,
       max: 1,
-      connection: MIGRATION_SESSION_SETTINGS,
+      // Widened as `createDatabase` does: postgres.js sends these as startup strings.
+      connection: MIGRATION_SESSION_SETTINGS as Record<string, string>,
       onnotice: () => {},
     });
     try {
