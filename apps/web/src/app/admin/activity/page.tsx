@@ -45,6 +45,7 @@ export default async function AdminActivityPage({
     subject?: RawParam;
     subjectType?: RawParam;
     range?: RawParam;
+    q?: RawParam;
     page?: RawParam;
   }>;
 }): Promise<React.ReactElement> {
@@ -56,7 +57,9 @@ export default async function AdminActivityPage({
    * 500 page for a URL anyone can paste into a support thread.
    */
   const params = activityParams(raw);
-  const dropped = droppedKeys(raw, params);
+  // A blank search is no search, not an unusable value, so `q` is never reported as ignored.
+  const { q, ...narrowing } = params;
+  const dropped = droppedKeys(raw, narrowing);
   const [activity, { actors }] = await Promise.all([
     getAdminActivity(adminQueryString({ ...params, page: pageNumber(raw.page) })),
     getAdminActivityActors(),
@@ -77,6 +80,7 @@ export default async function AdminActivityPage({
     { key: 'range', widening: 'All time' },
     { key: 'action', widening: 'Any action' },
     { key: 'subject', widening: 'Any subject' },
+    { key: 'q', widening: 'Clear the search' },
   ]
     .filter((filter) => params[filter.key as keyof typeof params] !== undefined)
     .map((filter) => ({ ...filter, carried: { ...params, [filter.key]: undefined } }));
@@ -87,9 +91,11 @@ export default async function AdminActivityPage({
    * so the state names the filter the way it was set rather than by its
    * parameter name.
    */
-  const filteredHeadline = params.action
-    ? `No "${ACTION_LABELS[params.action]}" actions match the rest of these filters`
-    : 'No console activity matches these filters';
+  const filteredHeadline = q
+    ? `No console activity matches "${q}"${Object.values(narrowing).some(Boolean) ? ' and these filters' : ''}`
+    : params.action
+      ? `No "${ACTION_LABELS[params.action]}" actions match the rest of these filters`
+      : 'No console activity matches these filters';
 
   return (
     <AdminSurface
@@ -100,6 +106,8 @@ export default async function AdminActivityPage({
         <FilterBar
           action={PATH}
           params={params}
+          searchPlaceholder="Search admin or subject id…"
+          searchValue={q}
           trailing={<ExportCsvLink href={`${PATH}/export${adminQueryString(params)}`} />}
         >
           {/*

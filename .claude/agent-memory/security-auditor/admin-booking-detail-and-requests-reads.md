@@ -24,3 +24,8 @@ VEN-743 (2026-09-24) PASS: free-text `q` on `/admin/bookings` + `/admin/payments
 names `users`/`vendorProfiles`, so every count and widening scan must carry those
 joins or the query errors. Web `boundedText` strips only NUL and slices pre-NFC;
 the API still refuses controls/over-length after NFC — a 400, never an injection.
+
+VEN-749 (2026-09-25) PASS: same `q` on `/admin/requests` (now matches customer
+**email** too — admin-only, so accepted), `/admin/reviews`, `/admin/activity`
+(`subject_id::text`) and the activity CSV export (`refuseUnlessAdmin` first).
+Headlines quote `q` through JSX text only; keep it out of `dangerouslySetInnerHTML`.

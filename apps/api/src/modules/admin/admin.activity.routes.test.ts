@@ -16,6 +16,7 @@ import {
   vendorTags,
 } from '@vendor-marketplace/db/schema';
 import type { AdminActionRow } from '@vendor-marketplace/db/schema';
+import { ERROR_CODES, MAX_NAME_LENGTH } from '@vendor-marketplace/shared';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 
@@ -874,6 +875,85 @@ describe('the admin action log', () => {
         headers: bearer(ADMIN),
       });
       expect(refused.statusCode).toBe(400);
+    });
+
+    /** The search box (VEN-749): the actor's email or name, or the start of a subject id. */
+    it('narrows by a search over the actor and the subject id', async () => {
+      const actorId = await signIn(ADMIN, true);
+      const otherActorId = await signIn(OTHER_ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+      const vendorUserId = await signIn(VENDOR);
+      await harness.database.db
+        .update(users)
+        .set({ firstName: 'Marguerite', lastName: 'Okonkwo' })
+        .where(eq(users.id, otherActorId));
+
+      const rows = await harness.database.db
+        .insert(adminActions)
+        .values(
+          [
+            { actorId, subjectId: customerId },
+            { actorId: otherActorId, subjectId: customerId },
+            { actorId, subjectId: vendorUserId },
+          ].map((row) => ({
+            ...row,
+            action: 'user_banned' as const,
+            subjectType: 'user' as const,
+            detail: {},
+          })),
+        )
+        .returning({ id: adminActions.id });
+      const [mine, theirs, onTheVendor] = rows.map((row) => row.id);
+
+      const ids = async (query: string): Promise<string[]> => {
+        const response = await harness.app.inject({
+          method: 'GET',
+          url: `/v1/admin/activity?${query}`,
+          headers: bearer(ADMIN),
+        });
+        expect(response.statusCode, query).toBe(200);
+        expect(response.json().total, query).toBe(response.json().items.length);
+
+        return response
+          .json()
+          .items.map((row: { id: string }) => row.id)
+          .sort();
+      };
+
+      expect(await ids('q=USER_ACTIVITY_ADMIN_TWO@')).toEqual([theirs]);
+      expect(await ids('q=marguerite%20okon')).toEqual([theirs]);
+      expect(await ids(`q=${vendorUserId.slice(0, 8)}`)).toEqual([onTheVendor]);
+      expect(await ids('q=nobody-by-that-name')).toEqual([]);
+      expect(await ids(`q=user_activity_admin@&subject=${customerId}`)).toEqual([mine]);
+      // As wildcards these would match `user_activity_admin@…`; literally, nothing is named so.
+      expect(await ids('q=user%25activity')).toEqual([]);
+      expect(await ids('q=user_activity_admi_')).toEqual([]);
+      expect(await ids('q=')).toEqual([mine, theirs, onTheVendor].sort());
+      expect(await ids('q=%20%20')).toEqual([mine, theirs, onTheVendor].sort());
+
+      const emptied = await harness.app.inject({
+        method: 'GET',
+        url: `/v1/admin/activity?q=${vendorUserId.slice(0, 8)}&subject=${customerId}`,
+        headers: bearer(ADMIN),
+      });
+      expect(emptied.json()).toMatchObject({
+        items: [],
+        widenings: [
+          { key: 'subject', count: 1 },
+          { key: 'q', count: 2 },
+        ],
+      });
+
+      const over = await harness.app.inject({
+        method: 'GET',
+        url: `/v1/admin/activity?q=${'a'.repeat(MAX_NAME_LENGTH + 1)}`,
+        headers: bearer(ADMIN),
+      });
+      expect(over.statusCode).toBe(400);
+      expect(over.json()).toMatchObject({
+        error: ERROR_CODES.VALIDATION_ERROR,
+        message: 'Request validation failed',
+      });
     });
 
     /** Pattern A's `Actor ▾` (VEN-388): only the admins the log names. */

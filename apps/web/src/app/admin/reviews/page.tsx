@@ -2,11 +2,12 @@ import { REVIEW_TYPES } from '@vendor-marketplace/shared';
 import { AdminSurface } from '@/components/admin/admin-surface';
 import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
 import { OutOfRange } from '@/components/admin/out-of-range';
-import { FilteredEmpty } from '@/components/admin/filtered-empty';
+import { FilteredEmpty, type ActiveFilter } from '@/components/admin/filtered-empty';
 import { ReviewTable } from '@/components/admin/review-table';
 import { getAdminReviews } from '@/lib/admin-data';
 import {
   adminQueryString,
+  boundedText,
   droppedKeys,
   oneOf,
   pageNumber,
@@ -23,12 +24,21 @@ const TYPE_LABELS: Record<string, string> = {
 export default async function AdminReviewsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: RawParam; page?: RawParam }>;
+  searchParams: Promise<{ type?: RawParam; q?: RawParam; page?: RawParam }>;
 }): Promise<React.ReactElement> {
   const raw = await searchParams;
   const type = oneOf(raw.type, REVIEW_TYPES);
+  const q = boundedText(raw.q);
   const dropped = droppedKeys(raw, { type });
-  const reviews = await getAdminReviews(adminQueryString({ type, page: pageNumber(raw.page) }));
+  const params = { type, q };
+  const reviews = await getAdminReviews(
+    adminQueryString({ ...params, page: pageNumber(raw.page) }),
+  );
+  const typeLabel = type && (TYPE_LABELS[type] ?? type);
+  const active: ActiveFilter[] = [
+    { key: 'type', widening: 'Both directions', carried: { q } },
+    { key: 'q', widening: 'Clear the search', carried: { type } },
+  ].filter((filter) => params[filter.key as keyof typeof params] !== undefined);
 
   return (
     <AdminSurface
@@ -36,7 +46,12 @@ export default async function AdminReviewsPage({
       counts={[`${reviews.total} total`]}
       dropped={dropped}
       filters={
-        <FilterBar action={PATH} params={{ type }}>
+        <FilterBar
+          action={PATH}
+          params={params}
+          searchPlaceholder="Search author, vendor or review…"
+          searchValue={q}
+        >
           <FilterSelect
             action={PATH}
             name="type"
@@ -51,7 +66,7 @@ export default async function AdminReviewsPage({
       }
       pager={{
         path: PATH,
-        params: { type },
+        params,
         page: reviews.page,
         pageSize: reviews.pageSize,
         total: reviews.total,
@@ -59,12 +74,12 @@ export default async function AdminReviewsPage({
     >
       <ReviewTable
         rows={reviews.items}
-        filtered={Boolean(type)}
+        filtered={Boolean(type ?? q)}
         pastEnd={
           reviews.items.length === 0 && reviews.total > 0 ? (
             <OutOfRange
               path={PATH}
-              params={{ type }}
+              params={params}
               page={reviews.page}
               pageSize={reviews.pageSize}
               total={reviews.total}
@@ -72,16 +87,20 @@ export default async function AdminReviewsPage({
           ) : undefined
         }
         /*
-         * One filter, so one counted way out (#454). `isPublic` is a moderation
+         * One counted way out per filter (#454). `isPublic` is a moderation
          * state this table renders rather than a filter the bar offers, so
          * there is nothing else to widen.
          */
         filteredEmpty={
-          type ? (
+          active.length > 0 ? (
             <FilteredEmpty
-              headline={`No ${(TYPE_LABELS[type] ?? type).toLowerCase()} reviews`}
+              headline={
+                q
+                  ? `No reviews match "${q}"${typeLabel ? ` and ${typeLabel}` : ''}`
+                  : `No ${typeLabel?.toLowerCase()} reviews`
+              }
               path={PATH}
-              filters={[{ key: 'type', widening: 'Both directions', carried: {} }]}
+              filters={active}
               widenings={reviews.widenings}
             />
           ) : undefined
