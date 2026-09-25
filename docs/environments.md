@@ -204,3 +204,59 @@ wanted here.
   Neon branch, migrate it, run the reference seed, and re-create its Neon Auth
   identities. Do not run `pnpm db:seed:demo` or `pnpm db:seed:e2e` against
   production.
+
+### `pnpm db:reset` (VEN-751)
+
+Empties a tier's app data in one transaction and keeps the schema. It connects
+over `DATABASE_URL_UNPOOLED` (the migration role) and never prints it.
+
+| Kept                                                                 | Deleted                                                                                                                       |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `drizzle.__drizzle_migrations`                                       | every customer and vendor, and every row they own                                                                             |
+| `categories`, `tags`, `us_cities` (the reference seed)               | bookings, requests, payments, refunds, reviews, messages, notifications                                                       |
+| `platform_settings`                                                  | support cases, admin alerts, audit rows (`admin_actions`, `booking_events`), email deliveries                                 |
+| `email_send_days` (it mirrors Resend's daily quota)                  | invites, the waitlist, sign-up roles, step-up challenges and grants, stream tickets, rate-limit rows, Stripe webhook failures |
+| every `users` row with role `admin`, and its own `legal_acceptances` |                                                                                                                               |
+
+Guards: `--tier` and `--confirm <database name>` are required; the host must be
+the tier's (staging `ep-jolly-poetry-ax8noqyz`, production
+`ep-lucky-cherry-axtyizs9`, local `localhost`); a run without `--yes` prints the
+counts and deletes nothing; `--dry-run` does the same and exits 0. A new table
+fails the suite until it is added to a list in `packages/db/src/scripts/reset.ts`.
+
+`<database>` is the connected database's name (`neondb` on a Neon branch
+unless renamed). Staging, with the staging environment's
+`DATABASE_URL_UNPOOLED` exported:
+
+```bash
+pnpm db:reset --tier staging --confirm <database> --dry-run  # read the counts
+pnpm db:reset --tier staging --confirm <database> --yes --auth
+pnpm db:seed       # reference data: already kept, and idempotent
+pnpm db:seed:demo  # staging carries the demo seed
+```
+
+Production, with the production environment's `DATABASE_URL_UNPOOLED` exported:
+
+```bash
+pnpm db:reset --tier production --confirm <database> --dry-run
+pnpm db:reset --tier production --confirm <database> --yes --auth
+```
+
+Production gets no demo or E2E seed; the next release's migrate step runs the
+reference seed on its own. Pause checkout in `/admin` first, so no payment
+lands mid-reset, and resume it after: `platform_settings` is kept, switches
+included.
+
+What the reset does not touch:
+
+- **Neon Auth identities**, unless `--auth` is passed. With it, every identity
+  in the branch's `neon_auth` schema goes except the admins' (sessions and
+  accounts cascade). Without it, a former user who signs in has an identity
+  and no app row, so the app treats them as a newcomer: they pick a role and
+  accept the Terms again. `--auth` is refused on local, whose identities live
+  on the shared `dev` branch.
+- **Stored images.** Nothing references them after a reset, and the API's
+  upload sweep (VEN-485) deletes unreferenced objects older than 24 hours, so
+  the bucket empties itself within a day.
+- **Stripe.** Test-mode customers and connected accounts stay in the Stripe
+  sandbox; no app row points at them.

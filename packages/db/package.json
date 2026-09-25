@@ -41,6 +41,7 @@
     "seed:marketing": "tsx src/scripts/seed-marketing.ts",
     "seed:e2e": "tsx src/scripts/seed-e2e.ts",
     "seed:demo": "tsx src/scripts/seed-demo.ts",
+    "reset": "tsx src/scripts/reset-cli.ts",
     "e2e:dates": "tsx src/scripts/e2e-booking-dates.ts",
     "e2e:admin": "tsx src/scripts/e2e-admin.ts",
     "e2e:mail-code": "tsx src/scripts/e2e-mail-code-cli.ts",

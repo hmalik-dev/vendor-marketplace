@@ -41,6 +41,7 @@
     "db:seed:e2e": "pnpm --filter @vendor-marketplace/db seed:e2e",
     "db:seed:e2e:draft": "pnpm --filter @vendor-marketplace/db seed:e2e --draft",
     "db:seed:demo": "pnpm --filter @vendor-marketplace/db run seed:demo",
+    "db:reset": "pnpm --filter @vendor-marketplace/db run reset",
     "db:studio": "pnpm --filter @vendor-marketplace/db studio",
     "prepare": "git config core.hooksPath .githooks || true"
   },
