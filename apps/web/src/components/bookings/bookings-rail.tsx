@@ -94,7 +94,7 @@ export function BookingsRail({
           {needsYou.length > 0 ? (
             <ul aria-labelledby="needs-you-heading" className="mb-5">
               {needsYou.map((item) => (
-                <li key={item.entry.id} className="mb-2.5 rounded-xl bg-clay-100 p-3.25">
+                <li key={item.entry.id} className="mb-2.5 rounded-panel bg-clay-100 p-3.25">
                   <div className="flex items-start gap-2.25">
                     <span
                       aria-hidden="true"

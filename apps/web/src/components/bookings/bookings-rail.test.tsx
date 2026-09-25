@@ -150,6 +150,8 @@ describe('BookingsRail', () => {
 
       const panel = screen.getByText('Casa Verde sent a quote').closest('li') as HTMLElement;
       expect(panel.className.split(' ')).toContain('bg-clay-100');
+      // Frame `07` draws the panel at 12px (`rounded-panel`), not the 14px card radius.
+      expect(panel.className.split(' ')).toContain('rounded-panel');
       expect(within(panel).getByText('$3,840 quoted · expires in 3d')).toBeDefined();
       expect(within(panel).getByRole('link', { name: 'Review quote' }).getAttribute('href')).toBe(
         '/bookings/e1',
