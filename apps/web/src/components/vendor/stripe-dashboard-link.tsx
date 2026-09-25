@@ -11,7 +11,14 @@ import { useApi } from '@/lib/use-api';
  * single-use link the API mints on the click, so it cannot be rendered into
  * the markup. The failure sentence is the same one the connect button uses.
  */
-export function StripeDashboardLink(): React.ReactElement {
+export interface StripeDashboardLinkProps {
+  /** What the control reads at rest; frame `49`'s account card says `Manage in Stripe`. */
+  label?: string;
+}
+
+export function StripeDashboardLink({
+  label = 'Open your Stripe dashboard',
+}: StripeDashboardLinkProps = {}): React.ReactElement {
   const request = useApi();
   const [isOpening, setIsOpening] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -48,7 +55,7 @@ export function StripeDashboardLink(): React.ReactElement {
   return (
     <>
       <Button type="button" variant="ghost" loading={isOpening} onClick={open}>
-        {isOpening ? 'Opening Stripe…' : 'Open your Stripe dashboard'}
+        {isOpening ? 'Opening Stripe…' : label}
       </Button>
       {failed ? (
         <span role="alert" className="block text-sm text-error-500">

@@ -231,7 +231,7 @@ export async function getVendorDashboard(
  * The empty answers are `null` and zero rather than a carried-over date: a
  * vendor owed nothing is owed nothing, undated (acceptance 4).
  */
-function toPayoutSummary(
+export function toPayoutSummary(
   rows: OwedPayoutTotalRow[],
   soonest: NextPendingPayoutRow | null,
   debt: VendorDebtTotals,

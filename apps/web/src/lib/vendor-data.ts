@@ -39,10 +39,12 @@ import {
   type WireVendorProfile,
   type WireVendorReviewsPage,
   type WireVendorPayoutStatus,
+  type WireVendorPayouts,
   wireVendorPayoutStatusSchema,
   type WireVendorAgreementStatus,
   wireVendorAgreementStatusSchema,
   wireVendorTaxYearsSchema,
+  wireVendorPayoutsSchema,
 } from './wire-schemas';
 
 /**
@@ -627,6 +629,17 @@ export async function getPayoutStatus(): Promise<WireVendorPayoutStatus | null> 
       return null;
     }
 
+    throw await rethrowUnlessSessionFailure(error, signInPath);
+  }
+}
+
+/** The payments page's summary, payout account and rows (VEN-768). */
+export async function getVendorPayouts(): Promise<WireVendorPayouts> {
+  const { token, signInPath } = await vendorSession();
+
+  try {
+    return await apiRequest('/vendor/payouts', { schema: wireVendorPayoutsSchema, token });
+  } catch (error) {
     throw await rethrowUnlessSessionFailure(error, signInPath);
   }
 }

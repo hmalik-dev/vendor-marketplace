@@ -11,11 +11,16 @@ import {
   vendorSlugSuccessorSchema,
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
-import { publicAvailabilitySchema, vendorDashboardSchema } from '@vendor-marketplace/shared';
+import {
+  publicAvailabilitySchema,
+  vendorDashboardSchema,
+  vendorPayoutsSchema,
+} from '@vendor-marketplace/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { assertRole } from '../../lib/guards.js';
 import { requireRole, requireRoleBeforeValidation } from '../../lib/guards.js';
 import { getVendorDashboard } from './dashboard.service.js';
+import { getVendorPayouts } from './vendor-payouts.service.js';
 import {
   createVendorProfile,
   getOwnVendorProfile,
@@ -52,6 +57,18 @@ export const vendorRoutes: FastifyPluginAsyncZod = async (app) => {
      */
     async (request) =>
       getVendorDashboard(app.db, assertRole(request.auth, ['vendor']).id, app.clock()),
+  );
+
+  /** The payments page's figures, rows and payout bank — the vendor's own only (VEN-768). */
+  app.get(
+    '/vendor/payouts',
+    { preHandler: vendorOnly, schema: { response: { 200: vendorPayoutsSchema } } },
+    async (request) =>
+      getVendorPayouts(
+        { db: app.db, stripe: app.stripe, log: request.log },
+        assertRole(request.auth, ['vendor']).id,
+        app.clock(),
+      ),
   );
 
   /*

@@ -46,7 +46,7 @@
 - [The public price filter is a pricing oracle](search-price-filter-is-a-pricing-oracle.md) — any-package EXISTS was binary-searchable
 - [`/places` replaced an inventory oracle](places-endpoint-replaced-an-inventory-oracle.md) — no `ESCAPE` is correct on Postgres
 - [The data-rights export is hand-enumerated](data-rights-export-is-hand-enumerated.md) — a new `users` PII column misses the DSAR file
-- [Response schemas are a second write boundary](response-schemas-are-a-second-write-boundary.md) — widen a write schema alone and a reader 500s
+- [Response schemas are a second write boundary](response-schemas-are-a-second-write-boundary.md) — widen a write schema alone and a reader 500s; zod counts UTF-16 units, varchar code points
 - [`'use client'` publishes a pane's props](client-component-props-are-public-html.md) — RSC payload is public
 - [JSON-LD is the only raw-HTML sink in web](json-ld-is-the-only-raw-html-sink.md) — `serialiseJsonLd` mandatory
 - [`canBook` is chrome, not a gate](canbook-is-chrome-not-a-gate.md) — three server checks refuse a vendor
