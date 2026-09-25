@@ -26,7 +26,7 @@
 - [`getCurrentUser`'s cache() is safe; route dynamism is borrowed](identity-read-is-cached-and-route-dynamism-is-inherited.md) — `/` has no `force-dynamic`; VEN-745 client store clean
 - [Email is a label, the auth id is the key](email-uniqueness-is-partial-nothing-joins-by-email.md) — partial `lower(email)` index + lowercase CHECK (VEN-649)
 - [Closing an account releases its address, scrubs the row, deletes uploads](closed-account-address-is-released.md) — VEN-614/672/687 scrubs (0089/0093/0097) clean
-- [The sign-up role is recorded server-side, first write wins](signup-role-is-confirmed-not-narrowed.md) — VEN-662 squat (Low); VEN-663 reset forgets it, no-record screen is a dead end
+- [The sign-up role is recorded server-side, first write wins](signup-role-is-confirmed-not-narrowed.md) — VEN-662 squat (Low); VEN-663 reset forgets it; VEN-756 verified rows survive (rests on the 422)
 - [Route handlers do not inherit layout gates](route-handlers-do-not-inherit-layout-gates.md) — `/admin/vendors/export` authorizes itself; [layout gates run beside the page](layout-gates-run-concurrently-with-the-page.md) (VEN-715)
 - [Validation runs before preHandler guards](schema-validation-runs-before-prehandler-guards.md) — `requireAuthBeforeValidation`; two enum routes left low
 - [The event stream's auth is hand-rolled on purpose](stream-route-auth-is-hand-rolled.md) — `requireAuth` breaks it; keep the inline ban check

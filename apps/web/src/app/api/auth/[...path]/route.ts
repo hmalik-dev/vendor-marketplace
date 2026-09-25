@@ -272,8 +272,8 @@ async function invalidateSessionsAtApi(userId: string | undefined): Promise<void
  * reset (VEN-663). Whoever signed the address up first chose that role, and
  * unless the address verified it (VEN-756, kept by the API) the reset is the
  * holder's first proof of the address, so `/accept-terms` must not state the
- * earlier choice as theirs. The reset has already
- * succeeded, so a failure is reported, never turned into a failed reset.
+ * earlier choice as theirs. The reset has already succeeded, so a failure is
+ * reported, never turned into a failed reset.
  */
 async function forgetSignUpRole(userId: string | undefined): Promise<void> {
   const key = process.env.WEB_TIER_KEY;
