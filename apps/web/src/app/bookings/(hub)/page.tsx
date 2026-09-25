@@ -2,7 +2,12 @@ import type { Metadata } from 'next';
 import { pageTitle, toDateString } from '@vendor-marketplace/shared';
 import { BookingsHub, BOOKING_TABS } from '@/components/bookings/bookings-hub';
 import { BookingsRail } from '@/components/bookings/bookings-rail';
-import { BOOKING_SORTS, type BookingSort, type BookingTab } from '@/lib/booking-entries';
+import {
+  BOOKING_SORTS,
+  needsYouItems,
+  type BookingSort,
+  type BookingTab,
+} from '@/lib/booking-entries';
 import { getOwnConversationBand } from '@/lib/messaging-data';
 import { requireRole } from '@/lib/current-user';
 import { readOwnBookingEntries } from '@/lib/own-booking-entries';
@@ -115,8 +120,8 @@ export default async function BookingsPage({
    */
   const today = toDateString(new Date());
 
-  // Clay is reserved for the reader's own move, and a quote is exactly that.
-  const needsYou = entries.filter((entry) => entry.status === 'quoted');
+  // Clay is reserved for the reader's own move: a quote to answer, a request to pay for.
+  const needsYou = needsYouItems(entries);
 
   return (
     <div className="flex h-full overflow-hidden">

@@ -280,6 +280,50 @@ export function toEntries(
   ].sort((left, right) => left.eventDate.localeCompare(right.eventDate));
 }
 
+/**
+ * One thing waiting on the customer, as the rail's `Needs you` panel draws it:
+ * a quote to review or decline, or an accepted request to pay for.
+ */
+export interface NeedsYouItem {
+  kind: 'quote' | 'pay';
+  entry: BookingEntry;
+  /** "Casa Verde sent a quote" — the rail and the list-column mirror share it. */
+  title: string;
+  /** The panel's primary action; `Decline` rides beside a quote's. */
+  action: { label: string; href: string };
+}
+
+/**
+ * Everything in `entries` that waits on the customer, quotes first, then the
+ * accepted requests awaiting payment — frame `07` and
+ * `20-customer-bookings-hub.md`'s "Accepted → Pay now".
+ *
+ * Only request rows qualify. A paid request is already a booking row in
+ * `toEntries`, so it can never surface here as a second `Pay now`.
+ */
+export function needsYouItems(entries: readonly BookingEntry[]): NeedsYouItem[] {
+  const requests = entries.filter((entry) => entry.kind === 'request');
+
+  return [
+    ...requests
+      .filter((entry) => entry.status === 'quoted')
+      .map((entry) => ({
+        kind: 'quote' as const,
+        entry,
+        title: `${entry.vendorName} sent a quote`,
+        action: { label: 'Review quote', href: `/bookings/${entry.requestId}` },
+      })),
+    ...requests
+      .filter((entry) => entry.status === 'accepted')
+      .map((entry) => ({
+        kind: 'pay' as const,
+        entry,
+        title: `${entry.vendorName} accepted your request`,
+        action: { label: 'Pay now', href: `/bookings/${entry.requestId}/checkout` },
+      })),
+  ];
+}
+
 export type BookingTab = 'upcoming' | 'history' | 'all';
 
 /**
