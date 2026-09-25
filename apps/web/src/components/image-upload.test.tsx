@@ -216,9 +216,7 @@ describe('ImageUpload', () => {
 
     fireEvent.error(await uploadOnto());
 
-    expect(
-      await screen.findByText('That photo saved, but the preview would not load.'),
-    ).toBeDefined();
+    expect(await screen.findByText("That photo saved, but its preview didn't load.")).toBeDefined();
     // Re-sending stores a second object that would not render either.
     expect(screen.getByText('Reload the page to see it.')).toBeDefined();
     expect(toastSuccess).not.toHaveBeenCalled();

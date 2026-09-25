@@ -48,9 +48,7 @@ export function UnsavedChangesDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Leave without saving?</DialogTitle>
-          <DialogDescription>
-            Your changes to this {noun} have not been saved. Leaving now discards them.
-          </DialogDescription>
+          <DialogDescription>Leaving now discards your changes to this {noun}.</DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={cancelLeave}>

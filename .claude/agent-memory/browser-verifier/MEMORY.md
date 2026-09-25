@@ -43,3 +43,4 @@
 - [Neon drops reset mail within ~60s of a burst](neon-suppresses-reset-mail-within-a-minute-of-a-burst.md) — allowed owner request 15-40s after a stranger's 5 sends got no mail; wait 70s+; Mailosaur lists lag; URL() in run_code listeners resets the page
 - [Failed-payout fixture needs paid_at; Retry button is clipped by the cell](failed-payout-fixture-needs-paid-at-and-cell-clips-retry.md) — only 1 paid booking seeded; hit-test Retry at 1024 (fully clipped there)
 - [Neon Auth codes bypass the lane mailbox](neon-auth-codes-bypass-lane-mailbox.md) — sign-up/reset codes come from Neon Auth directly; use real Mailosaur + `pnpm e2e:mail-code`, not `/__lane/mailbox/latest`
+- [Killing the API port can take web down too](killing-api-port-can-take-down-web-too.md) — reproducible collateral with many concurrent lanes; re-curl the web port right after, budget extra Bash calls to restart it

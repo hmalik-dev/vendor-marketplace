@@ -335,7 +335,7 @@ describe('ErrorScreen — the chrome frame 16 draws, and the chrome it removes',
   it('takes the frame type scale, not the shell it inherited', () => {
     render(<ErrorScreen digest="err_9F3K2QX7" reset={vi.fn()} />);
 
-    const body = screen.getByText(/This wasn't anything you did/);
+    const body = screen.getByText("We've been alerted and we're looking into it.");
 
     expect(screen.getByRole('heading', { level: 1 }).className).toContain('text-display-error');
     expect(body.className).toContain('text-cta');
@@ -353,7 +353,8 @@ describe('ErrorScreen — the chrome frame 16 draws, and the chrome it removes',
 
     const text = document.body.textContent ?? '';
 
-    expect(text).toContain("This wasn't anything you did.");
+    expect(text).toContain("We've been alerted and we're looking into it.");
+    expect(text).not.toContain("This wasn't anything you did");
     expect(text).not.toContain('’');
   });
 });

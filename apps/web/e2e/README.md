@@ -60,7 +60,7 @@ recreating it.
 
 A full pass makes more than `RATE_LIMIT_MAX` requests a minute (**120** by
 default), and the API then answers **429**. The app renders that as the generic
-500 page — _"Something broke on our end… We've been notified"_ — so a throttled
+500 page — _"Something broke on our end… We've been alerted"_ — so a throttled
 run looks exactly like a broken feature. Start the lane's API with the limit
 raised:
 
