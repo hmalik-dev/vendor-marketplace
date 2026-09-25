@@ -32,7 +32,8 @@ Acceptances are append-only and undeletable ([[legal-acceptance-record-is-undele
 so between releases every one of these gates can only flip false→true, which is
 what makes the locked re-check in `updateVendorProfile` sufficient.
 
-VEN-708 (v1.0→v1.1, Terms too) was the first real bump: clean. Every gate reads
+VEN-708 (v1.0→v1.1, Terms too) was the first real bump: clean; VEN-730 (v1.2)
+and VEN-740 (v1.3, copy trim) clean the same way. Every gate reads
 the constant, so a bump re-gates publish/checkout/accept and leaves payout owed;
 the only artefacts to check are the manifest hashes (`shasum -a 256` the two
 `.md` files) and that `scripts/legal-manifest.mjs` refuses same-version repins.
