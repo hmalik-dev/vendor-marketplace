@@ -503,66 +503,36 @@ export function DropdownCheck(): React.ReactElement {
 }
 
 /**
- * The footer that multi-select and range share: a primary Apply and a Clear.
+ * The footer that multi-select and range share: what the current selection
+ * produced, and a Clear once there is something to clear.
  *
- * Both bodies have one because **neither auto-applies** — a filter that fires
- * per keystroke makes the results grid flicker and re-sort under the hand that
- * is still typing.
+ * Frame `28`: **no Apply.** A tick or a preset is a discrete commit, so each
+ * one filters immediately and this line reports the count it produced. Typing
+ * to narrow a list is not a commit and never reaches the results.
  */
 export function DropdownFooter({
-  applyLabel,
-  onApply,
+  summary,
   onClear,
-  applyDisabled = false,
 }: {
-  applyLabel: string;
-  onApply: () => void;
-  onClear: () => void;
-  applyDisabled?: boolean;
+  summary: string;
+  /** Omitted while nothing is selected: Clear appears only with a selection. */
+  onClear?: () => void;
 }): React.ReactElement {
   return (
-    <div className="flex items-center gap-2 px-1.5 pt-1 pb-0.5">
-      <button
-        type="button"
-        onClick={onApply}
-        disabled={applyDisabled}
-        className="rounded-md bg-clay-400 px-[15px] py-2 text-[12.5px] font-semibold text-stone-0 disabled:opacity-50"
-      >
-        {applyLabel}
-      </button>
-      <button
-        type="button"
-        onClick={onClear}
-        className="text-[12.5px] font-medium text-stone-600 hover:text-stone-900"
-      >
-        Clear
-      </button>
+    <div className="flex items-center justify-between gap-2 px-1.5 pt-1 pb-0.5">
+      <span aria-live="polite" className="text-[11.5px] text-stone-600">
+        {summary}
+      </span>
+      {onClear ? (
+        <button
+          type="button"
+          onClick={onClear}
+          className="text-[12.5px] font-medium text-stone-600 hover:text-stone-900"
+        >
+          Clear
+        </button>
+      ) : null}
     </div>
-  );
-}
-
-/** "N more — scroll", plus the keys that move the list. */
-export function DropdownScrollNote({ hidden }: { hidden: number }): React.ReactElement | null {
-  const { sheet } = useDropdownContext();
-
-  if (hidden <= 0) {
-    return null;
-  }
-
-  if (sheet) {
-    return <div className="px-4 pt-2 text-[11.5px] text-stone-600">{hidden} more — scroll</div>;
-  }
-
-  return (
-    <>
-      <DropdownDivider />
-      <div className="flex items-center justify-between px-3 pt-[7px] pb-1.5">
-        <span className="text-[11.5px] text-stone-600">{hidden} more — scroll</span>
-        <span aria-hidden="true" className="font-mono text-[11px] text-stone-500">
-          ↑↓ ↵
-        </span>
-      </div>
-    </>
   );
 }
 
@@ -672,7 +642,6 @@ export function DropdownList({
   label,
   emptyMessage,
   emptyAction,
-  visibleCount,
   controlled,
 }: {
   options: readonly DropdownOption[];
@@ -701,8 +670,8 @@ export function DropdownList({
     listId: string;
   };
   /**
-   * How many rows fit before the panel scrolls, for the "N more" note. The
-   * note is the only thing that needs the number; the cap itself is CSS.
+   * Rows that fit before the panel scrolls. Frame `28` dropped the "N more —
+   * scroll" note it fed (VEN-761), so nothing reads it; the cap itself is CSS.
    */
   visibleCount?: number;
 }): React.ReactElement {
@@ -847,8 +816,6 @@ export function DropdownList({
     );
   }
 
-  const hidden = visibleCount === undefined ? 0 : Math.max(0, options.length - visibleCount);
-
   return (
     <>
       <div
@@ -880,7 +847,6 @@ export function DropdownList({
           />
         ))}
       </div>
-      <DropdownScrollNote hidden={hidden} />
     </>
   );
 }
