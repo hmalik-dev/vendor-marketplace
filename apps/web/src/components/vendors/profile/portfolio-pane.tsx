@@ -264,7 +264,7 @@ export function PortfolioPane({ items, businessName }: PortfolioPaneProps): Reac
             type="button"
             onClick={close}
             aria-label="Close"
-            className="absolute top-5 right-5 cursor-pointer rounded-full bg-stone-0/10 p-2 text-stone-0 hover:bg-stone-0/20"
+            className="absolute top-5 right-5 grid size-12 cursor-pointer place-items-center rounded-full bg-stone-0/10 text-stone-0 hover:bg-stone-0/20"
           >
             <X aria-hidden="true" className="size-5" />
           </button>
@@ -278,7 +278,7 @@ export function PortfolioPane({ items, businessName }: PortfolioPaneProps): Reac
                   event.stopPropagation();
                   step(-1);
                 }}
-                className="absolute left-5 cursor-pointer rounded-full bg-stone-0/10 p-2 text-stone-0 hover:bg-stone-0/20"
+                className="absolute left-5 grid size-12 cursor-pointer place-items-center rounded-full bg-stone-0/10 text-stone-0 hover:bg-stone-0/20"
               >
                 <ChevronLeft aria-hidden="true" className="size-5" />
               </button>
@@ -289,7 +289,7 @@ export function PortfolioPane({ items, businessName }: PortfolioPaneProps): Reac
                   event.stopPropagation();
                   step(1);
                 }}
-                className="absolute right-5 cursor-pointer rounded-full bg-stone-0/10 p-2 text-stone-0 hover:bg-stone-0/20"
+                className="absolute right-5 grid size-12 cursor-pointer place-items-center rounded-full bg-stone-0/10 text-stone-0 hover:bg-stone-0/20"
               >
                 <ChevronRight aria-hidden="true" className="size-5" />
               </button>
