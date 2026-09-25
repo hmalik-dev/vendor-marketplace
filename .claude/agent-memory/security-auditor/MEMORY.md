@@ -96,7 +96,7 @@
 - [Query-keyed literal maps need `Object.hasOwn`](query-keyed-literal-maps-need-hasown.md) — `?saved=__proto__`
 - [Image key columns are client-supplied](image-key-columns-are-client-supplied.md) — `/_next/image` patterns derive from the storage env var
 - [Every image-ref bypass is FIXED; the host is not](image-ref-scheme-allowlist-is-whitespace-bypassable.md) — any https host still accepted
-- [The image pipeline is one process-wide 2-slot queue](image-pipeline-is-one-process-wide-queue.md) — unbounded FIFO of 12 MB buffers
+- [The image pipeline is one process-wide 2-slot queue](image-pipeline-is-one-process-wide-queue.md) — unbounded FIFO of 12 MB buffers; VEN-625 cap lock holds a pool connection across storage I/O, bounded to 2 slots
 - [NUL/22021 and 22001 fail a statement on demand](free-text-accepts-nul-so-any-text-insert-can-be-failed-on-demand.md) — `freeText()` safe; bare `z.string()` not
 - [Webhook payload text bypasses the bidi strip](provider-payload-text-bypasses-the-bidi-strip.md) — hand-`safeParse` is invisible to the guard
 - [Reviews: profanity floor, eligibility and tombstones](review-profanity-filter-is-a-hard-reject-floor.md) — a review can outlive a cancel; VEN-747 window + reader-keyed join clean

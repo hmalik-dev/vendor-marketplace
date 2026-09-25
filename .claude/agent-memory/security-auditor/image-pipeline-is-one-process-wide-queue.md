@@ -34,3 +34,16 @@ decode path.
 here; a new call site of `processUploadedImage` (a background reprocessor, a
 webhook) shares these 2 slots process-wide and can starve the interactive route.
 Related: [[image-key-columns-are-client-supplied]].
+
+**VEN-625 (audited 2026-09-25):** the per-account image cap is now a recount plus
+both puts inside `withOwnerUploadLock` (`uploads.dao.ts`,
+`pg_advisory_xact_lock(hashtextextended('upload:'||id,0))`). Cap bypass, SQLi and
+error copy are clean: this route is the only writer, `ownedNamespaces` covers every
+prefix, and same-owner waiters get 55P03, which becomes a 503 after the 5s
+`lock_timeout`. Residual (Medium): each upload pins one of the **10 pooled
+connections** across the bucket list and two puts (15s × 2 attempts each, killed
+when idle at 120s). Nothing bounds how many upload transactions are open at once;
+only the 2-slot decode feeds them. A storage brownout plus uploads from about 10
+accounts drains the pool and takes every route down. FIXED in the same PR:
+`withOwnerUploadLock` takes one of `MAX_CONCURRENT_UPLOAD_WRITES` (2) in-memory
+slots before the connection, queue of 8, then 429. Do not re-report the lock choice.
