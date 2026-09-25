@@ -11,21 +11,15 @@ import { describe, expect, it } from 'vitest';
  * reads only what a person can see — string literals, template text and JSX
  * text, through the TypeScript parser — so a comment, an identifier and a bare
  * `'cancelled'` status value never count.
- *
- * `components/admin` is left out: its confirm dialogs and action copy are
- * VEN-737's rewrite, which holds them to the same form.
  */
 
 const WEB_SRC = path.dirname(fileURLToPath(import.meta.url));
-const SKIPPED_DIRS = [path.join(WEB_SRC, 'components/admin')];
 /** Copy written outside the web app that the web app shows: the demo seed's notifications reach the bell. */
 const SHOWN_ELSEWHERE = [path.resolve(WEB_SRC, '../../../packages/db/src/seed-demo.ts')];
 
 const DOUBLE_L = /\bcancell(?:ed|ing)\b/i;
 
 function sourcesUnder(dir: string): string[] {
-  if (SKIPPED_DIRS.includes(dir)) return [];
-
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const full = path.join(dir, entry.name);
 
@@ -103,6 +97,7 @@ describe('canceled on screen', () => {
         'app/admin/cases/[caseId]/page.tsx',
         'app/vendor/bookings/page.tsx',
         'components/vendor/complete-booking.tsx',
+        'components/admin/vendor-table.tsx',
         '../../../packages/db/src/seed-demo.ts',
       ]),
     );
