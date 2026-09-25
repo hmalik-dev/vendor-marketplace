@@ -119,6 +119,31 @@ describe('CustomerDetailsForm', () => {
     expect(submit.className).toContain('w-full');
   });
 
+  /* A blur error would shift the buttons under the pointer and lose the click. */
+  it('does not blur the focused field when Sign out or Continue is pressed', async () => {
+    signOut.mockResolvedValue(undefined);
+    vi.stubGlobal('location', { ...window.location, assign: vi.fn() });
+    const user = userEvent.setup();
+    render(<CustomerDetailsForm returnTo={null} />);
+
+    await user.pointer({
+      keys: '[MouseLeft>]',
+      target: screen.getByRole('button', { name: 'Sign out' }),
+    });
+
+    expect(document.activeElement).toBe(firstName());
+    expect(screen.queryByText('We need your first name.')).toBeNull();
+
+    await user.pointer({ keys: '[/MouseLeft]' });
+    await user.pointer({
+      keys: '[MouseLeft>]',
+      target: screen.getByRole('button', { name: 'Continue' }),
+    });
+
+    expect(document.activeElement).toBe(firstName());
+    expect(screen.queryByText('We need your first name.')).toBeNull();
+  });
+
   describe('field errors (frame 41b)', () => {
     it('shows the first-name error on blur, on that field only', async () => {
       const user = userEvent.setup();

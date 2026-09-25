@@ -42,6 +42,17 @@ const INPUT_CLASS =
   'rounded-[10px] bg-stone-0 aria-invalid:border-[1.5px] aria-invalid:ring-destructive/18 disabled:bg-stone-100 disabled:text-stone-600 disabled:opacity-100';
 
 /**
+ * Pressing either button must not blur the focused field. The first name is
+ * focused on mount, so a blur here would draw its error line under it and push
+ * the buttons down before the mouse is released: the press and the release then
+ * land on different elements and the click is lost. `click` still fires, and a
+ * keyboard user is unaffected.
+ */
+function keepFieldFocus(event: React.MouseEvent): void {
+  event.preventDefault();
+}
+
+/**
  * The mandatory name step (VEN-642), frame `41` and its states `41b` in
  * `design/delta-customer-name-collection/`, drawn in the same `FirstRunShell`
  * as the welcome screen (VEN-744). No "One last step" eyebrow: it is not the
@@ -187,6 +198,7 @@ export function CustomerDetailsForm({ returnTo }: CustomerDetailsFormProps): Rea
           variant="primary"
           disabled={saving}
           loading={saving}
+          onMouseDown={keepFieldFocus}
           className="w-full rounded-[10px] py-[13px] disabled:bg-clay-500"
         >
           {submitLabel}
@@ -197,6 +209,7 @@ export function CustomerDetailsForm({ returnTo }: CustomerDetailsFormProps): Rea
           <button
             type="button"
             disabled={saving}
+            onMouseDown={keepFieldFocus}
             className="mx-auto block text-action font-semibold text-clay-500 hover:text-clay-600 hover:underline disabled:opacity-50"
           >
             Sign out
