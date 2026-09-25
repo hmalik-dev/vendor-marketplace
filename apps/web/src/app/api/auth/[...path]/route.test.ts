@@ -431,6 +431,91 @@ describe('password reset through the auth proxy', () => {
       expect(await paths()).toEqual(['email-otp/reset-password']);
     });
 
+    describe('forgetting the role recorded at sign-up (VEN-663)', () => {
+      const KEY = 'k'.repeat(40);
+      const forgets = (fetchMock: ReturnType<typeof vi.fn>) =>
+        fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/internal/sign-up-role'));
+
+      beforeEach(() => {
+        vi.stubEnv('WEB_TIER_KEY', KEY);
+      });
+
+      afterEach(() => {
+        vi.unstubAllGlobals();
+      });
+
+      it('deletes the record for the id the reset resolves, with the web tier key', async () => {
+        answers(sessionResponse());
+        const fetchMock = vi.fn().mockResolvedValue(Response.json({ forgotten: true }));
+        vi.stubGlobal('fetch', fetchMock);
+
+        const response = await call(RESET, reset);
+
+        expect(response.status).toBe(200);
+        expect(forgets(fetchMock)).toEqual([
+          [
+            expect.stringMatching(/\/v1\/internal\/sign-up-role$/),
+            expect.objectContaining({
+              method: 'DELETE',
+              headers: expect.objectContaining({ 'x-web-tier-key': KEY }),
+              body: JSON.stringify({ authUserId: 'user-9' }),
+            }),
+          ],
+        ]);
+      });
+
+      it('deletes nothing when the code check is refused', async () => {
+        // Only the reset is refused: a sign-in, if one were made, would resolve the id.
+        answers(sessionResponse());
+        const answered = upstreamPost.getMockImplementation();
+        upstreamPost.mockImplementation(async (request, context) =>
+          (await route(context)) === RESET
+            ? Response.json({ code: 'INVALID_OTP' }, { status: 400 })
+            : answered!(request, context),
+        );
+        const fetchMock = vi.fn().mockResolvedValue(Response.json({ forgotten: true }));
+        vi.stubGlobal('fetch', fetchMock);
+
+        const response = await call(RESET, reset);
+
+        expect(response.status).toBe(400);
+        expect(forgets(fetchMock)).toEqual([]);
+      });
+
+      it('deletes nothing when the sign-in after the reset resolves no account', async () => {
+        answers(Response.json({ code: 'INVALID' }, { status: 401 }));
+        const fetchMock = vi.fn().mockResolvedValue(Response.json({ forgotten: true }));
+        vi.stubGlobal('fetch', fetchMock);
+
+        await call(RESET, reset);
+
+        expect(forgets(fetchMock)).toEqual([]);
+      });
+
+      it('reports a refused delete and still answers that the password was reset', async () => {
+        answers(sessionResponse());
+        vi.stubGlobal(
+          'fetch',
+          vi
+            .fn()
+            .mockImplementation(async (url: string) =>
+              url.endsWith('/internal/sign-up-role')
+                ? Response.json({}, { status: 500 })
+                : Response.json({ invalidated: true }),
+            ),
+        );
+
+        const response = await call(RESET, reset);
+
+        expect([response.status, await response.json()]).toEqual([200, { success: true }]);
+        expect(captureMessage).toHaveBeenCalledWith(
+          'Could not forget the sign-up role after a password reset',
+          { level: 'error', extra: { status: 500, authUserId: 'user-9' } },
+        );
+        expect(forgetSessionsFor).toHaveBeenCalledExactlyOnceWith('user-9');
+      });
+    });
+
     it('reports a failed revoke and still answers that the password was reset', async () => {
       answers(sessionResponse(), Response.json({}, { status: 500 }));
 

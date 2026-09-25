@@ -267,6 +267,39 @@ async function invalidateSessionsAtApi(userId: string | undefined): Promise<void
   }
 }
 
+/**
+ * Forgets the role recorded at sign-up for an identity whose password was just
+ * reset (VEN-663). Whoever signed the address up first chose that role, and
+ * the reset is the holder's first proof of the address, so `/accept-terms`
+ * must not state the earlier choice as theirs. The reset has already
+ * succeeded, so a failure is reported, never turned into a failed reset.
+ */
+async function forgetSignUpRole(userId: string | undefined): Promise<void> {
+  const key = process.env.WEB_TIER_KEY;
+
+  if (userId === undefined || !key) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${apiBaseUrl()}/internal/sign-up-role`, {
+      method: 'DELETE',
+      headers: { 'content-type': 'application/json', [WEB_TIER_KEY_HEADER]: key },
+      body: JSON.stringify({ authUserId: userId }),
+      signal: AbortSignal.timeout(SIGN_UP_ROLE_TIMEOUT_MS),
+    });
+
+    if (!response.ok) {
+      Sentry.captureMessage('Could not forget the sign-up role after a password reset', {
+        level: 'error',
+        extra: { status: response.status, authUserId: userId },
+      });
+    }
+  } catch (error) {
+    Sentry.captureException(error);
+  }
+}
+
 const MAX_BODY_BYTES = 4096;
 const SIGN_UP = 'sign-up/email';
 const SIGN_IN = 'sign-in/email';
@@ -616,6 +649,8 @@ async function endEverySession(request: NextRequest, email: string, body: string
     if (!signedIn.ok) {
       throw new Error(`Could not open a session to end the others (${signedIn.status})`);
     }
+
+    await forgetSignUpRole(userId);
 
     if (cookie === '') {
       throw new Error('Signing in to end the other sessions set no session cookie');

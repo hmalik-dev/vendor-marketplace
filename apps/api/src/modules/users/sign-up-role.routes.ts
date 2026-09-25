@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { SIGN_UP_ROLES } from '@vendor-marketplace/shared';
 import { requireWebTierKey } from '../../lib/web-tier-key.js';
-import { recordSignUpRole } from './sign-up-roles.dao.js';
+import { deleteSignUpRole, recordSignUpRole } from './sign-up-roles.dao.js';
 
 export interface SignUpRoleRoutesOptions {
   /** `WEB_TIER_KEY`. Unset (local only) and the route does not exist. */
@@ -36,6 +36,30 @@ export const signUpRoleRoutes: FastifyPluginAsyncZod<SignUpRoleRoutesOptions> = 
       await recordSignUpRole(app.db, request.body.authUserId, request.body.role);
 
       return { recorded: true as const };
+    },
+  );
+
+  /**
+   * Forgets the role recorded for an identity whose password was just reset
+   * (VEN-663). Whoever signed the address up first chose that role; a reset
+   * means the holder has only now proved the address, so the choice made with
+   * the old password may not be theirs. An unknown id answers the same.
+   */
+  app.delete(
+    '/internal/sign-up-role',
+    {
+      config: { rateLimit: false },
+      bodyLimit: 1_024,
+      onRequest: requireWebTierKey(options.webTierKey),
+      schema: {
+        body: z.object({ authUserId: z.string().min(1) }),
+        response: { 200: z.object({ forgotten: z.literal(true) }) },
+      },
+    },
+    async (request) => {
+      await deleteSignUpRole(app.db, request.body.authUserId);
+
+      return { forgotten: true as const };
     },
   );
 };

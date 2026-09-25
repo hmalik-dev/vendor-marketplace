@@ -1,8 +1,8 @@
 import { signUpRoles } from '@vendor-marketplace/db/schema';
 import { WEB_TIER_KEY_HEADER } from '@vendor-marketplace/shared';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { createTestHarness, type TestHarness } from '../../testing/test-server.js';
-import { findSignUpRole } from './sign-up-roles.dao.js';
+import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
+import { findSignUpRole, recordSignUpRole } from './sign-up-roles.dao.js';
 
 const KEY = 'k'.repeat(40);
 
@@ -115,5 +115,89 @@ describe('POST /internal/sign-up-role (VEN-662)', () => {
     } finally {
       await local.close();
     }
+  });
+});
+
+describe('DELETE /internal/sign-up-role (VEN-663)', () => {
+  let harness: TestHarness;
+
+  const SQUATTED = 'auth-squatted';
+
+  beforeAll(async () => {
+    harness = await createTestHarness({ acceptTerms: false, env: { WEB_TIER_KEY: KEY } });
+    harness.authUsers.set(SQUATTED, {
+      authUserId: SQUATTED,
+      email: 'owner@example.com',
+      firstName: 'Ada',
+      lastName: 'Reyes',
+      roleHint: null,
+      avatarUrl: null,
+    });
+  });
+
+  afterEach(async () => {
+    await harness.database.db.delete(signUpRoles);
+  });
+
+  afterAll(async () => {
+    await harness.close();
+  });
+
+  function forget(payload: Record<string, unknown>, key: string | null = KEY) {
+    return harness.app.inject({
+      method: 'DELETE',
+      url: '/v1/internal/sign-up-role',
+      headers: key ? { [WEB_TIER_KEY_HEADER]: key } : {},
+      payload,
+    });
+  }
+
+  async function recordedIds(): Promise<string[]> {
+    return (await harness.database.db.select().from(signUpRoles)).map((row) => row.authUserId);
+  }
+
+  it('forgets that identity’s record and no other', async () => {
+    await recordSignUpRole(harness.database.db, SQUATTED, 'customer');
+    await recordSignUpRole(harness.database.db, 'auth-other', 'vendor');
+
+    const response = await forget({ authUserId: SQUATTED });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ forgotten: true });
+    expect(await recordedIds()).toEqual(['auth-other']);
+  });
+
+  it('answers the same for an unknown identity and changes nothing', async () => {
+    await recordSignUpRole(harness.database.db, 'auth-other', 'vendor');
+
+    const response = await forget({ authUserId: 'auth-unknown' });
+
+    expect([response.statusCode, response.json()]).toEqual([200, { forgotten: true }]);
+    expect(await recordedIds()).toEqual(['auth-other']);
+  });
+
+  it('answers 401 without the web tier key and to a wrong one, and deletes nothing', async () => {
+    await recordSignUpRole(harness.database.db, SQUATTED, 'customer');
+
+    expect((await forget({ authUserId: SQUATTED }, null)).statusCode).toBe(401);
+    expect((await forget({ authUserId: SQUATTED }, 'w'.repeat(40))).statusCode).toBe(401);
+    expect(await recordedIds()).toEqual([SQUATTED]);
+  });
+
+  it('refuses an empty identity with a 400', async () => {
+    expect((await forget({ authUserId: '' })).statusCode).toBe(400);
+  });
+
+  it('leaves the Terms read with no recorded role for that identity', async () => {
+    await recordSignUpRole(harness.database.db, SQUATTED, 'customer');
+    const status = () =>
+      harness.app.inject({ method: 'GET', url: '/v1/legal/terms', headers: bearer(SQUATTED) });
+    expect((await status()).json()).toMatchObject({ signUpRole: 'customer' });
+
+    await forget({ authUserId: SQUATTED });
+
+    const after = await status();
+    expect(after.statusCode).toBe(200);
+    expect(after.json()).toMatchObject({ account: { exists: false }, signUpRole: null });
   });
 });
