@@ -256,7 +256,7 @@ describe('a chargeback the network has not closed, or has lost', () => {
 
     expect(screen.queryByRole('button', { name: 'Refund and cancel' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Resolve for the vendor' })).toBeNull();
-    expect(screen.getAllByText(/has already taken this payment back/)).toHaveLength(2);
+    expect(screen.getAllByText(/took this payment back/)).toHaveLength(2);
   });
 
   it("does not talk about a bank dispute on a customer's own report", () => {

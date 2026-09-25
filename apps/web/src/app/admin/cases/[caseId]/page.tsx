@@ -297,7 +297,7 @@ export default async function AdminCasePage({
                     formatPrice(booking.refundAmountCents)
                   )}
                 </KeyValue>
-                <KeyValue label="Cancelled by">{booking.cancelledBy ?? <Absent />}</KeyValue>
+                <KeyValue label="Canceled by">{booking.cancelledBy ?? <Absent />}</KeyValue>
                 {/*
                   **Red, and called by its own name** — Pattern C (#454). One of
                   exactly three things the delta spends red on: a failed payout

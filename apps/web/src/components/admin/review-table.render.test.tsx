@@ -175,7 +175,7 @@ describe('ReviewTable', () => {
     fireEvent.click(screen.getAllByRole('menuitem')[0]!);
 
     const dialog = await screen.findByRole('alertdialog');
-    expect(dialog.textContent).toMatch(/you can unhide it again from here/);
+    expect(dialog.textContent).toMatch(/You can unhide it here\./);
     expect(dialog.textContent).not.toMatch(/\bshow\b/i);
   });
 });

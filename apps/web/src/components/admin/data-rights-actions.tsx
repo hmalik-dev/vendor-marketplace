@@ -78,13 +78,13 @@ function closureLeftOwed(result: WireAdminCloseAccountResult): string[] {
     owed.push(
       `${stranded} ${
         stranded === 1 ? 'booking is' : 'bookings are'
-      } still confirmed and unrefunded — the money is still at Stripe and the customer has not been told.`,
+      } still confirmed and unrefunded. The money is at Stripe and the customer has not been told.`,
     );
   }
 
   if (!result.identityDeleted) {
     owed.push(
-      'Their sign-in could not be deleted — they are still signed in, and their email address has been released underneath them.',
+      'Their sign-in could not be deleted. They are still signed in, and their email address is released.',
     );
   }
 
@@ -196,7 +196,7 @@ export function DataRightsActions({
 
     setError(
       owed.length > 0
-        ? `The account is closed, but not everything it should have done landed. This needs a person. ${owed.join(
+        ? `The account is closed, but not every step finished. This needs a person. ${owed.join(
             ' ',
           )}`
         : null,
@@ -271,12 +271,12 @@ export function DataRightsActions({
           {busy ? 'Working…' : 'Export data'}
         </Button>
         <p className={CONSEQUENCE}>
-          Downloads everything held about this account as one file, to send to the person who asked.
-          Nothing on the account changes. Asks for an emailed code first.
+          Downloads everything held about this account as one file. Nothing on the account changes.
+          Asks for an emailed code first.
         </p>
         {exportStepUpNeeded ? (
           <StepUpPanel
-            lead="This hands over everything held about this person, so confirm it is you first."
+            lead="This hands over everything held about this person. Confirm it's you first."
             onVerified={exportRecord}
             onCancel={() => setExportStepUpNeeded(false)}
           />
@@ -335,13 +335,7 @@ export function DataRightsActions({
         {!closedAt && (isSelf || closeBlockers.length > 0) ? (
           <div className="rounded-lg border border-gold-200 bg-gold-50 px-3.5 py-3 text-sm leading-prose text-stone-900">
             {isSelf ? (
-              <>
-                <strong className="font-semibold">
-                  Can&apos;t close: this is your own account.
-                </strong>{' '}
-                Every action on this console is recorded against the admin who took it, and an audit
-                trail its own actor can end is not one.
-              </>
+              <strong className="font-semibold">Can&apos;t close: this is your own account.</strong>
             ) : (
               <>
                 <strong className="font-semibold">
@@ -349,8 +343,7 @@ export function DataRightsActions({
                   {closeBlockers.length === 1 ? 'booking' : 'bookings'} on{' '}
                   {closeBlockers.map((booking) => formatEventDate(booking.eventDate)).join(', ')}.
                 </strong>{' '}
-                Cancel or complete {closeBlockers.length === 1 ? 'it' : 'them'} first, from the
-                booking screens, where the refund is priced.
+                Cancel or complete {closeBlockers.length === 1 ? 'it' : 'them'} first.
                 <ul className="mt-1.5 flex flex-col gap-0.5 text-stone-700">
                   {closeBlockers.map((booking) => (
                     <li key={booking.bookingId}>
@@ -411,31 +404,29 @@ export function DataRightsActions({
               isAdmin ? (
                 <>
                   <strong className="font-semibold">
-                    This deletes their sign-in, and it can&apos;t be restored from here.
+                    This deletes their sign-in. It can&apos;t be restored from here.
                   </strong>{' '}
-                  They lose the console immediately. Only someone with access to the Neon Auth
-                  console can give them a sign-in again, and they would still need to be made an
-                  admin by hand.
+                  They lose the console at once. Only someone with access to the Neon Auth console
+                  can give them a sign-in again, and admin access would then need granting again.
                 </>
               ) : undefined
             }
             description={
               <>
-                This retires the account and takes any storefront off the marketplace immediately,
-                and declines every request still open against it. It deletes their sign-in, so they
-                are signed out everywhere, and releases their email address so they can register
-                again later if they want to.{' '}
+                This retires the account, takes any storefront off the marketplace and declines
+                every open request. It deletes their sign-in, which signs them out everywhere, and
+                releases their email address to register again.{' '}
                 {bookingsRefundedOnClose > 0
                   ? `It also cancels the ${bookingsRefundedOnClose} upcoming confirmed ${
                       bookingsRefundedOnClose === 1 ? 'booking' : 'bookings'
                     } their customers hold with them and refunds ${
                       bookingsRefundedOnClose === 1 ? 'it' : 'them'
-                    } in full, paying this vendor nothing. Any refund Stripe refuses is reported back here rather than retried.`
-                  : 'It refunds nothing and prices nothing.'}
+                    } in full. This vendor is paid nothing. A refund Stripe refuses is reported here, not retried.`
+                  : 'It refunds nothing.'}
                 <br />
                 <br />
-                Their bookings, messages, reviews and legal acceptances are kept — the privacy
-                policy says so, and this page keeps showing them.
+                Their bookings, messages, reviews and legal acceptances are kept, and this page
+                keeps showing them.
               </>
             }
             confirmLabel="Close account"
@@ -445,7 +436,7 @@ export function DataRightsActions({
         <p className={CONSEQUENCE}>
           {closedAt
             ? 'The account is retired. Its record is kept, and this page keeps showing it.'
-            : "Retires the account, takes any storefront down and signs them out; the record is kept. Their own upcoming bookings must be cancelled first; a vendor's customers are refunded in full. Confirms first."}
+            : "Retires the account, takes any storefront down and signs them out. The record is kept. Their own upcoming bookings must be canceled first. A vendor's customers are refunded in full."}
         </p>
       </div>
 

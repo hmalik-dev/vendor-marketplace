@@ -20,7 +20,7 @@ export interface StepUpPanelProps {
   onCancel?: () => void;
 }
 
-const IRREVERSIBLE_LEAD = 'This cannot be undone, so confirm it is you first.';
+const IRREVERSIBLE_LEAD = "This can't be undone. Confirm it's you first.";
 
 /**
  * The second step of an irreversible console action (VEN-500): the API refused

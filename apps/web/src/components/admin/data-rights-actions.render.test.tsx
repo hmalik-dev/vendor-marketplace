@@ -247,7 +247,7 @@ describe('the data-rights closure control', () => {
   it('promises no refund when the account holds no vendor-side bookings', () => {
     renderActions({});
 
-    expect(openConfirmation().textContent).toContain('It refunds nothing and prices nothing.');
+    expect(openConfirmation().textContent).toContain('It refunds nothing.');
   });
 
   it('names the refunds a vendor closure will issue, and the zeroed payout', () => {
@@ -257,10 +257,10 @@ describe('the data-rights closure control', () => {
 
     expect(dialog.textContent).toContain('cancels the 3 upcoming confirmed bookings');
     expect(dialog.textContent).toContain('refunds them in full');
-    expect(dialog.textContent).toContain('paying this vendor nothing');
+    expect(dialog.textContent).toContain('This vendor is paid nothing.');
     expect(dialog.textContent).not.toContain('It refunds nothing');
     /* And it does not promise a refund the unwind may decline to make. */
-    expect(dialog.textContent).toContain('Any refund Stripe refuses is reported back here');
+    expect(dialog.textContent).toContain('A refund Stripe refuses is reported here, not retried.');
   });
 
   it('says booking, not bookings, when exactly one would be refunded', () => {
@@ -278,14 +278,13 @@ describe('the data-rights closure control', () => {
    * refuse it too. A control that offers what the server will refuse is a
    * control that lies, and the browser pass found this one enabled.
    */
-  it('refuses the admin their own account, and says why', () => {
+  it('refuses the admin their own account', () => {
     renderActions({ isSelf: true });
 
     expect(closeButton().disabled).toBe(true);
 
     const reason = panel();
-    expect(reason.textContent).toContain("Can't close: this is your own account.");
-    expect(reason.textContent).toContain('recorded against the admin who took it');
+    expect(reason.textContent).toBe("Can't close: this is your own account.");
     expect(reason.textContent).not.toContain('confirmed booking');
   });
 
@@ -515,7 +514,7 @@ describe('an admin closure', () => {
     const dialog = openConfirmation();
 
     expect(confirmButton(dialog).disabled).toBe(true);
-    expect(dialog.textContent).toContain('Close account stays unavailable until this matches.');
+    expect(dialog.textContent).toContain('Close account unlocks once this matches.');
   });
 
   it('leaves a near miss disabled and names the mismatch', () => {
@@ -566,7 +565,7 @@ describe('an admin closure', () => {
       "Close Dana Okafor's admin account?",
     );
     expect(dialog.textContent).toContain(
-      "This deletes their sign-in, and it can't be restored from here.",
+      "This deletes their sign-in. It can't be restored from here.",
     );
     expect(dialog.textContent).toContain(
       'Only someone with access to the Neon Auth console can give them a sign-in again',

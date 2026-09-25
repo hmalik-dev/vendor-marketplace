@@ -73,7 +73,7 @@ describe('SuspensionConsequence', () => {
     const copy = copyOf(<SuspensionConsequence subject="Their storefront" />);
 
     expect(copy).toMatch(/refunded in full from the platform balance/);
-    expect(copy).toMatch(/no payout is made to the vendor/);
+    expect(copy).toMatch(/with no payout to the vendor/);
     expect(copy).not.toMatch(/reverses|reversed|can leave it negative|Stripe balance/);
   });
 
@@ -113,7 +113,7 @@ describe('UnpublishConsequence, against the dialog it sits beside', () => {
      */
     const unwinds = [
       /open requests are declined/,
-      /every confirmed booking in the future is cancelled/,
+      /Every future confirmed booking is canceled/,
       /refunded in full/,
     ];
 
@@ -128,7 +128,7 @@ describe('UnpublishConsequence, against the dialog it sits beside', () => {
   it('says outright that unpublishing unwinds nothing', () => {
     const copy = copyOf(<UnpublishConsequence subject="Their storefront" />);
 
-    expect(copy).toMatch(/Nothing is cancelled and no money moves/);
+    expect(copy).toMatch(/Nothing is canceled and no money moves/);
     expect(copy).toMatch(/open requests stand, confirmed bookings stand/);
     expect(copy).toMatch(/no refund is issued/);
   });
