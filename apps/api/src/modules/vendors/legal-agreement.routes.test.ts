@@ -134,8 +134,8 @@ describe('the vendor agreement', () => {
       expect(response.statusCode).toBe(404);
     });
 
-    /** VEN-708: v1.1 replaces v1.0, so an agreement accepted at v1.0 no longer counts. */
-    it('does not treat an agreement accepted at v1.0 as current, and asks for v1.1', async () => {
+    /** VEN-730: v1.2 replaces v1.0, so an agreement accepted at v1.0 no longer counts. */
+    it('does not treat an agreement accepted at v1.0 as current, and asks for v1.2', async () => {
       await seedVendorProfile('vendor_a', 'June Harlow Photography');
       const [vendor] = await harness.database.db
         .select({ id: vendorProfiles.id, userId: vendorProfiles.userId })
@@ -154,9 +154,9 @@ describe('the vendor agreement', () => {
 
       const status = (await read('vendor_a')).json();
 
-      expect(CURRENT_VENDOR_AGREEMENT_VERSION).toBe('v1.1');
+      expect(CURRENT_VENDOR_AGREEMENT_VERSION).toBe('v1.2');
       expect({ current: status.current, isCurrent: status.isCurrent }).toEqual({
-        current: 'v1.1',
+        current: 'v1.2',
         isCurrent: false,
       });
       expect((await accept('vendor_a', 'v1.0')).statusCode).toBe(409);

@@ -221,7 +221,7 @@ describe('RequestRow', () => {
     expect(quote.getAttribute('title')).toBeNull();
 
     const reason = screen.getByText(
-      'Priced by its package, so the amount is fixed. Decline if you cannot honour it.',
+      'Priced by its package, so the amount is fixed. Decline if you cannot honor it.',
     );
     expect(quote.getAttribute('aria-describedby')).toBe(reason.id);
   });

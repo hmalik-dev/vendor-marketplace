@@ -27,9 +27,13 @@ row: the auth provider `user.deleted` lands on `softDeleteUserByAuthId`, which s
 `deleted_at` and keeps the row for referential integrity. Only `seed-demo.ts`
 and `seed-marketing.ts` issue `db.delete(users)`.
 
-Net: **every user's IP and user agent is permanent**, and
-`apps/web/content/legal/privacy.md` ("Your rights") says "Closing the account
-removes it along with everything else." That sentence is false.
+Net: **every user's IP and user agent is permanent**. `privacy.md` ("Your
+rights") and `vendor-agreement.md` now say so (the old "closing removes it"
+claim is gone, verified 2026-09-24). VEN-730 cut the re-accept screen's
+in-flow notice to "We save the version and time you accept." — it no longer
+names IP/browser; reported Low, the caller decides (copy-brevity preference).
+Hash chain verified VEN-730: file bytes == manifest sha256 == what
+`terms.service`/`legal-agreement.service` record for the bumped version.
 
 **Why:** the immutability is the table's whole value in a dispute, so it is
 correct — but it turns any column on it into unerasable personal data, and the

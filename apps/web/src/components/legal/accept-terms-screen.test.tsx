@@ -442,15 +442,19 @@ describe('the acceptance gate', () => {
 
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('The Terms have changed');
     expect(
-      screen.getByText(
-        `Everyone using ${BRAND_NAME} accepts the current Terms. We record that you did — the version, the moment, and this browser — so both sides can say what was agreed.`,
-      ),
+      screen.getByText(`Please accept the current Terms to keep using ${BRAND_NAME}.`),
     ).toBeDefined();
-    expect(
-      screen.getByText(
-        'We record the moment, this browser and its address, so the record means something later.',
-      ),
-    ).toBeDefined();
+    expect(screen.getByText('We save the version and time you accept.')).toBeDefined();
+
+    const text = document.body.textContent ?? '';
+
+    for (const gone of [
+      'so both sides can say what was agreed',
+      'so the record means something later',
+      'the moment, and this browser',
+    ]) {
+      expect(text).not.toContain(gone);
+    }
   });
 
   it('shows no role choice and no notice on the new-version screen', () => {
