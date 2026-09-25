@@ -318,7 +318,7 @@ describe('MessagesScreen', () => {
       />,
     );
 
-    expect(await screen.findByText(/Start the conversation/)).toBeDefined();
+    expect(await screen.findByText(/Say what you need and when/)).toBeDefined();
   });
 
   it('sides each bubble by who sent it', async () => {
@@ -568,7 +568,7 @@ describe('MessagesScreen', () => {
         />,
       );
 
-      await screen.findByText(/Start the conversation/);
+      await screen.findByText(/Say what you need and when/);
       expect(announcement()).toBe('');
 
       await arrive('66666666-6666-4666-8666-666666666666', THEM, 'Are you free in June?');
@@ -752,7 +752,7 @@ describe('MessagesScreen', () => {
       );
 
       await screen.findByLabelText('Write a message');
-      expect(screen.queryByText(/Start the conversation/)).toBeNull();
+      expect(screen.queryByText(/Say what you need and when/)).toBeNull();
 
       await act(async () => {
         slow.resolve(page([message('44444444-4444-4444-8444-444444444444', THEM, 'Hello')]));

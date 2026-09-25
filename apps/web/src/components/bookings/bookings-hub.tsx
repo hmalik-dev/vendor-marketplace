@@ -277,7 +277,7 @@ export function BookingsHub({
             .
           </>
         ) : (
-          'Nothing coming up. Requests you send land here as soon as you send them.'
+          'Nothing coming up. Requests you send show up here.'
         )}
       </p>
 
@@ -431,8 +431,7 @@ export function EmptyBookings(): React.ReactElement {
       */}
       <h2 className="mb-2.25 font-display text-[26px] text-stone-900">No bookings yet</h2>
       <p className="mb-5 max-w-100 text-center text-base leading-[1.65] text-stone-700">
-        Every request you send will land here, grouped by month, with its status and the
-        vendor&apos;s replies.
+        Requests you send show up here, with their status and the vendor&apos;s replies.
       </p>
       <Button asChild variant="primary">
         <Link href="/search">Find a vendor</Link>

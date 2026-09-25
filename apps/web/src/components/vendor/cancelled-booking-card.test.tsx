@@ -111,7 +111,7 @@ describe('CancelledBookingCard', () => {
 
     expect(
       screen.getByText(
-        `${BRAND_NAME} canceled this booking on January 4, 2027. An account involved is no longer active.`,
+        `${BRAND_NAME} canceled this booking on January 4, 2027 because an account involved is no longer active.`,
       ),
     ).toBeDefined();
     expect(screen.queryByText(/the customer canceled/i)).toBeNull();

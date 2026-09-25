@@ -392,12 +392,9 @@ export function BookingRequestScreen({
     };
 
     if (!form.eventDate) {
-      blocker(
-        'eventDate',
-        'Pick the day of the event — the vendor answers with their calendar open.',
-      );
+      blocker('eventDate', 'Pick the date of your event.');
     } else if (isUniversallyPastDate(form.eventDate, new Date()) || form.eventDate < today) {
-      blocker('eventDate', 'That day has passed. Pick a date from today onwards.');
+      blocker('eventDate', 'That date has passed. Pick today or later.');
     } else if (dateStatus === 'booked' || dateStatus === 'pending') {
       blocker(
         'eventDate',
@@ -407,13 +404,13 @@ export function BookingRequestScreen({
       found.push({
         field: `${fieldId}-eventDate`,
         label: FIELD_LABELS.eventDate,
-        message: `${vendor.businessName} has this date blocked. You can still send the request, but they may well decline.`,
+        message: `${vendor.businessName} has this date blocked. You can still send the request, but they may decline.`,
         severity: 'costly',
       });
     }
 
     if (!form.eventType) {
-      blocker('eventType', 'Say what the occasion is — it changes what the vendor quotes.');
+      blocker('eventType', 'Choose an occasion.');
     }
 
     if (form.guestCount) {
@@ -465,15 +462,12 @@ export function BookingRequestScreen({
       // The brief and the notes travel as one field, so the limit is on the pair.
       blocker(
         'customDetails',
-        `Your description and notes are ${details.length - BOOKING_REQUEST_NOTES_MAX_LENGTH} characters over the ${BOOKING_REQUEST_NOTES_MAX_LENGTH} the vendor can be sent. Trim either.`,
+        `Your description and notes are ${details.length - BOOKING_REQUEST_NOTES_MAX_LENGTH} characters over the ${BOOKING_REQUEST_NOTES_MAX_LENGTH} limit. Shorten either one.`,
       );
     }
 
     if (!servicePackage && customDetails.trim().length < 10) {
-      blocker(
-        'customDetails',
-        'Describe what you need in a sentence or two, so there is something to quote.',
-      );
+      blocker('customDetails', 'Describe what you need in a sentence or two.');
     }
 
     return found;
@@ -587,13 +581,11 @@ export function BookingRequestScreen({
         <RequestStepper current={step} />
 
         <h1 className="mb-1 display-heading text-[26px] text-stone-900">
-          {step === 1
-            ? `Tell ${vendor.businessName} about your event`
-            : 'Check this over before it goes'}
+          {step === 1 ? `Tell ${vendor.businessName} about your event` : 'Review your request'}
         </h1>
         <p className="mb-5 text-cta leading-prose text-stone-700">
           {step === 1
-            ? 'The more they know now, the fewer messages it takes to lock the date.'
+            ? 'More detail now means fewer messages later.'
             : 'Nothing is sent yet. Edit anything that is not right.'}
         </p>
 
@@ -615,8 +607,8 @@ export function BookingRequestScreen({
             />
             <p className="text-base text-stone-900">
               {restoreNote.length === 0
-                ? 'We kept what you had written. Change anything before you send it.'
-                : `We kept what you had written, and the ${joinWithAnd(
+                ? 'We kept your draft. Change anything before you send it.'
+                : `We kept your draft and the ${joinWithAnd(
                     restoreNote.map((field) => DRAFT_FIELD_NOUNS[field]),
                   )} you just set. Change anything before you send it.`}
             </p>
@@ -784,7 +776,7 @@ export function BookingRequestScreen({
               className="sm:col-span-2"
               footer={
                 <div className="mt-1.25 flex justify-between text-helper text-stone-600">
-                  <span>Optional, but it speeds up the quote</span>
+                  <span>Optional</span>
                   <span>
                     {form.notes.length} / {BOOKING_REQUEST_NOTES_MAX_LENGTH}
                   </span>
@@ -1048,8 +1040,8 @@ function SuccessPanel({
     : `${businessName} can ${isPackaged ? 'confirm the date or decline' : 'confirm or send a quote'}.`;
 
   const closing = countdown
-    ? `You will get a notification either way, and the request ${countdown} if it goes unanswered.`
-    : 'You will get a notification either way.';
+    ? `We'll notify you when they answer. If they don't, the request ${countdown}.`
+    : "We'll notify you when they answer.";
 
   return (
     <div className="mx-auto w-full max-w-[660px] px-6 py-14 xl:px-10">
@@ -1059,7 +1051,7 @@ function SuccessPanel({
         <div className="flex gap-2.5 bg-sage-50 px-6 py-4">
           <span aria-hidden="true" className="mt-1.75 size-2 shrink-0 rounded-full bg-sage-400" />
           <p className="text-sm leading-[1.55] text-sage-600">
-            Sent. No card has been charged, and none will be until you approve a price.
+            Sent. You won&apos;t be charged until you approve a price.
           </p>
         </div>
 
@@ -1108,7 +1100,7 @@ function ExistingRequestPanel({
         <div className="flex gap-2.5 bg-steel-50 px-6 py-4">
           <span aria-hidden="true" className="mt-1.75 size-2 shrink-0 rounded-full bg-steel-600" />
           <p className="text-sm leading-[1.55] text-steel-600">
-            Nothing new was sent. What you just entered did not reach {businessName}.
+            Nothing new was sent to {businessName}.
           </p>
         </div>
 
@@ -1117,7 +1109,7 @@ function ExistingRequestPanel({
             You already have a request with {businessName} for {formatEventDate(eventDate)}
           </h1>
           <p className="mb-5 text-md leading-prose text-stone-700">
-            It is still open, so a second one was not made. Open it to see where it stands.
+            It&apos;s still open. Open it to see where it stands.
           </p>
 
           <div className="flex flex-wrap gap-3">

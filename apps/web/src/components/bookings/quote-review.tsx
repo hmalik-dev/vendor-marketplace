@@ -37,7 +37,7 @@ import { wireBookingRequestSchema, type WireBookingRequest } from '@/lib/wire-sc
  */
 const SETTLED_SENTENCE: Record<string, string> = {
   declined: 'This request was declined.',
-  expired: 'This request expired before it was answered.',
+  expired: 'This request expired.',
 };
 
 export interface QuoteReviewProps {
@@ -176,9 +176,9 @@ export function QuoteReview({ request }: QuoteReviewProps): React.ReactElement {
             wants the state named, not an empty slot rendered.
           */
           <p className="text-sm leading-[1.6] text-stone-700">
-            Your request is with {request.vendor.businessName}. They&apos;ll send a price, and
-            you&apos;ll get a notification the moment they do. The date isn&apos;t held until you
-            accept a quote, and nothing is charged until you pay.
+            Your request is with {request.vendor.businessName}. We&apos;ll notify you when they send
+            a price. The date isn&apos;t held until you accept a quote, and nothing is charged until
+            you pay.
           </p>
         ) : (
           <div className="flex items-baseline justify-between gap-3">

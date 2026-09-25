@@ -168,4 +168,35 @@ describe('AdminRequestsPage', () => {
     expect(widen.getAttribute('href')).toBe('/admin/requests?group=live');
     expect(widen.textContent).toContain('2');
   });
+
+  /** The search box (VEN-749). */
+  it('names the search when it and a group leave nothing, and keeps it through each way out', async () => {
+    getAdminRequests.mockResolvedValue(page([], [{ key: 'group', count: 3 }]));
+
+    await renderPage({ q: '  rivera ', group: 'live' });
+
+    expect(getAdminRequests).toHaveBeenCalledWith('?group=live&q=rivera&page=1');
+    expect(screen.getByText('No requests match "rivera" and these filters')).toBeDefined();
+    expect(screen.getByRole('link', { name: 'Any group (3)' }).getAttribute('href')).toBe(
+      '/admin/requests?q=rivera',
+    );
+    // The segmented control carries the search, as the selects do.
+    expect(screen.getByRole('link', { name: 'Closed' }).getAttribute('href')).toBe(
+      '/admin/requests?group=closed&q=rivera',
+    );
+    expect(screen.getByRole('searchbox', { name: 'Search' }).getAttribute('value')).toBe('rivera');
+  });
+
+  it('carries the search through the pager', async () => {
+    getAdminRequests.mockResolvedValue({ ...page([{}]), total: 40 });
+
+    await renderPage({ q: 'fernbank' });
+
+    expect(
+      screen
+        .getAllByRole('link')
+        .map((link) => link.getAttribute('href'))
+        .filter((href) => href?.includes('page=2')),
+    ).toContain('/admin/requests?q=fernbank&page=2');
+  });
 });

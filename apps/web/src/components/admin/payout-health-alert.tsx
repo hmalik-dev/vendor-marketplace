@@ -49,7 +49,7 @@ export function PayoutHealthAlert({
         {blockedVendors > 1 ? `, across ${blockedVendors} vendors` : ''}
       </Link>
       {'. '}
-      The scheduled release keeps trying, so this clears itself once the accounts are in order.
+      The scheduled release keeps trying. This clears once the accounts are in order.
     </Banner>
   );
 }

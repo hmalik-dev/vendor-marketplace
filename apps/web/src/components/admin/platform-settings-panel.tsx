@@ -56,13 +56,13 @@ const SWITCHES: readonly { field: PauseField; label: string; description: string
     field: 'checkoutPaused',
     label: 'Pause checkout',
     description:
-      'No new payment is started, and customers are told bookings are paused. A checkout a customer already has open can still complete.',
+      'No new payment starts. Customers see that bookings are paused. An open checkout can still complete.',
   },
   {
     field: 'payoutReleasePaused',
     label: 'Pause automatic payouts',
     description:
-      'The sweep transfers nothing. Due payouts wait and release on the first sweep after this is off; a retry on Payments still releases one by hand.',
+      'The sweep transfers nothing. Due payouts release on the first sweep after this is off. A retry on Payments still releases one by hand.',
   },
 ];
 
@@ -216,7 +216,7 @@ export function PlatformSettingsPanel({
               </label>
               <p className="mt-1 text-sm text-stone-600">
                 {confirmed.vendorInviteOnly
-                  ? 'A vendor account is created only for an invited email. Anyone else choosing vendor is sent to the application form; customers sign up as usual.'
+                  ? 'Only an invited email can open a vendor account. Anyone else is sent to the application form. Customers sign up as usual.'
                   : 'Anyone can sign up as a vendor. Customers are never gated.'}{' '}
                 <Link
                   href="/admin/vendor-applications"
@@ -249,7 +249,7 @@ export function PlatformSettingsPanel({
           </h2>
           <p className="mt-1 text-sm text-stone-600">
             {confirmed.noticeMessage === null
-              ? 'No notice is posted. While checkout or booking requests are paused, visitors see a default notice instead.'
+              ? 'No notice is posted. While checkout or booking requests are paused, visitors see a default notice.'
               : 'Every visitor sees this above the navigation within a minute. Each can dismiss it for their session.'}
           </p>
           <form
@@ -332,7 +332,7 @@ export function PlatformSettingsPanel({
           <p className="mt-1 text-sm text-stone-600">
             {confirmed.maxBookingCents === null
               ? 'No cap. Any price a vendor sets can be requested and paid.'
-              : `New requests and payments over ${formatPrice(confirmed.maxBookingCents)} are refused, including on requests made before the cap was set. A checkout already open can still complete.`}
+              : `New requests and payments over ${formatPrice(confirmed.maxBookingCents)} are refused, even on requests made before the cap. An open checkout can still complete.`}
           </p>
           <form
             noValidate

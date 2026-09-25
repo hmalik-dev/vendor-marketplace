@@ -85,7 +85,7 @@ function whatHappened(settlement: Settlement, audience: SettlementAudience): str
      * against, arriving through the other door. The wording has to be true of
      * both a suspension and a closure, and this is the phrase that is.
      */
-    return `${BRAND_NAME} canceled this booking${when}. An account involved is no longer active.`;
+    return `${BRAND_NAME} canceled this booking${when} because an account involved is no longer active.`;
   }
 
   if (settlement.cancelledBy === 'customer') {
@@ -96,7 +96,7 @@ function whatHappened(settlement: Settlement, audience: SettlementAudience): str
 
   if (settlement.cancelledBy === 'vendor') {
     return audience === 'customer'
-      ? `The vendor canceled this booking${when}. You were refunded in full.`
+      ? `The vendor canceled this booking${when}, and you were refunded in full.`
       : `You canceled this booking${when}.`;
   }
 

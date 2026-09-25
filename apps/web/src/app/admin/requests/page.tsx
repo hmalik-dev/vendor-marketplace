@@ -18,6 +18,7 @@ import { StatusPill } from '@/components/ui/status-pill';
 import { getAdminRequests } from '@/lib/admin-data';
 import {
   adminQueryString,
+  boundedText,
   droppedKeys,
   oneOf,
   pageNumber,
@@ -83,22 +84,25 @@ function Expires({ row, now }: { row: WireAdminRequestRow; now: Date }): React.R
 export default async function AdminRequestsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ group?: RawParam; status?: RawParam; page?: RawParam }>;
+  searchParams: Promise<{ group?: RawParam; status?: RawParam; q?: RawParam; page?: RawParam }>;
 }): Promise<React.ReactElement> {
   const raw = await searchParams;
   const group = oneOf(raw.group, ADMIN_REQUEST_GROUPS);
   const status = oneOf(raw.status, BOOKING_REQUEST_STATUSES);
+  const q = boundedText(raw.q);
   const dropped = droppedKeys(raw, { group, status });
+  const params = { group, status, q };
   const requests = await getAdminRequests(
-    adminQueryString({ group, status, page: pageNumber(raw.page) }),
+    adminQueryString({ ...params, page: pageNumber(raw.page) }),
   );
   const now = new Date();
 
-  const filtered = Boolean(group ?? status);
+  const filtered = Boolean(group ?? status ?? q);
   const active: ActiveFilter[] = [
-    { key: 'group', widening: 'Any group', carried: { status } },
-    { key: 'status', widening: 'Any status', carried: { group } },
-  ].filter((filter) => (filter.key === 'group' ? group : status) !== undefined);
+    { key: 'group', widening: 'Any group', carried: { status, q } },
+    { key: 'status', widening: 'Any status', carried: { group, q } },
+    { key: 'q', widening: 'Clear the search', carried: { group, status } },
+  ].filter((filter) => params[filter.key as keyof typeof params] !== undefined);
 
   return (
     <AdminSurface
@@ -107,7 +111,12 @@ export default async function AdminRequestsPage({
       counts={[`${requests.total} ${requests.total === 1 ? 'request' : 'requests'}`]}
       dropped={dropped}
       filters={
-        <FilterBar action={PATH} params={{ group, status }}>
+        <FilterBar
+          action={PATH}
+          params={params}
+          searchPlaceholder="Search customer or vendor…"
+          searchValue={q}
+        >
           {/*
             Pattern A's segmented control: six statuses in three groups. Each
             segment is a link, so a group is a URL; the active one clears.
@@ -116,7 +125,7 @@ export default async function AdminRequestsPage({
             {ADMIN_REQUEST_GROUPS.map((value) => (
               <Link
                 key={value}
-                href={`${PATH}${adminQueryString({ group: value === group ? undefined : value, status })}`}
+                href={`${PATH}${adminQueryString({ group: value === group ? undefined : value, status, q })}`}
                 aria-current={value === group ? 'true' : undefined}
                 className={cn(
                   'rounded-full px-3 py-1 text-sm font-medium',
@@ -143,7 +152,7 @@ export default async function AdminRequestsPage({
       }
       pager={{
         path: PATH,
-        params: { group, status },
+        params,
         page: requests.page,
         pageSize: requests.pageSize,
         total: requests.total,
@@ -156,14 +165,18 @@ export default async function AdminRequestsPage({
           requests.items.length === 0 && requests.total > 0 ? (
             <OutOfRange
               path={PATH}
-              params={{ group, status }}
+              params={params}
               page={requests.page}
               pageSize={requests.pageSize}
               total={requests.total}
             />
           ) : filtered ? (
             <FilteredEmpty
-              headline="No requests match these filters"
+              headline={
+                q
+                  ? `No requests match "${q}"${group || status ? ' and these filters' : ''}`
+                  : 'No requests match these filters'
+              }
               path={PATH}
               filters={active}
               widenings={requests.widenings}

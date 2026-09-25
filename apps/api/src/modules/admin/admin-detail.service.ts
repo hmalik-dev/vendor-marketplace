@@ -369,7 +369,7 @@ export async function listRequests(
   query: AdminRequestQuery,
   now: Date,
 ): Promise<AdminRequestPage> {
-  const filters = { group: query.group, status: query.status, now };
+  const filters = { group: query.group, status: query.status, q: query.q, now };
   const window = pageWindow(query);
   const [rows, total] = await Promise.all([
     findAdminRequests(db, filters, window.limit, window.offset),

@@ -76,10 +76,8 @@ describe('CaseConversation', () => {
     expect(card.querySelector('[data-card-band]')?.textContent).toBe(
       'Reported threadCase-scoped read · 12 Sep only',
     );
-    /* The frame's line, with the straight apostrophe `31-content-voice.md` rules. */
-    expect(card.textContent).toContain(
-      "Read-only, and scoped to the event date. Admins see the messages the case is about, not the relationship's whole history.",
-    );
+    /* VEN-736's line: the window the server applied, one fact. */
+    expect(card.textContent).toContain('Read-only. Only messages from the event date.');
   });
 
   it('prints the week a bookingless report was filed, and says that is the scope', async () => {
@@ -88,8 +86,8 @@ describe('CaseConversation', () => {
     expect(card.querySelector('[data-card-band]')?.textContent).toBe(
       'Reported threadCase-scoped read · 6–12 Sep',
     );
-    expect(card.textContent).toContain('scoped to the week the report was filed');
-    expect(card.textContent).not.toContain('scoped to the event date');
+    expect(card.textContent).toContain('Only messages from the week the report was filed.');
+    expect(card.textContent).not.toContain('Only messages from the event date.');
   });
 
   it('names no dates before the read, and keeps the conversation id visible', () => {

@@ -222,7 +222,7 @@ function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.React
          * form with no idea which of five fields to change.
          */
         setDecline({
-          message: result.error.message ?? 'Your bank refused the payment without giving a reason.',
+          message: result.error.message ?? 'Your bank declined the payment without a reason.',
           code: result.error.decline_code ?? result.error.code ?? null,
         });
         inFlight.current = false;
@@ -271,9 +271,8 @@ function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.React
           className="flex max-w-[620px] flex-col gap-4"
         >
           {unreachable ? (
-            <Banner status="failed" title="We could not reach Stripe">
-              We could not confirm the payment just now. Check your bookings before paying again,
-              then try once more.
+            <Banner status="failed" title="We couldn't reach Stripe">
+              We couldn&apos;t confirm the payment. Check your bookings before you try again.
             </Banner>
           ) : null}
           {decline ? <DeclineBanner decline={decline} event={event} /> : null}
