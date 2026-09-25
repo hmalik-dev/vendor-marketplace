@@ -65,4 +65,45 @@ describe('the bookings page', () => {
       '/admin/bookings',
     );
   });
+
+  it('names the search and the other filter when both leave nothing', async () => {
+    getAdminBookings.mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 15,
+      widenings: [{ key: 'status', count: 2 }],
+    });
+
+    render(
+      await AdminBookingsPage({
+        searchParams: Promise.resolve({ q: 'kessler', status: 'completed' }),
+      }),
+    );
+
+    expect(screen.getByText('No bookings match "kessler" and Completed')).toBeDefined();
+    expect(screen.getByText('2 filters are narrowing this.')).toBeDefined();
+    // Dropping the status keeps the search, and the count is the widening API's.
+    expect(screen.getByRole('link', { name: 'Any status (2)' }).getAttribute('href')).toBe(
+      '/admin/bookings?q=kessler',
+    );
+    expect(getAdminBookings).toHaveBeenCalledWith('?status=completed&q=kessler&page=1');
+  });
+
+  it('sends the search to the API and keeps it through the pager', async () => {
+    getAdminBookings.mockResolvedValue({
+      items: [ROW],
+      total: 40,
+      page: 1,
+      pageSize: 15,
+      widenings: [],
+    });
+
+    render(await AdminBookingsPage({ searchParams: Promise.resolve({ q: '  Sunlit  ' }) }));
+
+    expect(getAdminBookings).toHaveBeenCalledWith('?q=Sunlit&page=1');
+    expect(
+      screen.getAllByRole('link').some((link) => link.getAttribute('href')?.includes('q=Sunlit')),
+    ).toBe(true);
+  });
 });

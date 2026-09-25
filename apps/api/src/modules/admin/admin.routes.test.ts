@@ -3,6 +3,8 @@ import {
   addDays,
   ADMIN_PAGE_SIZE,
   DEFAULT_PAGE_SIZE,
+  ERROR_CODES,
+  MAX_NAME_LENGTH,
   MAX_TAGS_PER_CATEGORY,
   toDateString,
 } from '@vendor-marketplace/shared';
@@ -1794,6 +1796,149 @@ describe('admin routes', () => {
         vendorPayoutCents: 105_600,
         stripePaymentIntentId: 'pi_test_ban',
       });
+    });
+  });
+
+  describe('bookings and payments search (VEN-743)', () => {
+    /**
+     * Two paid bookings on one vendor that differ only in the field under test:
+     * the customer, and the payment intent. A match on the vendor's name takes
+     * both, so a search that ignored `q` could not pass any narrowing assertion.
+     */
+    async function twoPaidBookings(): Promise<{ mine: string; theirs: string }> {
+      await signIn(ADMIN, true);
+      const customerId = await signIn(CUSTOMER);
+      const otherCustomerId = await signIn(OTHER_ADMIN);
+      await signIn(VENDOR);
+      const vendor = await createVendorProfile({ isPublished: true });
+      const mine = await createFutureBooking(customerId, vendor.profileId, {
+        stripePaymentIntentId: 'pi_mine_0001',
+      });
+      const theirs = await createFutureBooking(otherCustomerId, vendor.profileId, {
+        stripePaymentIntentId: 'pi_theirs_0002',
+      });
+      await harness.database.db.update(bookings).set({ paidAt: new Date() });
+
+      return { mine, theirs };
+    }
+
+    async function ids(url: string): Promise<string[]> {
+      const response = await harness.app.inject({ method: 'GET', url, headers: bearer(ADMIN) });
+      expect(response.statusCode, url).toBe(200);
+      const body = response.json();
+      expect(body.total, url).toBe(body.items.length);
+
+      return body.items.map((row: { id?: string; bookingId?: string }) => row.id ?? row.bookingId);
+    }
+
+    it('narrows bookings by customer email, booking id and vendor name', async () => {
+      const { mine, theirs } = await twoPaidBookings();
+
+      expect(await ids('/v1/admin/bookings?q=user_customer@')).toEqual([mine]);
+      expect(await ids('/v1/admin/bookings?q=USER_ADMIN_TWO')).toEqual([theirs]);
+      expect(await ids(`/v1/admin/bookings?q=${theirs.slice(0, 8)}`)).toEqual([theirs]);
+      expect((await ids('/v1/admin/bookings?q=sunlit')).sort()).toEqual([mine, theirs].sort());
+      expect(await ids('/v1/admin/bookings?q=nobody-by-that-name')).toEqual([]);
+    });
+
+    it('matches a booking by the customer name, and combines q with a filter', async () => {
+      const { mine } = await twoPaidBookings();
+      await harness.database.db
+        .update(users)
+        .set({ firstName: 'Marguerite', lastName: 'Okonkwo' })
+        .where(eq(users.authUserId, CUSTOMER));
+
+      expect(await ids('/v1/admin/bookings?q=marguerite%20okon')).toEqual([mine]);
+      expect(await ids('/v1/admin/bookings?q=marguerite&status=completed')).toEqual([]);
+      expect(await ids('/v1/admin/bookings?q=marguerite&status=confirmed')).toEqual([mine]);
+    });
+
+    it('narrows payments by customer name, email, booking id, vendor name and payment intent', async () => {
+      const { mine, theirs } = await twoPaidBookings();
+      await harness.database.db
+        .update(users)
+        .set({ firstName: 'Marguerite', lastName: 'Okonkwo' })
+        .where(eq(users.authUserId, OTHER_ADMIN));
+
+      expect(await ids('/v1/admin/payments?q=marguerite%20okon')).toEqual([theirs]);
+      expect(await ids('/v1/admin/payments?q=user_customer@')).toEqual([mine]);
+      expect(await ids(`/v1/admin/payments?q=${theirs.slice(0, 8)}`)).toEqual([theirs]);
+      expect(await ids('/v1/admin/payments?q=pi_theirs')).toEqual([theirs]);
+      expect(await ids('/v1/admin/payments?q=PI_MINE')).toEqual([mine]);
+      expect((await ids('/v1/admin/payments?q=sunlit')).sort()).toEqual([mine, theirs].sort());
+      expect(await ids('/v1/admin/payments?q=nobody-by-that-name')).toEqual([]);
+    });
+
+    it('treats % and _ literally and ignores an empty term', async () => {
+      const { mine, theirs } = await twoPaidBookings();
+
+      for (const route of ['bookings', 'payments', 'cases', 'vendors', 'customers']) {
+        // An empty term is no search, and is not a 400 (it was, before VEN-743).
+        expect(
+          (
+            await harness.app.inject({
+              method: 'GET',
+              url: `/v1/admin/${route}?q=`,
+              headers: bearer(ADMIN),
+            })
+          ).statusCode,
+          route,
+        ).toBe(200);
+      }
+
+      for (const route of ['bookings', 'payments']) {
+        // As wildcards these would match `user_customer@…`; literally, nothing is named so.
+        expect(await ids(`/v1/admin/${route}?q=user%25customer`), route).toEqual([]);
+        expect(await ids(`/v1/admin/${route}?q=user_custome_`), route).toEqual([]);
+        expect(await ids(`/v1/admin/${route}?q=%25`), route).toEqual([]);
+        expect((await ids(`/v1/admin/${route}?q=`)).sort(), route).toEqual([mine, theirs].sort());
+        expect((await ids(`/v1/admin/${route}?q=%20%20`)).sort(), route).toEqual(
+          [mine, theirs].sort(),
+        );
+      }
+    });
+
+    it('names the search as a widening when it empties the list', async () => {
+      await twoPaidBookings();
+
+      for (const route of ['bookings', 'payments']) {
+        const response = await harness.app.inject({
+          method: 'GET',
+          url: `/v1/admin/${route}?q=user_customer&${route === 'bookings' ? 'status=completed' : 'flag=payout-failing'}`,
+          headers: bearer(ADMIN),
+        });
+        const widenings = response.json().widenings as { key: string; count: number }[];
+
+        expect(response.json().items, route).toEqual([]);
+        // Dropping the search leaves nothing to reveal; dropping the other filter reveals one row.
+        expect(widenings.find((widening) => widening.key === 'q')?.count, route).toBeUndefined();
+        expect(widenings.find((widening) => widening.key !== 'q')?.count, route).toBe(1);
+      }
+    });
+
+    it('refuses a term past MAX_NAME_LENGTH with 400', async () => {
+      await signIn(ADMIN, true);
+
+      for (const route of ['bookings', 'payments', 'cases', 'vendors', 'customers']) {
+        const over = await harness.app.inject({
+          method: 'GET',
+          url: `/v1/admin/${route}?q=${'a'.repeat(MAX_NAME_LENGTH + 1)}`,
+          headers: bearer(ADMIN),
+        });
+        const at = await harness.app.inject({
+          method: 'GET',
+          url: `/v1/admin/${route}?q=${'a'.repeat(MAX_NAME_LENGTH)}`,
+          headers: bearer(ADMIN),
+        });
+
+        expect(over.statusCode, route).toBe(400);
+        expect(over.json(), route).toMatchObject({
+          statusCode: 400,
+          error: ERROR_CODES.VALIDATION_ERROR,
+          message: 'Request validation failed',
+        });
+        expect(at.statusCode, route).toBe(200);
+      }
     });
   });
 
