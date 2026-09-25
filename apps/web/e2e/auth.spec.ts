@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures.js';
+import { landedOn } from './landed-on.js';
 
 /**
  * Route protection, in both directions.
@@ -44,10 +45,10 @@ test.describe('route protection', () => {
     test(`refuses a signed-in customer at ${path}`, async ({ customerPage }) => {
       await customerPage.goto(path);
 
-      await expect(
-        customerPage,
+      expect(
+        landedOn(customerPage.url(), path),
         `a customer reached ${path} — role gating is missing on this route`,
-      ).not.toHaveURL(new RegExp(path.replace(/\//g, '\\/') + '$'));
+      ).toBe(false);
     });
   }
 });
