@@ -49,7 +49,8 @@ export function FirstRunShell({
       />
 
       <div className="relative w-full max-w-[700px]">
-        <div className="mb-[34px] flex justify-center">
+        {/* 38px: the wordmark's own line box in the frame, where `Logo` sets `leading-none`. */}
+        <div className="mb-[34px] flex h-[38px] items-center justify-center">
           <Logo size={LOGO_SIZES.authPanel} />
         </div>
 

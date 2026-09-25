@@ -216,6 +216,10 @@ describe('CustomerDetailsForm', () => {
       const submit = document.querySelector('button[type="submit"]') as HTMLButtonElement;
       expect(submit.disabled).toBe(true);
       expect(submit.textContent).toBe('Saving');
+      expect(submit.getAttribute('aria-busy')).toBe('true');
+      /* The primitive's `loading` dims the label to 60%; on this fill that fails contrast. */
+      expect(submit.querySelector('.opacity-60')).toBeNull();
+      expect(submit.querySelector('[role="status"]')).not.toBeNull();
       expect(firstName().disabled).toBe(true);
       expect(lastName().disabled).toBe(true);
       expect(firstName().value).toBe('Ada');

@@ -7,6 +7,7 @@ import { FirstRunShell } from '@/components/first-run-shell';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
 import { RETURN_PATH_PARAM } from '@/lib/return-path';
 import { useApi } from '@/lib/use-api';
 import { wireUserSchema } from '@/lib/wire-schemas';
@@ -184,7 +185,7 @@ export function CustomerDetailsForm({ returnTo }: CustomerDetailsFormProps): Rea
                   onBlur={() => blur(key)}
                 />
                 {invalid[key] ? (
-                  <p id={errorId} className="text-helper text-error-500">
+                  <p id={errorId} className="text-helper leading-normal text-error-500">
                     {FIELD_ERRORS[key]}
                   </p>
                 ) : null}
@@ -197,10 +198,15 @@ export function CustomerDetailsForm({ returnTo }: CustomerDetailsFormProps): Rea
           type="submit"
           variant="primary"
           disabled={saving}
-          loading={saving}
+          aria-busy={saving || undefined}
           onMouseDown={keepFieldFocus}
-          className="w-full rounded-[10px] py-[13px] disabled:bg-clay-500"
+          className="w-full gap-2.5 rounded-[10px] py-[13px] disabled:bg-clay-500 disabled:opacity-100"
         >
+          {/*
+            Not the primitive's `loading`: it dims the label to 60%, which on
+            this fill is 3.1:1. Frame `41b` draws the label at full strength.
+          */}
+          {saving ? <Spinner className="size-3.5 border-stone-0/35 border-t-stone-0" /> : null}
           {submitLabel}
         </Button>
 
