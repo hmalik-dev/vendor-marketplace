@@ -48,7 +48,7 @@ export default async function VendorDetailsPage(): Promise<React.ReactElement> {
   return (
     <AuthScreen
       headline="Tell us about your business"
-      subhead={`${BRAND_NAME} is opening to vendors by invitation for now. Add your details and we'll add you to the waitlist.`}
+      subhead={`Vendors join ${BRAND_NAME} by invitation for now. Add your details to join the waitlist.`}
       panel="vendor"
     >
       <VendorDetailsForm application={application} categories={categories} />

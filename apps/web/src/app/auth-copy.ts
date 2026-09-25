@@ -1,3 +1,4 @@
+import { PASSWORD_MIN_LENGTH } from '@vendor-marketplace/shared';
 import type { AuthOutcome } from '@/lib/auth/auth-requests';
 
 /**
@@ -8,7 +9,7 @@ import type { AuthOutcome } from '@/lib/auth/auth-requests';
 export const AUTH_COPY = {
   emailLabel: 'Email',
   passwordLabel: 'Password',
-  passwordHelper: 'At least 10 characters',
+  passwordHelper: `At least ${PASSWORD_MIN_LENGTH} characters`,
   signUpSubmit: 'Create my account',
   signInSubmit: 'Sign in',
   signUpAlt: 'Already with us?',
@@ -20,27 +21,26 @@ export const AUTH_COPY = {
   codeResend: 'Send a new code',
   codeResent: 'A new code is on its way.',
   codeWrong: 'That code did not work. Check it and try again.',
-  codeExhausted: 'That code can no longer be used. Send a new one below.',
+  codeExhausted: 'That code no longer works. Send a new one below.',
   signUpFailed:
     'We could not create that account. Check the details, or sign in if you already have one.',
   signInFailed: 'That email and password did not match.',
   forgotLink: 'Forgot password?',
   forgotSubmit: 'Email me a code',
   forgotBack: 'Back to sign in',
-  resetCodeSent: 'If that address has an account, we have emailed it a six-digit code.',
+  resetCodeSent: 'If that email has an account, we sent it a six-digit code.',
   resetPasswordLabel: 'New password',
   resetSubmit: 'Set new password',
   resetDone: 'Your password is changed. Sign in with the new one.',
-  resetFailed: 'That code did not work, or it has expired. Check it, or ask for a new one.',
+  resetFailed: 'That code did not work or has expired. Check it or send a new one.',
   currentPasswordLabel: 'Current password',
   confirmPasswordLabel: 'Confirm new password',
   changeSubmit: 'Change password',
   changeWrongCurrent: 'That is not your current password. Check it and try again.',
-  changeSameAsCurrent: 'Choose a new password that is different from your current one.',
-  changeTooShort: 'Your new password needs at least 10 characters.',
+  changeSameAsCurrent: 'Your new password must differ from your current one.',
+  changeTooShort: `Your new password needs at least ${PASSWORD_MIN_LENGTH} characters.`,
   changeTooLong: 'Your new password can be at most 128 characters.',
-  changeDone:
-    'Your password is changed. You are still signed in here, and signed out everywhere else.',
+  changeDone: 'Your password is changed. Every other device is signed out.',
   changeMismatch: 'The two new passwords do not match.',
   sessionsTitle: "Where you're signed in",
   sessionsRowValue: 'See your devices and sign out the others',
@@ -56,8 +56,7 @@ export const AUTH_COPY = {
   sessionsEnded: 'Every other device is signed out.',
   sessionEndFailed: 'We could not sign that device out. Try again in a moment.',
   throttled: "This isn't going through right now. Wait a few minutes and try again.",
-  resetMailPaced:
-    'Too many reset codes were requested for this address just now. Wait a minute, then try again.',
+  resetMailPaced: 'Too many codes were requested for this email. Wait a minute and try again.',
   signInThrottled:
     'Too many sign-in attempts from this device. Wait a few minutes and try again, or reset your password.',
   unreachable: 'We could not reach the sign-in service. Try again in a moment.',

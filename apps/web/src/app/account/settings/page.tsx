@@ -67,7 +67,7 @@ export default async function AccountSettingsPage({
     rows.push({
       id: 'close',
       label: 'Close account',
-      value: 'Retire your account and sign out everywhere',
+      value: 'Remove your details and sign out everywhere',
       href: ACCOUNT_CLOSE_PATH,
     });
   }
