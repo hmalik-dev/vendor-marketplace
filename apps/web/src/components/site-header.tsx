@@ -12,7 +12,8 @@ import { SignedInDrawer, SignedOutDrawer } from '@/components/header-drawer';
 import { HeaderNav } from '@/components/header-nav';
 import { HeaderQuery } from '@/components/search/header-query';
 import { roleHasMessages } from '@/components/account-links';
-import { MessagesLink } from '@/components/messaging/messages-link';
+import { CustomerHeaderLinks } from '@/components/customer-header-links';
+import { MessagesLink, UnreadMessagesSource } from '@/components/messaging/messages-link';
 import { NotificationBell } from '@/components/messaging/notification-bell';
 import { Button } from '@/components/ui/button';
 import { getCategories } from '@/lib/vendor-data';
@@ -225,17 +226,28 @@ export async function SiteHeader(): Promise<React.ReactElement> {
               `stone-700` at 500, and ghost's `clay-500` is for tertiary
               actions in a pane (VEN-413).
             */}
-            {hasMessages ? <MessagesLink gated={gated} /> : null}
-            {/*
-              Four items do not fit at 390 — they pushed the header past the
-              viewport. Dashboard is the one that gives way, and since #26 it
-              gives way *into the drawer* rather than off the screen: frame
-              `14 Search tablet` keeps Messages in the bar and puts the rest
-              behind the hamburger.
-            */}
-            <Link href="/dashboard" className={`${MARKETING_LINK_CLASS} max-sm:hidden`}>
-              {dashboardLabel}
-            </Link>
+            {menuRole === 'customer' ? (
+              <>
+                {/*
+                  The customer bar draws no `Messages` link (VEN-760), but the
+                  sidebar's unread dot still reads what this publishes.
+                */}
+                <UnreadMessagesSource gated={gated} />
+                <CustomerHeaderLinks />
+              </>
+            ) : (
+              <>
+                {hasMessages ? <MessagesLink gated={gated} /> : null}
+                {/*
+                  Four items do not fit at 390 — they pushed the header past the
+                  viewport. Dashboard is the one that gives way, and since #26 it
+                  gives way *into the drawer* rather than off the screen.
+                */}
+                <Link href="/dashboard" className={`${MARKETING_LINK_CLASS} max-sm:hidden`}>
+                  {dashboardLabel}
+                </Link>
+              </>
+            )}
             {hasMessages ? <NotificationBell gated={gated} /> : null}
             {/*
               The account control is the app's own, never a
