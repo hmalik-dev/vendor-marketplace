@@ -263,6 +263,67 @@ describe('the role recorded at sign-up (VEN-507, VEN-662)', () => {
     ).toBeTruthy();
   });
 
+  /* Frame 40 (VEN-744): one centred column, the logo, one sentence, one button, the consent line under it. */
+  it.each([
+    { role: 'customer', sentence: "You're joining as a customer." },
+    { role: 'vendor', sentence: "You're joining as a vendor." },
+  ] as const)('draws the $role welcome as frame 40 does', ({ role, sentence }) => {
+    render(<AcceptTermsScreen status={recorded(role)} terms={TERMS} returnTo={null} />);
+
+    const shell = screen.getByTestId('first-run-shell');
+    expect(within(shell).getByTestId('logo')).toBeDefined();
+    expect(within(shell).getByRole('heading', { level: 1 }).textContent).toBe(
+      `Welcome to ${BRAND_NAME}`,
+    );
+    expect(within(shell).getByTestId('stored-role').textContent).toBe(sentence);
+    expect(
+      within(shell)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['Continue']);
+    expect(within(shell).queryByRole('checkbox')).toBeNull();
+
+    const notice = shell.querySelector('[data-continue-notice]') as HTMLElement;
+    for (const name of ['Terms', 'Privacy Policy']) {
+      expect(within(notice).getByRole('link', { name }).getAttribute('target')).toBe('_blank');
+    }
+    expect(notice.className).toContain('text-center');
+    /* Full-width primary: the frame's button spans the 460px controls column. */
+    expect(submit().className).toContain('w-full');
+  });
+
+  it('draws the landed-as welcome and the no-role failure in the same shell', async () => {
+    const user = userEvent.setup();
+    post.mockResolvedValue(
+      status({ accepted: true, acceptedAt: new Date(), account: { exists: true, role: 'vendor' } }),
+    );
+    const { unmount } = render(
+      <AcceptTermsScreen status={recorded('customer')} terms={TERMS} returnTo={null} />,
+    );
+
+    await user.click(submit());
+
+    await waitFor(() => expect(screen.getByTestId('landed-role')).toBeDefined());
+    expect(screen.getByTestId('first-run-shell').contains(screen.getByTestId('landed-role'))).toBe(
+      true,
+    );
+    unmount();
+
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+
+    expect(
+      screen
+        .getByTestId('first-run-shell')
+        .contains(screen.getByText("We couldn't find how you're joining")),
+    ).toBe(true);
+  });
+
+  it('leaves the new-version screen outside the shell', () => {
+    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} />);
+
+    expect(screen.queryByTestId('first-run-shell')).toBeNull();
+  });
+
   it('sends one request for a double-click on the submit', async () => {
     let release: (value: TermsAcceptanceStatus) => void = () => undefined;
     post.mockReset();

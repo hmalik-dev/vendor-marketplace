@@ -1285,6 +1285,10 @@ describe('payments', () => {
         'A booking is confirmed',
         'Sunlit Studio is booked',
       ]);
+      expect(rows.map((row) => row.body).sort()).toEqual([
+        'The date is paid and held. Payment reaches you after the event.',
+        'The date is yours. Payment is held until the event is done.',
+      ]);
     });
 
     /**
@@ -1611,6 +1615,7 @@ describe('payments', () => {
 
       expect(rows).toHaveLength(1);
       expect(rows[0]?.userId).toBe(booking.customerId);
+      expect(rows[0]?.body).toBe('The vendor marked it complete. Leave a review.');
     });
   });
 
@@ -1905,7 +1910,7 @@ describe('payments', () => {
       );
 
       expect(response.statusCode).toBe(409);
-      expect(response.json().message).toBe('That booking is already cancelled');
+      expect(response.json().message).toBe('That booking is already canceled');
       expect(harness.stripe.refunds).toHaveLength(0);
     });
 
@@ -2151,9 +2156,7 @@ describe('payments', () => {
       );
 
       expect(response.statusCode).toBe(409);
-      expect(response.json().message).toBe(
-        'That event already happened, so it cannot be cancelled',
-      );
+      expect(response.json().message).toBe('That event already happened, so it cannot be canceled');
       expect(harness.stripe.refunds).toEqual([]);
     });
 
@@ -2347,18 +2350,18 @@ describe('payments', () => {
           .from(notifications)
           .where(eq(notifications.type, 'booking_cancelled'));
         expect(rows.map((row) => row.title).sort()).toEqual([
-          'You cancelled a booking',
-          'Your booking was cancelled by the vendor',
+          'You canceled a booking',
+          'Your booking was canceled by the vendor',
         ]);
         expect(rows.find((row) => row.userId === booking!.customerId)?.body).toBe(
-          'The vendor cancelled this booking and your payment of $1,450 is refunded in full. Their reason: A family emergency.',
+          'The vendor canceled this booking. Your payment of $1,450 is refunded in full. Their reason: A family emergency.',
         );
         const cancellationMail = harness.email.sent
           .filter((mail) => mail.subject.includes('cancel'))
           .map((mail) => [mail.to, mail.subject]);
         expect(cancellationMail).toEqual([
-          ['alan@example.com', 'Your booking was cancelled by the vendor'],
-          ['grace@example.com', 'You cancelled a booking'],
+          ['alan@example.com', 'Your booking was canceled by the vendor'],
+          ['grace@example.com', 'You canceled a booking'],
         ]);
       });
 
@@ -2456,7 +2459,7 @@ describe('payments', () => {
         const response = await vendorCancel(booking!.id);
 
         expect(response.statusCode).toBe(409);
-        expect(response.json().message).toBe('That booking is already cancelled');
+        expect(response.json().message).toBe('That booking is already canceled');
       });
     });
 
