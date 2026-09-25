@@ -148,6 +148,31 @@ export function literalRedirectDestinations(code: string): string[] {
   );
 }
 
+const SESSION_BINDING = /\b(?:const|let)\s+(\w+)\s*=\s*await\s+getServerSession\(\)/g;
+
+/** What follows the empty-session test: a `redirect(`, braced or not, returned or not. */
+const THEN_REDIRECT = String.raw`\s*\)\s*\{?\s*(?:return\s+)?redirect\(`;
+
+/**
+ * Whether a render-chain file refuses a caller without a usable session: a
+ * `requireRole` or a `requireCurrentUser` call, or a hand-rolled gate that
+ * redirects when `getServerSession()` comes back empty (VEN-590) — the shape
+ * the VEN-512 screens use. Reading the session is not enough: the root layout
+ * and `/` read it to draw the header and render for everyone.
+ */
+export function refusesWithoutSession(code: string): boolean {
+  const stripped = stripComments(code);
+  if (/\b(?:requireRole|requireCurrentUser)\(/.test(stripped)) return true;
+  const inline = String.raw`!\s*\(\s*await\s+getServerSession\(\)\s*\)`;
+  const bound = [...stripped.matchAll(SESSION_BINDING)].map(
+    ([, name]) => String.raw`!\s*${name}|${name}\s*===?\s*null`,
+  );
+
+  return [inline, ...bound].some((test) =>
+    new RegExp(String.raw`\bif\s*\(\s*(?:${test})${THEN_REDIRECT}`).test(stripped),
+  );
+}
+
 const SHARED_PATH_CONSTANT = /^export const [A-Z_]+_PATH = (['"`])(\/[^'"`$]*)\1/gm;
 
 export function enumerateRouteTargets(roots: RouteTargetRoots): RouteTarget[] {

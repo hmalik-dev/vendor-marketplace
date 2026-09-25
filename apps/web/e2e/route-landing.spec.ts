@@ -30,6 +30,7 @@ import {
 import {
   enumerateRouteTargets,
   literalRedirectDestinations,
+  refusesWithoutSession,
   stripComments,
   type RouteTarget,
 } from './route-targets.js';
@@ -144,15 +145,13 @@ function renderChain(target: RouteTarget): string[] {
 }
 
 /**
- * A route that refuses a caller without a usable session — a `requireRole` or a
- * `requireCurrentUser` anywhere in its render chain. `ROLE_ROUTE_RULES` names
- * only the role gates, and `/messages` admits every role, so without this a
- * signed-out `/messages` could render and still pass.
+ * A route that refuses a caller without a usable session anywhere in its render
+ * chain — `refusesWithoutSession` names the shapes. `ROLE_ROUTE_RULES` names
+ * only the routes someone wrote into the role table, so a gated page left out
+ * of it is swept strictly only through this.
  */
 function isSessionGated(target: RouteTarget): boolean {
-  return renderChain(target).some((file) =>
-    /\b(?:requireRole|requireCurrentUser)\(/.test(codeOf(file)),
-  );
+  return renderChain(target).some((file) => refusesWithoutSession(codeOf(file)));
 }
 
 /**
@@ -497,6 +496,17 @@ test.describe('route landing, every persona × every source-derived target', () 
     expect(paths).toEqual(
       expect.arrayContaining(['/after-sign-in', '/dashboard', '/bookings', '/accept-terms']),
     );
+
+    /*
+     * VEN-590: the detector reads a hand-rolled `if (!session) redirect(…)` as a
+     * gate. `VENDOR_GATE_PATHS` still decides these three cells; this pins the
+     * detection a future page with the same shape relies on.
+     */
+    const handRolled = [...VENDOR_GATE_PATHS].map((path) => {
+      const target = TARGETS.find((candidate) => candidate.path === path);
+      return [path, target !== undefined && isSessionGated(target)];
+    });
+    expect(handRolled).toEqual([...VENDOR_GATE_PATHS].map((path) => [path, true]));
   });
 
   test('signed out', async ({ browser }) => {
