@@ -128,7 +128,7 @@ function UnacceptedStep({
       setFailed(
         error instanceof ApiClientError && error.statusCode === 409
           ? 'The agreement was updated while this page was open. Reload and read it before accepting.'
-          : 'Nothing has been recorded — try again.',
+          : 'Nothing was saved. Try again.',
       );
     } finally {
       setSaving(false);
@@ -141,8 +141,7 @@ function UnacceptedStep({
 
       <h1 className="display-heading text-display-lg text-stone-900">The vendor agreement</h1>
       <p className="mt-2 text-sm leading-prose text-stone-600">
-        Read this once and accept it. You cannot take payments until you have, because it is the
-        agreement Stripe pays you under.
+        Accept this agreement to take payments.
       </p>
 
       {isNewVersion ? (
@@ -151,8 +150,8 @@ function UnacceptedStep({
           title={`${status.current} replaces ${status.accepted?.version}`}
           className="mt-5"
         >
-          The agreement has been revised. Your acceptance of {status.accepted?.version} stands on
-          your record — accepting this one adds to it rather than replacing it.
+          The agreement has changed. Your acceptance of {status.accepted?.version} stays on your
+          record.
         </Banner>
       ) : null}
 
@@ -211,7 +210,7 @@ function UnacceptedStep({
           </>
         }
         collapseLabel="Collapse the agreement"
-        helper="Opens in this step — you don't lose your place."
+        helper="Opens on this page."
       />
 
       {/*
@@ -284,7 +283,7 @@ function AcceptedRecord({
     <div className="max-w-[700px]">
       <h1 className="display-heading text-display-md text-stone-900">Agreements</h1>
       <p className="mt-1 text-sm leading-prose text-stone-600">
-        What you have accepted, and when. A new version adds a row here rather than replacing one.
+        What you have accepted, and when. Each new version adds a row.
       </p>
 
       {accepted ? (

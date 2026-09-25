@@ -104,7 +104,7 @@ export default async function VendorBookingsPage(): Promise<React.ReactElement> 
         <EmptyState
           panel
           headline="No bookings yet"
-          description="Requests you accept show up here with the customer's contact details, and become bookings once the customer pays."
+          description="Accepted requests show up here with the customer's contact details. They become bookings once the customer pays."
         />
       ) : (
         <ul className="flex flex-col gap-2.5">

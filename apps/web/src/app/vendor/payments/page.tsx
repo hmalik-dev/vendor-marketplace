@@ -74,7 +74,7 @@ export default async function VendorPaymentsPage({
       description={
         status.stripeOnboarded
           ? `${BRAND_NAME} takes payment from the customer and passes it to you through Stripe.`
-          : `${BRAND_NAME} takes payment from the customer and passes it to you through Stripe. Connecting your bank account is what lets you accept a booking.`
+          : `${BRAND_NAME} takes payment from the customer and passes it to you through Stripe. Connect your bank account to accept bookings.`
       }
     >
       <div className="max-w-[620px]">
@@ -108,8 +108,7 @@ export default async function VendorPaymentsPage({
             */}
             {linkExpired ? (
               <Banner status="informational" title="That link had expired">
-                Stripe&apos;s setup links expire. Start again and you will pick up where you left
-                off.
+                Stripe&apos;s setup links expire. Start again to pick up where you left off.
               </Banner>
             ) : (
               <Banner status="pending" title="Payouts not connected">
@@ -122,8 +121,7 @@ export default async function VendorPaymentsPage({
             </div>
 
             <p className="mt-3.5 text-sm leading-prose text-stone-600">
-              Stripe asks for your bank details and enough identification to pay you legally.{' '}
-              {BRAND_NAME} never sees them.
+              Stripe asks for your bank details and ID. {BRAND_NAME} never sees them.
             </p>
             <TaxStatementDownloads years={statementYears} />
           </>

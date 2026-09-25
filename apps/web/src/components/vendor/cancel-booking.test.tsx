@@ -62,7 +62,7 @@ describe('CancelBooking', () => {
     expect(document.activeElement).toBe(screen.getByLabelText('Reason for the customer'));
     expect(
       screen.getByText(
-        'The customer is refunded $1,200 in full and you are not paid for this booking. This cannot be undone.',
+        'The customer is refunded $1,200 in full. You are not paid for this booking. This cannot be undone.',
       ),
     ).toBeDefined();
     const confirm = screen.getByRole('button', { name: 'Yes, cancel and refund $1,200' });

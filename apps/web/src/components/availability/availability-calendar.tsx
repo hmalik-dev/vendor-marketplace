@@ -381,7 +381,7 @@ export function AvailabilityCalendar({
     const editable = dates.filter(isEditable);
 
     if (editable.length === 0) {
-      toast.error('Pick one or more future dates that are not already spoken for.');
+      toast.error('Pick future dates that are not booked.');
       return;
     }
 
@@ -474,8 +474,8 @@ export function AvailabilityCalendar({
           frame's 32px, which pushed the whole calendar 23px down the page.
         */}
         <p className="mt-1 shrink-0 text-base leading-[normal] text-stone-700">
-          Click a date to block it, or drag across several. Booked dates are locked, and completed
-          events stay on the calendar &mdash; click one to open it.
+          Click a date to block it, or drag across several. Booked dates are locked. Click a
+          completed event to open it.
         </p>
 
         {/*
@@ -803,8 +803,8 @@ export function AvailabilityCalendar({
         */}
         <p className="rounded-panel bg-stone-150 p-3 text-sm leading-relaxed text-stone-700">
           {quarter.openSaturdays === 0
-            ? 'Every Saturday in these three months is already spoken for.'
-            : `${quarter.openSaturdays} of your Saturdays in these three months are still open, alongside ${quarter.booked} booked and ${quarter.blocked} blocked dates.`}
+            ? 'Every Saturday in these three months is taken.'
+            : `${quarter.openSaturdays} of your Saturdays in these three months are open. You have ${quarter.booked} booked and ${quarter.blocked} blocked dates.`}
         </p>
       </aside>
     </div>

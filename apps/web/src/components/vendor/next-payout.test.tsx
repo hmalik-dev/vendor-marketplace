@@ -202,7 +202,7 @@ describe('NextPayout', () => {
     );
 
     expect(container.textContent).toContain(
-      '$615 is kept back from your payouts until it is repaid: the card network ruled against a chargeback on a booking you were already paid for, and $200 is already repaid',
+      '$615 is held from your payouts until it is repaid: you lost a chargeback on a booking you were already paid for, and $200 is already repaid',
     );
   });
 

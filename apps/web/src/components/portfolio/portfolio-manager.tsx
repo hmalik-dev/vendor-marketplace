@@ -359,8 +359,7 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
 
       {items.length === 0 && inFlight.length === 0 ? (
         <p className="mt-6 rounded-lg border border-stone-300 bg-card px-6 py-12 text-center text-sm leading-prose text-stone-600">
-          No photos yet. Your gallery is what convinces a customer to send a request — eight to
-          twelve of your best is plenty.
+          No photos yet. Add eight to twelve of your best.
         </p>
       ) : (
         <>
@@ -369,7 +368,7 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
             a vendor can see which photo is the cover but not how to change it.
           */}
           <p className="mt-6 text-sm leading-normal text-stone-600">
-            The first photo is your cover — drag another into first place to change it.
+            The first photo is your cover. Drag another into first place to change it.
           </p>
           <ul className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
             {items.map((item, index) => (
@@ -484,7 +483,7 @@ export function PortfolioManager({ initialItems }: PortfolioManagerProps): React
           <DialogHeader>
             <DialogTitle>Remove this photo?</DialogTitle>
             <DialogDescription>
-              It comes off your gallery straight away. You can upload it again later.
+              It comes off your gallery now. You can upload it again later.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

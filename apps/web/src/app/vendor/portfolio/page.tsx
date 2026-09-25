@@ -24,7 +24,7 @@ export default async function VendorPortfolioPage(): Promise<React.ReactElement>
     <VendorSurface
       eyebrow="Your business"
       heading="Portfolio"
-      description="The work that proves you can do it. Photos appear on your profile in the order below."
+      description="Photos appear on your profile in the order below."
       aside={
         <p className="rounded-md bg-stone-100 px-3 py-2 text-sm text-stone-700">
           {items.length === 0

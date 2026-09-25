@@ -191,7 +191,7 @@ describe('the unaccepted step', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Accept and continue' }));
 
     await waitFor(() => {
-      expect(screen.getByText('Nothing has been recorded — try again.')).toBeDefined();
+      expect(screen.getByText('Nothing was saved. Try again.')).toBeDefined();
     });
   });
 
@@ -208,7 +208,7 @@ describe('the unaccepted step', () => {
     );
 
     expect(screen.getByText(`${CURRENT_VENDOR_AGREEMENT_VERSION} replaces v0.9`)).toBeDefined();
-    expect(screen.getByText(/stands on your record/)).toBeDefined();
+    expect(screen.getByText(/stays on your\s+record\./)).toBeDefined();
   });
 });
 

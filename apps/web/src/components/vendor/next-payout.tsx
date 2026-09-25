@@ -94,8 +94,8 @@ export function NextPayout({ payouts, serverToday }: NextPayoutProps): React.Rea
       )}
       {debtOutstandingCents > 0 && (
         <p className="mt-1.5 text-helper text-gold-600">
-          {formatPrice(debtOutstandingCents)} is kept back from your payouts until it is repaid: the
-          card network ruled against a chargeback on a booking you were already paid for
+          {formatPrice(debtOutstandingCents)} is held from your payouts until it is repaid: you lost
+          a chargeback on a booking you were already paid for
           {debtRecoveredCents > 0
             ? `, and ${formatPrice(debtRecoveredCents)} is already repaid`
             : ''}
