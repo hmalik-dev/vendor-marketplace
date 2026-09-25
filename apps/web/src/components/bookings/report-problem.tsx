@@ -76,10 +76,9 @@ function stateFor(
 
       return {
         body:
-          `Something go wrong on the day? Tell us what happened and we'll hold ${vendorName}'s ` +
-          (closes === null
-            ? 'payment while we look into it.'
-            : `payment while we look into it — up until ${formatPayoutDate(closes, toDateString(new Date()))}, when it goes out.`),
+          closes === null
+            ? `Something go wrong on the day? Report it and we'll hold ${vendorName}'s payment while we look into it.`
+            : `Something go wrong on the day? Report it before ${formatPayoutDate(closes, toDateString(new Date()))}, when ${vendorName}'s payment goes out, and we'll hold it while we look into it.`,
         action: { label: 'Report a problem', href: supportBookingLink(booking.id) },
       };
     }
@@ -87,15 +86,15 @@ function stateFor(
     case 'reported':
       return {
         body:
-          `You've reported a problem with this booking. ${vendorName}'s payment is on hold while ` +
-          "we look into it, and we'll reply by email.",
+          `You reported a problem with this booking. ${vendorName}'s payment is on hold while we ` +
+          "look into it. We'll reply by email.",
       };
 
     case 'before-event':
       return {
         body:
-          'Reporting a problem opens after the event. Until then, cancelling is what changes a ' +
-          'booking — the refund is shown above before you confirm.',
+          'You can report a problem after the event. Until then, you can cancel above and see ' +
+          'the refund before you confirm.',
       };
 
     /*
@@ -109,9 +108,8 @@ function stateFor(
     case 'released':
       return {
         body:
-          `Something still not right? Tell us what happened and we'll look into it with you. ` +
-          `${vendorName}'s payment for this booking has already gone out, so this one comes ` +
-          'straight to us rather than pausing a payment.',
+          `Something still not right? Tell us and we'll look into it with you. ` +
+          `${vendorName}'s payment has already gone out.`,
         action: { label: 'Contact support', href: SUPPORT_PATH },
       };
 

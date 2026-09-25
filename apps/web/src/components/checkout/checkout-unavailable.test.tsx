@@ -28,7 +28,9 @@ describe('CheckoutUnavailable', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
       "Kessler & Co. can't take payment right now",
     );
-    expect(screen.getByText(/nothing is wrong with your account/)).toBeDefined();
+    expect(
+      screen.getByText(/needs to finish setting up payments\. Try again later\./),
+    ).toBeDefined();
     expect(screen.getByRole('link', { name: 'Try this payment again' })).toBeDefined();
     expect(screen.queryByText(/isn't here/)).toBeNull();
   });
@@ -56,7 +58,7 @@ describe('CheckoutUnavailable', () => {
   });
 
   /* VEN-559: unpublished or on a hold, which is reversible and says so. */
-  it('tells a customer a paused vendor is temporary, names the deadline, and offers a retry', () => {
+  it('tells a customer a paused vendor can be retried, names the deadline, and offers a retry', () => {
     render(
       <CheckoutUnavailable
         reason="vendor-paused"
@@ -69,7 +71,9 @@ describe('CheckoutUnavailable', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
       "Kessler & Co. isn't taking bookings right now",
     );
-    expect(screen.getByText(/This is temporary/)).toBeDefined();
+    expect(
+      screen.getByText(/is paused, so this can't be paid yet\. Try again later\./),
+    ).toBeDefined();
     expect(screen.getByText(/Your booking expires in 3d/)).toBeDefined();
     expect(screen.queryByText(/no longer taking bookings/)).toBeNull();
     const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
@@ -167,7 +171,7 @@ describe('CheckoutUnavailable', () => {
     render(<CheckoutUnavailable reason="closed" requestId={REQUEST_ID} vendorName="June Harlow" />);
 
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
-      "This booking isn't open any more",
+      "This booking isn't open anymore",
     );
     expect(screen.getByRole('status').textContent).toBe('Nothing is owed on this booking.');
     expect(screen.queryByRole('link', { name: 'Try this payment again' })).toBeNull();

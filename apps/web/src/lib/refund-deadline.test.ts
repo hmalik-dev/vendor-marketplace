@@ -12,13 +12,13 @@ describe('prePaymentRefundClause', () => {
 
   it('says the full refund has ended once it has, and when online cancellation closes', () => {
     expect(prePaymentRefundClause('2026-10-10', iso, new Date('2026-10-08T00:00:00.001Z'))).toBe(
-      'the full-refund window ended 2026-10-08T00:00:00.000Z, so cancelling before 2026-10-09T00:00:00.000Z refunds part of the total',
+      'the full-refund window ended 2026-10-08T00:00:00.000Z, so canceling before 2026-10-09T00:00:00.000Z refunds part of the total',
     );
   });
 
   it('promises no cancellation once online cancellation has closed', () => {
     expect(prePaymentRefundClause('2026-10-10', iso, new Date('2026-10-09T00:00:00.000Z'))).toBe(
-      "online cancellation closed 2026-10-09T00:00:00.000Z, so once paid it can't be cancelled here",
+      "online cancellation closed 2026-10-09T00:00:00.000Z, so once paid it can't be canceled here",
     );
   });
 

@@ -36,7 +36,11 @@ describe('ReportProblem', () => {
     const link = screen.getByRole('link', { name: 'Report a problem' });
     expect(link.getAttribute('href')).toBe(`${SUPPORT_PATH}?booking=booking-1`);
     // The consequence is stated before the click, not after it.
-    expect(screen.getByText(/hold Sunlit Studio's payment/)).toBeDefined();
+    expect(
+      screen.getByText(
+        /Sunlit Studio's payment goes out, and we'll hold it while we look into it\./,
+      ),
+    ).toBeDefined();
   });
 
   /**
@@ -47,7 +51,11 @@ describe('ReportProblem', () => {
   it('names the day the window closes, and never the interval behind it', () => {
     at(INSIDE, 'confirmed');
 
-    expect(screen.getByText(/up until Jun 18, when it goes out/)).toBeDefined();
+    expect(
+      screen.getByText(
+        /Report it before Jun 18, when Sunlit Studio's payment goes out, and we'll hold it/,
+      ),
+    ).toBeDefined();
     expect(RELEASE_AT.toISOString().startsWith('2026-06-18')).toBe(true);
 
     for (const [now, status] of [
@@ -70,7 +78,7 @@ describe('ReportProblem', () => {
     at(BEFORE, 'confirmed');
 
     expect(screen.queryByRole('link', { name: 'Report a problem' })).toBeNull();
-    expect(screen.getByText(/Reporting a problem opens after the event/)).toBeDefined();
+    expect(screen.getByText(/You can report a problem after the event/)).toBeDefined();
   });
 
   it('sends the customer to a person once the payout has actually gone out', () => {
@@ -87,9 +95,9 @@ describe('ReportProblem', () => {
      * which is the part that was wrong before and the part a future edit would
      * lose first.
      */
-    const body = screen.getByText(/payment for this booking has already gone out/);
+    const body = screen.getByText(/payment has already gone out/);
 
-    expect(body.textContent).toContain("Sunlit Studio's payment for this booking");
+    expect(body.textContent).toContain("Sunlit Studio's payment has already gone out.");
     expect(body.textContent?.startsWith('Something still not right?')).toBe(true);
   });
 

@@ -35,7 +35,7 @@ describe('cancellationNarrative', () => {
 
     it('names the customer when they cancelled the booking themselves', () => {
       expect(cancellationNarrative(settlement(), 'customer').what).toBe(
-        'You cancelled this booking on June 1, 2026.',
+        'You canceled this booking on June 1, 2026.',
       );
     });
 
@@ -47,7 +47,7 @@ describe('cancellationNarrative', () => {
      */
     it('names the admin without claiming which account was suspended', () => {
       const unwound = settlement({ cancelledBy: 'admin' });
-      const sentence = `${BRAND_NAME} cancelled this booking on June 1, 2026, because an account involved is no longer active.`;
+      const sentence = `${BRAND_NAME} canceled this booking on June 1, 2026 because an account involved is no longer active.`;
 
       expect(cancellationNarrative(unwound, 'customer').what).toBe(sentence);
       expect(cancellationNarrative(unwound, 'vendor').what).toBe(sentence);
@@ -58,11 +58,11 @@ describe('cancellationNarrative', () => {
       const byVendor = settlement({ cancelledBy: 'vendor', paidOutAt: null });
 
       expect(cancellationNarrative(byVendor, 'customer')).toEqual({
-        what: 'The vendor cancelled this booking on June 1, 2026, and you were refunded in full.',
+        what: 'The vendor canceled this booking on June 1, 2026, and you were refunded in full.',
         money: 'You paid $1,450, and all of it was refunded to your original payment method.',
       });
       expect(cancellationNarrative(byVendor, 'vendor').what).toBe(
-        'You cancelled this booking on June 1, 2026.',
+        'You canceled this booking on June 1, 2026.',
       );
     });
 
@@ -73,13 +73,13 @@ describe('cancellationNarrative', () => {
      */
     it('names no actor on a row that does not record one', () => {
       expect(cancellationNarrative(settlement({ cancelledBy: null }), 'customer').what).toBe(
-        'This booking was cancelled on June 1, 2026.',
+        'This booking was canceled on June 1, 2026.',
       );
     });
 
     it('drops the date rather than printing one it does not have', () => {
       expect(cancellationNarrative(settlement({ cancelledAt: null }), 'customer').what).toBe(
-        'You cancelled this booking.',
+        'You canceled this booking.',
       );
     });
   });
@@ -120,14 +120,14 @@ describe('cancellationNarrative', () => {
       expect(cancellationNarrative(unpaid, 'customer').money).toBeNull();
       expect(cancellationNarrative(unpaid, 'vendor').money).toBeNull();
       /* The cancellation itself is still described. */
-      expect(cancellationNarrative(unpaid, 'customer').what).toContain('cancelled this booking');
+      expect(cancellationNarrative(unpaid, 'customer').what).toContain('canceled this booking');
     });
   });
 
   describe('the vendor reads the same facts in their own person', () => {
     it('attributes the cancellation to the customer', () => {
       expect(cancellationNarrative(settlement(), 'vendor').what).toBe(
-        'The customer cancelled this booking on June 1, 2026.',
+        'The customer canceled this booking on June 1, 2026.',
       );
     });
 

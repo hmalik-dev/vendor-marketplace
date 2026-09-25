@@ -89,7 +89,7 @@ export const BOOKING_PRESENTATION: Record<
 > = {
   confirmed: { label: 'Confirmed', tone: 'confirmed', settled: false },
   completed: { label: 'Completed', tone: 'completed', settled: true },
-  cancelled: { label: 'Cancelled', tone: 'inert', settled: true },
+  cancelled: { label: 'Canceled', tone: 'inert', settled: true },
   disputed: { label: 'Disputed', tone: 'failed', settled: true },
 };
 

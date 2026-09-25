@@ -137,7 +137,7 @@ export default async function VendorBookingsPage(): Promise<React.ReactElement> 
 
       {lost.length > 0 ? (
         <>
-          <h2 className="mt-6 mb-2.5 font-display text-[21px] text-stone-900">Cancelled</h2>
+          <h2 className="mt-6 mb-2.5 font-display text-[21px] text-stone-900">Canceled</h2>
           <ul className="flex flex-col gap-2.5">
             {lost.map((request) => (
               <CancelledBookingCard key={request.id} request={request} />
