@@ -457,11 +457,11 @@ describe('an account unwind and the requests behind settled bookings', () => {
 
       if (banned === 'customer') {
         expect(bodyFor(vendorUserId)).toContain(
-          "The customer's account was suspended and the booking was cancelled. Their payment has been refunded in full from the platform balance, and no payout will be made to you for this booking.",
+          "The customer's account was suspended. The booking was canceled. Their payment is refunded in full from the platform balance. You will not receive a payout for this booking.",
         );
       } else {
         expect(bodyFor(customerUserId)).toContain(
-          "The other party's account was suspended. Your payment has been refunded in full.",
+          "The other party's account was suspended. Your payment is refunded in full.",
         );
       }
       expect(sent.map((row) => row.body).join(' ')).not.toMatch(/Stripe balance/);

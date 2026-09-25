@@ -93,6 +93,33 @@ describe('notification copy never carries a raw ISO date', () => {
     }
   });
 
+  it('spells canceled with one l in every sentence a reader sees', () => {
+    const modules = join(import.meta.dirname, '..');
+    const files = ['payments/payments.service.ts', 'admin/account-unwind.ts'].map((file) =>
+      readFileSync(join(modules, file), 'utf8'),
+    );
+
+    const sentences = (source: string): string[] =>
+      source
+        .split('\n')
+        .filter((line) => !/^\s*(?:\/\/|\*|\/\*)/.test(line))
+        .flatMap((line) => line.match(/'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`[^`]*`/g) ?? [])
+        // A status value has no space; a log line is not shown to anyone.
+        .filter((literal) => /\s/.test(literal) && !literal.includes('row could not be cancelled'));
+
+    // Guards the guard: the sweep must read sentences, and must flag a British one.
+    expect(sentences(service).length + files.flatMap(sentences).length).toBeGreaterThan(50);
+    expect(sentences("throw conflict('That booking was cancelled');")).toEqual([
+      "'That booking was cancelled'",
+    ]);
+
+    const british = [service, ...files]
+      .flatMap(sentences)
+      .filter((literal) => /cancell(?:ed|ing)\b/.test(literal));
+
+    expect(british).toEqual([]);
+  });
+
   it('hard-codes no ISO date in any template', () => {
     for (const template of copyTemplates()) {
       expect(template).not.toMatch(/\d{4}-\d{2}-\d{2}/);

@@ -135,17 +135,17 @@ export function refundedBody(
 
   if (reader === 'customer') {
     const outcome = inFull
-      ? 'Your payment has been refunded in full.'
-      : `${formatPrice(refundedCents)} of your ${formatPrice(totalCents)} payment has been refunded.`;
+      ? 'Your payment is refunded in full.'
+      : `${formatPrice(refundedCents)} of your ${formatPrice(totalCents)} payment is refunded.`;
 
     return `The other party's account was ${copy.state}. ${outcome}`;
   }
 
   const outcome = inFull
-    ? 'Their payment has been refunded in full'
-    : `${formatPrice(refundedCents)} of their ${formatPrice(totalCents)} payment has been refunded`;
+    ? 'Their payment is refunded in full'
+    : `${formatPrice(refundedCents)} of their ${formatPrice(totalCents)} payment is refunded`;
 
-  return `The customer's account was ${copy.state} and the booking was cancelled. ${outcome} from the platform balance, and no payout will be made to you for this booking.`;
+  return `The customer's account was ${copy.state}. The booking was canceled. ${outcome} from the platform balance. You will not receive a payout for this booking.`;
 }
 
 /**
@@ -172,7 +172,7 @@ function unwindCopy(
     cancellationReason: `The other party's account was ${state}`,
     state,
     customerUnpaid: `The other party's account was ${state}. Nothing was charged for this booking.`,
-    vendorUnpaid: `The customer's account was ${state} and the booking was cancelled. Nothing had been charged for it.`,
+    vendorUnpaid: `The customer's account was ${state}. The booking was canceled. Nothing was charged for it.`,
   };
 }
 
@@ -593,7 +593,7 @@ async function unwindBatch(
           const stored = await insertNotification(context.db, {
             userId: recipient,
             type: 'booking_cancelled',
-            title: 'A booking was cancelled',
+            title: 'A booking was canceled',
             body,
             data: { bookingId: booking.id },
           });

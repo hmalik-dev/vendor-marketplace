@@ -941,7 +941,7 @@ describe('admin routes', () => {
         .from(notifications)
         .where(eq(notifications.userId, customerId));
       expect(told?.body).toBe(
-        "The other party's account was suspended. Your payment has been refunded in full.",
+        "The other party's account was suspended. Your payment is refunded in full.",
       );
     });
 
@@ -2553,7 +2553,7 @@ describe('admin routes', () => {
        * that rather than naming a Stripe reversal that never happens.
        */
       expect(toVendor?.body).toBe(
-        "The customer's account was suspended and the booking was cancelled. Their payment has been refunded in full from the platform balance, and no payout will be made to you for this booking.",
+        "The customer's account was suspended. The booking was canceled. Their payment is refunded in full from the platform balance. You will not receive a payout for this booking.",
       );
       expect(toVendor?.body).not.toContain('Stripe balance');
       expect(toVendor?.body).not.toContain('Your payment');
