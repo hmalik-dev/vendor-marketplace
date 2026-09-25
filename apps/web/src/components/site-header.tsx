@@ -92,10 +92,9 @@ export async function SiteHeader(): Promise<React.ReactElement> {
   const role = user?.role ?? null;
 
   /*
-   * What the signed-in `/dashboard` link is called for this reader, resolved
-   * once and given to both places that draw it — the bar and the drawer the bar
-   * hides it into below `sm`. Frame `02` draws `Bookings`, which is what a
-   * customer reads; `DASHBOARD_LABEL_BY_ROLE` carries why the other two differ.
+   * What a vendor's or an admin's `/dashboard` link in the bar is called;
+   * `DASHBOARD_LABEL_BY_ROLE` carries why. A customer's bar draws the
+   * `My bookings` pill instead (VEN-760).
    *
    * `role` is `null` only when the account record could not be read, which is
    * the same failure that makes `/dashboard` itself bounce to sign-in. The
