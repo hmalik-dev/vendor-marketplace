@@ -48,5 +48,16 @@ tells you exactly which screens went out of parity instead of guessing. On the
 frames by full label, never by number. Leave the `.dc.html` byte-identical to
 the export rather than renumbering, so the next import stays clean.
 
+**The code is the source of truth over a re-import (user, 2026-09-24).** Where
+an imported frame disagrees with shipped code, the frame is the defect: restore
+the old local frame or fix the frame, never change code to match. The
+2026-09-25 resync export (942 KB, `~/Downloads/Orla-V2/`, PR #559) regressed
+locally fixed frames (12b washes, 13 padding, 21 "Total today", 17/27 search)
+and broke `design-contract-structure.test.ts` (`<span class="sc-d">` closed by
+`</div>`, frames missing `class="fr"`). **Run the whole `apps/web` vitest suite
+after any import** — about eleven parity suites read the frames — and swap a
+regressed frame back whole, by label, from the previous committed file. Run
+`packages/shared` `repo-guard.test.ts` too: frames can name retired providers.
+
 See [[vendor-marketplace-orla-design]], [[design-is-a-contract-not-code]],
 [[playwright-parity-gate-every-fe-ticket]], [[vendor-marketplace-desktop-first]].
