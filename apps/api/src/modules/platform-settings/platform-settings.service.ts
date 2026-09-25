@@ -143,7 +143,7 @@ function overBetaCap(maxBookingCents: number | null, priceCents: number): AppErr
   return new AppError(
     422,
     ERROR_CODES.OVER_BETA_CAP,
-    `Bookings are limited to a price${cap} during the beta, and this one is ${formatPrice(priceCents)}`,
+    `Bookings are limited to a price${cap} during the beta. This one is ${formatPrice(priceCents)}.`,
   );
 }
 

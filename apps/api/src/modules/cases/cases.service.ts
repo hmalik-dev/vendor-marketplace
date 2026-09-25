@@ -349,8 +349,8 @@ function describeHoldRefusal(target: DisputedBookingProjection): string {
     target.vendorPayoutCents > 0
   ) {
     return (
-      "The booking is cancelled, so the payout was not frozen, but the vendor's remaining share " +
-      "is held by this case. It is released only once the card network rules in the platform's favor."
+      "The booking is canceled, so the payout was not frozen. This case holds the vendor's remaining share. " +
+      "It is released only once the card network rules in the platform's favor."
     );
   }
 
@@ -819,10 +819,7 @@ export async function resolveCase(
   }
 
   if (state.bookingStatus === 'disputed') {
-    throw conflict(
-      'This case holds a payout. Resolve it for the vendor or the customer instead, ' +
-        'so the money moves with the ruling.',
-    );
+    throw conflict('This case holds a payout. Resolve it for the vendor or the customer instead.');
   }
 
   /*
@@ -843,8 +840,8 @@ export async function resolveCase(
   ) {
     throw conflict(
       state.networkOutcome === 'lost'
-        ? "The card network ruled against the platform and has already taken this payment back, so the vendor's remaining share cannot be paid out as well."
-        : "This case holds the vendor's remaining share while the chargeback is with the card network. Close it once the network has ruled in the platform's favor.",
+        ? "The card network ruled against the platform and took this payment back. The vendor's remaining share cannot be paid out."
+        : "This case holds the vendor's remaining share while the chargeback is with the card network. Close it once the network rules in the platform's favor.",
     );
   }
 
@@ -964,8 +961,7 @@ export async function readCaseConversation(
 
   if (!grant) {
     throw forbidden(
-      'No open case of this id names this conversation. Threads are readable from the report that ' +
-        'raised them, and only while that case is open.',
+      'No open case with this id names this conversation. A thread is readable only while its case is open.',
     );
   }
 

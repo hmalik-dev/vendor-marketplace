@@ -259,7 +259,7 @@ describe('GET /vendors/availability/nearby', () => {
     });
 
     expect(response.statusCode).toBe(400);
-    expect(response.json().message).toContain('already passed');
+    expect(response.json().message).toBe('That date has passed. Pick today or a later one.');
   });
 
   it('returns nothing at all when the vendor is blocked across the whole window', async () => {

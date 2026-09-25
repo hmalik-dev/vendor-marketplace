@@ -1353,11 +1353,11 @@ export const HELD_PAYOUT_STATUSES = ['disputed'] as const;
  * notification the product does not send.
  */
 export const VENDOR_PROFILE_MODERATION_HOLD_MESSAGE =
-  "You can't publish this storefront — our team took it off search. Contact support and we'll go through it with you.";
+  'Our team took this storefront off search. Contact support to publish it again.';
 
 /** `VENDOR_PROFILE_MODERATION_HOLD_MESSAGE`'s twin, for a package (#457). */
 export const SERVICE_PACKAGE_MODERATION_HOLD_MESSAGE =
-  "You can't switch this package back on — our team took it off your storefront. Contact support and we'll go through it with you.";
+  'Our team took this package off your storefront. Contact support to switch it back on.';
 
 export const RESOLVE_DISPUTE_OUTCOMES = ['vendor', 'customer'] as const;
 export type DisputeOutcome = (typeof RESOLVE_DISPUTE_OUTCOMES)[number];
