@@ -37,7 +37,7 @@ export async function AgreementBlockerBanner(): Promise<React.ReactElement | nul
     >
       {revised
         ? `You accepted ${status.accepted?.version}; ${status.current} is now in force. You can't take payment until you accept it. `
-        : "You can't take payment until you accept the agreement you are paid under. "}
+        : "You can't take payment until you accept the vendor agreement. "}
       <Link href={VENDOR_AGREEMENT_PATH} className="font-semibold text-clay-500 hover:underline">
         {revised ? 'Read what changed' : 'Read and accept'} &rarr;
       </Link>

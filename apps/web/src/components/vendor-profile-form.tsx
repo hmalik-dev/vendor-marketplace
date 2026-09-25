@@ -736,7 +736,7 @@ export function VendorProfileForm({
           <div className="max-w-[65rem]">
             <h1 className="display-heading text-display-md text-stone-900">Your storefront</h1>
             <p className="mt-0.5 mb-4.5 text-base leading-prose text-stone-700">
-              This is what a customer sees before they decide to message you.
+              What a customer sees before they message you.
             </p>
           </div>
 
@@ -1320,8 +1320,8 @@ export function VendorProfileForm({
                       : isPublished
                         ? 'Customers can find and book you.'
                         : isDirty
-                          ? 'Save your changes first — this switch applies to your saved storefront.'
-                          : 'Ready to publish — flip this when you are.'}
+                          ? 'Save your changes first. This switch applies to your saved storefront.'
+                          : 'Ready to publish.'}
                   </p>
                 </div>
               </div>

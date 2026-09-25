@@ -10,6 +10,8 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 afterEach(cleanup);
 
+const TODAY = '2026-04-26';
+
 function entry(overrides: Partial<BookingEntry> = {}): BookingEntry {
   return {
     id: 'e1',
@@ -27,6 +29,7 @@ function entry(overrides: Partial<BookingEntry> = {}): BookingEntry {
     statusTone: 'quoted',
     subline: '$3,840 quoted · expires in 3d',
     isSettled: false,
+    reviewDeadline: null,
     ...overrides,
   };
 }
@@ -118,7 +121,7 @@ describe('BookingsRail', () => {
     it('still leads with Needs you when a quote is waiting', () => {
       render(
         <BookingsRail
-          needsYou={needsYouItems([entry()])}
+          needsYou={needsYouItems([entry()], TODAY)}
           hasBookings
           conversations={[conversation()]}
         />,
@@ -146,7 +149,9 @@ describe('BookingsRail', () => {
     });
 
     it('draws a quote with its subline, Review quote and Decline', () => {
-      render(<BookingsRail needsYou={needsYouItems([entry()])} hasBookings conversations={[]} />);
+      render(
+        <BookingsRail needsYou={needsYouItems([entry()], TODAY)} hasBookings conversations={[]} />,
+      );
 
       const panel = screen.getByText('Casa Verde sent a quote').closest('li') as HTMLElement;
       expect(panel.className.split(' ')).toContain('bg-clay-100');
@@ -163,14 +168,17 @@ describe('BookingsRail', () => {
     it('draws an accepted request with Pay now into checkout and no Decline', () => {
       render(
         <BookingsRail
-          needsYou={needsYouItems([
-            entry({
-              id: 'r9',
-              requestId: 'r9',
-              status: 'accepted',
-              subline: '$1,450 · Barr Mansion',
-            }),
-          ])}
+          needsYou={needsYouItems(
+            [
+              entry({
+                id: 'r9',
+                requestId: 'r9',
+                status: 'accepted',
+                subline: '$1,450 · Barr Mansion',
+              }),
+            ],
+            TODAY,
+          )}
           hasBookings
           conversations={[]}
         />,
@@ -190,11 +198,14 @@ describe('BookingsRail', () => {
     it('draws two quotes and an accepted request as three panels, quotes first', () => {
       render(
         <BookingsRail
-          needsYou={needsYouItems([
-            entry({ id: 'a1', requestId: 'a1', vendorName: 'Bloom & Co.', status: 'accepted' }),
-            entry({ id: 'q1', requestId: 'q1', vendorName: 'Casa Verde' }),
-            entry({ id: 'q2', requestId: 'q2', vendorName: 'Kessler & Co.' }),
-          ])}
+          needsYou={needsYouItems(
+            [
+              entry({ id: 'a1', requestId: 'a1', vendorName: 'Bloom & Co.', status: 'accepted' }),
+              entry({ id: 'q1', requestId: 'q1', vendorName: 'Casa Verde' }),
+              entry({ id: 'q2', requestId: 'q2', vendorName: 'Kessler & Co.' }),
+            ],
+            TODAY,
+          )}
           hasBookings
           conversations={[]}
         />,
@@ -210,6 +221,60 @@ describe('BookingsRail', () => {
         'Kessler & Co. sent a quote',
         'Bloom & Co. accepted your request',
       ]);
+    });
+
+    /*
+     * VEN-747. Frame `07`'s second panel: gold, not clay, with the event's age,
+     * the close date and a link to the vendor's Reviews tab, after the quotes.
+     */
+    it('draws a review on gold after the quote, with its age, close date and link', () => {
+      const review = entry({
+        id: 'b7',
+        kind: 'booking',
+        requestId: 'r7',
+        vendorSlug: 'bloom-co',
+        vendorName: 'Bloom & Co.',
+        occasion: 'Wedding',
+        eventDate: '2026-04-20',
+        status: 'completed',
+        reviewDeadline: '2026-05-04',
+      });
+
+      render(
+        <BookingsRail
+          needsYou={needsYouItems([review, entry()], TODAY)}
+          hasBookings
+          conversations={[conversation()]}
+        />,
+      );
+
+      const items = within(screen.getByRole('list', { name: 'Needs you' })).getAllByRole(
+        'listitem',
+      );
+      expect(items.map((item) => item.querySelector('p')?.textContent)).toEqual([
+        'Casa Verde sent a quote',
+        'Leave a review for Bloom & Co.',
+      ]);
+
+      const panel = items[1]!;
+      expect(panel.className.split(' ')).toContain('bg-gold-50');
+      expect(panel.className.split(' ')).not.toContain('bg-clay-100');
+      expect(panel.querySelector('[aria-hidden="true"]')?.className.split(' ')).toContain(
+        'bg-gold-400',
+      );
+      expect(within(panel).getByText('Your wedding was 6 days ago.')).toBeDefined();
+      expect(within(panel).getByText('Reviews close May 4.')).toBeDefined();
+      expect(within(panel).getByRole('link', { name: 'Write a review' }).getAttribute('href')).toBe(
+        '/vendors/bloom-co?tab=reviews',
+      );
+      expect(within(panel).queryByRole('button', { name: 'Decline' })).toBeNull();
+
+      // The rail's other blocks are unchanged.
+      expect(screen.getAllByRole('heading').map((heading) => heading.textContent)).toEqual([
+        'Needs you',
+        'Recent messages',
+      ]);
+      expect(screen.getByText('Maya Kessler')).toBeDefined();
     });
   });
 
@@ -247,7 +312,7 @@ describe('BookingsRail', () => {
      * not anything is waiting, so that is the heading it is named for.
      */
     it('names the Needs you panel it leads with, whether or not anything waits', () => {
-      for (const needsYou of [needsYouItems([entry()]), []]) {
+      for (const needsYou of [needsYouItems([entry()], TODAY), []]) {
         cleanup();
         render(<BookingsRail needsYou={needsYou} hasBookings conversations={[conversation()]} />);
 

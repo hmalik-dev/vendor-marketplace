@@ -2173,6 +2173,8 @@ describe('/v1/booking-requests', () => {
           'payoutReleasedAt',
           'refundAmountCents',
           'requestId',
+          // When this reader's own review closes, or null (VEN-747).
+          'reviewDeadline',
           'status',
           'totalAmountCents',
           'updatedAt',

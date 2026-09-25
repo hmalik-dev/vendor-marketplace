@@ -103,7 +103,9 @@ describe('ConnectPayoutsForm', () => {
     await userEvent.click(screen.getByRole('button'));
 
     const banner = await screen.findByRole('status');
-    expect(banner.textContent).toContain('We could not reach Stripe just then.');
+    expect(banner.textContent).toContain(
+      'We could not reach Stripe. Nothing has changed. Try again.',
+    );
     expect(banner.textContent).not.toContain('sk_test');
     expect(banner.textContent).not.toContain('API Key');
     // Red, because this one did fail — `40-states.md`.

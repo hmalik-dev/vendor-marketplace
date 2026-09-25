@@ -94,8 +94,8 @@ export function CancelBooking({ booking }: CancelBookingProps): React.ReactEleme
         onChange={(event) => setReason(event.target.value)}
       />
       <p id={consequenceId} className="text-xs text-stone-600">
-        The customer is refunded {refund} in full and you are not paid for this booking. This cannot
-        be undone.
+        The customer is refunded {refund} in full. You are not paid for this booking. This cannot be
+        undone.
       </p>
       {error ? (
         <p role="alert" className="text-xs text-error-500">
@@ -109,7 +109,7 @@ export function CancelBooking({ booking }: CancelBookingProps): React.ReactEleme
           disabled={busy || reason.trim() === ''}
           onClick={() => void cancel()}
         >
-          {busy ? 'Cancelling…' : `Yes, cancel and refund ${refund}`}
+          {busy ? 'Canceling…' : `Yes, cancel and refund ${refund}`}
         </Button>
         <Button type="button" variant="ghost" disabled={busy} onClick={() => setConfirming(false)}>
           Keep the booking

@@ -22,6 +22,14 @@ consequence that _is_ new: `cancelBooking` only accepts `confirmed`, so a review
 can now be filed and the booking then cancelled at the 50% late tier — the
 review keeps counting in `publicVendorReviews`.
 
+**14-day window (VEN-747), audited clean:** `isBookingReviewable` =
+`hasBookingHappened` + `isReviewWindowOpen`; `createReview` still 404s a
+non-participant before any status-revealing 400. `GET /v1/bookings` left-joins
+`reviews`/`review_tombstones` on `(booking, reviewerId = user.id)`, so
+`reviewDeadline` reflects only the reader's own row, never the other party's
+private `vendor_to_customer` review. Keep that join reader-keyed; a join on
+booking alone would leak the counterpart's review existence.
+
 **`review_tombstones` (booking_id, reviewer_id) finality:** the re-review race
 is closed by statement _order_, not by a lock — `createReview` reads `reviews`
 then the tombstone, and `deleteReviewAndRecalculate` commits the delete and the

@@ -1,5 +1,6 @@
 import {
   REVIEW_PAGE_SIZE,
+  REVIEW_WINDOW_DAYS,
   type CreateReviewInput,
   type Review,
   type ReviewViewer,
@@ -28,9 +29,10 @@ import {
   findReviewableBooking,
   findUnreviewedCompletedBooking,
   findVendorReviewSummary,
+  hasBookingHappened,
   hasReviewTombstone,
   insertReviewAndRecalculate,
-  isBookingReviewable,
+  isReviewWindowOpen,
 } from './reviews.dao.js';
 
 /**
@@ -149,8 +151,12 @@ export async function createReview(
     await requireCustomerName(db, reviewerId);
   }
 
-  if (!isBookingReviewable(booking)) {
+  if (!hasBookingHappened(booking)) {
     throw validationFailed('A booking can only be reviewed once the event has happened');
+  }
+
+  if (!isReviewWindowOpen(booking.eventDate)) {
+    throw validationFailed(`Reviews close ${REVIEW_WINDOW_DAYS} days after the event.`);
   }
 
   if (containsBlockedWord(input.title, input.content)) {

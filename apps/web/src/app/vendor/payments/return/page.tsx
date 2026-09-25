@@ -44,7 +44,7 @@ export default async function VendorPaymentsReturnPage(): Promise<React.ReactEle
       heading={isOnboarded ? "You're set up" : 'Stripe is still checking'}
       description={
         isOnboarded
-          ? `Payouts are connected, so you can accept bookings now. ${BRAND_NAME} holds each payment and pays it out to you ${PAYOUT_RELEASE_HOURS} hours after the event date.`
+          ? `Payouts are connected. You can accept bookings now. ${BRAND_NAME} holds each payment and pays it out to you ${PAYOUT_RELEASE_HOURS} hours after the event date.`
           : 'Stripe has your details and is verifying them.'
       }
     >
@@ -58,8 +58,7 @@ export default async function VendorPaymentsReturnPage(): Promise<React.ReactEle
             waiting on Stripe, and there is no action to take.
           */
           <Banner status="informational" title="Nothing is wrong">
-            You don&apos;t need to do anything. Check again later, or carry on and come back from
-            the dashboard.
+            You don&apos;t need to do anything. Check again later.
           </Banner>
         )}
 

@@ -7,7 +7,7 @@ import {
   type PayoutStatus,
 } from '@vendor-marketplace/shared';
 import type { StatusTone } from '@/components/ui/status-pill';
-import type { WireBooking, WireBookingRequest } from './wire-schemas';
+import type { WireBookingRequest, WireOwnBooking } from './wire-schemas';
 
 /**
  * One row of the bookings hub.
@@ -44,6 +44,11 @@ export interface BookingEntry {
   subline: string;
   /** Settled one way or the other, so it belongs under History. */
   isSettled: boolean;
+  /**
+   * The last day the customer may review this booking, or `null` when they
+   * cannot (VEN-747). Only a booking row can carry one.
+   */
+  reviewDeadline: string | null;
 }
 
 /**
@@ -211,13 +216,15 @@ export function requestToEntry(request: WireBookingRequest, now: Date = new Date
     statusTone: presentation.tone,
     subline,
     isSettled: presentation.settled,
+    reviewDeadline: null,
   };
 }
 
 export function bookingToEntry(
-  booking: WireBooking,
+  booking: WireOwnBooking,
   vendorName: string,
   categoryName: string | null = null,
+  vendorSlug: string | null = null,
 ): BookingEntry {
   const presentation = BOOKING_PRESENTATION[booking.status];
 
@@ -225,7 +232,7 @@ export function bookingToEntry(
     id: booking.id,
     kind: 'booking',
     requestId: booking.requestId,
-    vendorSlug: null,
+    vendorSlug,
     vendorName,
     vendorImageUrl: null,
     categoryName,
@@ -239,6 +246,7 @@ export function bookingToEntry(
       .filter(Boolean)
       .join(' · '),
     isSettled: presentation.settled,
+    reviewDeadline: booking.reviewDeadline,
   };
 }
 
@@ -248,7 +256,7 @@ export function bookingToEntry(
  */
 export function toEntries(
   requests: readonly WireBookingRequest[],
-  bookings: readonly WireBooking[],
+  bookings: readonly WireOwnBooking[],
   now: Date = new Date(),
 ): BookingEntry[] {
   const nameByVendorId = new Map(
@@ -264,6 +272,10 @@ export function toEntries(
   const categoryByVendorId = new Map(
     requests.map((request) => [request.vendorId, request.vendor.categoryName]),
   );
+  // The same ride across for the slug, which the `Leave a review` link needs (VEN-747).
+  const slugByVendorId = new Map(
+    requests.map((request) => [request.vendorId, request.vendor.slug]),
+  );
   const paidRequestIds = new Set(bookings.map((booking) => booking.requestId));
 
   return [
@@ -272,6 +284,7 @@ export function toEntries(
         booking,
         nameByVendorId.get(booking.vendorId) ?? 'Your vendor',
         categoryByVendorId.get(booking.vendorId) ?? null,
+        slugByVendorId.get(booking.vendorId) ?? null,
       ),
     ),
     ...requests
@@ -282,26 +295,71 @@ export function toEntries(
 
 /**
  * One thing waiting on the customer, as the rail's `Needs you` panel draws it:
- * a quote to review or decline, or an accepted request to pay for.
+ * a quote to review or decline, an accepted request to pay for, or a finished
+ * booking to review.
  */
 export interface NeedsYouItem {
-  kind: 'quote' | 'pay';
+  kind: 'quote' | 'pay' | 'review';
   entry: BookingEntry;
   /** "Casa Verde sent a quote" — the rail and the list-column mirror share it. */
   title: string;
+  /** The lines under the title, one fact each. */
+  detail: readonly string[];
   /** The panel's primary action; `Decline` rides beside a quote's. */
   action: { label: string; href: string };
 }
 
+const SHORT_DATE = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'UTC',
+});
+
 /**
- * Everything in `entries` that waits on the customer, quotes first, then the
- * accepted requests awaiting payment — frame `07` and
- * `20-customer-bookings-hub.md`'s "Accepted → Pay now".
- *
- * Only request rows qualify. A paid request is already a booking row in
- * `toEntries`, so it can never surface here as a second `Pay now`.
+ * "Your wedding was 6 days ago." — frame `07`'s gold panel. `other`'s label,
+ * "Something else", names no occasion, so it reads as the event.
  */
-export function needsYouItems(entries: readonly BookingEntry[]): NeedsYouItem[] {
+function eventAgo(entry: BookingEntry, today: string): string {
+  const days = -daysUntil(entry.eventDate, today);
+  let when: string;
+  if (days <= 0) {
+    when = 'today';
+  } else if (days === 1) {
+    when = 'yesterday';
+  } else {
+    when = `${days} days ago`;
+  }
+  const occasion =
+    entry.occasion && entry.occasion !== EVENT_TYPE_LABELS.other
+      ? entry.occasion.toLowerCase()
+      : 'event';
+
+  return `Your ${occasion} was ${when}.`;
+}
+
+/**
+ * "Reviews close Oct 8." The API keeps a window open until its last day is past
+ * everywhere, so on the UTC day after it the date would already read as gone;
+ * from the last day on, the line says today.
+ */
+function reviewsClose(deadline: string, today: string): string {
+  return daysUntil(deadline, today) <= 0
+    ? 'Reviews close today.'
+    : `Reviews close ${SHORT_DATE.format(new Date(`${deadline}T00:00:00Z`))}.`;
+}
+
+/**
+ * Everything in `entries` that waits on the customer: quotes first, then the
+ * accepted requests awaiting payment, then the finished bookings still open to
+ * review, newest event first — frame `07` and `20-customer-bookings-hub.md`'s
+ * "Accepted → Pay now" and "Completed → Leave a review".
+ *
+ * Quote and pay items come from request rows only. A paid request is already a
+ * booking row in `toEntries`, so it can never surface here as a second
+ * `Pay now`. A review needs the vendor's slug to link to, so a closed vendor's
+ * booking asks for none.
+ */
+export function needsYouItems(entries: readonly BookingEntry[], today: string): NeedsYouItem[] {
   const requests = entries.filter((entry) => entry.kind === 'request');
 
   return [
@@ -311,6 +369,7 @@ export function needsYouItems(entries: readonly BookingEntry[]): NeedsYouItem[] 
         kind: 'quote' as const,
         entry,
         title: `${entry.vendorName} sent a quote`,
+        detail: [entry.subline],
         action: { label: 'Review quote', href: `/bookings/${entry.requestId}` },
       })),
     ...requests
@@ -319,7 +378,21 @@ export function needsYouItems(entries: readonly BookingEntry[]): NeedsYouItem[] 
         kind: 'pay' as const,
         entry,
         title: `${entry.vendorName} accepted your request`,
+        detail: [entry.subline],
         action: { label: 'Pay now', href: `/bookings/${entry.requestId}/checkout` },
+      })),
+    ...entries
+      .filter(
+        (entry): entry is BookingEntry & { reviewDeadline: string; vendorSlug: string } =>
+          entry.kind === 'booking' && entry.reviewDeadline !== null && entry.vendorSlug !== null,
+      )
+      .sort((left, right) => right.eventDate.localeCompare(left.eventDate))
+      .map((entry) => ({
+        kind: 'review' as const,
+        entry,
+        title: `Leave a review for ${entry.vendorName}`,
+        detail: [eventAgo(entry, today), reviewsClose(entry.reviewDeadline, today)],
+        action: { label: 'Write a review', href: `/vendors/${entry.vendorSlug}?tab=reviews` },
       })),
   ];
 }

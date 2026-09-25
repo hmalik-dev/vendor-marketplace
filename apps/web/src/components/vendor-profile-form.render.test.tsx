@@ -893,7 +893,7 @@ describe('VendorProfileForm under a moderation hold', () => {
   it('says the ordinary thing when no hold stands', () => {
     renderSaved({ isPublished: false, moderationHold: false, publishBlockers: [] });
 
-    expect(holdLine()).toBe('Ready to publish — flip this when you are.');
+    expect(holdLine()).toBe('Ready to publish.');
     expect(
       screen.getByRole('switch', { name: 'Visible to customers' }).hasAttribute('disabled'),
     ).toBe(false);
