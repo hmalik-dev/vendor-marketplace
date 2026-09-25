@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  FULL_REFUND_CUTOFF_HOURS,
   MAX_GUEST_COUNT,
   formatPrice,
   openedConversationSchema,
@@ -157,7 +158,7 @@ export function BookingRail({
        * refusal that will never change.
        */
       if (error instanceof ApiClientError && error.statusCode === 403) {
-        setMessageError('Only a customer account can start a thread with a vendor.');
+        setMessageError('Only a customer account can message a vendor.');
         setOpening(false);
         return;
       }
@@ -538,7 +539,7 @@ export function BookingRail({
         <ul className="flex flex-col gap-2 border-t border-stone-200 px-4.5 py-3 min-[90rem]:gap-2.25 min-[90rem]:px-5 min-[90rem]:py-3.25">
           {[
             'Payment held until the event is done',
-            'Full refund if cancelled 48h+ ahead',
+            `Full refund if canceled ${FULL_REFUND_CUTOFF_HOURS}h+ ahead`,
             reviewCount > 0
               ? `${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'} from verified bookings`
               : 'Every review comes from a completed booking',

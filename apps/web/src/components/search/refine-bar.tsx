@@ -279,7 +279,7 @@ export interface RefineBarProps {
    *
    * It reports the clean applies too, and that is the point: the notice it
    * drives has to be retracted by something. Firing only on the bad case would
-   * leave "that price range isn't one we can use" on screen over a range that
+   * leave "that price range isn't valid" on screen over a range that
    * was subsequently accepted.
    */
   onPriceApplied?: (discarded: RangeDiscarded) => void;

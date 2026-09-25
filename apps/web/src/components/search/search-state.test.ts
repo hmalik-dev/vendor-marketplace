@@ -271,19 +271,19 @@ describe('clearedParamsLine', () => {
 
   it('names the one param it cleared, in the customer’s words', () => {
     expect(clearedParamsLine(['date'])).toBe(
-      "That date isn't one we can use, so it was cleared — the rest of your search still applies.",
+      "That date isn't valid, so we cleared it. Your other filters still apply.",
     );
   });
 
   it('names both ends of a price range once, not twice', () => {
     expect(clearedParamsLine(['minPriceCents', 'maxPriceCents'])).toBe(
-      "That price range isn't one we can use, so it was cleared — the rest of your search still applies.",
+      "That price range isn't valid, so we cleared it. Your other filters still apply.",
     );
   });
 
   it('lists several cleared params in one line', () => {
     expect(clearedParamsLine(['date', 'minRating'])).toBe(
-      "The date and rating aren't ones we can use, so they were cleared — the rest of your search still applies.",
+      "The date and rating aren't valid, so we cleared them. Your other filters still apply.",
     );
   });
 
@@ -301,13 +301,13 @@ describe('clearedParamsLine', () => {
 describe('clearedParamsLine — a half-rejected price range', () => {
   it('names the maximum when only the ceiling was dropped', () => {
     expect(clearedParamsLine(['maxPriceCents'])).toBe(
-      "That maximum price isn't one we can use, so it was cleared — the rest of your search still applies.",
+      "That maximum price isn't valid, so we cleared it. Your other filters still apply.",
     );
   });
 
   it('names the minimum when only the floor was dropped', () => {
     expect(clearedParamsLine(['minPriceCents'])).toBe(
-      "That minimum price isn't one we can use, so it was cleared — the rest of your search still applies.",
+      "That minimum price isn't valid, so we cleared it. Your other filters still apply.",
     );
   });
 
@@ -367,7 +367,7 @@ describe('unusableSearchParams', () => {
    */
   it('feeds the same sentence every other cleared param uses', () => {
     expect(clearedParamsLine(of('page=abc&sort=evil'))).toBe(
-      "The sort order and page aren't ones we can use, so they were cleared — the rest of your search still applies.",
+      "The sort order and page aren't valid, so we cleared them. Your other filters still apply.",
     );
   });
 });
@@ -406,7 +406,7 @@ describe('every search param is announced when the URL asks something unusable',
     const { dropped } = parseUrl({ [field]: HOSTILE[field] });
 
     expect(dropped).toContain(field);
-    expect(clearedParamsLine(dropped)).toContain("isn't one we can use");
+    expect(clearedParamsLine(dropped)).toContain("isn't valid");
   });
 
   /*
@@ -545,13 +545,13 @@ describe('applicableTagSelection', () => {
 describe('droppedTagGroupsLine', () => {
   it('says which filter went and which vendors it does not apply to', () => {
     expect(droppedTagGroupsLine(['dietary'], 'photography')).toBe(
-      "Dietary filters don't apply to photographers, so they were cleared — the rest of your search still applies.",
+      "Dietary filters don't apply to photographers, so we cleared them. Your other filters still apply.",
     );
   });
 
   it('names two groups as a pair rather than stacking two sentences', () => {
     expect(droppedTagGroupsLine(['cultural', 'dietary'], 'photography')).toBe(
-      "Cultural and Dietary filters don't apply to photographers, so they were cleared — the rest of your search still applies.",
+      "Cultural and Dietary filters don't apply to photographers, so we cleared them. Your other filters still apply.",
     );
   });
 
