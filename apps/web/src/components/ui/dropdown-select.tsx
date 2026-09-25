@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Dropdown,
   DropdownFooter,
@@ -17,7 +17,8 @@ import { useStableValue } from '@/lib/use-stable-value';
  * They share a list and differ in exactly two ways, both of them the design's:
  * single-select **commits and closes on click** and marks its choice with a
  * check; multi-select uses **checkboxes, not checkmarks** — the square says
- * "more than one" before anything is read — and **never auto-applies**.
+ * "more than one" before anything is read — and **each tick applies**, with
+ * no Apply button (frame `28`, VEN-761).
  *
  * Neither has a search field. Eleven categories fit on one screen, and a filter
  * box on a list that short is friction rather than help.
@@ -92,15 +93,28 @@ export function SingleSelectDropdown({
   );
 }
 
+/** Rapid ticks settle into one request: three quick ticks, one refetch. */
+export const MULTI_SELECT_COMMIT_DELAY_MS = 250;
+
+/** `18 results`, or nothing while no count is known yet. */
+export function resultsSummary(lead: string | null, count: number | null | undefined): string {
+  const results = count === null || count === undefined ? null : `${count} results`;
+
+  return [lead, results].filter((part) => part !== null).join(' · ');
+}
+
 export interface MultiSelectDropdownProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   trigger: ReactNode;
   label: string;
   options: readonly DropdownOption[];
-  /** What is applied right now — the panel edits a draft of this. */
+  /** What is applied right now. */
   value: readonly string[];
+  /** Called once the ticks settle — 250ms trailing — and on close or Clear. */
   onApply: (value: readonly string[]) => void;
+  /** What the applied selection returned; the previous number stays while a new one loads. */
+  resultCount?: number | null;
   width?: DropdownWidth;
   density?: DropdownDensity;
   scrim?: boolean;
@@ -118,6 +132,7 @@ export function MultiSelectDropdown({
   options,
   value,
   onApply,
+  resultCount,
   width = 'field',
   density = 'default',
   scrim = false,
@@ -127,11 +142,13 @@ export function MultiSelectDropdown({
   visibleCount,
 }: MultiSelectDropdownProps): React.ReactElement {
   /*
-   * A draft, because this body does not auto-apply. Re-seeded from `value`
-   * every time the panel opens, so a panel dismissed without Apply discards
-   * its edits rather than leaking them into the next open.
+   * The ticks the reader has made, drawn at once; the commit trails them by
+   * 250ms so a run of ticks is one request rather than one per tick.
    */
   const [draft, setDraft] = useState<readonly string[]>(value);
+  const pending = useRef<{ timer: ReturnType<typeof setTimeout>; next: readonly string[] } | null>(
+    null,
+  );
 
   /*
    * Seeded from the selection's *contents*, never from the array. Every caller
@@ -142,15 +159,44 @@ export function MultiSelectDropdown({
   const seed = useStableValue(value);
 
   useEffect(() => {
-    if (open) {
+    if (open && pending.current === null) {
       setDraft(seed);
     }
   }, [open, seed]);
 
+  function flush(): void {
+    if (pending.current !== null) {
+      clearTimeout(pending.current.timer);
+      const { next } = pending.current;
+      pending.current = null;
+      onApply(next);
+    }
+  }
+
+  // A tick still settling when the panel closes is applied, not dropped: Esc
+  // keeps what was ticked.
+  useEffect(() => {
+    if (!open) {
+      flush();
+    }
+  });
+
+  function commit(next: readonly string[]): void {
+    setDraft(next);
+    if (pending.current !== null) {
+      clearTimeout(pending.current.timer);
+    }
+    pending.current = {
+      next,
+      timer: setTimeout(() => {
+        pending.current = null;
+        onApply(next);
+      }, MULTI_SELECT_COMMIT_DELAY_MS),
+    };
+  }
+
   function toggle(next: string): void {
-    setDraft((current) =>
-      current.includes(next) ? current.filter((item) => item !== next) : [...current, next],
-    );
+    commit(draft.includes(next) ? draft.filter((item) => item !== next) : [...draft, next]);
   }
 
   return (
@@ -175,14 +221,8 @@ export function MultiSelectDropdown({
         emptyAction={emptyAction}
       />
       <DropdownFooter
-        // The count is on the button because it is what Apply will do, and a
-        // reader deciding whether to press it is asking exactly that.
-        applyLabel={draft.length > 0 ? `Apply · ${draft.length}` : 'Apply'}
-        onApply={() => {
-          onApply(draft);
-          onOpenChange(false);
-        }}
-        onClear={() => setDraft([])}
+        summary={resultsSummary(draft.length > 0 ? `${draft.length} selected` : null, resultCount)}
+        onClear={draft.length > 0 ? () => commit([]) : undefined}
       />
     </Dropdown>
   );

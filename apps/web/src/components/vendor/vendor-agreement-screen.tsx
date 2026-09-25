@@ -3,10 +3,12 @@
 import {
   BRAND_NAME,
   LEGAL_ACCEPTANCE_LABELS,
+  LEGAL_PATHS,
   vendorAgreementStatusSchema,
   vendorAgreementTerms,
   type VendorAgreementStatus,
 } from '@vendor-marketplace/shared';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Banner } from '@/components/ui/banner';
@@ -304,6 +306,12 @@ function AcceptedRecord({
                 <strong className="font-semibold">{ACCEPTED_AT.format(accepted.acceptedAt)}</strong>{' '}
                 by {accepted.acceptedByName}, for {accepted.businessName}.
               </p>
+              <Link
+                href={LEGAL_PATHS['vendor-agreement']}
+                className="mt-2 inline-block text-sm font-semibold text-clay-500 underline underline-offset-4 hover:text-clay-600"
+              >
+                View agreement
+              </Link>
             </div>
           </div>
         </div>

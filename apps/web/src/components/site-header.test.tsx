@@ -243,26 +243,116 @@ describe('SiteHeader', () => {
     expect(screen.getAllByTestId('session-sync')).toHaveLength(1);
   });
 
+  /*
+   * A customer's `Browse` is their own link, not the marketing nav's (VEN-760),
+   * so the nav is asserted on a vendor, who draws neither.
+   */
   it('hides the marketing nav from a signed-in visitor', async () => {
     authState = 'signed-in';
+    currentRole = 'vendor';
 
     render(await SiteHeader());
 
     expect(screen.queryByRole('link', { name: 'Browse' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'How it works' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'For vendors' })).toBeNull();
   });
 
   /*
-   * The signed-in cluster, pinned **by name** (#361). Frame `02` draws
-   * `Messages` · `Bookings` · avatar, and the drift this catches is the Text
-   * axis: the cluster read `Dashboard` for every role, which is neither the
-   * frame's word nor — for a customer — a permitted one, since
-   * `20-customer-bookings-hub.md` requires that "the word 'dashboard' appears
-   * nowhere in the UI".
+   * The signed-in customer cluster, pinned **by name** (VEN-760, the 2026-09-25
+   * resync): `Browse` · `My bookings` pill · bell · avatar. The pill replaced
+   * the `Messages` and `Bookings` links and sits immediately left of the bell.
    */
-  it('offers messages, the role-named dashboard link and the account menu when signed in', async () => {
+  it('offers a customer Browse, the My bookings pill beside the bell and the account menu', async () => {
     authState = 'signed-in';
     currentRole = 'customer';
+
+    render(await SiteHeader());
+
+    const pill = screen.getByRole('link', { name: 'My bookings' });
+
+    expect(pill).toHaveProperty('href', 'http://localhost:3000/bookings');
+    expect(pill.nextElementSibling).toBe(screen.getByRole('button', { name: 'Notifications' }));
+    expect(screen.getByRole('link', { name: 'Browse' })).toHaveProperty(
+      'href',
+      'http://localhost:3000/search',
+    );
+    expect(screen.queryByRole('link', { name: /^Messages/ })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Bookings' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Account menu' })).toBeDefined();
+    expect(screen.queryByRole('link', { name: 'Sign in' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Sign up' })).toBeNull();
+  });
+
+  it.each(['/', '/vendors/some-vendor', '/bookings', '/messages'])(
+    'draws the customer Browse link on %s',
+    async (path) => {
+      authState = 'signed-in';
+      currentRole = 'customer';
+      pathname = path;
+
+      render(await SiteHeader());
+
+      expect(screen.getByRole('link', { name: 'Browse' })).toBeDefined();
+      expect(screen.getByRole('link', { name: 'My bookings' })).toBeDefined();
+    },
+  );
+
+  it('drops Browse on /search, where it goes, and keeps the pill', async () => {
+    authState = 'signed-in';
+    currentRole = 'customer';
+    pathname = '/search';
+
+    render(await SiteHeader());
+
+    expect(screen.queryByRole('link', { name: 'Browse' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'My bookings' })).toBeDefined();
+  });
+
+  /*
+   * Frames `07` and `19` draw the pill tinted on the hub itself: `#8E3F20` on
+   * `#F7E7E0` with an `#EFD8CC` border — `clay-600` / `clay-100` / `clay-200`.
+   * Elsewhere it is frame `03`'s ink on `stone-0` with a `stone-300` border.
+   */
+  it.each([
+    ['/bookings', true],
+    ['/bookings/req_123', true],
+    ['/', false],
+    ['/messages', false],
+  ])('tints the My bookings pill on %s: %s', async (path, current) => {
+    authState = 'signed-in';
+    currentRole = 'customer';
+    pathname = path;
+
+    render(await SiteHeader());
+
+    const pill = screen.getByRole('link', { name: 'My bookings' });
+    const classes = pill.className.split(/\s+/);
+
+    expect(pill.getAttribute('aria-current')).toBe(current ? 'page' : null);
+    if (current) {
+      expect(classes).toEqual(
+        expect.arrayContaining(['text-clay-600', 'bg-clay-100', 'border-clay-200']),
+      );
+      expect(classes).not.toContain('text-stone-900');
+    } else {
+      expect(classes).toEqual(
+        expect.arrayContaining(['text-stone-900', 'bg-stone-0', 'border-stone-300']),
+      );
+      expect(classes).not.toContain('bg-clay-100');
+    }
+    expect(classes).toEqual(
+      expect.arrayContaining(['rounded-full', 'font-semibold', 'min-[90rem]:text-[13px]']),
+    );
+  });
+
+  /*
+   * The vendor cluster is unchanged by VEN-760: `Messages` · `Dashboard` ·
+   * bell · avatar, and no customer pill or Browse link.
+   */
+  it('offers a vendor messages, the dashboard link and no customer pill', async () => {
+    authState = 'signed-in';
+    currentRole = 'vendor';
 
     render(await SiteHeader());
 
@@ -270,32 +360,31 @@ describe('SiteHeader', () => {
       'href',
       'http://localhost:3000/messages',
     );
-    expect(screen.getByRole('button', { name: 'Notifications' })).toBeDefined();
-    expect(screen.getByRole('link', { name: 'Bookings' })).toHaveProperty(
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveProperty(
       'href',
       'http://localhost:3000/dashboard',
     );
-    expect(screen.getByRole('button', { name: 'Account menu' })).toBeDefined();
-    expect(screen.queryByRole('link', { name: 'Sign in' })).toBeNull();
-    expect(screen.queryByRole('link', { name: 'Sign up' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'My bookings' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Browse' })).toBeNull();
   });
 
   /*
    * VEN-702: an admin lives on `/admin` and has no inbox, so the bar draws no
-   * `Messages` link and no bell; a customer and a vendor keep both.
+   * `Messages` link and no bell. A vendor keeps both; a customer keeps the bell
+   * and reaches messages through the hub (VEN-760).
    */
   it.each([
-    ['customer' as const, true],
-    ['vendor' as const, true],
-    ['admin' as const, false],
-  ])('draws Messages and the bell for a %s: %s', async (role, drawn) => {
+    ['customer' as const, false, true],
+    ['vendor' as const, true, true],
+    ['admin' as const, false, false],
+  ])('draws Messages / the bell for a %s: %s / %s', async (role, messages, bell) => {
     authState = 'signed-in';
     currentRole = role;
 
     render(await SiteHeader());
 
-    expect(screen.queryByRole('link', { name: 'Messages' }) !== null).toBe(drawn);
-    expect(screen.queryByRole('button', { name: 'Notifications' }) !== null).toBe(drawn);
+    expect(screen.queryByRole('link', { name: 'Messages' }) !== null).toBe(messages);
+    expect(screen.queryByRole('button', { name: 'Notifications' }) !== null).toBe(bell);
     expect(screen.getByRole('button', { name: 'Account menu' })).toBeDefined();
   });
 
@@ -306,7 +395,6 @@ describe('SiteHeader', () => {
    * instead, where a customer's row is `My bookings` (VEN-702).
    */
   it.each([
-    ['customer' as const, 'Bookings'],
     ['vendor' as const, 'Dashboard'],
     ['admin' as const, 'Admin'],
   ])('calls the dashboard link %s -> %s', async (role, label) => {
@@ -334,9 +422,13 @@ describe('SiteHeader', () => {
    * `min-[90rem]:text-[13.5px]` stand in for a different step. jsdom computes
    * no styles, so the rendered colour is the browser pass's to verify.
    */
-  it.each(['Messages', 'Bookings'])('draws %s in the nav-link treatment', async (name) => {
+  it.each([
+    ['vendor' as const, 'Messages'],
+    ['vendor' as const, 'Dashboard'],
+    ['customer' as const, 'Browse'],
+  ])('draws the %s %s link in the nav-link treatment', async (role, name) => {
     authState = 'signed-in';
-    currentRole = 'customer';
+    currentRole = role;
 
     render(await SiteHeader());
 
@@ -365,7 +457,7 @@ describe('SiteHeader', () => {
 
     render(await SiteHeader());
 
-    const cluster = screen.getByRole('link', { name: 'Messages' }).parentElement;
+    const cluster = screen.getByRole('link', { name: 'My bookings' }).parentElement;
     const classes = cluster?.className.split(/\s+/) ?? [];
 
     expect(classes).toEqual(expect.arrayContaining(['gap-3', 'lg:gap-3.5', 'min-[90rem]:gap-4']));
@@ -594,7 +686,7 @@ describe('SiteHeader', () => {
   describe('the Messages link unread cue', () => {
     it('names the link `Messages, unread` and draws the dot when a thread is unread', async () => {
       authState = 'signed-in';
-      currentRole = 'customer';
+      currentRole = 'vendor';
       apiCall.mockResolvedValue({ items: [], nextBefore: null, hasUnread: true });
 
       render(await SiteHeader());
@@ -626,13 +718,44 @@ describe('SiteHeader', () => {
 
     it('stays quiet for a gated session on a gate-exempt page', async () => {
       authState = 'signed-in';
-      currentRole = 'customer';
+      currentRole = 'vendor';
       currentlyGated = true;
       pathname = '/search';
 
       render(await SiteHeader());
 
       expect(screen.getByRole('link', { name: 'Messages' })).toBeDefined();
+      expect(apiCall).not.toHaveBeenCalled();
+    });
+
+    /*
+     * VEN-760: a customer's bar has no `Messages` link, but the hub sidebar's
+     * dot (VEN-745) draws from what the header publishes, so the read still
+     * runs — with nothing drawn in the bar.
+     */
+    it('still reads the unread state for a customer, without drawing a link', async () => {
+      authState = 'signed-in';
+      currentRole = 'customer';
+      apiCall.mockResolvedValue({ items: [], nextBefore: null, hasUnread: true });
+
+      render(await SiteHeader());
+
+      await waitFor(() =>
+        expect(apiCall).toHaveBeenCalledWith('/conversations', expect.anything()),
+      );
+      expect(screen.queryByRole('link', { name: /^Messages/ })).toBeNull();
+      expect(screen.queryByTestId('messages-unread-dot')).toBeNull();
+    });
+
+    it('issues no unread request for a gated customer on a gate-exempt page', async () => {
+      authState = 'signed-in';
+      currentRole = 'customer';
+      currentlyGated = true;
+      pathname = '/search';
+
+      render(await SiteHeader());
+
+      expect(screen.getByRole('link', { name: 'My bookings' })).toBeDefined();
       expect(apiCall).not.toHaveBeenCalled();
     });
   });

@@ -3,8 +3,10 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SignedInDrawer } from './header-drawer';
 
+let pathname = '/';
+
 vi.mock('next/navigation', () => ({
-  usePathname: () => '/',
+  usePathname: () => pathname,
 }));
 
 /*
@@ -39,6 +41,7 @@ vi.mock('next/link', () => ({
 afterEach(() => {
   cleanup();
   signOut.mockClear();
+  pathname = '/';
 });
 
 const SIGN_OUT_ROW = ['Sign out', null];
@@ -54,6 +57,7 @@ describe('SignedInDrawer', () => {
     [
       'customer' as const,
       [
+        ['Browse', '/search'],
         ['My bookings', '/dashboard'],
         ['Messages', '/messages'],
         ['My profile', '/customer/profile'],
@@ -85,6 +89,23 @@ describe('SignedInDrawer', () => {
     const rows = screen.getByRole('navigation', { name: 'Menu' }).querySelectorAll('li > *');
 
     expect([...rows].map((row) => [row.textContent, row.getAttribute('href')])).toEqual(expected);
+  });
+
+  /*
+   * The bar's `Browse` gives way below `sm` (VEN-760), so the drawer carries it
+   * — and, like the bar, not on `/search`, which is where it goes.
+   */
+  it('offers a customer no Browse row on /search', async () => {
+    const user = userEvent.setup();
+    pathname = '/search';
+
+    render(<SignedInDrawer role="customer" />);
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+
+    expect(screen.getByRole('link', { name: 'My bookings' }).getAttribute('href')).toBe(
+      '/dashboard',
+    );
+    expect(screen.queryByRole('link', { name: 'Browse' })).toBeNull();
   });
 
   it('signs out to the home page', async () => {

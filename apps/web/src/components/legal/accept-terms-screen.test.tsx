@@ -599,14 +599,14 @@ describe('the acceptance gate', () => {
     expect(screen.getByRole('checkbox')).toBeDefined();
   });
 
-  /* VEN-750 non-goal: the new-version screen keeps the site header, and with it the header's sign-out. */
-  it('keeps exactly its own controls on the new-version screen', () => {
+  /* VEN-763, frame 45b: the new-version screen adds only `Sign out`, under `Accept and continue`. */
+  it('keeps exactly its own controls on the new-version screen, ending in Sign out', () => {
     render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} />);
 
     expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual([
       expect.stringMatching(/^Read all \d+ sections$/),
       'Accept and continue',
+      'Sign out',
     ]);
-    expect(screen.queryByRole('button', { name: 'Sign out' })).toBeNull();
   });
 });

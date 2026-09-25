@@ -626,8 +626,8 @@ describe('SearchShell against a hostile URL', () => {
     render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     await user.click(await screen.findByRole('button', { name: 'Price' }));
-    await user.type(screen.getByLabelText('Min'), 'abc');
-    await user.click(screen.getByRole('button', { name: 'Apply' }));
+    // Frame `28 Dropdown variants`: no Apply; a typed bound commits on ↵ or blur.
+    await user.type(screen.getByLabelText('Min'), 'abc{Enter}');
 
     const status = await screen.findByRole('status');
     expect(status.textContent).toContain(clearedParamsLine(['minPriceCents']) ?? '');
@@ -639,9 +639,13 @@ describe('SearchShell against a hostile URL', () => {
     render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     await user.click(await screen.findByRole('button', { name: 'Price' }));
-    await user.type(screen.getByLabelText('Min'), 'abc');
+    await user.type(screen.getByLabelText('Min'), 'abc{Enter}');
+    // The notice is up first, so its absence below is a retraction, not silence.
+    expect((await screen.findByRole('status')).textContent).toContain(
+      clearedParamsLine(['minPriceCents']) ?? '',
+    );
+
     await user.click(screen.getByRole('button', { name: '$1–2k' }));
-    await user.click(screen.getByRole('button', { name: 'Apply' }));
 
     expect(screen.queryByText(/isn't valid/)).toBeNull();
   });

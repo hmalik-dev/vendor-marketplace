@@ -38,6 +38,10 @@ export const DASHBOARD_PATH_BY_ROLE: Record<UserRole, string> = {
  * `20-customer-bookings-hub.md`'s acceptance is *"The word 'dashboard' appears
  * nowhere in the UI"* — a customer has no dashboard and never did.
  *
+ * Since VEN-760 a customer's bar draws a `My bookings` pill to `/bookings`
+ * instead and the drawer reads `accountLinksFor`, so nothing draws `customer`
+ * here; it stays because the record is keyed by every role.
+ *
  * A vendor keeps `Dashboard`, because that is the word frame `08` puts on the
  * first row of their own rail for the same destination, and an admin gets
  * the console's name. Each label names where the reader actually lands.

@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import { Dropdown, DropdownFooter, type DropdownWidth } from './dropdown';
+import { resultsSummary } from './dropdown-select';
 import { FIELD_FOCUS } from '@/lib/focus';
 import { cn } from '@/lib/utils';
 import { useStableValue } from '@/lib/use-stable-value';
@@ -15,8 +16,9 @@ import { useStableValue } from '@/lib/use-stable-value';
  * *readout* of the inputs rather than the only control, because a budget is a
  * number someone already knows, and dragging for it is worse than typing it.
  *
- * Like the multi-select, it **never auto-applies**: a range that fired per
- * keystroke would re-sort the results grid between the two digits of "18".
+ * No Apply (frame `28`, VEN-761): a preset commits on press, and a typed bound
+ * commits when the field is left or Enter is pressed — never per keystroke,
+ * which would re-sort the results grid between the two digits of "18".
  */
 
 export interface RangePreset {
@@ -82,6 +84,8 @@ export interface RangeDropdownProps {
   parse: (raw: string) => number | null;
   /** The stored value as the reader would type it — the inverse of `parse`. */
   toEditable: (value: number) => string;
+  /** What the applied range returned; the previous number stays while a new one loads. */
+  resultCount?: number | null;
   width?: DropdownWidth;
   scrim?: boolean;
 }
@@ -118,6 +122,7 @@ export function RangeDropdown({
   format,
   parse,
   toEditable,
+  resultCount,
   width = 'field',
   scrim = false,
 }: RangeDropdownProps): React.ReactElement {
@@ -143,6 +148,19 @@ export function RangeDropdown({
       setUnusable(NO_DISCARD);
     }
   }, [open, seed]);
+
+  /** Applies `next` unless it is what is already applied. */
+  function commit(next: RangeValue, discarded: RangeDiscarded): void {
+    if (next.min === seed.min && next.max === seed.max && !discarded.min && !discarded.max) {
+      return;
+    }
+    onApply(next, { discarded });
+  }
+
+  const hasRange = draft.min !== null || draft.max !== null;
+  const rangeLabel = hasRange
+    ? `${draft.min === null ? 'Any' : format(draft.min)}–${draft.max === null ? 'Any' : format(draft.max)}`
+    : null;
 
   const activePreset = presets.findIndex(
     (preset) => preset.min === draft.min && preset.max === draft.max,
@@ -174,6 +192,7 @@ export function RangeDropdown({
             setDraft((current) => ({ ...current, min }));
             setUnusable((current) => ({ ...current, min: isUnusable }));
           }}
+          onCommit={() => commit(draft, unusable)}
         />
         <span aria-hidden="true" className="mt-3.5 text-stone-500">
           –
@@ -189,6 +208,7 @@ export function RangeDropdown({
             setDraft((current) => ({ ...current, max }));
             setUnusable((current) => ({ ...current, max: isUnusable }));
           }}
+          onCommit={() => commit(draft, unusable)}
         />
       </div>
 
@@ -234,6 +254,7 @@ export function RangeDropdown({
                * — a notice that contradicted the chip beside it.
                */
               setUnusable(NO_DISCARD);
+              commit({ min: preset.min, max: preset.max }, NO_DISCARD);
             }}
             className={cn(
               'rounded-full border px-2.5 py-[5px] text-[11.5px]',
@@ -248,15 +269,16 @@ export function RangeDropdown({
       </div>
 
       <DropdownFooter
-        applyLabel="Apply"
-        onApply={() => {
-          onApply(draft, { discarded: unusable });
-          onOpenChange(false);
-        }}
-        onClear={() => {
-          setDraft(EMPTY);
-          setUnusable(NO_DISCARD);
-        }}
+        summary={resultsSummary(rangeLabel, resultCount)}
+        onClear={
+          hasRange
+            ? () => {
+                setDraft(EMPTY);
+                setUnusable(NO_DISCARD);
+                commit(EMPTY, NO_DISCARD);
+              }
+            : undefined
+        }
       />
     </Dropdown>
   );
@@ -277,6 +299,7 @@ function AmountField({
   parse,
   toEditable,
   onChange,
+  onCommit,
 }: {
   id: string;
   label: string;
@@ -286,6 +309,8 @@ function AmountField({
   toEditable: (value: number) => string;
   /** `unusable` distinguishes "typed something we cannot read" from "empty". */
   onChange: (value: number | null, unusable: boolean) => void;
+  /** Leaving the field or pressing Enter: the typed bound is final. */
+  onCommit: () => void;
 }): React.ReactElement {
   const [editing, setEditing] = useState(false);
   const [raw, setRaw] = useState('');
@@ -313,7 +338,15 @@ function AmountField({
           setRaw(value === null ? '' : toEditable(value));
           setEditing(true);
         }}
-        onBlur={() => setEditing(false)}
+        onBlur={() => {
+          setEditing(false);
+          onCommit();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            onCommit();
+          }
+        }}
         onChange={(event) => {
           const typed = event.target.value;
           const parsed = parse(typed);
