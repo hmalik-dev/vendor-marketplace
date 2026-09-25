@@ -1281,6 +1281,17 @@ export const bookingWithContextSchema = bookingSchema.extend({
 });
 export type BookingWithContext = z.infer<typeof bookingWithContextSchema>;
 
+/**
+ * A row of `GET /bookings`: the booking, plus when the caller's own review of
+ * it closes (VEN-747). `null` unless the caller can still review it — it
+ * happened, they have not reviewed it, no admin deleted their review, and the
+ * window is open. A date string, like `eventDate`, so the wire needs no coercion.
+ */
+export const ownBookingSchema = bookingWithContextSchema.extend({
+  reviewDeadline: calendarDateSchema.nullable(),
+});
+export type OwnBooking = z.infer<typeof ownBookingSchema>;
+
 // --- Checkout --------------------------------------------------------------
 
 /**

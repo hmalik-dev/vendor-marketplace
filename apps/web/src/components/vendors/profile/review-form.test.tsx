@@ -4,6 +4,7 @@ import {
   ERROR_CODES,
   MAX_TITLE_LENGTH,
   REVIEW_CONTENT_MAX_LENGTH,
+  REVIEW_WINDOW_DAYS,
 } from '@vendor-marketplace/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiClientError } from '@/lib/api-client';
@@ -202,6 +203,30 @@ describe('ReviewForm — submitting', () => {
 
     await waitFor(() =>
       expect(screen.getByRole('alert').textContent).toBe('You have already reviewed this booking'),
+    );
+    expect(onWritten).not.toHaveBeenCalled();
+  });
+
+  // VEN-747. A form opened before the window closed and posted after it.
+  it('shows the closed-window refusal as the API words it', async () => {
+    const user = userEvent.setup();
+    requestMock.mockImplementation(() =>
+      Promise.reject(
+        new ApiClientError(
+          400,
+          ERROR_CODES.VALIDATION_ERROR,
+          `Reviews close ${REVIEW_WINDOW_DAYS} days after the event.`,
+        ),
+      ),
+    );
+    renderForm();
+
+    await user.click(screen.getByRole('radio', { name: '5 stars — Excellent' }));
+    await user.type(screen.getByLabelText('Review'), BODY);
+    await user.click(screen.getByRole('button', { name: 'Post review' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toBe('Reviews close 14 days after the event.'),
     );
     expect(onWritten).not.toHaveBeenCalled();
   });

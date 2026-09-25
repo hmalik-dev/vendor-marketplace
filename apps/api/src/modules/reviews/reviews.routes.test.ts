@@ -15,10 +15,11 @@ import {
   addDays,
   MAX_NAME_LENGTH,
   REVIEW_PAGE_SIZE,
+  REVIEW_WINDOW_DAYS,
   toDateString,
 } from '@vendor-marketplace/shared';
 import { and, eq } from 'drizzle-orm';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 import { deleteReviewAndRecalculate } from './reviews.dao.js';
 
@@ -605,6 +606,75 @@ describe('reviews', () => {
       expect(page.viewer).toEqual({ canReview: false, bookingId: null });
     });
 
+    /*
+     * VEN-747. Relative to the real clock, the widest window is what every
+     * moment of a UTC day agrees on: 15 UTC days back is still open (its
+     * deadline is yesterday, somebody's today), 16 is closed. The exact
+     * boundary with a fixed clock is `review-window.test.ts`'s.
+     */
+    it('accepts a review on the last open day and refuses one after it, from either party', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Kessler & Co.');
+      let offset = 0;
+
+      for (const status of ['completed', 'confirmed'] as const) {
+        const open = await completedBooking(vendorId, packageId, {
+          status,
+          dayOffset: (offset += 1),
+          pastByDays: REVIEW_WINDOW_DAYS + 1,
+        });
+        const closed = await completedBooking(vendorId, packageId, {
+          status,
+          dayOffset: (offset += 1),
+          pastByDays: REVIEW_WINDOW_DAYS + 2,
+        });
+
+        for (const actor of [CUSTOMER, VENDOR]) {
+          const accepted = await harness.app.inject({
+            method: 'POST',
+            url: `/v1/bookings/${open}/reviews`,
+            headers: bearer(actor),
+            payload: reviewBody(),
+          });
+          expect(accepted.statusCode, `${status} ${actor}`).toBe(201);
+
+          const refused = await harness.app.inject({
+            method: 'POST',
+            url: `/v1/bookings/${closed}/reviews`,
+            headers: bearer(actor),
+            payload: reviewBody(),
+          });
+          expect(refused.statusCode, `${status} ${actor}`).toBe(400);
+          expect(refused.json().message).toBe('Reviews close 14 days after the event.');
+        }
+      }
+
+      expect(await reviewNotificationsFor(VENDOR)).toHaveLength(2);
+    });
+
+    it('refuses a cancelled or disputed booking, however recent', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Kessler & Co.');
+
+      for (const [index, status] of (['cancelled', 'disputed'] as const).entries()) {
+        const bookingId = await completedBooking(vendorId, packageId, {
+          dayOffset: index,
+          pastByDays: 3,
+        });
+        await harness.database.db
+          .update(bookings)
+          .set({ status, completedAt: null })
+          .where(eq(bookings.id, bookingId));
+
+        const response = await harness.app.inject({
+          method: 'POST',
+          url: `/v1/bookings/${bookingId}/reviews`,
+          headers: bearer(CUSTOMER),
+          payload: reviewBody(),
+        });
+        expect(response.statusCode, status).toBe(400);
+        expect(response.json().message).toContain('once the event has happened');
+      }
+    });
+
     it('closes the booking to that reviewer for good once an admin deletes their review', async () => {
       const { vendorId, packageId, slug } = await createVendor(VENDOR, 'Kessler & Co.');
       const bookingId = await completedBooking(vendorId, packageId);
@@ -977,6 +1047,28 @@ describe('reviews', () => {
       expect(after.viewer).toEqual({ canReview: false, bookingId: null });
     });
 
+    it('withdraws the write action once the window closes, and offers the open booking instead', async () => {
+      const { vendorId, packageId, slug } = await createVendor(VENDOR, 'Kessler & Co.');
+      await completedBooking(vendorId, packageId, { pastByDays: 20 });
+
+      const viewerOf = async (): Promise<ReviewsBody['viewer']> =>
+        (
+          (
+            await harness.app.inject({
+              method: 'GET',
+              url: `/v1/vendors/${slug}/reviews`,
+              headers: bearer(CUSTOMER),
+            })
+          ).json() as ReviewsBody
+        ).viewer;
+
+      expect(await viewerOf()).toEqual({ canReview: false, bookingId: null });
+
+      // The older closed booking sorts first; the newer open one is still chosen.
+      const open = await completedBooking(vendorId, packageId, { dayOffset: 1, pastByDays: 6 });
+      expect(await viewerOf()).toEqual({ canReview: true, bookingId: open });
+    });
+
     it('appends a page at a time and says when there is more', async () => {
       const { vendorId, packageId, slug } = await createVendor(VENDOR, 'Kessler & Co.');
       const reviewerId = await idOf(CUSTOMER);
@@ -1056,6 +1148,111 @@ describe('reviews', () => {
    * that two copies of it would eventually disagree. Exercised directly, so
    * that a change to either half fails here rather than in #15's surface.
    */
+  /*
+   * VEN-747. The hub's `Leave a review` panel reads this, so it must agree with
+   * what `POST /bookings/:id/reviews` would accept, from one query.
+   */
+  describe('GET /bookings reviewDeadline', () => {
+    async function ownBookings(actor: string): Promise<Map<string, string | null>> {
+      const response = await harness.app.inject({
+        method: 'GET',
+        url: '/v1/bookings',
+        headers: bearer(actor),
+      });
+      expect(response.statusCode).toBe(200);
+
+      return new Map(
+        (response.json() as { id: string; reviewDeadline: string | null }[]).map((row) => [
+          row.id,
+          row.reviewDeadline,
+        ]),
+      );
+    }
+
+    async function review(actor: string, bookingId: string): Promise<string> {
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: `/v1/bookings/${bookingId}/reviews`,
+        headers: bearer(actor),
+        payload: reviewBody(),
+      });
+      expect(response.statusCode).toBe(201);
+
+      return response.json().id;
+    }
+
+    it('names the last open day only while this reader can still review', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Kessler & Co.');
+      const booking = (dayOffset: number, pastByDays?: number) =>
+        completedBooking(vendorId, packageId, { dayOffset, pastByDays });
+
+      const open = await booking(0, 6);
+      const vendorReviewed = await booking(1, 7);
+      const reviewed = await booking(2, 5);
+      const tombstoned = await booking(3, 4);
+      const closed = await booking(4, 20);
+      const cancelled = await booking(5, 3);
+      const future = await completedBooking(vendorId, packageId, {
+        status: 'confirmed',
+        dayOffset: 6,
+      });
+
+      await review(CUSTOMER, reviewed);
+      await review(VENDOR, vendorReviewed);
+      expect(
+        await deleteReviewAndRecalculate(harness.database.db, await review(CUSTOMER, tombstoned)),
+      ).toBe(true);
+      await harness.database.db
+        .update(bookings)
+        .set({ status: 'cancelled', completedAt: null })
+        .where(eq(bookings.id, cancelled));
+
+      const deadline = (daysAgo: number): string =>
+        toDateString(addDays(new Date(), REVIEW_WINDOW_DAYS - daysAgo));
+
+      expect(Object.fromEntries(await ownBookings(CUSTOMER))).toEqual({
+        [open]: deadline(6),
+        // The vendor's review of the customer is their own row; the customer's slot is open.
+        [vendorReviewed]: deadline(7),
+        [reviewed]: null,
+        [tombstoned]: null,
+        [closed]: null,
+        [cancelled]: null,
+        [future]: null,
+      });
+
+      // The vendor's list answers for the vendor's own reviews.
+      const asVendor = await ownBookings(VENDOR);
+      expect(asVendor.get(vendorReviewed)).toBeNull();
+      expect(asVendor.get(reviewed)).toBe(deadline(5));
+    });
+
+    it('reads the page in the same number of queries however many rows it holds', async () => {
+      const { vendorId, packageId } = await createVendor(VENDOR, 'Kessler & Co.');
+
+      const selectsFor = async (): Promise<number> => {
+        const select = vi.spyOn(harness.database.db, 'select');
+        try {
+          await ownBookings(CUSTOMER);
+          return select.mock.calls.length;
+        } finally {
+          select.mockRestore();
+        }
+      };
+
+      await completedBooking(vendorId, packageId, { pastByDays: 6 });
+      const one = await selectsFor();
+
+      for (const dayOffset of [1, 2, 3]) {
+        await completedBooking(vendorId, packageId, { dayOffset, pastByDays: 6 + dayOffset });
+      }
+      const many = await selectsFor();
+
+      expect(one).toBeGreaterThan(0);
+      expect(many).toBe(one);
+    });
+  });
+
   describe('deleteReviewAndRecalculate', () => {
     it('re-derives the vendor’s rating from what is left', async () => {
       const { vendorId, packageId } = await createVendor(VENDOR, 'Kessler & Co.');

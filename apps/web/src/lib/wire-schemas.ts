@@ -10,6 +10,7 @@ import {
   customerProfileSchema,
   customerReviewSchema,
   notificationItemSchema,
+  ownBookingSchema,
   cursorPageSchema,
   paginatedSchema,
   wideningShape,
@@ -277,7 +278,16 @@ export const wireBookingSchema = bookingWithContextSchema.extend({
   updatedAt: z.coerce.date(),
 });
 export type WireBooking = z.infer<typeof wireBookingSchema>;
-export const wireBookingListSchema = z.array(wireBookingSchema);
+
+/**
+ * A row of `GET /bookings`, which also says when the reader's review closes
+ * (VEN-747). `reviewDeadline` is a `YYYY-MM-DD` string, so it needs no coercion.
+ */
+export const wireOwnBookingSchema = wireBookingSchema.extend({
+  reviewDeadline: ownBookingSchema.shape.reviewDeadline,
+});
+export type WireOwnBooking = z.infer<typeof wireOwnBookingSchema>;
+export const wireBookingListSchema = z.array(wireOwnBookingSchema);
 
 /**
  * A booking with no request context — what the action routes and the report

@@ -1,9 +1,9 @@
 import {
   bookingRequestDetailSchema,
   bookingRequestListQuerySchema,
-  bookingWithContextSchema,
   createBookingRequestSchema,
   historyPageQuerySchema,
+  ownBookingSchema,
   quoteBookingRequestSchema,
   uuidSchema,
 } from '@vendor-marketplace/shared';
@@ -204,7 +204,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
       onRequest: requireAuthBeforeValidation,
       schema: {
         querystring: historyPageQuerySchema,
-        response: { 200: z.array(bookingWithContextSchema) },
+        response: { 200: z.array(ownBookingSchema) },
       },
     },
     async (request) => listBookings(app.db, authenticated(request.auth), request.query),

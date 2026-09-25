@@ -13,7 +13,7 @@ import {
   toEntries,
   type BookingEntry,
 } from './booking-entries';
-import type { WireBooking, WireBookingRequest } from './wire-schemas';
+import type { WireBookingRequest, WireOwnBooking } from './wire-schemas';
 
 const TODAY = '2026-04-26';
 const NOW = new Date('2026-04-26T12:00:00Z');
@@ -69,7 +69,7 @@ function vendorWith(categoryName: string | null, id: string): WireBookingRequest
   };
 }
 
-function booking(overrides: Partial<WireBooking> = {}): WireBooking {
+function booking(overrides: Partial<WireOwnBooking> = {}): WireOwnBooking {
   return {
     id: 'bok-1',
     requestId: 'req-1',
@@ -87,8 +87,9 @@ function booking(overrides: Partial<WireBooking> = {}): WireBooking {
     updatedAt: NOW,
     eventType: 'wedding',
     venue: 'Barr Mansion',
+    reviewDeadline: null,
     ...overrides,
-  } as WireBooking;
+  } as WireOwnBooking;
 }
 
 describe('daysUntil', () => {
@@ -422,6 +423,7 @@ describe('needsYouItems', () => {
         [],
         NOW,
       ),
+      TODAY,
     );
 
     expect(items.map((item) => [item.kind, item.entry.requestId, item.title, item.action])).toEqual(
@@ -456,7 +458,123 @@ describe('needsYouItems', () => {
     );
 
     expect(entries.map((entry) => entry.status)).toEqual(['confirmed']);
-    expect(needsYouItems(entries)).toEqual([]);
+    expect(needsYouItems(entries, TODAY)).toEqual([]);
+  });
+
+  /*
+   * VEN-747. A finished booking the customer can still review asks for it, after
+   * the quotes and payments, newest event first. `reviewDeadline` is the API's
+   * answer to "can this reader still review it", so a `null` asks for nothing.
+   */
+  it('asks for a review after quotes and payments, newest event first', () => {
+    const entries = toEntries(
+      [
+        request({ id: 'req-q', status: 'quoted' }),
+        request({ id: 'req-a', status: 'accepted', eventDate: '2026-05-02' }),
+      ],
+      [
+        booking({
+          id: 'bok-old',
+          requestId: 'paid-old',
+          status: 'completed',
+          eventDate: '2026-04-14',
+          reviewDeadline: '2026-04-28',
+        }),
+        booking({
+          id: 'bok-new',
+          requestId: 'paid-new',
+          status: 'confirmed',
+          eventDate: '2026-04-20',
+          eventType: 'holiday_party',
+          reviewDeadline: '2026-05-04',
+        }),
+        booking({
+          id: 'bok-shut',
+          requestId: 'paid-shut',
+          status: 'completed',
+          eventDate: '2026-04-22',
+          reviewDeadline: null,
+        }),
+      ],
+      NOW,
+    );
+
+    expect(
+      needsYouItems(entries, TODAY).map((item) => [
+        item.kind,
+        item.entry.id,
+        item.title,
+        item.detail,
+        item.action,
+      ]),
+    ).toEqual([
+      ['quote', 'req-q', 'Kessler & Co. sent a quote', [expect.any(String)], expect.any(Object)],
+      [
+        'pay',
+        'req-a',
+        'Kessler & Co. accepted your request',
+        [expect.any(String)],
+        expect.any(Object),
+      ],
+      [
+        'review',
+        'bok-new',
+        'Leave a review for Kessler & Co.',
+        ['Your holiday party was 6 days ago.', 'Reviews close May 4.'],
+        { label: 'Write a review', href: '/vendors/kessler-co?tab=reviews' },
+      ],
+      [
+        'review',
+        'bok-old',
+        'Leave a review for Kessler & Co.',
+        ['Your wedding was 12 days ago.', 'Reviews close Apr 28.'],
+        { label: 'Write a review', href: '/vendors/kessler-co?tab=reviews' },
+      ],
+    ]);
+  });
+
+  it('writes today, yesterday and a missing occasion plainly', () => {
+    const detailFor = (eventDate: string, eventType: string | null): readonly string[] =>
+      needsYouItems(
+        toEntries(
+          [request()],
+          [booking({ status: 'completed', eventDate, eventType, reviewDeadline: '2026-05-10' })],
+          NOW,
+        ),
+        TODAY,
+      )[0]!.detail;
+
+    expect(detailFor(TODAY, 'wedding')[0]).toBe('Your wedding was today.');
+    expect(detailFor('2026-04-25', 'wedding')[0]).toBe('Your wedding was yesterday.');
+    expect(detailFor('2026-04-25', null)[0]).toBe('Your event was yesterday.');
+    const closeFor = (reviewDeadline: string): string | undefined =>
+      needsYouItems(
+        toEntries(
+          [request()],
+          [booking({ status: 'completed', eventDate: '2026-04-12', reviewDeadline })],
+          NOW,
+        ),
+        TODAY,
+      )[0]!.detail[1];
+
+    expect(closeFor('2026-04-27')).toBe('Reviews close Apr 27.');
+    // The last day, and the UTC day after it that the API still counts as open.
+    expect(closeFor(TODAY)).toBe('Reviews close today.');
+    expect(closeFor('2026-04-25')).toBe('Reviews close today.');
+    // `other` reads "Something else" on a card; as an occasion it is just the event.
+    expect(detailFor('2026-04-25', 'other')[0]).toBe('Your event was yesterday.');
+  });
+
+  it('asks for no review when the vendor has no slug to link to', () => {
+    // No request row names this vendor, so nothing carries its slug across.
+    const entries = toEntries(
+      [],
+      [booking({ status: 'completed', eventDate: '2026-04-20', reviewDeadline: '2026-05-04' })],
+      NOW,
+    );
+
+    expect(entries[0]?.vendorSlug).toBeNull();
+    expect(needsYouItems(entries, TODAY)).toEqual([]);
   });
 
   it('leaves out every status that does not wait on the customer', () => {
@@ -469,6 +587,6 @@ describe('needsYouItems', () => {
     const entries = toEntries(requests, bookings, NOW);
 
     expect(entries).toHaveLength(8);
-    expect(needsYouItems(entries)).toEqual([]);
+    expect(needsYouItems(entries, TODAY)).toEqual([]);
   });
 });

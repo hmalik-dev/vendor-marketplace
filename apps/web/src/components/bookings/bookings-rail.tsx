@@ -2,6 +2,7 @@ import { MONEY_COPY, shortTimeAgo } from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import { Avatar } from '@/components/ui/avatar';
 import type { NeedsYouItem } from '@/lib/booking-entries';
+import { cn } from '@/lib/utils';
 import type { WireConversation } from '@/lib/wire-schemas';
 import { NeedsYouDecline } from './needs-you-decline';
 
@@ -28,7 +29,7 @@ const MECHANISM_PROMISES = [
 ] as const;
 
 export interface BookingsRailProps {
-  /** What waits on the customer, from `needsYouItems`: quotes, then payments due. */
+  /** What waits on the customer, from `needsYouItems`: quotes, payments due, then reviews. */
   needsYou: readonly NeedsYouItem[];
   /**
    * Whether this customer has any bookings at all — **not** whether the current
@@ -39,6 +40,17 @@ export interface BookingsRailProps {
   /** Newest first; the rail draws the first three. */
   conversations: readonly WireConversation[];
 }
+
+/**
+ * Frame `07` draws a quote on clay and a review on gold: clay is the reader's
+ * own move against a deadline someone else set, gold is a thing waiting on them
+ * with no one else waiting on it.
+ */
+export const NEEDS_YOU_TONE: Record<NeedsYouItem['kind'], { panel: string; dot: string }> = {
+  quote: { panel: 'bg-clay-100', dot: 'bg-clay-400' },
+  pay: { panel: 'bg-clay-100', dot: 'bg-clay-400' },
+  review: { panel: 'bg-gold-50', dot: 'bg-gold-400' },
+};
 
 /** Frame `07` draws three rows before the rail's own scroll takes over. */
 const RECENT_MESSAGE_COUNT = 3;
@@ -94,22 +106,39 @@ export function BookingsRail({
           {needsYou.length > 0 ? (
             <ul aria-labelledby="needs-you-heading" className="mb-5">
               {needsYou.map((item) => (
-                <li key={item.entry.id} className="mb-2.5 rounded-panel bg-clay-100 p-3.25">
+                <li
+                  key={`${item.kind}-${item.entry.id}`}
+                  className={cn('mb-2.5 rounded-panel p-3.25', NEEDS_YOU_TONE[item.kind].panel)}
+                >
                   <div className="flex items-start gap-2.25">
                     <span
                       aria-hidden="true"
-                      className="mt-1.25 size-1.75 shrink-0 rounded-full bg-clay-400"
+                      className={cn(
+                        'mt-1.25 size-1.75 shrink-0 rounded-full',
+                        NEEDS_YOU_TONE[item.kind].dot,
+                      )}
                     />
                     <div className="min-w-0">
                       <p className="text-base font-semibold text-stone-900">{item.title}</p>
-                      <p className="mt-0.75 text-sm leading-normal text-stone-700">
-                        {item.entry.subline}
-                      </p>
+                      {item.detail.map((line) => (
+                        <p key={line} className="mt-0.75 text-sm leading-normal text-stone-700">
+                          {line}
+                        </p>
+                      ))}
                       <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                        {/* The request or its checkout, not the storefront — see `bookings-hub.tsx`. */}
+                        {/*
+                          The request or its checkout, not the storefront — see
+                          `bookings-hub.tsx`. A review goes to the vendor's
+                          Reviews tab, where the form lives; frame `07` draws its
+                          panel with no button, so it is a quiet link.
+                        */}
                         <Link
                           href={item.action.href}
-                          className="inline-block rounded-md bg-clay-400 px-3.25 py-1.75 text-sm font-semibold text-stone-0 hover:bg-clay-500"
+                          className={
+                            item.kind === 'review'
+                              ? 'text-sm font-semibold text-gold-600 hover:underline'
+                              : 'inline-block rounded-md bg-clay-400 px-3.25 py-1.75 text-sm font-semibold text-stone-0 hover:bg-clay-500'
+                          }
                         >
                           {item.action.label}
                         </Link>

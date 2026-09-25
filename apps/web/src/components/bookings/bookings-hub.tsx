@@ -22,6 +22,7 @@ import {
   type NeedsYouItem,
 } from '@/lib/booking-entries';
 import { BookingsRefineChips } from './bookings-refine-chips';
+import { NEEDS_YOU_TONE } from './bookings-rail';
 import { NeedsYouDecline } from './needs-you-decline';
 import { cn } from '@/lib/utils';
 
@@ -290,12 +291,18 @@ export function BookingsHub({
         <ul aria-label="Needs you" className="mb-3.5 flex flex-col gap-2 xl:hidden">
           {needsYou.map((item) => (
             <li
-              key={item.entry.id}
-              className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl bg-clay-100 px-3.5 py-2.5"
+              key={`${item.kind}-${item.entry.id}`}
+              className={cn(
+                'flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl px-3.5 py-2.5',
+                NEEDS_YOU_TONE[item.kind].panel,
+              )}
             >
-              <span aria-hidden="true" className="size-1.75 shrink-0 rounded-full bg-clay-400" />
+              <span
+                aria-hidden="true"
+                className={cn('size-1.75 shrink-0 rounded-full', NEEDS_YOU_TONE[item.kind].dot)}
+              />
               <span className="text-base font-semibold text-stone-900">{item.title}</span>
-              <span className="text-sm text-stone-700">{item.entry.subline}</span>
+              <span className="text-sm text-stone-700">{item.detail.join(' ')}</span>
               {/*
                 The request or its checkout, not the storefront. This pointed at
                 `/vendors/<slug>` — a page whose only controls are `Request
@@ -306,7 +313,10 @@ export function BookingsHub({
               <span className="ml-auto flex flex-wrap items-center gap-x-2">
                 <Link
                   href={item.action.href}
-                  className="text-sm font-semibold text-clay-500 hover:underline"
+                  className={cn(
+                    'text-sm font-semibold hover:underline',
+                    item.kind === 'review' ? 'text-gold-600' : 'text-clay-500',
+                  )}
                 >
                   {item.action.label}
                 </Link>

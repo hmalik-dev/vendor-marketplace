@@ -71,7 +71,9 @@ sub-line reads "Search Sept 5 in Austin". An invitation, not a checklist.
 
 **Needs you** — clay panel per item with the action inline ("Casa Verde sent a
 quote — $3,840 for 120 guests, expires in 3 days" + Review quote / Decline). Gold
-panels for softer nudges. Drawn from all bookings.
+panels for softer nudges. Drawn from all bookings. A finished booking the customer
+has not reviewed gets a gold "Leave a review for {vendor}" panel until its review
+closes, 14 days after the event (`REVIEW_WINDOW_DAYS`, VEN-747).
 
 **Recent messages** — three rows, then "View all".
 

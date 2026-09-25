@@ -16,6 +16,7 @@ import {
   wireCheckoutIntentSchema,
   wireCustomerReviewListSchema,
   type WireBooking,
+  type WireOwnBooking,
   type WireBookingRequest,
   type WireBookingView,
   type WireCheckoutIntent,
@@ -295,7 +296,7 @@ export async function getBookingForRequest(requestId: string): Promise<WireBooki
 }
 
 /** Bookings that reached payment, carrying their occasion and venue. */
-export async function getOwnBookings(options: OwnListReadOptions = {}): Promise<WireBooking[]> {
+export async function getOwnBookings(options: OwnListReadOptions = {}): Promise<WireOwnBooking[]> {
   const token = await customerToken();
 
   return degradeToEmpty(

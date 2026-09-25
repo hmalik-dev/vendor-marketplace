@@ -99,7 +99,7 @@
 - [The image pipeline is one process-wide 2-slot queue](image-pipeline-is-one-process-wide-queue.md) — unbounded FIFO of 12 MB buffers
 - [NUL/22021 and 22001 fail a statement on demand](free-text-accepts-nul-so-any-text-insert-can-be-failed-on-demand.md) — `freeText()` safe; bare `z.string()` not
 - [Webhook payload text bypasses the bidi strip](provider-payload-text-bypasses-the-bidi-strip.md) — hand-`safeParse` is invisible to the guard
-- [Reviews: profanity floor, eligibility and tombstones](review-profanity-filter-is-a-hard-reject-floor.md) — a review can outlive a cancel
+- [Reviews: profanity floor, eligibility and tombstones](review-profanity-filter-is-a-hard-reject-floor.md) — a review can outlive a cancel; VEN-747 window + reader-keyed join clean
 - [The `err` serialiser is the log sink](err-serializer-is-the-log-sink.md) — fields beside `err` are verbatim; log an opaque id
 - [Sentry is a second log sink](sentry-is-a-second-log-sink.md) — `request.url` path-only; VEN-674 ReDoS notes
 - [Webhook error objects carry the redacted header](webhook-error-objects-carry-the-redacted-header.md) — `log.warn({err})` re-emits the signature
