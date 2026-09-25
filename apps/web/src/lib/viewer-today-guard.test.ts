@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { withoutComments } from '@/testing/source-scan';
+import { USE_CLIENT, withoutComments } from '@/testing/source-scan';
 
 /**
  * **The viewer's day is only knowable in the viewer's browser.**
@@ -25,9 +25,6 @@ import { withoutComments } from '@/testing/source-scan';
  * the hook is expected to return.
  */
 const WEB_SOURCE = join(import.meta.dirname, '..');
-
-/** `'use client'` or `"use client"`, as the very first statement in the file. */
-const USE_CLIENT = /^\s*(?:\/\*[\s\S]*?\*\/\s*|\/\/[^\n]*\n\s*)*['"]use client['"]/;
 
 /**
  * `src/testing/` holds helpers that only tests import — they pull in `vitest`
