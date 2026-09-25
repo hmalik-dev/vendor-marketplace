@@ -1,8 +1,9 @@
 import { MONEY_COPY, shortTimeAgo } from '@vendor-marketplace/shared';
 import Link from 'next/link';
 import { Avatar } from '@/components/ui/avatar';
-import type { BookingEntry } from '@/lib/booking-entries';
+import type { NeedsYouItem } from '@/lib/booking-entries';
 import type { WireConversation } from '@/lib/wire-schemas';
+import { NeedsYouDecline } from './needs-you-decline';
 
 /**
  * The four mechanism promises. They are what the rail carries when there is
@@ -27,8 +28,8 @@ const MECHANISM_PROMISES = [
 ] as const;
 
 export interface BookingsRailProps {
-  /** Entries the customer has to act on — quotes to review, mostly. */
-  needsYou: readonly BookingEntry[];
+  /** What waits on the customer, from `needsYouItems`: quotes, then payments due. */
+  needsYou: readonly NeedsYouItem[];
   /**
    * Whether this customer has any bookings at all — **not** whether the current
    * tab or filter shows any. The rail answers "is this a new account", and a
@@ -66,62 +67,70 @@ export function BookingsRail({
   /*
     The label follows the content rather than describing the best case. A fixed
     "What needs your attention" announced a section that was not rendered —
-    #81's ninth finding — and #302 gave the rail a third shape, so there are now
-    three answers rather than two: the quotes waiting, the threads, or frame
-    `19`'s promises. Each one names the heading the reader actually meets.
+    #81's ninth finding. With bookings the rail always opens on `Needs you`
+    (VEN-746); without, on frame `19`'s promises. Each names the heading the
+    reader actually meets.
   */
-  const label =
-    needsYou.length > 0
-      ? 'What needs your attention'
-      : hasBookings
-        ? 'Recent messages'
-        : 'How booking works here';
+  const label = hasBookings ? 'Needs you' : 'How booking works here';
 
   return (
     <aside
       aria-label={label}
       className="hidden w-[340px] shrink-0 overflow-y-auto border-l border-stone-300 bg-stone-0 p-5 xl:block"
     >
-      {needsYou.length > 0 ? (
-        <>
-          <h2 className="mb-2.75 text-label font-semibold tracking-label text-stone-600 uppercase">
-            Needs you
-          </h2>
-          <ul className="mb-5">
-            {needsYou.map((entry) => (
-              <li key={entry.id} className="mb-2.5 rounded-xl bg-clay-100 p-3.25">
-                <div className="flex items-start gap-2.25">
-                  <span
-                    aria-hidden="true"
-                    className="mt-1.25 size-1.75 shrink-0 rounded-full bg-clay-400"
-                  />
-                  <div className="min-w-0">
-                    <p className="text-base font-semibold text-stone-900">
-                      {entry.vendorName} sent a quote
-                    </p>
-                    <p className="mt-0.75 text-sm leading-normal text-stone-700">{entry.subline}</p>
-                    {/* The request, not the storefront — see `bookings-hub.tsx`. */}
-                    <Link
-                      href={`/bookings/${entry.id}`}
-                      className="mt-2.5 inline-block rounded-md bg-clay-400 px-3.25 py-1.75 text-sm font-semibold text-stone-0 hover:bg-clay-500"
-                    >
-                      Review quote
-                    </Link>
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </>
-      ) : null}
-
       {hasBookings ? (
         /*
-          Frame `07`'s second block. Rendered even with nothing in it: the rail
-          is never blanked, and a customer with bookings and no replies yet is
-          told so rather than shown a column that stops halfway.
+          Frame `07`'s first block, drawn whenever the customer has bookings
+          (VEN-746). It was drawn only while a quote waited, so most of the time
+          the rail opened on `Recent messages` and the panel read as missing.
         */
         <>
+          <h2
+            id="needs-you-heading"
+            className="mb-2.75 text-label font-semibold tracking-label text-stone-600 uppercase"
+          >
+            Needs you
+          </h2>
+          {needsYou.length > 0 ? (
+            <ul aria-labelledby="needs-you-heading" className="mb-5">
+              {needsYou.map((item) => (
+                <li key={item.entry.id} className="mb-2.5 rounded-panel bg-clay-100 p-3.25">
+                  <div className="flex items-start gap-2.25">
+                    <span
+                      aria-hidden="true"
+                      className="mt-1.25 size-1.75 shrink-0 rounded-full bg-clay-400"
+                    />
+                    <div className="min-w-0">
+                      <p className="text-base font-semibold text-stone-900">{item.title}</p>
+                      <p className="mt-0.75 text-sm leading-normal text-stone-700">
+                        {item.entry.subline}
+                      </p>
+                      <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                        {/* The request or its checkout, not the storefront — see `bookings-hub.tsx`. */}
+                        <Link
+                          href={item.action.href}
+                          className="inline-block rounded-md bg-clay-400 px-3.25 py-1.75 text-sm font-semibold text-stone-0 hover:bg-clay-500"
+                        >
+                          {item.action.label}
+                        </Link>
+                        {item.kind === 'quote' ? (
+                          <NeedsYouDecline requestId={item.entry.requestId} />
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mb-5 text-sm leading-normal text-stone-700">Nothing is waiting on you.</p>
+          )}
+
+          {/*
+            Frame `07`'s second block. Rendered even with nothing in it: the rail
+            is never blanked, and a customer with bookings and no replies yet is
+            told so rather than shown a column that stops halfway.
+          */}
           <h2 className="mb-2.75 text-label font-semibold tracking-label text-stone-600 uppercase">
             Recent messages
           </h2>

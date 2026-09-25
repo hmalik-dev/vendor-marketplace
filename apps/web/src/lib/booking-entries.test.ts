@@ -7,6 +7,7 @@ import {
   formatCardDate,
   formatEventDate,
   groupByMonth,
+  needsYouItems,
   requestToEntry,
   summarise,
   toEntries,
@@ -401,5 +402,73 @@ describe('toEntries past the first page of each list (VEN-433)', () => {
     expect(entries).toHaveLength(count);
     expect(entries.filter((entry) => entry.status === 'accepted')).toEqual([]);
     expect(entries.find((entry) => entry.id === 'bok-149')?.status).toBe('confirmed');
+  });
+});
+
+/*
+ * VEN-746. The rail's `Needs you` panel lists what waits on the customer: a
+ * quote to review and an accepted request to pay. It was quotes alone, so an
+ * accepted request waiting on payment surfaced nowhere.
+ */
+describe('needsYouItems', () => {
+  it('lists quotes first, then accepted requests, each with its action', () => {
+    const items = needsYouItems(
+      toEntries(
+        [
+          request({ id: 'req-a', status: 'accepted', eventDate: '2026-05-01' }),
+          request({ id: 'req-q1', status: 'quoted', eventDate: '2026-06-01' }),
+          request({ id: 'req-q2', status: 'quoted', eventDate: '2026-07-01' }),
+        ],
+        [],
+        NOW,
+      ),
+    );
+
+    expect(items.map((item) => [item.kind, item.entry.requestId, item.title, item.action])).toEqual(
+      [
+        [
+          'quote',
+          'req-q1',
+          'Kessler & Co. sent a quote',
+          { label: 'Review quote', href: '/bookings/req-q1' },
+        ],
+        [
+          'quote',
+          'req-q2',
+          'Kessler & Co. sent a quote',
+          { label: 'Review quote', href: '/bookings/req-q2' },
+        ],
+        [
+          'pay',
+          'req-a',
+          'Kessler & Co. accepted your request',
+          { label: 'Pay now', href: '/bookings/req-a/checkout' },
+        ],
+      ],
+    );
+  });
+
+  it('never offers Pay now for a request that was already paid', () => {
+    const entries = toEntries(
+      [request({ id: 'req-1', status: 'accepted' })],
+      [booking({ requestId: 'req-1' })],
+      NOW,
+    );
+
+    expect(entries.map((entry) => entry.status)).toEqual(['confirmed']);
+    expect(needsYouItems(entries)).toEqual([]);
+  });
+
+  it('leaves out every status that does not wait on the customer', () => {
+    const requests = (['pending', 'declined', 'expired', 'cancelled'] as const).map(
+      (status, index) => request({ id: `req-${index}`, status }),
+    );
+    const bookings = (['confirmed', 'completed', 'cancelled', 'disputed'] as const).map(
+      (status, index) => booking({ id: `bok-${index}`, requestId: `paid-${index}`, status }),
+    );
+    const entries = toEntries(requests, bookings, NOW);
+
+    expect(entries).toHaveLength(8);
+    expect(needsYouItems(entries)).toEqual([]);
   });
 });
