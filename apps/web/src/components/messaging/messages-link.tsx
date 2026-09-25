@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { MARKETING_LINK_CLASS } from '@/components/marketing-link';
 import { reportSwallowedError } from '@/lib/report-error';
 import { isHeaderReadSuppressed, isTermsRequired } from '@/lib/terms-gate-paths';
+import { setUnreadMessages } from '@/lib/unread-messages-store';
 import { useApi } from '@/lib/use-api';
 import { wireConversationPageSchema } from '@/lib/wire-schemas';
 
@@ -25,8 +26,9 @@ export interface MessagesLinkProps {
 }
 
 /**
- * The header's `Messages` link, carrying the only unread cue a customer or
- * vendor has now that the bookings sidebar is gone (VEN-706).
+ * The header's `Messages` link and the source of the unread cue: it publishes
+ * what it reads to `unread-messages-store`, which the customer sidebar's dot
+ * draws from (VEN-745), so the sidebar fetches and streams nothing.
  *
  * Fetched here rather than server-rendered for the bell's reason: the header is
  * on every page, and a user-scoped read in it would add a round trip to each.
@@ -58,6 +60,7 @@ function UnreadMessagesLink(): React.ReactElement {
 
       if (request === latest.current) {
         setUnread(page.hasUnread);
+        setUnreadMessages(page.hasUnread);
       }
     } catch (error: unknown) {
       /*

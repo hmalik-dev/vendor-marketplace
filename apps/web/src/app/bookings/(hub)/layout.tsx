@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { AccountShell } from '@/components/account-shell';
 import { requireRole } from '@/lib/current-user';
 
 /**
@@ -19,6 +20,8 @@ import { requireRole } from '@/lib/current-user';
  * them would throw an unreachable API above `checkout/error.tsx`, trading
  * checkout's own error shell for the bare root one.
  *
+ * It also mounts frame `07`'s sidebar around the hub (VEN-745).
+ *
  * The destination comes from the request path the middleware stamped, since a
  * layout has no `searchParams` — the hub drops a `?tab=` it does not recognise
  * on arrival, so carrying the raw query is harmless.
@@ -30,5 +33,5 @@ export default async function BookingsHubLayout({
 }): Promise<React.ReactElement> {
   await requireRole('customer');
 
-  return <>{children}</>;
+  return <AccountShell current="bookings">{children}</AccountShell>;
 }

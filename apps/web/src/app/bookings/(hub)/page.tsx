@@ -2,10 +2,10 @@ import type { Metadata } from 'next';
 import { pageTitle, toDateString } from '@vendor-marketplace/shared';
 import { BookingsHub, BOOKING_TABS } from '@/components/bookings/bookings-hub';
 import { BookingsRail } from '@/components/bookings/bookings-rail';
-import { BOOKING_SORTS, toEntries, type BookingSort, type BookingTab } from '@/lib/booking-entries';
-import { getOwnBookingRequests, getOwnBookings } from '@/lib/customer-data';
+import { BOOKING_SORTS, type BookingSort, type BookingTab } from '@/lib/booking-entries';
 import { getOwnConversationBand } from '@/lib/messaging-data';
 import { requireRole } from '@/lib/current-user';
+import { readOwnBookingEntries } from '@/lib/own-booking-entries';
 
 export const metadata: Metadata = {
   title: pageTitle('Your bookings'),
@@ -87,14 +87,13 @@ export default async function BookingsPage({
    */
   const user = await requireRole('customer', `/bookings?tab=${tab}`);
 
-  const [requests, bookings, band] = await Promise.all([
+  const [entries, band] = await Promise.all([
     /*
-     * Required: the hub's subject is these two lists, so a failed read reaches
-     * the route's error boundary and its Try again rather than drawing "No
-     * bookings yet" for a customer who may have just paid.
+     * Required (see `readOwnBookingEntries`): the hub's subject is these two
+     * lists, so a failed read reaches the route's error boundary rather than
+     * drawing "No bookings yet". The sidebar's count in the layout shares it.
      */
-    getOwnBookingRequests({ required: true }),
-    getOwnBookings({ required: true }),
+    readOwnBookingEntries(),
     /*
      * Frame `07`'s rail draws the three most recent threads. It fails soft on its
      * own — an unreachable messaging API costs the rail's second block, not the
@@ -102,7 +101,6 @@ export default async function BookingsPage({
      */
     getOwnConversationBand(),
   ]);
-  const entries = toEntries(requests, bookings);
   /*
    * The UTC day, not this process's local one (#409, #391). `todayDateString`
    * reads the *caller's* wall clock and says in its own contract that it is
@@ -121,7 +119,7 @@ export default async function BookingsPage({
   const needsYou = entries.filter((entry) => entry.status === 'quoted');
 
   return (
-    <div className="flex h-[calc(100dvh-var(--header-height))] overflow-hidden">
+    <div className="flex h-full overflow-hidden">
       <BookingsHub
         entries={entries}
         tab={tab}

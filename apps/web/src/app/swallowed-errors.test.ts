@@ -81,6 +81,8 @@ describe('swallowed errors', () => {
       'src/app/customer/profile/page.tsx',
       // VEN-680: a sign-out the provider could not take after a closure changes nothing for the person, and is reported.
       'src/components/account/close-account-form.tsx',
+      // VEN-745: a failed bookings read costs the sidebar its count, not the screen beside it (the page owns the error boundary), and is reported.
+      'src/components/bookings/bookings-sidebar-with-count.tsx',
       // VEN-540: a rejected `confirmPayment` shows its own banner; the cause is reported.
       'src/components/checkout/checkout-screen.tsx',
       // VEN-706: a failed unread read leaves the header's dot at its last value

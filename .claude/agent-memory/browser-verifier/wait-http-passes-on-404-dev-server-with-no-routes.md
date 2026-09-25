@@ -10,6 +10,10 @@ route (`/`, `/sign-in`, `/bookings`, `/search`, `/icon.svg`) rendered the brande
 page with HTTP 404, `next dev` had started ~1 min earlier, `.next-dev` existed (trace file open)
 but never routed. The API on 4009 was healthy (`/ready` 200).
 
+Recurred VEN-745 (2026-09-24, web 3015): `next dev` up ~3.5 min, every route 404 incl. /sign-in, /search, /icon.svg;
+`pnpm e2e:auth` hangs past 120s and its diagnostic screenshot is the 404 page. The caller's "`/` 404 is not a finding" note
+does not cover `/sign-in` 404. Reported BLOCKED.
+
 **Why:** the script treats any HTTP answer as "up"; a 404 on `/` is not a healthy signal.
 
 **How to apply:** right after wait-http, `curl -o /dev/null -w '%{http_code}'` `/`, `/sign-in`,
