@@ -130,3 +130,13 @@ never "Are you sure?".
 - Automated flag triage
 - Vendor quality scoring
 - Bulk messaging to vendor segments
+
+## Resync 2026-09-25
+
+The frames were brought into line with the shipped app. Where this section and older text above disagree, this section wins.
+
+- Frame 13: pane padding 16, 15 full rows, zebra `stone-25 #FDFAF4`.
+- The /admin/tags route keeps the label "Categories & tags".
+- Admin delta B and C are merged into the Screens file as frames 42 (vendor detail) and 43 (case detail).
+- Suspending a vendor refunds its confirmed bookings in full. It does not hold payouts.
+- The copy says "admin", never "operator".

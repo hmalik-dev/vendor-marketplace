@@ -106,3 +106,11 @@ so it is not re-filed.
 - "Couples who booked X also booked" — needs real pairing data
 - Counts on the category chips
 - Add-to-calendar and a shareable event summary
+
+## Resync 2026-09-25
+
+The frames were brought into line with the shipped app. Where this section and older text above disagree, this section wins.
+
+- Frame 06 now draws the signed-in header.
+- The sage field fills the area below the header (min-height 836, not a fixed shell).
+- Sub-lines use full stone-0 for contrast.

@@ -277,3 +277,11 @@ visitor.
 
 - **Vendor pricing line** on the vendor panel once the model is decided — a plain statement of what a vendor pays, as a fourth guarantee.
 - Vendor-side proof once it exists: earnings ranges by category, time-to-first-booking. Both need real vendors.
+
+## Resync 2026-09-25
+
+The frames were brought into line with the shipped app. Where this section and older text above disagree, this section wins.
+
+- Frame 12's panel uses sage-175 `#C4D6A8` and gold-150 `#F9E2BD`.
+- Button: "Create my account".
+- Sign-in, forgot-password and reset-password reuse this card. They are drawn in Phase 2.

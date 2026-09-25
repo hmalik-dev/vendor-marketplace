@@ -270,3 +270,14 @@ ids, not strings. Shareable, back button works, SWR revalidates.
 - Map view alongside the grid
 - Semantic search as an _additional_ entry point once there's enough profile text to index — never replacing the select
 - "Similar vendors" on an empty result set — needs behavioural data
+
+## Resync 2026-09-25
+
+The frames were brought into line with the shipped app. Where this section and older text above disagree, this section wins.
+
+- No availability chip and no distance chip on any result card, at any width. Only the stone "New" chip remains.
+- Default sort is "Most relevant".
+- There is no Style filter.
+- Refine triggers draw no ▾ (D25). Only the vendor-type segment keeps it.
+- Compact bar on frame 02: 42px fixed height, 32px clay circle submit, no "Search" label. This matches the five sibling frames.
+- Card at every width: radius 16, name 19px, price 17px, gutter 16. The 1024 view no longer draws the Photography pill.
