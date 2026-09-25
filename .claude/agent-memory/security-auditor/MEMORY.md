@@ -126,7 +126,7 @@
 - [The categories cascade is single-edged, for now](categories-cascade-is-single-edged.md) — a second cascading FK is silent loss
 - [The `/search` retired-category 308 rests on three invariants](search-retired-category-redirect.md) — prefix, `Object.hasOwn`, no key successor
 - [launch:check bearer hosts are fixed](launch-check-bearer-hosts-are-fixed.md) — reopen if `bearer()` meets an env URL
-- [Admin booking detail + requests funnel](admin-booking-detail-and-requests-reads.md) — PASS
+- [Admin booking detail, requests funnel, list search](admin-booking-detail-and-requests-reads.md) — PASS; VEN-743 `q` needs joins in every scan
 - [Admin vendor detail is a gated aggregate](admin-vendor-detail-is-a-gated-aggregate.md) — notification `body` bypasses the case grant
 - [The staging probe spec's guard is the URL, not DEPLOY_ENV](staging-probe-spec-guard.md) — required `STAGING_WEB_URL`
 - [Admin category writes](admin-category-writes.md) — PASS; toggle can double-write audit

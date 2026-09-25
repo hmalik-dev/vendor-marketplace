@@ -12,6 +12,7 @@ import { BOOKING_PRESENTATION } from '@/lib/booking-entries';
 import { getAdminBookings } from '@/lib/admin-data';
 import {
   adminQueryString,
+  boundedText,
   droppedKeys,
   oneOf,
   pageNumber,
@@ -33,14 +34,16 @@ const EVENT_DATE = new Intl.DateTimeFormat('en-US', {
 export default async function AdminBookingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: RawParam; flag?: RawParam; page?: RawParam }>;
+  searchParams: Promise<{ status?: RawParam; flag?: RawParam; q?: RawParam; page?: RawParam }>;
 }): Promise<React.ReactElement> {
   const raw = await searchParams;
   const status = oneOf(raw.status, BOOKING_STATUSES);
   const flag = oneOf(raw.flag, ADMIN_BOOKING_FLAGS);
+  const q = boundedText(raw.q);
   const dropped = droppedKeys(raw, { status, flag });
+  const params = { status, flag, q };
   const bookings = await getAdminBookings(
-    adminQueryString({ status, flag, page: pageNumber(raw.page) }),
+    adminQueryString({ ...params, page: pageNumber(raw.page) }),
   );
   /*
    * One place the empty states are chosen, so headline and description cannot
@@ -52,8 +55,16 @@ export default async function AdminBookingsPage({
    * answered it with "Every booking on a suspended account has been unwound."
    * — told to an admin with stuck refunds one click away.
    */
-  const empty =
-    flag && status
+  const named = [status && BOOKING_PRESENTATION[status].label, flag && REFUND_STUCK_LABEL].filter(
+    Boolean,
+  );
+  const withFilters = named.length > 0 ? ` and ${named.join(' and ')}` : '';
+  const empty = q
+    ? {
+        headline: `No bookings match "${q}"${withFilters}`,
+        description: 'Search by booking id, customer name or email, or vendor.',
+      }
+    : flag && status
       ? {
           headline: 'No bookings match both filters',
           description: `A stuck refund is always ${BOOKING_PRESENTATION.confirmed.label.toLowerCase()}. Clear the status to see them.`,
@@ -80,13 +91,14 @@ export default async function AdminBookingsPage({
    * earns itself: dropping the status is the route that pays, and the number
    * says so before the admin clicks.
    */
-  const filtered = Boolean(status ?? flag);
+  const filtered = Boolean(status ?? flag ?? q);
   // Rows exist, this page is just past them: not "no bookings", and not filtered-empty.
   const pastEnd = bookings.items.length === 0 && bookings.total > 0;
   const active: ActiveFilter[] = [
-    { key: 'status', widening: 'Any status', carried: { flag } },
-    { key: 'flag', widening: 'Any booking', carried: { status } },
-  ].filter((filter) => (filter.key === 'status' ? status : flag) !== undefined);
+    { key: 'status', widening: 'Any status', carried: { flag, q } },
+    { key: 'flag', widening: 'Any booking', carried: { status, q } },
+    { key: 'q', widening: 'Clear the search', carried: { status, flag } },
+  ].filter((filter) => params[filter.key as keyof typeof params] !== undefined);
 
   return (
     <AdminSurface
@@ -95,7 +107,12 @@ export default async function AdminBookingsPage({
       counts={[`${bookings.total} total`]}
       dropped={dropped}
       filters={
-        <FilterBar action={PATH} params={{ status, flag }}>
+        <FilterBar
+          action={PATH}
+          params={params}
+          searchPlaceholder="Search booking, customer or vendor…"
+          searchValue={q}
+        >
           <FilterSelect
             action={PATH}
             name="status"
@@ -124,7 +141,7 @@ export default async function AdminBookingsPage({
       }
       pager={{
         path: PATH,
-        params: { status, flag },
+        params,
         page: bookings.page,
         pageSize: bookings.pageSize,
         total: bookings.total,
@@ -137,7 +154,7 @@ export default async function AdminBookingsPage({
           pastEnd ? (
             <OutOfRange
               path={PATH}
-              params={{ status, flag }}
+              params={params}
               page={bookings.page}
               pageSize={bookings.pageSize}
               total={bookings.total}

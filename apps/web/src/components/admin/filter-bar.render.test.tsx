@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { adminQueryString } from '@/lib/admin-params';
 import { FilterBar, FilterSelect } from './filter-bar';
@@ -520,5 +520,139 @@ describe('a Refine bar dropdown healing off the timer, not the transition settle
     vi.advanceTimersByTime(1000);
     expect(assign).toHaveBeenCalledTimes(1);
     expect(assign).toHaveBeenCalledWith('/admin/activity?actor=a1&subject=s1&action=vendor.banned');
+  });
+});
+
+describe('the active-filter chips (VEN-743)', () => {
+  const STATUSES = [
+    { value: 'confirmed', label: 'Confirmed' },
+    { value: 'completed', label: 'Completed' },
+  ] as const;
+
+  function threeFilters(): ReturnType<typeof render> {
+    return render(
+      <FilterBar
+        action="/admin/bookings"
+        params={{ status: 'confirmed', flag: 'refund-stuck', q: 'kessler' }}
+        searchPlaceholder="Search…"
+        searchValue="kessler"
+      >
+        <>
+          <FilterSelect
+            action="/admin/bookings"
+            name="status"
+            label="Status"
+            value="confirmed"
+            options={STATUSES}
+          />
+          <FilterSelect
+            action="/admin/bookings"
+            name="flag"
+            label="Needs attention"
+            value="refund-stuck"
+            options={[{ value: 'refund-stuck', label: 'Refund did not go through' }]}
+          />
+        </>
+      </FilterBar>,
+    );
+  }
+
+  function hrefOf(name: string): string | null {
+    return screen.getByRole('link', { name }).getAttribute('href');
+  }
+
+  it('draws one chip per filter whose × removes only that filter', () => {
+    threeFilters();
+
+    const chips = within(screen.getByRole('list', { name: 'Active filters' }))
+      .getAllByRole('listitem')
+      .map((item) => item.textContent);
+
+    expect(chips).toEqual([
+      'Search: kessler×',
+      'Status: Confirmed×',
+      'Needs attention: Refund did not go through×',
+      'Clear all',
+    ]);
+    expect(hrefOf('Remove Search filter: kessler')).toBe(
+      '/admin/bookings?status=confirmed&flag=refund-stuck',
+    );
+    expect(hrefOf('Remove Status filter: Confirmed')).toBe(
+      '/admin/bookings?flag=refund-stuck&q=kessler',
+    );
+    expect(hrefOf('Remove Needs attention filter: Refund did not go through')).toBe(
+      '/admin/bookings?status=confirmed&q=kessler',
+    );
+    expect(hrefOf('Clear all')).toBe('/admin/bookings');
+  });
+
+  it('finds a select whose element type is not FilterSelect, as it arrives across the RSC boundary', () => {
+    /*
+     * A client component handed through a Server Component's children arrives
+     * as a lazy reference, so `child.type === FilterSelect` is false in the
+     * running app. This stand-in has a different type and the same props.
+     */
+    const Lazy = (props: React.ComponentProps<typeof FilterSelect>): React.ReactElement => (
+      <FilterSelect {...props} />
+    );
+
+    render(
+      <FilterBar action="/admin/bookings" params={{ status: 'confirmed' }}>
+        <Lazy
+          action="/admin/bookings"
+          name="status"
+          label="Status"
+          value="confirmed"
+          options={STATUSES}
+        />
+      </FilterBar>,
+    );
+
+    expect(hrefOf('Remove Status filter: Confirmed')).toBe('/admin/bookings');
+  });
+
+  it('offers Clear all only from two filters, and draws nothing with none', () => {
+    const { unmount } = render(
+      <FilterBar
+        action="/admin/payments"
+        params={{ q: 'pi_3' }}
+        searchPlaceholder="Search…"
+        searchValue="pi_3"
+      >
+        {null}
+      </FilterBar>,
+    );
+
+    expect(screen.getByRole('link', { name: 'Remove Search filter: pi_3' })).toBeDefined();
+    expect(screen.queryByRole('link', { name: 'Clear all' })).toBeNull();
+    unmount();
+
+    render(
+      <FilterBar action="/admin/payments" params={{}} searchPlaceholder="Search…" searchValue="">
+        {null}
+      </FilterBar>,
+    );
+
+    expect(screen.queryByRole('list', { name: 'Active filters' })).toBeNull();
+  });
+
+  it('draws no chip for a select with no Any choice, or for a filter with no select', () => {
+    render(
+      <FilterBar
+        action="/admin/cases"
+        params={{ status: 'open', actor: '0f3f3d4a-1c0a-4a1e-8f6a-2b1c9d4e5f60' }}
+      >
+        <FilterSelect
+          action="/admin/cases"
+          name="status"
+          label="Status"
+          allowAny={false}
+          value="open"
+          options={[{ value: 'open', label: 'Open' }]}
+        />
+      </FilterBar>,
+    );
+
+    expect(screen.queryByRole('list', { name: 'Active filters' })).toBeNull();
   });
 });

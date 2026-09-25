@@ -1,9 +1,13 @@
 'use client';
 
 import { MAX_NAME_LENGTH } from '@vendor-marketplace/shared';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
+  Children,
   createContext,
+  Fragment,
+  isValidElement,
   useCallback,
   useContext,
   useEffect,
@@ -252,6 +256,137 @@ export function FilterSelect({
   );
 }
 
+/** One active filter, as the chip row prints it: `Status: Confirmed`. */
+interface FilterChip {
+  key: string;
+  label: string;
+  value: string;
+}
+
+/** The label the search term prints on its chip. */
+const SEARCH_CHIP_LABEL = 'Search';
+
+/**
+ * Whether an element's props are a `FilterSelect`'s.
+ *
+ * **By props, never by `child.type === FilterSelect`.** The surfaces are Server
+ * Components handing this client component their children, and across that
+ * boundary a client component's type arrives as a lazy reference, not the
+ * function — so a type check is false for every select in the running app and
+ * true only in a test that imports the components directly.
+ */
+function isSelectProps(props: unknown): props is FilterSelectProps {
+  const candidate = props as Partial<FilterSelectProps> | null;
+
+  return (
+    typeof candidate?.name === 'string' &&
+    typeof candidate.label === 'string' &&
+    typeof candidate.value === 'string' &&
+    Array.isArray(candidate.options)
+  );
+}
+
+/** Every `FilterSelect` among the bar's children, looking through fragments. */
+function selectsIn(children: ReactNode): FilterSelectProps[] {
+  return Children.toArray(children).flatMap((child) => {
+    if (!isValidElement<{ children?: ReactNode }>(child)) {
+      return [];
+    }
+
+    if (child.type === Fragment) {
+      return selectsIn(child.props.children);
+    }
+
+    return isSelectProps(child.props) ? [child.props] : [];
+  });
+}
+
+/**
+ * The filters narrowing the view, one chip each (VEN-743).
+ *
+ * Derived from the bar's own `FilterSelect`s and `params`, never handed in by
+ * the surface: a surface that listed its chips by hand would be a second copy
+ * of what it already tells the bar, and the two would drift (VEN-395 removed
+ * that shape from the selects for the same reason).
+ *
+ * A select with `allowAny={false}` has no chip, because there is nothing to
+ * remove: its parameter's absence is a default, not "no filter". A parameter
+ * with no select (`/admin/requests`' segment, `/admin/activity`'s subject) has
+ * no chip either: its own control already shows it and lifts it.
+ */
+function activeChips(
+  params: FilterParamValues,
+  selects: readonly FilterSelectProps[],
+  searchValue: string | undefined,
+  hasSearch: boolean,
+): FilterChip[] {
+  const chips: FilterChip[] = [];
+
+  if (hasSearch && searchValue) {
+    chips.push({ key: 'q', label: SEARCH_CHIP_LABEL, value: searchValue });
+  }
+
+  for (const select of selects) {
+    const chosen = select.options.find((option) => option.value === select.value);
+
+    if (select.allowAny !== false && chosen && select.value) {
+      chips.push({ key: select.name, label: select.label, value: chosen.label });
+    }
+  }
+
+  return chips;
+}
+
+/** Below this many active filters "Clear all" would only repeat the one chip's ×. */
+const CLEAR_ALL_MIN_FILTERS = 2;
+
+function FilterChips({
+  action,
+  params,
+  chips,
+}: {
+  action: string;
+  params: FilterParamValues;
+  chips: readonly FilterChip[];
+}): React.ReactElement | null {
+  if (chips.length === 0) {
+    return null;
+  }
+
+  return (
+    <ul aria-label="Active filters" className="mt-3 flex flex-wrap items-center gap-2">
+      {chips.map((chip) => (
+        <li
+          key={chip.key}
+          className="inline-flex items-center gap-1.5 rounded-full border border-stone-300 bg-stone-0 py-1 pr-1.5 pl-3 text-sm text-stone-900"
+        >
+          <span>
+            <span className="text-stone-600">{chip.label}:</span> {chip.value}
+          </span>
+          {/* A real link, so removing one filter works with JavaScript off. */}
+          <Link
+            href={`${action}${adminQueryString({ ...params, [chip.key]: undefined, [PAGE_PARAM]: undefined })}`}
+            aria-label={`Remove ${chip.label} filter: ${chip.value}`}
+            className="rounded-full px-1.5 font-semibold text-stone-600 hover:text-clay-600"
+          >
+            <span aria-hidden="true">×</span>
+          </Link>
+        </li>
+      ))}
+      {chips.length >= CLEAR_ALL_MIN_FILTERS ? (
+        <li>
+          <Link
+            href={action}
+            className="px-1.5 text-sm font-semibold text-clay-500 underline-offset-4 hover:text-clay-600 hover:underline"
+          >
+            Clear all
+          </Link>
+        </li>
+      ) : null}
+    </ul>
+  );
+}
+
 export interface FilterBarProps {
   /** Where the form submits — the surface's own path, so filters stay in the URL. */
   action: string;
@@ -312,6 +447,8 @@ export function FilterBar({
       return () => ++attempt;
     })(),
   };
+
+  const chips = activeChips(params, selectsIn(children), searchValue, Boolean(searchPlaceholder));
 
   return (
     <FilterParams.Provider value={params}>
@@ -410,6 +547,7 @@ export function FilterBar({
           </button>
           {trailing ? <span className="ml-auto">{trailing}</span> : null}
         </form>
+        <FilterChips action={action} params={params} chips={chips} />
       </FilterNav.Provider>
     </FilterParams.Provider>
   );

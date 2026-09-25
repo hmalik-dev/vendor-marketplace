@@ -91,8 +91,8 @@ const CASE_SELECTION = {
 } as const;
 
 /**
- * The search (VEN-388): the reference, the address the case was sent from, or
- * the sender account's name or address.
+ * The search (VEN-388): the reference, the booking id, the address the case was
+ * sent from, or the sender account's name or address.
  *
  * The account half is an `EXISTS` rather than a condition on the list's sender
  * join, so the count and the widening scan — which read `support_cases` alone —
@@ -102,6 +102,7 @@ function caseSearchCondition(term: string): SQL | undefined {
   return or(
     containsInsensitive(supportCases.reference, term),
     containsInsensitive(supportCases.senderEmail, term),
+    containsInsensitive(sql`${supportCases.bookingId}::text`, term),
     sql`exists (
       select 1 from ${users} as sender
       where sender.id = ${supportCases.senderUserId}

@@ -784,7 +784,12 @@ export async function listBookings(
    * bound (#415). Passed from the clock rather than read as `current_date` so
    * the filter answers the same question a test's fake clock asks.
    */
-  const filters = { status: query.status, flag: query.flag, floorDate: unwindFloorDate(now) };
+  const filters = {
+    status: query.status,
+    flag: query.flag,
+    q: query.q,
+    floorDate: unwindFloorDate(now),
+  };
   const [rows, total] = await Promise.all([
     findAdminBookings(db, filters, query.pageSize, offset),
     countAdminBookings(db, filters),
@@ -824,9 +829,10 @@ export async function listPayments(
   query: AdminPaymentQuery,
 ): Promise<AdminPaymentPage> {
   const offset = offsetOf(query);
+  const filters = { flag: query.flag, q: query.q };
   const [rows, total] = await Promise.all([
-    findAdminPayments(db, query.flag, query.pageSize, offset),
-    countAdminPayments(db, query.flag),
+    findAdminPayments(db, filters, query.pageSize, offset),
+    countAdminPayments(db, filters),
   ]);
 
   /*
@@ -836,7 +842,7 @@ export async function listPayments(
    * `Promise.all` above.
    */
   const widenings =
-    rows.length === 0 && query.page === 1 ? await countPaymentWidenings(db, query.flag) : [];
+    rows.length === 0 && query.page === 1 ? await countPaymentWidenings(db, filters) : [];
 
   return {
     widenings,
