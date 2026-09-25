@@ -111,11 +111,7 @@ describe('BookingsRail', () => {
       expect(screen.getByText('Recent messages')).toBeDefined();
       // The approved line, shared with `/messages`'s own empty state — asserted
       // by its exact wording so a second spelling of it cannot creep back in.
-      expect(
-        screen.getByText(
-          'A thread opens the moment you send a booking request, so the whole negotiation stays attached to the booking.',
-        ),
-      ).toBeDefined();
+      expect(screen.getByText('A thread opens when you send a booking request.')).toBeDefined();
     });
 
     it('still leads with Needs you when a quote is waiting', () => {

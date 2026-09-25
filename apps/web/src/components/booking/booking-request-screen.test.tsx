@@ -115,7 +115,7 @@ describe('field layout', () => {
     const describedBy = brief.getAttribute('aria-describedby');
     expect(describedBy).toBeTruthy();
     expect(document.getElementById(describedBy ?? '')?.textContent).toBe(
-      'Describe what you need in a sentence or two, so there is something to quote.',
+      'Describe what you need in a sentence or two.',
     );
   });
 
@@ -149,7 +149,7 @@ describe('the date question', () => {
     await chooseEventType();
     await userEvent.click(screen.getByRole('button', { name: 'Continue to review' }));
 
-    expect(screen.getByRole('heading', { name: 'Check this over before it goes' })).toBeDefined();
+    expect(screen.getByRole('heading', { name: 'Review your request' })).toBeDefined();
   });
 
   it('blocks a date the vendor is already taken on', async () => {
@@ -350,7 +350,7 @@ describe('sending', () => {
 
     await screen.findByRole('heading', { name: 'Your request is with Kessler & Co.' });
 
-    expect(screen.getByText(/the request expires in 3d if it goes unanswered/)).toBeDefined();
+    expect(screen.getByText(/If they don't, the request expires in 3d\./)).toBeDefined();
     expect(screen.queryByText(/7 days/)).toBeNull();
   });
 
@@ -434,7 +434,7 @@ describe('the request survives leaving the page', () => {
         'The Marfa barn',
       ),
     );
-    expect(screen.getByText(/We kept what you had written/)).toBeDefined();
+    expect(screen.getByText(/We kept your draft/)).toBeDefined();
   });
 
   /* A customer comparing two vendors has a half-written request to each. */
@@ -448,14 +448,14 @@ describe('the request survives leaving the page', () => {
     await waitFor(() =>
       expect((screen.getByLabelText('Venue or location') as HTMLInputElement).value).toBe(''),
     );
-    expect(screen.queryByText(/We kept what you had written/)).toBeNull();
+    expect(screen.queryByText(/We kept your draft/)).toBeNull();
   });
 
   /* A form that fills itself is unsettling; an untouched one has nothing to say. */
   it('says nothing when there was no draft', () => {
     renderScreen();
 
-    expect(screen.queryByText(/We kept what you had written/)).toBeNull();
+    expect(screen.queryByText(/We kept your draft/)).toBeNull();
   });
 
   /*
@@ -505,7 +505,7 @@ describe('the request survives leaving the page', () => {
 
     expect(
       await screen.findByText(
-        'We kept what you had written, and the date and guest count you just set. Change anything before you send it.',
+        'We kept your draft and the date and guest count you just set. Change anything before you send it.',
       ),
     ).toBeDefined();
   });
@@ -525,7 +525,7 @@ describe('the request survives leaving the page', () => {
     await waitFor(() =>
       expect((screen.getByLabelText('Guest count') as HTMLInputElement).value).toBe('250'),
     );
-    expect(screen.queryByText(/We kept what you had written/)).toBeNull();
+    expect(screen.queryByText(/We kept your draft/)).toBeNull();
   });
 
   /*
@@ -547,7 +547,7 @@ describe('the request survives leaving the page', () => {
     );
     expect((screen.getByLabelText('Guest count') as HTMLInputElement).value).toBe('');
     expect(
-      screen.getByText('We kept what you had written. Change anything before you send it.'),
+      screen.getByText('We kept your draft. Change anything before you send it.'),
     ).toBeDefined();
   });
 
@@ -565,7 +565,7 @@ describe('the request survives leaving the page', () => {
     await waitFor(() =>
       expect((screen.getByLabelText('Guest count') as HTMLInputElement).value).toBe(''),
     );
-    expect(screen.queryByText(/We kept what you had written/)).toBeNull();
+    expect(screen.queryByText(/We kept your draft/)).toBeNull();
   });
 
   it('starts the next request empty once one has been sent', async () => {
@@ -590,7 +590,7 @@ describe('the request survives leaving the page', () => {
     await waitFor(() =>
       expect((screen.getByLabelText('Venue or location') as HTMLInputElement).value).toBe(''),
     );
-    expect(screen.queryByText(/We kept what you had written/)).toBeNull();
+    expect(screen.queryByText(/We kept your draft/)).toBeNull();
   });
 });
 
@@ -665,7 +665,7 @@ describe('a custom request (VEN-428)', () => {
     const total = BRIEF.length + 2 + 560;
     expect(
       screen.getAllByText(
-        `Your description and notes are ${total - 600} characters over the 600 the vendor can be sent. Trim either.`,
+        `Your description and notes are ${total - 600} characters over the 600 limit. Shorten either one.`,
       ).length,
     ).toBeGreaterThan(0);
     expect(screen.getByText(`${total} / 600`)).toBeDefined();

@@ -106,9 +106,7 @@ describe('a guest count that is not a whole number', () => {
     const field = screen.getByLabelText('Guests, up to');
     await userEvent.type(field, '2.7');
 
-    const message = screen.getByText(
-      'Guests, up to has to be a whole number of people, from 1 to 100,000.',
-    );
+    const message = screen.getByText('Guests, up to must be a whole number from 1 to 100,000.');
     // The control announces its own reason rather than only its label.
     expect(field.getAttribute('aria-describedby')).toBe(message.getAttribute('id'));
   });

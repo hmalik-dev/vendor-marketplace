@@ -258,7 +258,7 @@ export function RequestSummaryRail({
 
         {blocked ? (
           <p className="text-center text-xs leading-normal text-stone-600">
-            Fix the fields above and this goes straight to {vendor.businessName}.
+            Fix the fields above to send this to {vendor.businessName}.
           </p>
         ) : (
           <Link

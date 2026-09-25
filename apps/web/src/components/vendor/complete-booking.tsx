@@ -59,7 +59,7 @@ export function CompleteBooking({
   }
 
   if (status === 'cancelled') {
-    return <StatusPill tone="failed">Cancelled</StatusPill>;
+    return <StatusPill tone="failed">Canceled</StatusPill>;
   }
 
   /*

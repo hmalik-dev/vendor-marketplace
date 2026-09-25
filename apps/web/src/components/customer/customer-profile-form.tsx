@@ -119,7 +119,7 @@ function guestCountIssue(raw: string, field: string, label: string): FieldIssue 
     field,
     label,
     severity: 'blocker',
-    message: `${label} has to be a whole number of people, from 1 to ${GUEST_CEILING}.`,
+    message: `${label} must be a whole number from 1 to ${GUEST_CEILING}.`,
   };
 }
 
@@ -193,7 +193,7 @@ export function CustomerProfileForm({ user }: CustomerProfileFormProps): React.R
           field: guestMinId,
           label: FIELD_LABELS.typicalGuestCountMin,
           severity: 'blocker',
-          message: 'The smaller number goes first — swap them and this will save.',
+          message: 'Put the smaller number first.',
         }
       : null;
 
