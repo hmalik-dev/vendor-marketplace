@@ -5,6 +5,8 @@ import { promisify } from 'node:util';
 
 import { test as base, expect, type Browser, type Page, type TestInfo } from '@playwright/test';
 
+import { recordExchanges } from './request-log.js';
+
 /**
  * Walk up to the workspace root rather than counting `../`.
  *
@@ -177,9 +179,13 @@ async function pageForRole(browser: Browser, role: Role): Promise<Page> {
       rateLimited.get(page)?.push(response.url());
     }
   });
+  exchanges.set(page, recordExchanges(page));
 
   return page;
 }
+
+/** Each role page's request log (`request-log.ts`), attached when its test fails. */
+const exchanges = new WeakMap<Page, string[]>();
 
 /**
  * Attach the real cause to a failure that has already happened.
@@ -193,10 +199,15 @@ async function pageForRole(browser: Browser, role: Role): Promise<Page> {
  * Teardown is where the answer is knowable: the test's outcome is settled and
  * the response log is complete.
  */
-function explainFailure(page: Page, testInfo: TestInfo): void {
+async function explainFailure(page: Page, role: Role, testInfo: TestInfo): Promise<void> {
   if (testInfo.status === testInfo.expectedStatus) {
     return;
   }
+
+  await testInfo.attach(`${role} requests`, {
+    body: (exchanges.get(page) ?? []).join('\n'),
+    contentType: 'text/plain',
+  });
 
   const hits = rateLimited.get(page) ?? [];
   if (hits.length === 0) {
@@ -233,7 +244,7 @@ export const test = base.extend<{ customerPage: Page; vendorPage: Page }>({
     await page.goto('/bookings');
     await expectSignedIn(page);
     await provide(page);
-    explainFailure(page, testInfo);
+    await explainFailure(page, 'customer', testInfo);
     await page.context().close();
   },
 
@@ -242,7 +253,7 @@ export const test = base.extend<{ customerPage: Page; vendorPage: Page }>({
     await page.goto('/vendor/dashboard');
     await expectSignedIn(page);
     await provide(page);
-    explainFailure(page, testInfo);
+    await explainFailure(page, 'vendor', testInfo);
     await page.context().close();
   },
 });
