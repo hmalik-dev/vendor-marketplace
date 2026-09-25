@@ -1,3 +1,4 @@
+import './refresh-diagnostic.js'; // VEN-779 DIAGNOSTIC — removed before merge.
 import { type Page } from '@playwright/test';
 
 import {
