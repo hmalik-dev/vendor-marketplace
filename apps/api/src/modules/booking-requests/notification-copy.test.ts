@@ -141,7 +141,13 @@ describe('notification copy never carries a raw ISO date', () => {
    * asserted rather than assumed: a named month cannot render as `2026-12-19`.
    */
   it('formats with a named month and a numeric day', () => {
-    const formatter = service.match(/new Intl\.DateTimeFormat\(\s*'en-US',\s*\{([^}]*)\}/);
+    // VEN-753: the formatter moved to `lib/readable-date.ts` so refusals share it.
+    expect(service).toContain("import { readableDate } from '../../lib/readable-date.js';");
+
+    const formatter = readFileSync(
+      join(import.meta.dirname, '../../lib/readable-date.ts'),
+      'utf8',
+    ).match(/new Intl\.DateTimeFormat\(\s*'en-US',\s*\{([^}]*)\}/);
 
     expect(formatter).not.toBeNull();
 

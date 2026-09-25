@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto';
 import type { AvailabilityRow, NewAvailabilityRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 import { conflict } from '../../lib/errors.js';
+import { readableDate } from '../../lib/readable-date.js';
 import { requireOwnVendorProfile } from '../vendors/vendors.service.js';
 import {
   applyAvailability,
@@ -214,7 +215,7 @@ export async function setOwnAvailability(
     if (booked.length > 0) {
       throw conflict(
         booked.length === 1
-          ? `${booked[0]} is already booked, so it cannot be changed here.`
+          ? `${readableDate(booked[0]!)} is already booked, so it cannot be changed here.`
           : `${booked.length} of those dates are already booked, so they cannot be changed here.`,
         { bookedDates: booked.sort() },
       );
@@ -245,7 +246,7 @@ export async function setOwnAvailability(
       if (pending.length > 0) {
         throw conflict(
           pending.length === 1
-            ? `${pending[0]} has an open request. Block it once the request is answered or lapses.`
+            ? `${readableDate(pending[0]!)} has an open request. Block it once the request is answered or lapses.`
             : `${pending.length} of those dates have open requests. Block them once the requests are answered or lapse.`,
           { pendingDates: pending },
         );

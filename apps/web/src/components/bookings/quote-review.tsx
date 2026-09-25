@@ -84,7 +84,7 @@ export function QuoteReview({ request }: QuoteReviewProps): React.ReactElement {
    * What it actually has is one action, and the state machine already allows
    * it: `pending -> cancelled`. The product calls that **withdrawing** — the
    * hub renders a cancelled request as "Withdrawn", separately from a
-   * cancelled booking's "Cancelled" — so this is the existing word for it
+   * cancelled booking's "Canceled" — so this is the existing word for it
    * rather than a new one.
    */
   const awaiting = request.status === 'pending';

@@ -15,8 +15,8 @@ import type { WireBookingRequest } from '@/lib/wire-schemas';
  * | Case                          | Shape                                |
  * | ----------------------------- | ------------------------------------ |
  * | Withdrawn before acceptance   | no settlement — no booking was made  |
- * | Cancelled after payment       | `cancelledBy: 'customer'`            |
- * | Cancelled by the vendor       | `cancelledBy: 'vendor'` (VEN-659)    |
+ * | Canceled after payment        | `cancelledBy: 'customer'`            |
+ * | Canceled by the vendor        | `cancelledBy: 'vendor'` (VEN-659)    |
  * | Unwound by an admin        | `cancelledBy: 'admin'`               |
  *
  * A fourth shape exists and is not a case: a booking cancelled before those
