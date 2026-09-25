@@ -117,7 +117,7 @@ export const AUTH_PANELS: Record<AuthPanelRole, AuthPanel> = {
     wash: scrim('rgba(45,40,32,.62)', 'rgba(30,28,24,.86)'),
     headline: ['Clear prices.', 'Open calendars.', 'No back-and-forth.'],
     accentClass: 'text-gold-150',
-    body: 'Event vendors and the people who hire them — with the price and the date settled before anyone picks up the phone.',
+    body: 'Event vendors and the people who hire them, with the price and date settled up front.',
     guarantees: [
       "See what a vendor charges and when they're free",
       'Publish your prices and own your calendar',
@@ -134,7 +134,7 @@ export const AUTH_PANELS: Record<AuthPanelRole, AuthPanel> = {
     // it and the italic third hands the decision back to the visitor.
     headline: ['See the price.', 'See the open dates.', 'Then decide.'],
     accentClass: 'text-gold-150',
-    body: "Every vendor publishes what they charge and when they're free — before you talk to anyone, and without asking for a quote.",
+    body: "Every vendor publishes what they charge and when they're free. No quotes to ask for.",
     guarantees: [
       'Live calendars — if a date shows open, it is',
       'Payment held until the event is complete',
@@ -147,7 +147,7 @@ export const AUTH_PANELS: Record<AuthPanelRole, AuthPanel> = {
     wash: scrim('rgba(28,34,24,.62)', 'rgba(28,32,24,.86)'),
     headline: ['Set your prices.', 'Set your dates.', 'Get booked.'],
     accentClass: 'text-sage-150',
-    body: 'Inquiries arrive already knowing what you charge and that your date is free — so you spend your evenings working, not writing quotes.',
+    body: 'Inquiries arrive knowing what you charge and that your date is free. No quotes to write.',
     // The vendor's pain is unpaid quoting and calendar chaos, not price
     // discovery, so each line answers one of those. None of them claims volume
     // — that's a platform-scale promise the app cannot keep on day one.

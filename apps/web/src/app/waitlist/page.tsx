@@ -66,8 +66,8 @@ export default async function WaitlistPage(): Promise<React.ReactElement> {
         <>
           {`We've saved `}
           <strong className="font-semibold text-stone-900">{application.email}</strong>
-          {`. We'll email you when you're invited. Then sign in with this same address and `}
-          {`you'll land in your new vendor account. There's nothing else you need to do.`}
+          {`. We'll email you when you're invited. Then sign in with this address to reach `}
+          {`your vendor account.`}
         </>
       }
       photo={false}

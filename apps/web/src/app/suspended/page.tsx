@@ -25,8 +25,8 @@ export default function SuspendedPage(): React.ReactElement {
         than the default being widened back for everything.
       */}
       <p className="mt-4 leading-prose text-stone-600">
-        You cannot book or list services while this account is suspended. If you think this is a
-        mistake, reply to any {BRAND_NAME} email and our team will take another look.
+        You can&apos;t book or list services while your account is suspended. Think this is a
+        mistake? Reply to any {BRAND_NAME} email.
       </p>
       <Button variant="secondary" className="mt-8" asChild>
         <Link href="/">Back to home</Link>

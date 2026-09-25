@@ -155,6 +155,9 @@ describe('the role recorded at sign-up (VEN-507, VEN-662)', () => {
     expect(screen.queryAllByRole('radio')).toHaveLength(0);
     expect(screen.queryByTestId('stored-role')).toBeNull();
     expect(screen.getByText("We couldn't find how you're joining")).toBeDefined();
+    expect(screen.getByText(/Your sign-up choice wasn't saved\./).textContent).toBe(
+      "Your sign-up choice wasn't saved. Contact support and we'll finish setting you up.",
+    );
     expect(screen.getByRole('link', { name: 'Contact support' }).getAttribute('href')).toBe(
       '/support',
     );
@@ -216,7 +219,7 @@ describe('the role recorded at sign-up (VEN-507, VEN-662)', () => {
     render(<AcceptTermsScreen status={recorded('vendor')} terms={TERMS} returnTo={null} />);
 
     await user.click(submit());
-    await waitFor(() => expect(screen.getByText(/Nothing has been recorded/)).toBeDefined());
+    await waitFor(() => expect(screen.getByText(/Nothing was saved/)).toBeDefined());
     expect(screen.getByTestId('stored-role').textContent).toContain('joining as a vendor');
 
     await user.click(submit());
@@ -438,7 +441,7 @@ describe('the acceptance gate', () => {
     await user.click(submit());
 
     await waitFor(() =>
-      expect(screen.getByText(/The Terms were updated while this page was open/)).toBeDefined(),
+      expect(screen.getByText(/The Terms changed while this page was open/)).toBeDefined(),
     );
     expect(replace).not.toHaveBeenCalled();
   });
@@ -478,13 +481,11 @@ describe('the acceptance gate', () => {
     await user.click(box());
     await user.click(submit());
 
-    await waitFor(() =>
-      expect(screen.getByText('Nothing has been recorded — try again.')).toBeDefined(),
-    );
+    await waitFor(() => expect(screen.getByText('Nothing was saved. Try again.')).toBeDefined());
     expect(replace).not.toHaveBeenCalled();
   });
 
-  /** The card promises "you don't lose your place", so an in-text link must not navigate this tab. */
+  /** The card opens on this page, so an in-text link must not navigate this tab. */
   it('opens the Privacy Policy link inside the Terms card in a new tab', () => {
     render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} />);
 

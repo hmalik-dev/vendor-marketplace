@@ -432,7 +432,7 @@ describe('SignUpForm', () => {
     await user.click(screen.getByRole('button', { name: 'Verify email' }));
 
     expect(
-      await screen.findByText('That code can no longer be used. Send a new one below.'),
+      await screen.findByText('That code no longer works. Send a new one below.'),
     ).toBeDefined();
     expect(screen.queryByText('That code did not work. Check it and try again.')).toBeNull();
     expect(
