@@ -568,8 +568,13 @@ export const wireAdminTaxYearsSchema = z.object({
 });
 export type WireAdminTaxYears = z.infer<typeof wireAdminTaxYearsSchema>;
 
-/** The years a vendor has a yearly statement for (VEN-725): the same shape as the admin's list. */
-export const wireVendorTaxYearsSchema = wireAdminTaxYearsSchema;
+/**
+ * The years a vendor has a yearly statement for (VEN-725): `GET /vendor/tax/years`
+ * answers `years` alone. It is not the admin's schema: that one requires
+ * `backupWithheld`, which the vendor route never sends, so aliasing it made
+ * every vendor's Payments page throw once VEN-723 added the field.
+ */
+export const wireVendorTaxYearsSchema = z.object({ years: z.array(z.number().int()) });
 
 /**
  * The retry's answer, with its date coerced — **the one that gets away** (#432).
