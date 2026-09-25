@@ -46,6 +46,7 @@ export default defineConfig({
    * before that project also carried the pattern, which loaded (and ran) this
    * spec's module-level `assertStagingEnvironment()`.
    */
+  // VEN-779 DIAGNOSTIC: touching this file selects the full suite in CI. Removed before merge.
   testIgnore: STAGING_SPEC_IGNORE,
   // Fills `next start`'s image cache before a journey can wedge it (VEN-655).
   globalSetup: './e2e/global-setup.ts',
