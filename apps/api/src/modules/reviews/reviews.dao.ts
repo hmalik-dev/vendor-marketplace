@@ -1,7 +1,11 @@
 import { and, desc, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm';
 import {
+  addDays,
   isUniversallyPastDate,
+  parseDateString,
   REVIEW_RATINGS,
+  REVIEW_WINDOW_DAYS,
+  toDateString,
   type CreateReviewInput,
   type PublicReview,
   type ReviewSummary,
@@ -45,14 +49,47 @@ export interface ReviewableBooking {
 
 /**
  * A finished booking, or a confirmed one whose event date has passed everywhere.
- * Lives beside the query that post-filters on it; the service applies the same
- * rule to the single booking it loads.
+ * Says nothing about the review window; `isBookingReviewable` adds that.
  */
-export function isBookingReviewable(booking: { status: string; eventDate: string }): boolean {
+export function hasBookingHappened(
+  booking: { status: string; eventDate: string },
+  now: Date = new Date(),
+): boolean {
   return (
     booking.status === 'completed' ||
-    (booking.status === 'confirmed' && isUniversallyPastDate(booking.eventDate))
+    (booking.status === 'confirmed' && isUniversallyPastDate(booking.eventDate, now))
   );
+}
+
+/**
+ * The last day a review of an event on `eventDate` may be written, as
+ * `YYYY-MM-DD`: `REVIEW_WINDOW_DAYS` after the event (VEN-747).
+ */
+export function reviewDeadline(eventDate: string): string {
+  const parsed = parseDateString(eventDate);
+
+  return parsed ? toDateString(addDays(parsed, REVIEW_WINDOW_DAYS)) : eventDate;
+}
+
+/**
+ * Whether the deadline is still somebody's today or later. The same
+ * universal-past test `hasBookingHappened` uses, so the server never guesses
+ * the reviewer's timezone and closes the window early for anyone.
+ */
+export function isReviewWindowOpen(eventDate: string, now: Date = new Date()): boolean {
+  return !isUniversallyPastDate(reviewDeadline(eventDate), now);
+}
+
+/**
+ * The one eligibility rule: the booking happened and its window is open. Lives
+ * beside the query that post-filters on it; the service applies the same rule
+ * to the single booking it loads, and `GET /bookings` to every row it lists.
+ */
+export function isBookingReviewable(
+  booking: { status: string; eventDate: string },
+  now: Date = new Date(),
+): boolean {
+  return hasBookingHappened(booking, now) && isReviewWindowOpen(booking.eventDate, now);
 }
 
 /** The booking a review would be filed against, with both parties resolved. */
@@ -132,7 +169,7 @@ export async function findReviewByBookingAndReviewer(
 
 /**
  * The oldest completed booking with this vendor that the customer has not
- * reviewed, or `null`.
+ * reviewed and whose review window is still open, or `null`.
  *
  * Oldest rather than newest on purpose: it is the one closest to being
  * forgotten, and a customer with two finished bookings should be asked about

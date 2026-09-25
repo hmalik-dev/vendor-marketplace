@@ -1690,6 +1690,17 @@ export const REVIEW_RATING_MIN = 1;
 export const REVIEW_RATING_MAX = 5;
 
 /**
+ * How long after the event a booking stays open to review, in days (VEN-747).
+ *
+ * Counted from the event date, not from `completedAt`: a `confirmed` booking
+ * nobody marked complete has no `completedAt`, and a vendor marking early must
+ * not shorten the customer's window. Fourteen rather than seven, because the
+ * photographer's gallery often arrives a week or more after the event and a
+ * customer cannot review work they have not seen.
+ */
+export const REVIEW_WINDOW_DAYS = 14;
+
+/**
  * Every rating a review can carry, ascending — the distribution chart's rows.
  *
  * Derived from the bounds rather than written out, so the chart cannot disagree

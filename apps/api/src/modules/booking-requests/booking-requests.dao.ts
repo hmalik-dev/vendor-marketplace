@@ -21,6 +21,8 @@ import {
   bookings,
   conversations,
   legalAcceptances,
+  reviews,
+  reviewTombstones,
   servicePackages,
   users,
   vendorProfiles,
@@ -807,16 +809,24 @@ export async function findVendorContact(
 export interface BookingWithContextRow {
   booking: typeof bookings.$inferSelect;
   eventType: string | null;
+  /** The reader has written their review of it, or an admin deleted it (VEN-747). */
+  reviewedByReader: boolean;
 }
 
 /**
  * Bookings with the occasion the hub renders beside them. `event_type` lives on
  * the request, not the booking, so the join is what makes
  * "Photography · Wedding" possible without a second round trip per row.
+ *
+ * `readerId` is whoever is listing them. Their own review and tombstone ride on
+ * the same query, left joined on `(booking, reviewer)` — both unique on that
+ * pair, so no row doubles — which is what lets the hub ask for a review
+ * without a per-row read.
  */
 export async function findBookings(
   db: AppDatabase,
   filter: { customerId?: string; vendorId?: string },
+  readerId: string,
   window: PageWindow,
 ): Promise<BookingWithContextRow[]> {
   const conditions = [
@@ -829,9 +839,18 @@ export async function findBookings(
   }
 
   return db
-    .select({ booking: bookings, eventType: bookingRequests.eventType })
+    .select({
+      booking: bookings,
+      eventType: bookingRequests.eventType,
+      reviewedByReader: sql<boolean>`(${reviews.id} is not null or ${reviewTombstones.bookingId} is not null)`,
+    })
     .from(bookings)
     .innerJoin(bookingRequests, eq(bookings.requestId, bookingRequests.id))
+    .leftJoin(reviews, and(eq(reviews.bookingId, bookings.id), eq(reviews.reviewerId, readerId)))
+    .leftJoin(
+      reviewTombstones,
+      and(eq(reviewTombstones.bookingId, bookings.id), eq(reviewTombstones.reviewerId, readerId)),
+    )
     .where(and(...conditions))
     .orderBy(desc(bookings.eventDate))
     .limit(window.limit)

@@ -16,10 +16,10 @@ import {
   type BookingRequestDetail,
   type BookingRequestStatus,
   type BookingSettlement,
-  type BookingWithContext,
   type CreateBookingRequestInput,
   type HistoryPageQuery,
   type NotificationType,
+  type OwnBooking,
   type PackageSnapshot,
   type QuoteBookingRequestInput,
 } from '@vendor-marketplace/shared';
@@ -44,6 +44,7 @@ import { notificationHref } from '../messaging/messaging.service.js';
 import { AppError, conflict, forbidden, notFound, validationFailed } from '../../lib/errors.js';
 import type { AuthenticatedUser } from '../../plugins/neon-auth.js';
 import { requireCustomerName } from '../users/customer-name.js';
+import { isBookingReviewable, reviewDeadline } from '../reviews/reviews.dao.js';
 import {
   applyExpiry,
   applyTransition,
@@ -1422,7 +1423,7 @@ export async function listBookings(
   db: AppDatabase,
   user: AuthenticatedUser,
   query: HistoryPageQuery,
-): Promise<BookingWithContext[]> {
+): Promise<OwnBooking[]> {
   const vendorId = await actorVendorId(db, user);
 
   if (user.role === 'vendor' && !vendorId) {
@@ -1432,8 +1433,18 @@ export async function listBookings(
   const rows = await findBookings(
     db,
     vendorId ? { vendorId } : { customerId: user.id },
+    user.id,
     pageWindow(query),
   );
 
-  return rows.map(({ booking, eventType }) => toBookingWithContext(booking, eventType));
+  const now = new Date();
+
+  return rows.map(({ booking, eventType, reviewedByReader }) => ({
+    ...toBookingWithContext(booking, eventType),
+    // The same rule `createReview` enforces, so the rail never offers a review the API refuses.
+    reviewDeadline:
+      !reviewedByReader && isBookingReviewable(booking, now)
+        ? reviewDeadline(booking.eventDate)
+        : null,
+  }));
 }

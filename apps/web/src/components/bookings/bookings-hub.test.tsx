@@ -47,6 +47,7 @@ function entry(overrides: Partial<BookingEntry> = {}): BookingEntry {
     statusTone: 'confirmed',
     subline: '$1,450 paid · Barr Mansion',
     isSettled: false,
+    reviewDeadline: null,
     ...overrides,
   };
 }
@@ -691,7 +692,7 @@ describe('BookingsHub Needs you mirror below xl', () => {
         tab="upcoming"
         today={TODAY}
         city="Austin"
-        needsYou={needsYouItems([accepted, quote])}
+        needsYou={needsYouItems([accepted, quote], TODAY)}
         category={null}
         sort="soonest"
       />,
@@ -711,6 +712,43 @@ describe('BookingsHub Needs you mirror below xl', () => {
       '/bookings/a1/checkout',
     );
     expect(within(second!).queryByRole('button', { name: 'Decline' })).toBeNull();
+  });
+
+  // VEN-747. The mirror carries a review on gold, with both detail lines.
+  it('mirrors a review on gold with its age, close date and link', () => {
+    const review = entry({
+      id: 'b7',
+      kind: 'booking',
+      requestId: 'r7',
+      vendorSlug: 'bloom-co',
+      vendorName: 'Bloom & Co.',
+      eventDate: '2026-04-20',
+      status: 'completed',
+      reviewDeadline: '2026-05-04',
+    });
+
+    render(
+      <BookingsHub
+        entries={[review]}
+        tab="upcoming"
+        today={TODAY}
+        city="Austin"
+        needsYou={needsYouItems([review], TODAY)}
+        category={null}
+        sort="soonest"
+      />,
+    );
+
+    const [item] = within(screen.getByRole('list', { name: 'Needs you' })).getAllByRole('listitem');
+    expect(item!.className.split(' ')).toContain('bg-gold-50');
+    expect(within(item!).getByText('Leave a review for Bloom & Co.')).toBeDefined();
+    expect(
+      within(item!).getByText('Your wedding was 6 days ago. Reviews close May 4.'),
+    ).toBeDefined();
+    expect(within(item!).getByRole('link', { name: 'Write a review' }).getAttribute('href')).toBe(
+      '/vendors/bloom-co?tab=reviews',
+    );
+    expect(within(item!).queryByRole('button', { name: 'Decline' })).toBeNull();
   });
 
   it('draws no mirror when nothing waits', () => {

@@ -121,7 +121,8 @@ export default async function BookingsPage({
   const today = toDateString(new Date());
 
   // Clay is reserved for the reader's own move: a quote to answer, a request to pay for.
-  const needsYou = needsYouItems(entries);
+  // A finished booking to review is gold, frame `07`'s second panel (VEN-747).
+  const needsYou = needsYouItems(entries, today);
 
   return (
     <div className="flex h-full overflow-hidden">
