@@ -130,6 +130,84 @@ describe('readMailCode', () => {
     );
   });
 
+  it('skips a six-digit run in the recipient address that precedes the code', async () => {
+    const decoyAddress = `e2e-604-123456@${SERVER}.mailosaur.net`;
+    const fetchMock = answer(200, {
+      text: { body: `Hi ${decoyAddress.toUpperCase()},\n\nEnter 482913 to verify your email.` },
+    });
+
+    await expect(readMailCode({ address: decoyAddress }, env, asFetch(fetchMock))).resolves.toBe(
+      '482913',
+    );
+  });
+
+  it('takes the labelled code over a decoy six-digit run before it', async () => {
+    const fetchMock = answer(200, {
+      text: { body: 'Order 555555 is on hold.\nYour verification code is: 482913' },
+    });
+
+    await expect(readMailCode({ address: ADDRESS }, env, asFetch(fetchMock))).resolves.toBe(
+      '482913',
+    );
+  });
+
+  it('reads the labelled code in HTML past markup and entity digits', async () => {
+    const fetchMock = answer(200, {
+      html: {
+        body: '<p style="font-size:24px">Ref 111111</p><p>Your code is&#160;<b style="margin:12px">731904</b></p>',
+      },
+    });
+
+    await expect(readMailCode({ address: ADDRESS }, env, asFetch(fetchMock))).resolves.toBe(
+      '731904',
+    );
+  });
+
+  it('skips a label followed by other digits or a seven-digit run', async () => {
+    const fetchMock = answer(200, {
+      text: { body: 'This code expires in 10 minutes. Code 1234567 is old; your code is 482913' },
+    });
+
+    await expect(readMailCode({ address: ADDRESS }, env, asFetch(fetchMock))).resolves.toBe(
+      '482913',
+    );
+  });
+
+  it("takes the labelled code over Mailosaur's extracted codes", async () => {
+    const fetchMock = answer(200, {
+      text: { body: 'Your code is 482913', codes: [{ value: '777777' }] },
+    });
+
+    await expect(readMailCode({ address: ADDRESS }, env, asFetch(fetchMock))).resolves.toBe(
+      '482913',
+    );
+  });
+
+  it('never reads a stylesheet colour as the code', async () => {
+    const fetchMock = answer(200, {
+      text: { body: 'Enter 482913 to verify.' },
+      html: { body: '<style>.code{color:#333333}</style><p>Enter <b>482913</b></p>' },
+    });
+
+    await expect(readMailCode({ address: ADDRESS }, env, asFetch(fetchMock))).resolves.toBe(
+      '482913',
+    );
+  });
+
+  it("prefers Mailosaur's extracted code over an unlabelled decoy, skipping one from the address", async () => {
+    const decoyAddress = `e2e-604-123456@${SERVER}.mailosaur.net`;
+    const fetchMock = answer(200, {
+      text: {
+        body: 'Ticket 999999. Enter 482913 to continue.',
+        codes: [{ value: '123456' }, { value: '482913' }],
+      },
+    });
+
+    await expect(readMailCode({ address: decoyAddress }, env, asFetch(fetchMock))).resolves.toBe(
+      '482913',
+    );
+  });
+
   it('refuses a message with no code without echoing its body', async () => {
     const error = await failure(
       readMailCode(
