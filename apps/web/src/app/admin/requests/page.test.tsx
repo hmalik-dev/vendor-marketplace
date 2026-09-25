@@ -199,4 +199,17 @@ describe('AdminRequestsPage', () => {
         .filter((href) => href?.includes('page=2')),
     ).toContain('/admin/requests?q=fernbank&page=2');
   });
+
+  // A JavaScript-off `Apply filters` submits the empty field too (VEN-752).
+  it('treats an empty q as no search', async () => {
+    getAdminRequests.mockResolvedValue(page([]));
+
+    await renderPage({ status: 'pending', q: '' });
+
+    expect(getAdminRequests).toHaveBeenCalledWith('?status=pending&page=1');
+    expect(screen.queryByText(/^Search:/)).toBeNull();
+    expect(screen.queryByText(/Ignored/)).toBeNull();
+    expect(screen.queryByText(/No requests match "/)).toBeNull();
+    expect(screen.getByText(/^One filter is narrowing this\./)).toBeDefined();
+  });
 });
