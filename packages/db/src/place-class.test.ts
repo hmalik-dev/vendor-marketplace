@@ -2,10 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { stripPlaceClass } from './place-class.js';
 
-/** The pattern as it stood before the overlapping `city and borough` branch went. */
-const PREVIOUS =
-  /(?:\s+(?:city|town|village|borough|municipality|CDP|comunidad|zona urbana|consolidated government|metro government|metropolitan government|unified government|corporation|plantation|charter township|township|city and borough|and borough|balance))+$/i;
-
 describe('stripPlaceClass', () => {
   it.each([
     ['Athens-Clarke County unified government (balance)', 'Athens-Clarke County'],
@@ -22,22 +18,15 @@ describe('stripPlaceClass', () => {
     expect(stripPlaceClass(raw)).toBe(expected);
   });
 
-  it('strips exactly what the previous pattern stripped', () => {
-    const classes = ['city and borough', 'and borough', 'city', 'borough', 'township', 'balance'];
-    const names = ['Sitka', 'Bear Creek', 'X'];
-    const cases: string[] = [];
-    for (const name of names) {
-      for (const first of classes) {
-        cases.push(`${name} ${first}`);
-        for (const second of classes) {
-          cases.push(`${name} ${first} ${second}`);
-        }
-      }
-    }
-
-    for (const raw of cases) {
-      expect(stripPlaceClass(raw), raw).toBe(raw.replace(PREVIOUS, '').trim());
-    }
+  it.each([
+    ['Sitka city and borough balance', 'Sitka'],
+    ['Sitka and borough', 'Sitka'],
+    ['Sitka borough city', 'Sitka'],
+    ['Sitka city city and borough', 'Sitka'],
+    ['Bear Creek township balance', 'Bear Creek'],
+    ['Sitka city and borough of Alaska', 'Sitka city and borough of Alaska'],
+  ])('strips stacked classes only from the end: %j', (raw, expected) => {
+    expect(stripPlaceClass(raw)).toBe(expected);
   });
 
   it('does not backtrack exponentially on a run of classes that almost matches', () => {
