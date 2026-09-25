@@ -10,6 +10,7 @@ import {
 } from '@/components/admin/admin-detail';
 import { CaseConversation, THREAD_CHIP, THREAD_SCOPE } from '@/components/admin/case-conversation';
 import { CaseResolution } from '@/components/admin/case-resolution';
+import { StripeDashboardCard } from '@/components/admin/stripe-dashboard-card';
 import { Avatar } from '@/components/ui/avatar';
 import { StatusPill } from '@/components/ui/status-pill';
 import { BOOKING_PRESENTATION, PAYOUT_PRESENTATION } from '@/lib/booking-entries';
@@ -321,6 +322,10 @@ export default async function AdminCasePage({
               <KeyValueList>{chargebackRows}</KeyValueList>
               {chargebackNote}
             </AdminCard>
+          ) : null}
+
+          {booking?.stripePaymentIntentId ? (
+            <StripeDashboardCard paymentIntentId={booking.stripePaymentIntentId} />
           ) : null}
 
           {supportCase.subjectType && supportCase.subjectId && !thread ? (

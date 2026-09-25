@@ -1,5 +1,5 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { dirname, join, relative, sep } from 'node:path';
 
 import { E2E_VENDOR_SLUG } from './fixtures-data.js';
 
@@ -153,16 +153,86 @@ const SESSION_BINDING = /\b(?:const|let)\s+(\w+)\s*=\s*await\s+getServerSession\
 /** What follows the empty-session test: a `redirect(`, braced or not, returned or not. */
 const THEN_REDIRECT = String.raw`\s*\)\s*\{?\s*(?:return\s+)?redirect\(`;
 
+/** The two gates every other one wraps: each redirects a caller with no usable session. */
+const DIRECT_SESSION_GATES: ReadonlySet<string> = new Set(['requireCurrentUser', 'requireRole']);
+
+/** A top-level `function` or `const` declaration, exported or file-local. */
+const DECLARATION = /^(export\s+)?(?:(?:async\s+)?function\s+(\w+)|const\s+(\w+)\s*=)/gm;
+
+function callsAny(code: string, names: Iterable<string>): boolean {
+  return [...names].some((name) => new RegExp(String.raw`\b${name}\(`).test(code));
+}
+
+interface Declaration {
+  name: string;
+  exported: boolean;
+  /** The source from this declaration's line up to the next top-level one. */
+  body: string;
+}
+
+/** Every top-level `function`/`const` declaration in a file, exported or file-local. */
+function declarationsIn(file: string): Declaration[] {
+  const code = stripComments(readFileSync(file, 'utf8'));
+  const starts = [...code.matchAll(DECLARATION)];
+  return starts.map((match, index) => ({
+    name: match[2] ?? match[3] ?? '',
+    exported: match[1] !== undefined,
+    body: code.slice(match.index, starts[index + 1]?.index ?? code.length),
+  }));
+}
+
+/**
+ * Every `src/lib` helper that refuses a caller without a session because it
+ * calls a gate on the way — `requireNonAdmin` wrapping `requireCurrentUser`,
+ * `gateCheckout` reaching `requireRole` through a file-local `cache()`d helper
+ * (VEN-757). Resolved from the source to a fixed point rather than listed, so
+ * the next wrapper reads as a gate without anyone adding it here.
+ *
+ * A file-local helper counts only inside its own file: the same name
+ * elsewhere is a different function.
+ */
+export function sessionGateNames(libDir: string): Set<string> {
+  const filesDeclarations = walk(libDir)
+    .filter((file) => /\.tsx?$/.test(file) && !IS_TEST.test(file))
+    .map(declarationsIn);
+  const gates = new Set(DIRECT_SESSION_GATES);
+
+  let gatesChanged = true;
+  while (gatesChanged) {
+    gatesChanged = false;
+    for (const declarations of filesDeclarations) {
+      const local = new Set<string>();
+      let localChanged = true;
+      while (localChanged) {
+        localChanged = false;
+        for (const { name, exported, body } of declarations) {
+          const known = exported ? gates : local;
+          if (known.has(name) || !callsAny(body, [...gates, ...local])) continue;
+          known.add(name);
+          if (exported) gatesChanged = true;
+          else localChanged = true;
+        }
+      }
+    }
+  }
+
+  return gates;
+}
+
 /**
  * Whether a render-chain file refuses a caller without a usable session: a
- * `requireRole` or a `requireCurrentUser` call, or a hand-rolled gate that
- * redirects when `getServerSession()` comes back empty (VEN-590) — the shape
+ * call to one of `gates` — `requireRole`, `requireCurrentUser`, or a helper
+ * `sessionGateNames` resolved as wrapping one — or a hand-rolled gate that
+ * redirects when `getServerSession()` comes back empty (VEN-590), the shape
  * the VEN-512 screens use. Reading the session is not enough: the root layout
  * and `/` read it to draw the header and render for everyone.
  */
-export function refusesWithoutSession(code: string): boolean {
+export function refusesWithoutSession(
+  code: string,
+  gates: ReadonlySet<string> = DIRECT_SESSION_GATES,
+): boolean {
   const stripped = stripComments(code);
-  if (/\b(?:requireRole|requireCurrentUser)\(/.test(stripped)) return true;
+  if (callsAny(stripped, gates)) return true;
   const inline = String.raw`!\s*\(\s*await\s+getServerSession\(\)\s*\)`;
   const bound = [...stripped.matchAll(SESSION_BINDING)].map(
     ([, name]) => String.raw`!\s*${name}|${name}\s*===?\s*null`,
@@ -170,6 +240,42 @@ export function refusesWithoutSession(code: string): boolean {
 
   return [inline, ...bound].some((test) =>
     new RegExp(String.raw`\bif\s*\(\s*(?:${test})${THEN_REDIRECT}`).test(stripped),
+  );
+}
+
+/** A segment's own `page.tsx` or `route.ts` — the first source the enumerator records for it. */
+export function segmentFile(target: RouteTarget, roots: RouteTargetRoots): string | null {
+  return target.kinds.includes('segment') ? join(roots.repoRoot, target.sources[0] ?? '') : null;
+}
+
+/** The segment's file and every `layout.tsx` above it — everything that runs to render it. */
+export function renderChain(target: RouteTarget, roots: RouteTargetRoots): string[] {
+  const file = segmentFile(target, roots);
+  if (file === null) return [];
+
+  const chain = [file];
+  for (
+    let directory = dirname(file);
+    directory.startsWith(roots.appDir);
+    directory = dirname(directory)
+  ) {
+    chain.push(join(directory, 'layout.tsx'));
+  }
+  return chain;
+}
+
+/**
+ * A route that refuses a caller without a usable session anywhere in its render
+ * chain. `ROLE_ROUTE_RULES` names only the routes someone wrote into the role
+ * table, so a gated page left out of it is swept strictly only through this.
+ */
+export function isSessionGated(
+  target: RouteTarget,
+  roots: RouteTargetRoots,
+  gates: ReadonlySet<string> = DIRECT_SESSION_GATES,
+): boolean {
+  return renderChain(target, roots).some(
+    (file) => existsSync(file) && refusesWithoutSession(readFileSync(file, 'utf8'), gates),
   );
 }
 

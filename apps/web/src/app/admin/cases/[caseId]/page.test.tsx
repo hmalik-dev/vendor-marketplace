@@ -101,6 +101,7 @@ describe('AdminCasePage', () => {
     expect(titles).toEqual([
       '1 · The complaint',
       '2 · The booking it froze',
+      'Stripe',
       'Reported thread',
       '3 · Resolve',
     ]);
@@ -305,5 +306,26 @@ describe('AdminCasePage', () => {
       'Payment intent': 'mono',
     });
     expect(booking.textContent).toContain('Aug 20, 2026, 16:41 UTC');
+  });
+
+  it('links the frozen payment out to the Stripe Dashboard, and draws no link without one (VEN-601)', async () => {
+    vi.stubEnv('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', 'pk_test_abc');
+    const { container } = await renderCase(supportCase());
+
+    const link = cardTitled(container, 'Stripe').querySelector('a');
+    expect(link?.textContent).toBe('Open the payment in the Stripe Dashboard');
+    expect(link?.getAttribute('href')).toBe('https://dashboard.stripe.com/test/payments/pi_3PqR');
+
+    for (const detail of [
+      supportCase({ booking: { ...supportCase().booking!, stripePaymentIntentId: null } }),
+      supportCase({ booking: null }),
+    ]) {
+      cleanup();
+      const { container: without } = await renderCase(detail);
+      expect(
+        [...without.querySelectorAll('[data-admin-card] h2')].map((title) => title.textContent),
+      ).not.toContain('Stripe');
+    }
+    vi.unstubAllEnvs();
   });
 });
