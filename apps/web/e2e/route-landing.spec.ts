@@ -29,10 +29,14 @@ import {
 } from './no-row-account.js';
 import {
   enumerateRouteTargets,
+  isSessionGated as isSessionGatedIn,
   literalRedirectDestinations,
-  refusesWithoutSession,
+  renderChain as renderChainIn,
+  segmentFile as segmentFileIn,
+  sessionGateNames,
   stripComments,
   type RouteTarget,
+  type RouteTargetRoots,
 } from './route-targets.js';
 
 /**
@@ -60,12 +64,17 @@ import {
 
 const REPO_ROOT = dirname(AUTH_DIR);
 
-const TARGETS = enumerateRouteTargets({
+const ROOTS: RouteTargetRoots = {
   appDir: join(REPO_ROOT, 'apps/web/src/app'),
   webSourceDir: join(REPO_ROOT, 'apps/web/src'),
   sharedConstantsDir: join(REPO_ROOT, 'packages/shared/src/constants'),
   repoRoot: REPO_ROOT,
-});
+};
+
+const TARGETS = enumerateRouteTargets(ROOTS);
+
+/** `requireRole`, `requireCurrentUser` and every `src/lib` helper that wraps one (VEN-757). */
+const SESSION_GATES = sessionGateNames(join(ROOTS.webSourceDir, 'lib'));
 
 type SignedInRole = keyof typeof DASHBOARD_PATH_BY_ROLE;
 
@@ -117,41 +126,21 @@ const APP_ORIGIN = new URL(resolveE2EBaseUrl()).origin;
 /** The origin the browser's own reads go to — the header bell, the message stream. */
 const API_ORIGIN = new URL(resolveE2EApiUrl()).origin;
 
-const APP_DIR = join(REPO_ROOT, 'apps/web/src/app');
-
-/** A segment's own `page.tsx` or `route.ts` — the first source the enumerator records for it. */
 function segmentFile(target: RouteTarget): string | null {
-  return target.kinds.includes('segment') ? join(REPO_ROOT, target.sources[0] ?? '') : null;
+  return segmentFileIn(target, ROOTS);
+}
+
+function renderChain(target: RouteTarget): string[] {
+  return renderChainIn(target, ROOTS);
+}
+
+/** Session-gated in its render chain, through a direct gate, a wrapper or a hand-rolled one. */
+function isSessionGated(target: RouteTarget): boolean {
+  return isSessionGatedIn(target, ROOTS, SESSION_GATES);
 }
 
 function codeOf(file: string): string {
   return existsSync(file) ? stripComments(readFileSync(file, 'utf8')) : '';
-}
-
-/** The segment's file and every `layout.tsx` above it — everything that runs to render it. */
-function renderChain(target: RouteTarget): string[] {
-  const file = segmentFile(target);
-  if (file === null) return [];
-
-  const chain = [file];
-  for (
-    let directory = dirname(file);
-    directory.startsWith(APP_DIR);
-    directory = dirname(directory)
-  ) {
-    chain.push(join(directory, 'layout.tsx'));
-  }
-  return chain;
-}
-
-/**
- * A route that refuses a caller without a usable session anywhere in its render
- * chain — `refusesWithoutSession` names the shapes. `ROLE_ROUTE_RULES` names
- * only the routes someone wrote into the role table, so a gated page left out
- * of it is swept strictly only through this.
- */
-function isSessionGated(target: RouteTarget): boolean {
-  return renderChain(target).some((file) => refusesWithoutSession(codeOf(file)));
 }
 
 /**
@@ -507,6 +496,17 @@ test.describe('route landing, every persona × every source-derived target', () 
       return [path, target !== undefined && isSessionGated(target)];
     });
     expect(handRolled).toEqual([...VENDOR_GATE_PATHS].map((path) => [path, true]));
+
+    /*
+     * VEN-757: these gate only through a `src/lib` wrapper — `requireNonAdmin`,
+     * `gateBookingRequest`, `gateCheckout`, `gateConfirmedBooking`. The role
+     * table lists them too; this pins that the source alone reads them as gated.
+     */
+    const wrapped = TARGETS.filter(
+      (target) => target.path === '/account/settings/close' || target.path.startsWith('/bookings/'),
+    ).map((target) => [target.path, isSessionGated(target)]);
+    expect(wrapped).toHaveLength(4);
+    expect(wrapped).toEqual(wrapped.map(([path]) => [path, true]));
   });
 
   test('signed out', async ({ browser }) => {

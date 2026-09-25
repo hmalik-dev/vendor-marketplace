@@ -6,8 +6,10 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { E2E_VENDOR_SLUG } from './fixtures-data.js';
 import {
   enumerateRouteTargets,
+  isSessionGated,
   refusesWithoutSession,
   SAMPLE_ID,
+  sessionGateNames,
   type RouteTargetRoots,
 } from './route-targets.js';
 
@@ -165,6 +167,92 @@ describe('enumerateRouteTargets over this repository', () => {
     expect(matching).not.toContain('/');
     expect(matching).not.toContain('/support');
     expect(matching).not.toContain('/account/settings/close');
+  });
+
+  /*
+   * VEN-757: `/messages`'s layout — the gate above `loading.tsx` that answers a
+   * real 307 — calls only `requireNonAdmin`, which wraps `requireCurrentUser`.
+   * Its page also calls `requireCurrentUser`, so the route as a whole would read
+   * as gated either way; the layout alone is what proves the wrapper is read.
+   */
+  it('reads /messages as session-gated through requireNonAdmin, with no role table', () => {
+    const layout = readFileSync(join(REAL_ROOTS.appDir, 'messages/layout.tsx'), 'utf8');
+    const gates = sessionGateNames(join(REAL_ROOTS.webSourceDir, 'lib'));
+
+    expect(refusesWithoutSession(layout)).toBe(false);
+    expect(refusesWithoutSession(layout, gates)).toBe(true);
+    expect(isSessionGated(byPath.get('/messages')!, REAL_ROOTS, gates)).toBe(true);
+  });
+
+  it('resolves every src/lib helper that wraps a session gate', () => {
+    const gates = sessionGateNames(join(REAL_ROOTS.webSourceDir, 'lib'));
+
+    expect([...gates]).toEqual(
+      expect.arrayContaining([
+        'requireCurrentUser',
+        'requireRole',
+        'requireNonAdmin',
+        'gateBookingRequest',
+        'gateConfirmedBooking',
+        'gateCheckout',
+      ]),
+    );
+    expect(gates).not.toContain('getCurrentUser');
+    expect(gates).not.toContain('redirectIfSignedIn');
+  });
+});
+
+describe('sessionGateNames over a fixture tree', () => {
+  it('follows a gate through file-local helpers and across files, and leaves readers out', () => {
+    const roots = tree({
+      'web/src/lib/current-user.ts': [
+        'export async function requireCurrentUser() {}',
+        'export async function getCurrentUser() { return null; }',
+        'export async function requireStaff() {',
+        '  return requireCurrentUser();',
+        '}',
+      ].join('\n'),
+      'web/src/lib/booking.ts': [
+        'const gateFor = cache(async (raw: string) => {',
+        "  await requireStaff('x');",
+        '});',
+        'const readFor = cache(async () => getCurrentUser());',
+        'export async function gateBooking() {',
+        '  return gateFor(1);',
+        '}',
+        'export async function readBooking() {',
+        '  return readFor();',
+        '}',
+        '// export async function quoted() { requireCurrentUser(); }',
+      ].join('\n'),
+      'web/src/lib/booking.test.ts': 'export function fromATest() { requireCurrentUser(); }',
+      'web/src/lib/other.ts': 'export function unrelated() { gateFor(1); }',
+    });
+
+    expect([...sessionGateNames(join(roots.webSourceDir, 'lib'))].sort()).toEqual([
+      'gateBooking',
+      'requireCurrentUser',
+      'requireRole',
+      'requireStaff',
+    ]);
+  });
+});
+
+describe('isSessionGated over a fixture tree', () => {
+  const GATED_LAYOUT = 'export default async function L() { await requireNonAdmin(); }';
+
+  it('reads a gate in any layout above the segment, and a wrapped gate only when named', () => {
+    const roots = tree({
+      'web/src/app/inbox/layout.tsx': GATED_LAYOUT,
+      'web/src/app/inbox/(group)/[id]/page.tsx': 'export default function P() {}',
+      'web/src/app/open/page.tsx': 'export default function P() {}',
+      'shared/constants/index.ts': '',
+    });
+    const [inbox, open] = enumerateRouteTargets(roots);
+
+    expect(isSessionGated(inbox!, roots, new Set(['requireNonAdmin']))).toBe(true);
+    expect(isSessionGated(inbox!, roots)).toBe(false);
+    expect(isSessionGated(open!, roots, new Set(['requireNonAdmin']))).toBe(false);
   });
 });
 
