@@ -283,7 +283,8 @@ describe('the role recorded at sign-up (VEN-507, VEN-662)', () => {
       within(shell)
         .getAllByRole('button')
         .map((button) => button.textContent),
-    ).toEqual(['Continue']);
+    ).toEqual(['Continue', 'Sign out']);
+    expect(within(shell).getAllByRole('button', { name: 'Continue' })).toHaveLength(1);
     expect(within(shell).queryByRole('checkbox')).toBeNull();
 
     const notice = shell.querySelector('[data-continue-notice]') as HTMLElement;
@@ -319,6 +320,76 @@ describe('the role recorded at sign-up (VEN-507, VEN-662)', () => {
         .getByTestId('first-run-shell')
         .contains(screen.getByText("We couldn't find how you're joining")),
     ).toBe(true);
+  });
+
+  /* VEN-750: the shell hides the site header, so the welcome carries its own way out, as the name step does. */
+  it('signs the person out from the welcome and lands them on the home page', async () => {
+    const user = userEvent.setup();
+    render(<AcceptTermsScreen status={recorded('customer')} terms={TERMS} returnTo={null} />);
+
+    const signOutButton = screen.getByRole('button', { name: 'Sign out' });
+    const notice = document.querySelector('[data-continue-notice]') as HTMLElement;
+    /* Below the consent line, not beside the primary. */
+    expect(
+      notice.compareDocumentPosition(signOutButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(signOutButton.getAttribute('type')).toBe('button');
+    expect(signOutButton.className.split(' ')).toEqual(
+      expect.arrayContaining(['mx-auto', 'block', 'text-action', 'font-semibold', 'text-clay-500']),
+    );
+
+    await user.click(signOutButton);
+
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/'));
+    expect(signOut).toHaveBeenCalledTimes(1);
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  /* A sign-out racing the accept POST would leave the account half made under an ended session. */
+  it('holds Sign out while the acceptance is saving', async () => {
+    post.mockReset();
+    post.mockReturnValue(new Promise<TermsAcceptanceStatus>(() => undefined));
+    const user = userEvent.setup();
+    render(<AcceptTermsScreen status={recorded('customer')} terms={TERMS} returnTo={null} />);
+
+    expect(screen.getByRole('button', { name: 'Sign out' }).hasAttribute('disabled')).toBe(false);
+    await user.click(submit());
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Sign out' }).hasAttribute('disabled')).toBe(true),
+    );
+  });
+
+  it('offers Sign out on the landed-as welcome and the no-role failure too', async () => {
+    const user = userEvent.setup();
+    post.mockResolvedValue(
+      status({ accepted: true, acceptedAt: new Date(), account: { exists: true, role: 'vendor' } }),
+    );
+    const { unmount } = render(
+      <AcceptTermsScreen status={recorded('customer')} terms={TERMS} returnTo={null} />,
+    );
+
+    await user.click(submit());
+
+    await waitFor(() => expect(screen.getByTestId('landed-role')).toBeDefined());
+    expect(
+      within(screen.getByTestId('first-run-shell'))
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['Continue', 'Sign out']);
+    unmount();
+
+    render(<AcceptTermsScreen status={status()} terms={TERMS} returnTo={null} />);
+
+    const shell = screen.getByTestId('first-run-shell');
+    expect(
+      within(shell)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['Continue', 'Sign out']);
+    expect(within(shell).getByRole('button', { name: 'Sign out' }).hasAttribute('disabled')).toBe(
+      false,
+    );
   });
 
   it('leaves the new-version screen outside the shell', () => {
@@ -526,5 +597,16 @@ describe('the acceptance gate', () => {
     expect(screen.queryByTestId('stored-role')).toBeNull();
     expect(document.querySelector('[data-continue-notice]')).toBeNull();
     expect(screen.getByRole('checkbox')).toBeDefined();
+  });
+
+  /* VEN-750 non-goal: the new-version screen keeps the site header, and with it the header's sign-out. */
+  it('keeps exactly its own controls on the new-version screen', () => {
+    render(<AcceptTermsScreen status={tickStatus()} terms={TERMS} returnTo={null} />);
+
+    expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual([
+      expect.stringMatching(/^Read all \d+ sections$/),
+      'Accept and continue',
+    ]);
+    expect(screen.queryByRole('button', { name: 'Sign out' })).toBeNull();
   });
 });
