@@ -250,7 +250,7 @@ const DROPPED_FIELD_LABELS: Record<DroppedSearchField, string> = {
   minPriceCents: 'minimum price',
   maxPriceCents: 'maximum price',
   minRating: 'rating',
-  tags: 'tags',
+  tags: 'tag filter',
   sort: 'sort order',
   page: 'page',
 };
@@ -330,7 +330,7 @@ const RAW_NUMERIC_SHAPES: Partial<Record<DroppedSearchField, RegExp>> = {
  *
  * An empty value (`?sort=`) is a param that asks nothing, not one that asks
  * something unreadable, so it is left alone — writing "that sort order isn't
- * one we can use" over a blank would be inventing a complaint.
+ * valid" over a blank would be inventing a complaint.
  *
  * Takes the raw params rather than reading them, so the rule is a unit test.
  */
@@ -372,10 +372,10 @@ export function clearedParamsLine(dropped: readonly DroppedSearchField[]): strin
 
   const subject =
     labels.length === 1
-      ? `That ${labels[0]} isn't one we can use, so it was cleared`
-      : `The ${labels.slice(0, -1).join(', ')} and ${labels.at(-1)} aren't ones we can use, so they were cleared`;
+      ? `That ${labels[0]} isn't valid, so we cleared it`
+      : `The ${labels.slice(0, -1).join(', ')} and ${labels.at(-1)} aren't valid, so we cleared them`;
 
-  return `${subject} — the rest of your search still applies.`;
+  return `${subject}. The rest of your search still applies.`;
 }
 
 /**
@@ -460,7 +460,7 @@ export function droppedTagGroupsLine(
   const named =
     labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(', ')} and ${labels.at(-1)}`;
 
-  return `${named} filters don't apply to ${vendorNounFor(category, 2)}, so they were cleared — the rest of your search still applies.`;
+  return `${named} filters don't apply to ${vendorNounFor(category, 2)}, so we cleared them. The rest of your search still applies.`;
 }
 
 /** The three values the search bar owns. Never rendered as Refine chips. */

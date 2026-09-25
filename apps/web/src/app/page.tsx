@@ -61,7 +61,7 @@ const SHORT_DESCRIPTIONS = new Map(
 const HOW_IT_WORKS = [
   {
     title: 'Discover',
-    body: 'Pick a vendor type, a city and your date. Every profile shows what they charge and which dates are still open.',
+    body: 'Pick a vendor type, a city and your date. Every profile shows what they charge and which dates are open.',
   },
   {
     title: 'Book',
@@ -110,11 +110,11 @@ const TRUST_ICONS: Record<TrustTitle, LucideIcon> = {
 const VENDOR_STEPS = [
   {
     title: 'Publish your prices',
-    body: `What you charge, in the open. ${BRAND_NAME} adds nothing on top of it.`,
+    body: `What you charge, in the open. ${BRAND_NAME} adds nothing on top.`,
   },
   {
     title: 'Set your open dates',
-    body: 'Customers only ever request a date you have actually left free.',
+    body: 'Customers can only request a date you left open.',
   },
   {
     title: 'Get paid after the event',
@@ -768,8 +768,8 @@ export default async function HomePage(): Promise<React.ReactElement> {
                   Booking events yourself?
                 </h3>
                 <p className="mt-3.25 text-cta leading-[1.7] text-stone-480">
-                  Publish your prices and your open dates, and take bookings without the phone tag.
-                  You are paid through Stripe after the event.
+                  Publish your prices and open dates, and take bookings without the phone tag. You
+                  are paid through Stripe after the event.
                 </p>
               </div>
 

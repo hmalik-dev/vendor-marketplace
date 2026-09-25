@@ -502,7 +502,7 @@ export function SearchBar({
           role="alert"
           className="absolute top-full left-0 z-(--z-sticky) mt-2 rounded-lg bg-stone-0 px-3 py-2 text-sm text-stone-700 shadow-md max-sm:static max-sm:mt-3 max-sm:px-0 max-sm:shadow-none"
         >
-          That date has already passed — pick today or a later date.
+          That date has passed. Pick today or later.
         </p>
       ) : null}
 
