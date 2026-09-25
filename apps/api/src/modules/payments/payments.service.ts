@@ -2266,7 +2266,7 @@ export async function resolveDispute(
         bookingId,
         {
           cancelledAt: now,
-          cancellationReason: "Resolved in the customer's favour after a reported problem",
+          cancellationReason: "Resolved in the customer's favor after a reported problem",
           cancelledBy: 'admin',
           refundAmountCents: refund.amountCents,
           // A full refund, so the vendor keeps nothing and the sweep never pays it.

@@ -212,8 +212,7 @@ export function AcceptTermsScreen({
             The Terms have changed
           </h1>
           <p className="mt-2 text-sm leading-prose text-stone-600">
-            Everyone using {BRAND_NAME} accepts the current Terms. We record that you did — the
-            version, the moment, and this browser — so both sides can say what was agreed.
+            Please accept the current Terms to keep using {BRAND_NAME}.
           </p>
         </>
       ) : (
@@ -318,8 +317,7 @@ export function AcceptTermsScreen({
           </Button>
           {tickMode ? (
             <p className="mt-2 text-helper text-stone-600">
-              We record the moment, this browser and its address, so the record means something
-              later.
+              We save the version and time you accept.
             </p>
           ) : (
             <ContinueNotice className="mt-3 text-left" />

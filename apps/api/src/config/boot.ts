@@ -27,8 +27,8 @@ const LIVE_KEY_PREFIX = 'sk_live_';
 export const BOOT_GUARDS: readonly BootGuard[] = [
   {
     // The webhook compares each event's `livemode` to the key's mode; a key of
-    // no recognised mode would make that comparison silently skip.
-    name: 'Stripe key has a recognised mode',
+    // no recognized mode would make that comparison silently skip.
+    name: 'Stripe key has a recognized mode',
     check: (env) =>
       stripeKeyMode(env.STRIPE_SECRET_KEY) === null
         ? `STRIPE_SECRET_KEY starts ${JSON.stringify(/^[^_]{1,8}(?:_[^_]{1,8}_)?/.exec(env.STRIPE_SECRET_KEY)?.[0])}, not sk_live_, sk_test_, rk_live_ or rk_test_`

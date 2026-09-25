@@ -1323,7 +1323,7 @@ export async function createTestHarness(
       // Tokens in the suites are literally the auth user id they stand for.
       verifySessionToken: async (token) => {
         if (!token.startsWith('token-')) {
-          throw new Error('Unrecognised test token');
+          throw new Error('Unrecognized test token');
         }
 
         const authUserId = token.slice('token-'.length);

@@ -640,7 +640,7 @@ describe('the operations case queue (#431)', () => {
     const detail = await readCase((await readCases()).items[0]!.id);
     expect(detail.holdRefusal).toBe(
       "The booking is cancelled, so the payout was not frozen, but the vendor's remaining share " +
-        "is held by this case. It is released only once the card network rules in the platform's favour.",
+        "is held by this case. It is released only once the card network rules in the platform's favor.",
     );
   });
 
