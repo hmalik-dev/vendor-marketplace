@@ -27,6 +27,28 @@ export interface StepUpDeps {
   log: FastifyBaseLogger;
 }
 
+/** The code email: the code, how long it works, and what to do if it was not asked for. */
+export function renderStepUpCodeEmail(code: string): {
+  subject: string;
+  text: string;
+  html: string;
+} {
+  const minutes = STEP_UP_CODE_TTL_MS / 60_000;
+  const text = [
+    `Your ${BRAND_NAME} confirmation code is ${code}.`,
+    `It works for ${minutes} minutes. Didn't ask for it? Someone has your session. Sign out everywhere and reset your password.`,
+  ].join('\n\n');
+
+  return {
+    subject: `${BRAND_NAME} confirmation code`,
+    text,
+    html: text
+      .split('\n\n')
+      .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
+      .join(''),
+  };
+}
+
 /**
  * Emails the admin a code, to the address on **their own account** — never
  * one the request supplies, so a stolen session cannot redirect it.
@@ -52,21 +74,11 @@ export async function startStepUp(
   }
 
   const { code, expiresAt } = await deps.store.issue(adminId, now);
-  const minutes = STEP_UP_CODE_TTL_MS / 60_000;
-  const text = [
-    `Your ${BRAND_NAME} confirmation code is ${code}.`,
-    `It works for ${minutes} minutes. If you did not ask for it, someone has your session: sign out everywhere and reset your password.`,
-  ].join('\n\n');
 
   try {
     await deps.email.send({
       to: admin.email,
-      subject: `${BRAND_NAME} confirmation code`,
-      text,
-      html: text
-        .split('\n\n')
-        .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
-        .join(''),
+      ...renderStepUpCodeEmail(code),
       idempotencyKey: randomUUID(),
       essential,
     });

@@ -34,7 +34,7 @@ export async function findNearbyAvailability(
    * does not apply rather than an empty list that looks like scarcity.
    */
   if (isUniversallyPastDate(query.date, now)) {
-    throw validationFailed('That date has already passed — pick today or a later one');
+    throw validationFailed('That date has passed. Pick today or a later one.');
   }
 
   const page = await findVendorsFreeNearby(db, query, toDateString(now), now);

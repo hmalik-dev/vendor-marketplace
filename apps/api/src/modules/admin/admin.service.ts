@@ -1270,7 +1270,7 @@ export async function setReviewVisibility(
    */
   if (result.outcome === 'not_applicable') {
     throw conflict(
-      "Only a review of a vendor can be hidden or shown. This is a vendor's private note about a customer — delete it if it has to go.",
+      "Only a review of a vendor can be hidden or shown. This is a vendor's private note about a customer. Delete it instead.",
     );
   }
 
@@ -1490,9 +1490,7 @@ function tagSlug(category: TagCategory, name: string): string {
  */
 function assertTagIsOffered(tag: Pick<TagRow, 'name' | 'isActive'>): void {
   if (!tag.isActive) {
-    throw conflict(
-      `“${tag.name}” is a deactivated tag, so the suggestion cannot be approved into it. Reactivate or rename it on the Tags page first.`,
-    );
+    throw conflict(`“${tag.name}” is deactivated. Reactivate or rename it on the Tags page first.`);
   }
 }
 

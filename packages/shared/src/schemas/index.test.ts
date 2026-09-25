@@ -956,14 +956,14 @@ describe('the tagline and the experience figure', () => {
     expect(result.success).toBe(true);
   });
 
-  it('refuses one character past it, and says it is one line', () => {
+  it('refuses one character past it, and names the cap', () => {
     const result = createVendorProfileSchema.safeParse({
       ...MINIMAL_VENDOR_PROFILE,
       tagline: 'a'.repeat(MAX_TAGLINE_LENGTH + 1),
     });
 
     expect(result.success).toBe(false);
-    expect(result.error?.issues[0]?.message).toContain('one line');
+    expect(result.error?.issues[0]?.message).toBe(`Keep it to ${MAX_TAGLINE_LENGTH} characters`);
   });
 
   /* Zero is a vendor in their first year, not a missing answer. */

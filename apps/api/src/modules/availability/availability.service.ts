@@ -245,8 +245,8 @@ export async function setOwnAvailability(
       if (pending.length > 0) {
         throw conflict(
           pending.length === 1
-            ? `${pending[0]} has an open request, so it cannot be blocked until that request is answered or lapses.`
-            : `${pending.length} of those dates have an open request, so they cannot be blocked until those requests are answered or lapse.`,
+            ? `${pending[0]} has an open request. Block it once the request is answered or lapses.`
+            : `${pending.length} of those dates have open requests. Block them once the requests are answered or lapse.`,
           { pendingDates: pending },
         );
       }

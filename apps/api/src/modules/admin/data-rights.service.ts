@@ -569,10 +569,11 @@ async function deleteAndConfirm(
 
 /** The 409 that refuses a closure while future confirmed bookings stand (D39). */
 function blockedByBookings(blocked: AdminCloseBlocker[]): AppError {
+  const one = blocked.length === 1;
+
   return conflict(
-    `This account holds ${blocked.length} upcoming confirmed ${
-      blocked.length === 1 ? 'booking' : 'bookings'
-    }. Those have to be cancelled through the booking screens first — cancelling there prices the refund; closing the account here does not price anything.`,
+    `This account holds ${blocked.length} upcoming confirmed ${one ? 'booking' : 'bookings'}. ` +
+      `Cancel ${one ? 'it' : 'them'} from the booking screens first. That prices the refund; closing the account does not.`,
     { bookings: blocked },
   );
 }
