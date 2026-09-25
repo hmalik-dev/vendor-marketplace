@@ -157,7 +157,7 @@ export function Pager({
                 className={cn(
                   CONTROL,
                   'min-w-7 px-2',
-                  n === page ? 'border-stone-900 bg-stone-900 text-stone-0' : LIVE,
+                  n === page ? 'border-clay-400 bg-clay-400 text-stone-0' : LIVE,
                 )}
               >
                 {n}
