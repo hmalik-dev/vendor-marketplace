@@ -377,8 +377,10 @@ describe('the table', () => {
     expect(frame).toContain('background:#FDFAF4');
     expect(themeCss).toContain('--color-stone-150: #f1ece4');
     expect(themeCss).toContain('--color-stone-25: #fdfaf4');
-    // h-11 is 44px.
-    expect(dataTable).toContain('h-11 items-center gap-3 border-b border-stone-150');
+    // min-h-11 is 44px, and a row whose cells fit sits exactly there (VEN-742).
+    expect(dataTable).toContain(
+      'box-content min-h-11 items-center gap-3 border-b border-stone-150',
+    );
     expect(dataTable).toContain('bg-stone-25');
   });
 
