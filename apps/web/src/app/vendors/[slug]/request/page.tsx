@@ -7,6 +7,7 @@ import {
   type AvailabilityStatus,
 } from '@vendor-marketplace/shared';
 import { BookingRequestScreen } from '@/components/booking/booking-request-screen';
+import { requireRole } from '@/lib/current-user';
 import { parseGuestCountParam } from '@/lib/guest-count';
 import { gateVendorSlug } from '@/lib/vendor-route';
 import { getPublicVendorAvailability, getPublicVendorProfile } from '@/lib/vendor-data';
@@ -47,9 +48,11 @@ export default async function BookingRequestPage({
    * `layout.tsx`'s, above the loading boundary (VEN-715); the vendor comes from
    * the same per-request gate, which raises the layout's own refusal here.
    */
-  const [vendor, availability] = await Promise.all([
+  const [vendor, availability, customer] = await Promise.all([
     gateVendorSlug(slug),
     getPublicVendorAvailability(slug),
+    // The layout's gate, read again from the same per-request cache: the draft is keyed by this id.
+    requireRole('customer'),
   ]);
 
   /*
@@ -98,6 +101,7 @@ export default async function BookingRequestPage({
 
   return (
     <BookingRequestScreen
+      userId={customer.id}
       vendorId={vendor.id}
       vendorSlug={vendor.slug}
       vendor={{

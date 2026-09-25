@@ -1,4 +1,5 @@
 import type { SignUpRole } from '@vendor-marketplace/shared';
+import { forgetBookingRequestDrafts } from '@/lib/booking-request-draft';
 import { reportSwallowedError } from '@/lib/report-error';
 import { clearSessionToken } from './client';
 import { announceSessionEnded } from './session-ended';
@@ -219,6 +220,8 @@ export async function signOut(): Promise<void> {
   }
 
   clearSessionToken();
+  // The next person to sign in on this computer must not find this one's event (VEN-617).
+  forgetBookingRequestDrafts();
   // After the request, never before: a failed sign-out must not sign anyone else out.
   announceSessionEnded();
 }
