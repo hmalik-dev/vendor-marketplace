@@ -159,6 +159,9 @@ export function assertNotRateLimited(page: Page): void {
   }
 }
 
+/** Each role page's request log (`request-log.ts`), attached when its test fails. */
+const exchanges = new WeakMap<Page, string[]>();
+
 async function pageForRole(browser: Browser, role: Role): Promise<Page> {
   const statePath = storageStatePath(role);
 
@@ -183,9 +186,6 @@ async function pageForRole(browser: Browser, role: Role): Promise<Page> {
 
   return page;
 }
-
-/** Each role page's request log (`request-log.ts`), attached when its test fails. */
-const exchanges = new WeakMap<Page, string[]>();
 
 /**
  * Attach the real cause to a failure that has already happened.
