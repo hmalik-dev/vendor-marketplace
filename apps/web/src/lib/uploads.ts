@@ -169,8 +169,8 @@ export function connectionFailure(): UploadFailure {
   return {
     kind: 'connection-dropped',
     tone: 'red',
-    reason: 'The connection dropped part-way.',
-    fix: 'The file is fine — send it again.',
+    reason: 'The connection dropped.',
+    fix: 'Send it again.',
     retryable: true,
   };
 }
@@ -260,7 +260,7 @@ export function previewFailure(): UploadFailure {
   return {
     kind: 'preview-broken',
     tone: 'red',
-    reason: 'That photo saved, but the preview would not load.',
+    reason: "That photo saved, but its preview didn't load.",
     /*
      * Not "send it again": the bytes are already stored, so a re-send produces
      * a second object at a second key that will not render either — one orphan

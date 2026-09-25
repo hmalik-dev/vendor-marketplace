@@ -108,7 +108,8 @@ describe('failure tones', () => {
 
   it('offers a retry only where the same bytes are worth re-sending', () => {
     expect(connectionFailure().retryable).toBe(true);
-    expect(connectionFailure().fix).toBe('The file is fine — send it again.');
+    expect(connectionFailure().reason).toBe('The connection dropped.');
+    expect(connectionFailure().fix).toBe('Send it again.');
     expect(tooLargeFailure(1).retryable).toBe(false);
     expect(tooNarrowFailure(900).retryable).toBe(false);
   });

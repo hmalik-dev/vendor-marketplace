@@ -3,7 +3,7 @@ import type { z } from 'zod';
 
 /** What a form says when its save was refused because the row moved (VEN-481). */
 export const STALE_EDIT_NOTICE =
-  'This changed since you opened it. What you typed is still here; saving again replaces the current version.';
+  'This changed since you opened it. Save again to replace it with your edits.';
 
 /**
  * The row as it stands now, when `error` is the API's stale-edit 409, else

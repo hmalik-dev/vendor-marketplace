@@ -325,6 +325,14 @@ restates the control, placeholder or toggle beside it. A parity pass reading
 them as missing text is reading this ruling; the frames are corrected by a
 design pass, not by a ticket.
 
+**The 404 and 500 bodies are one sentence each (VEN-739, 2026-09-25).** Frame
+`15` draws "…taken their listing down. Nothing is wrong with your account." and
+frame `16` draws "This wasn't anything you did. We've been notified and we're
+looking at it." The copy audit dropped both reassurances: the 404 reads "The
+link may be old, or the vendor took their listing down." and the 500 reads
+"We've been alerted and we're looking into it." A parity pass reading the old
+sentences is reading this ruling.
+
 **The Florals category no longer exists (#419, ruled 2026-09-06).** It was
 folded into `Decor`, so the taxonomy is ten categories and three frames now
 draw a category the product does not have. All three are overruled, not drift:
