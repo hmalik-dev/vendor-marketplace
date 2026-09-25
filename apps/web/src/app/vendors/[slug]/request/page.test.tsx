@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const getPublicVendorProfile = vi.fn();
 const getPublicVendorAvailability = vi.fn();
 const getVendorSlugSuccessor = vi.fn();
-const requireRole = vi.fn();
+const getCurrentUser = vi.fn();
 
 vi.mock('next/navigation', () => ({
   notFound: () => {
@@ -21,7 +21,7 @@ vi.mock('@/lib/vendor-data', () => ({
 }));
 
 vi.mock('@/lib/current-user', () => ({
-  requireRole: (role: string) => requireRole(role),
+  getCurrentUser: () => getCurrentUser(),
 }));
 
 vi.mock('@/components/booking/booking-request-screen', () => ({
@@ -51,7 +51,7 @@ describe('BookingRequestPage', () => {
   beforeEach(() => {
     getPublicVendorProfile.mockResolvedValue(VENDOR);
     getPublicVendorAvailability.mockResolvedValue([]);
-    requireRole.mockResolvedValue({ id: 'customer-1', role: 'customer' });
+    getCurrentUser.mockResolvedValue({ id: 'customer-1', role: 'customer' });
   });
 
   afterEach(() => {
@@ -70,7 +70,6 @@ describe('BookingRequestPage', () => {
       vendorId: 'vendor-1',
       vendorSlug: 'sunlit-studio',
     });
-    expect(requireRole).toHaveBeenCalledWith('customer');
     expect(getPublicVendorAvailability).toHaveBeenCalledWith('sunlit-studio');
   });
 

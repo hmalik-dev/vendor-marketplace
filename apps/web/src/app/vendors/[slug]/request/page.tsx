@@ -7,7 +7,7 @@ import {
   type AvailabilityStatus,
 } from '@vendor-marketplace/shared';
 import { BookingRequestScreen } from '@/components/booking/booking-request-screen';
-import { requireRole } from '@/lib/current-user';
+import { getCurrentUser } from '@/lib/current-user';
 import { parseGuestCountParam } from '@/lib/guest-count';
 import { gateVendorSlug } from '@/lib/vendor-route';
 import { getPublicVendorAvailability, getPublicVendorProfile } from '@/lib/vendor-data';
@@ -51,9 +51,17 @@ export default async function BookingRequestPage({
   const [vendor, availability, customer] = await Promise.all([
     gateVendorSlug(slug),
     getPublicVendorAvailability(slug),
-    // The layout's gate, read again from the same per-request cache: the draft is keyed by this id.
-    requireRole('customer'),
+    /*
+     * The draft is keyed by this id (VEN-617). The layout's gate already
+     * resolved it from the same per-request cache; the page reads it without a
+     * redirect of its own, since it answers no status below the loading boundary.
+     */
+    getCurrentUser(),
   ]);
+
+  if (!customer) {
+    throw new Error('The request form rendered without the customer its layout gated on.');
+  }
 
   /*
    * The server's UTC day. It is only a seed: `BookingRequestScreen` re-anchors
