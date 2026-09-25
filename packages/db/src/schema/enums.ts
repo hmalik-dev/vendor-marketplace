@@ -1,5 +1,6 @@
 import {
   AVAILABILITY_STATUSES,
+  BACKUP_WITHHOLDING_REASONS,
   BOOKING_CANCELLED_BY,
   BOOKING_REQUEST_STATUSES,
   BOOKING_STATUSES,
@@ -27,6 +28,10 @@ export const bookingRequestStatusEnum = pgEnum('booking_request_status', BOOKING
 export const bookingStatusEnum = pgEnum('booking_status', BOOKING_STATUSES);
 export const bookingCancelledByEnum = pgEnum('booking_cancelled_by', BOOKING_CANCELLED_BY);
 export const payoutModelEnum = pgEnum('payout_model', PAYOUT_MODELS);
+export const backupWithholdingReasonEnum = pgEnum(
+  'backup_withholding_reason',
+  BACKUP_WITHHOLDING_REASONS,
+);
 export const reviewTypeEnum = pgEnum('review_type', REVIEW_TYPES);
 export const budgetTierEnum = pgEnum('budget_tier', BUDGET_TIERS);
 export const tagCategoryEnum = pgEnum('tag_category', TAG_CATEGORIES);

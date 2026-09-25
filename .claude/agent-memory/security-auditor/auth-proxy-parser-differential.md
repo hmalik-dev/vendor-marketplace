@@ -58,6 +58,35 @@ floor and the per-address budget key both miss. `change-password` pins
 'application/json')` on every re-encoded upstream. node_modules reads are
 permission-denied for this agent, so the SDK's forwarding was inferred, not read.
 `readBounded` (VEN-685) counts stream bytes and fails closed on gzip; clean.
+`forwardBudgeted` now pins `application/json` (seen VEN-714).
+
+**Discarding a minted session** (VEN-714 audit, 2026-09-24, PASS): sign-up,
+verify-email and a 200 unverified sign-in are signed out with the cookie from the
+provider's own `Set-Cookie` (caller's `cookie` replaced, `authorization` deleted,
+the `endEverySession` pattern), plain `sign-out` not `forwardSignOut`, so only that
+one session ends; no cross-account lever since minting needed the password or OTP.
+The body (`token`) and any non-cookie header still pass through, owner-only.
+
+**VEN-630 made the sign-in address budget rotatable** (audit 2026-09-24, blocker):
+`isSignInRefused` refuses a caller only if its own `pair|` bucket is spent, or the
+address bucket is spent **and** it has failed once itself. A fresh caller is never
+refused, so guesses per account = distinct caller keys × ~10 (the per-minute
+`chargeCaller` cap passes a parallel burst past the read-only check). On Vercel the
+key is the full `x-real-ip`, so one IPv6 /64 is unlimited callers; off Vercel it is
+the rightmost XFF. The owner is still lockable: one typo while the address is spent,
+a shared CGNAT address, and the "reset instead" escape is itself an any-caller
+5/10-min address budget. Fix shape: /64 caller keys + a hard address ceiling that
+binds everyone; the canonical form is OWASP device cookies (trusted device exempt).
+
+**VEN-718 moved codes and mail onto the same shape** (`chargeRequest`, audit
+2026-09-24): per-route pair buckets, address budget binds a caller only once it has
+asked, ceiling 10x limit. For `email-otp/reset-password` (account takeover) the
+all-caller bound went 5 -> 50 guesses/10 min: 5 + one per fresh /64 or IPv4. Flagged;
+fix shape is a lower ceiling on the two code-check routes, mail routes may keep 10x.
+The "hard" ceiling is not hard under a burst: `chargeThrottle` is count-then-insert
+with no lock, and `chargeRequest` reads 3-4 buckets before recording and discards the
+record calls' results. No enumeration (request-reset still fixed 200, refusal is
+existence-independent); buckets are sha256'd, `*` as a caller only hurts the caller.
 
 Related: the request-reset path hides account existence with a fixed 200 and
 `after()`; its sibling `email-otp/reset-password` returns the upstream status

@@ -6,12 +6,15 @@ import {
   type SettingsRowData,
 } from '@/components/account/settings-layout';
 import {
+  ACCOUNT_CLOSE_PATH,
   ACCOUNT_NAME_PATH,
   ACCOUNT_PASSWORD_PATH,
+  ACCOUNT_SESSIONS_PATH,
   ACCOUNT_SETTINGS_PATH,
   SETTINGS_SAVED_COPY,
   SETTINGS_SAVED_PARAM,
 } from '@/components/account/settings-paths';
+import { AUTH_COPY } from '@/app/auth-copy';
 import { Banner } from '@/components/ui/banner';
 import { requireCurrentUser } from '@/lib/current-user';
 
@@ -51,7 +54,23 @@ export default async function AccountSettingsPage({
       href: ACCOUNT_NAME_PATH,
     },
     { id: 'password', label: 'Password', value: '••••••••••', href: ACCOUNT_PASSWORD_PATH },
+    {
+      id: 'sessions',
+      label: AUTH_COPY.sessionsTitle,
+      value: AUTH_COPY.sessionsRowValue,
+      href: ACCOUNT_SESSIONS_PATH,
+    },
   ];
+
+  // An admin account is closed from the console, which keeps its own guards.
+  if (user.role !== 'admin') {
+    rows.push({
+      id: 'close',
+      label: 'Close account',
+      value: 'Retire your account and sign out everywhere',
+      href: ACCOUNT_CLOSE_PATH,
+    });
+  }
 
   return (
     <SettingsLayout title="Account settings">

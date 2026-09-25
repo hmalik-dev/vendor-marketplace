@@ -8,9 +8,16 @@ import { z } from 'zod';
 import {
   adminBanResultSchema,
   adminPackageActiveResultSchema,
+  adminVendorBackupWithholdingResultSchema,
   adminVendorPayoutHoldResultSchema,
   adminVendorPublishResultSchema,
+  BACKUP_WITHHOLDING_RATE_BPS,
+  BACKUP_WITHHOLDING_REASON_LABELS,
+  BACKUP_WITHHOLDING_REASONS,
   BRAND_NAME,
+  backupWithholdingCents,
+  formatPrice,
+  type BackupWithholdingReason,
 } from '@vendor-marketplace/shared';
 import { ConfirmAction } from '@/components/admin/confirm-action';
 import {
@@ -20,6 +27,7 @@ import {
   UnpublishConsequence,
 } from '@/components/admin/vendor-table';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useApi } from '@/lib/use-api';
 import type { WireAdminVendorDetail } from '@/lib/wire-schemas';
 
@@ -179,6 +187,7 @@ export function VendorDetailActions({ vendor }: { vendor: Vendor }): React.React
                 ? 'Payouts are held. Releasing lets the next sweep pay what is due.'
                 : 'Stops automatic payouts without touching bookings or money already paid.'}
             </p>
+            <BackupWithholdingControl vendor={vendor} />
           </Tier>
 
           <Hairline />
@@ -238,11 +247,111 @@ export function VendorDetailActions({ vendor }: { vendor: Vendor }): React.React
   );
 }
 
+/** The illustration in the consequence line: a round payout, so the split reads at a glance. */
+const EXAMPLE_PAYOUT_CENTS = 100_000;
+const WITHHOLDING_PERCENT = BACKUP_WITHHOLDING_RATE_BPS / 100;
+
+/**
+ * Switches backup withholding on for a vendor, or clears it, through
+ * `PUT /admin/vendors/:vendorId/backup-withholding` (VEN-723, D49).
+ *
+ * The consequence is stated in money before the press. Switching on asks for the
+ * reason and the notice date; clearing asks for the date a corrected TIN or a
+ * certified W-9 arrived, and holds the button back until it is entered. Like
+ * the other irreversible levers it asks for the emailed code inside the dialog.
+ */
+function BackupWithholdingControl({ vendor }: { vendor: Vendor }): React.ReactElement {
+  const router = useRouter();
+  const call = useApi();
+  const [reason, setReason] = useState<BackupWithholdingReason | null>(null);
+  const [date, setDate] = useState('');
+  const on = vendor.backupWithholding !== null;
+  const withheld = backupWithholdingCents(EXAMPLE_PAYOUT_CENTS);
+  const sent = EXAMPLE_PAYOUT_CENTS - withheld;
+
+  return (
+    <>
+      <ConfirmAction
+        trigger={
+          <Button type="button" variant="secondary" size="sm" className="w-full">
+            {on ? 'Clear backup withholding' : 'Switch on backup withholding'}
+          </Button>
+        }
+        title={
+          on
+            ? `Clear backup withholding for ${vendor.businessName}?`
+            : `Switch on backup withholding for ${vendor.businessName}?`
+        }
+        description={
+          on ? (
+            <div className="flex flex-col gap-3">
+              <p>
+                Their payouts go back to the full share from the next release. What was already
+                withheld is not returned.
+              </p>
+              <label className="flex flex-col gap-1.5 text-sm font-medium text-stone-900">
+                Date a corrected TIN or certified W-9 was received
+                <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+              </label>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <p>
+                From the next release, {WITHHOLDING_PERCENT}% of each of their payouts is kept for
+                the IRS: on a {formatPrice(EXAMPLE_PAYOUT_CENTS)} payout, {formatPrice(withheld)} is
+                withheld and {formatPrice(sent)} is sent.
+              </p>
+              <fieldset className="flex flex-col gap-1.5">
+                <legend className="text-sm font-medium text-stone-900">Reason</legend>
+                {BACKUP_WITHHOLDING_REASONS.map((option) => (
+                  <label key={option} className="flex items-center gap-2 text-sm text-stone-900">
+                    <input
+                      type="radio"
+                      name="backup-withholding-reason"
+                      value={option}
+                      checked={reason === option}
+                      onChange={() => setReason(option)}
+                    />
+                    {BACKUP_WITHHOLDING_REASON_LABELS[option]}
+                  </label>
+                ))}
+              </fieldset>
+              <label className="flex flex-col gap-1.5 text-sm font-medium text-stone-900">
+                Notice date
+                <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} />
+              </label>
+            </div>
+          )
+        }
+        confirmLabel={on ? 'Clear withholding' : 'Switch on'}
+        confirmDisabled={date === '' || (!on && reason === null)}
+        onConfirm={async () => {
+          await call(`/admin/vendors/${vendor.id}/backup-withholding`, {
+            method: 'PUT',
+            body: on
+              ? { withholding: false, receivedDate: date }
+              : { withholding: true, reason, noticeDate: date },
+            schema: adminVendorBackupWithholdingResultSchema,
+          });
+          setReason(null);
+          setDate('');
+          router.refresh();
+        }}
+      />
+      <p className={CONSEQUENCE}>
+        {on
+          ? `Kept for the IRS: ${WITHHOLDING_PERCENT}% of each payout. Clearing needs the date the corrected TIN or W-9 arrived.`
+          : `Keeps ${WITHHOLDING_PERCENT}% of each payout for the IRS once it is switched on, from an IRS notice or a missing TIN.`}
+      </p>
+    </>
+  );
+}
+
 /**
  * Switches one package off the storefront, or back on, through
  * `PUT /admin/packages/:packageId/active`. Says so when the last bookable
  * package took the storefront with it, because that is a second, larger thing
- * the operator did.
+ * the admin did.
  */
 export function PackageActiveControl({
   pkg,

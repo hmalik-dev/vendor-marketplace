@@ -26,6 +26,10 @@ const NOTIFICATION_RETRY_BATCH = 50;
  * connection for at most `EMAIL_SEND_TIMEOUT_MS`, which is the price of the row
  * lock being the claim.
  *
+ * A send the closed day refuses ends the batch and is recorded as a refusal, not
+ * an attempt (`SEND_CLOSED_FAILURE_REASON`), so the message is claimable again the
+ * next UTC day with every attempt it had (VEN-688).
+ *
  * A notification is tried once per call however it ends: a candidate that
  * records no new row (its recipient's address is being changed, say) would
  * otherwise be picked again forever within the same tick.
@@ -37,6 +41,8 @@ export async function retryFailedNotificationEmails(
   now: Clock,
 ): Promise<number> {
   const tried: string[] = [];
+
+  let closed = false;
 
   while (tried.length < NOTIFICATION_RETRY_BATCH) {
     const notificationId = await deps.db.transaction(async (tx) => {
@@ -54,7 +60,11 @@ export async function retryFailedNotificationEmails(
       const notification = await findNotificationForRetry(tx, candidate.notificationId);
 
       if (notification) {
-        await sendNotificationEmail({ ...deps, db: tx }, notification.row, notification.audience);
+        closed = await sendNotificationEmail(
+          { ...deps, db: tx },
+          notification.row,
+          notification.audience,
+        );
       }
 
       return candidate.notificationId;
@@ -65,6 +75,11 @@ export async function retryFailedNotificationEmails(
     }
 
     tried.push(notificationId);
+
+    // The day closed under this batch: every message left would be refused too (VEN-688).
+    if (closed) {
+      break;
+    }
   }
 
   return tried.length;
@@ -92,6 +107,12 @@ export async function retryFailedEmails(
   }
 
   const notifications = await retryFailedNotificationEmails(deps.notifications, now);
+
+  // The batch above may have closed the day; the rest would only be refused.
+  if ((await sendDayClosedReason(deps.notifications.db, sendDay(now()))) !== null) {
+    return { notifications, invites: 0, applicationConfirmations: 0 };
+  }
+
   const invites = await retryFailedInviteEmails(deps.invites);
   const applicationConfirmations = await retryFailedApplicationConfirmationEmails(deps.invites);
 

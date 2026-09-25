@@ -15,7 +15,7 @@
 //
 // The accounts are Neon Auth identities on the dev branch (VEN-447, VEN-448),
 // created once with a verified address, so signing in needs no inbox and no
-// code. The operator account is one of them; its `users.role` is granted by
+// code. The admin account is one of them; its `users.role` is granted by
 // `db:seed:e2e`, never by signing in.
 import { chromium } from 'playwright';
 import { readFileSync, mkdirSync, existsSync, rmSync } from 'node:fs';
@@ -26,6 +26,7 @@ import { resolveRoles } from './e2e-roles.mjs';
 import { describeFailure } from './e2e-diagnostics.mjs';
 import {
   keepOffTheImageOptimizer,
+  pruneSessions,
   signInRefusal,
   waitForSession,
   withRetry,
@@ -116,6 +117,11 @@ async function signIn(browser, role, email, password) {
     mkdirSync(AUTH_DIR, { recursive: true });
     const out = resolve(AUTH_DIR, `${role}.json`);
     await context.storageState({ path: out });
+    // Bounded, not zero: lanes share these accounts, so only the stalest of a pile-up go (VEN-714).
+    const pruned = await pruneSessions(context.request, BASE);
+    if (pruned > 0) {
+      console.log(`  ${role}: ended ${pruned} stale session(s) over the cap`);
+    }
     // A failed try before this one left its capture; the upload step must not read it as current.
     rmSync(resolve(DIAGNOSTICS_DIR, `${role}-sign-in-failure.png`), { force: true });
     console.log(`  ${role}: saved -> .auth/${role}.json  (landed on ${landed})`);

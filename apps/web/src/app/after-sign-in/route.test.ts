@@ -177,6 +177,9 @@ describe('GET /after-sign-in', () => {
       ['a vendor', 'vendor', '/', '/vendor/dashboard'],
       ['a customer', 'customer', '/vendor/dashboard', '/'],
       ['a customer', 'customer', '/admin', '/'],
+      ['a customer', 'customer', '/waitlist', '/'],
+      ['a customer', 'customer', '/vendors/apply', '/'],
+      ['a vendor', 'vendor', '/waitlist', '/vendor/dashboard'],
       ['an admin', 'admin', '/vendor/dashboard', '/admin'],
       ['an admin', 'admin', '/bookings', '/admin'],
     ] as const)(

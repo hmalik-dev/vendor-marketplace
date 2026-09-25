@@ -372,7 +372,7 @@ export function VendorProfileForm({
   const request = useApi();
   const router = useRouter();
   const [form, setForm] = useState<FormState>(() => initialState(profile, personalName));
-  // A tag the vendor holds but an operator has since deactivated is not in the
+  // A tag the vendor holds but an admin has since deactivated is not in the
   // active list; without it the picker draws no pill and no Remove control, and
   // the vendor cannot see what they are saving.
   const pickerTags = useMemo(
@@ -504,7 +504,7 @@ export function VendorProfileForm({
 
   /*
    * What the preview rail mirrors: the live form, not the saved row, which is
-   * what makes "Updates as you type" true rather than decorative.
+   * what keeps the preview true rather than decorative.
    *
    * `startingPriceCents` is null on purpose. A starting price is derived from
    * this vendor's packages, which this screen does not load and cannot know —

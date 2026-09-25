@@ -1,20 +1,31 @@
 import { withRequestIdentity } from '@vendor-marketplace/db';
-import { unwindFloorDate } from '@vendor-marketplace/shared';
+import { ADMIN_ACCESS_ACTIONS, unwindFloorDate } from '@vendor-marketplace/shared';
 import type {
   AdminCloseAccountResult,
   AdminCloseBlocker,
   AdminUserDataRights,
   AdminUserExport,
+  CloseOwnAccount,
+  CloseOwnAccountReadiness,
+  CloseOwnAccountResult,
   LegalAcceptanceRecord,
 } from '@vendor-marketplace/shared';
 import type { LegalAcceptanceRow, UserRow, VendorProfileRow } from '@vendor-marketplace/db/schema';
 import type { AppDatabase } from '../../lib/database.js';
 import { removeOwnedObjects, type ObjectStorage } from '../../lib/storage.js';
 import { isSeededIdentity, type AuthIdentityDeleter } from '../auth-sync/identity.js';
-import { conflict, forbidden, notFound } from '../../lib/errors.js';
 import {
-  hasAnotherLiveOperator,
-  retireOperatorById,
+  conflict,
+  forbidden,
+  notFound,
+  validationFailed,
+  type AppError,
+} from '../../lib/errors.js';
+import type { StepUpStore } from '../../lib/step-up.js';
+import { completeStepUp } from './admin-step-up.service.js';
+import {
+  hasAnotherLiveAdmin,
+  retireAdminById,
   retireUserById,
   type RetirementAudit,
 } from '../users/users.dao.js';
@@ -50,7 +61,7 @@ import {
  *
  * *"Ask us for a copy of what we hold"* and *"to close your account, ask us
  * through Contact support"* were both true of the document and false of the
- * product: a subject-access request reached `SUPPORT_EMAIL_TO` and an operator
+ * product: a subject-access request reached `SUPPORT_EMAIL_TO` and an admin
  * with no query to run, and a closure request could not be performed at all
  * without a privileged write against the database.
  *
@@ -130,7 +141,7 @@ interface GatheredRecord {
  * Everything the platform holds for one person, gathered once.
  *
  * **One gatherer for the export and for the console's retention panel**, which
- * is the ticket's fourth requirement read literally: an operator asked "what do
+ * is the ticket's fourth requirement read literally: an admin asked "what do
  * you still hold about me" has to get the same answer the export gives. Two
  * queries counting what a third query returns is how those two answers drift,
  * and the drift would show up as the console under-reporting a category the
@@ -145,7 +156,7 @@ async function gather(db: AppDatabase, user: UserRow, actorId: string): Promise<
       findExportBookingRequests(db, user.id, profileId),
       findExportBookings(db, user.id, profileId),
       findExportReviews(db, user.id, profileId),
-      withRequestIdentity(db, { userId: actorId, role: 'admin', operator: true }, (tx) =>
+      withRequestIdentity(db, { userId: actorId, role: 'admin', admin: true }, (tx) =>
         findExportMessages(tx, user.id, profileId),
       ),
       findExportNotifications(db, user.id),
@@ -184,7 +195,7 @@ function splitReviews(record: GatheredRecord): {
 }
 
 /**
- * A copy of everything held for one person, for an operator answering a
+ * A copy of everything held for one person, for an admin answering a
  * subject-access request.
  *
  * Reads a **closed** account as readily as a live one. That is the case the
@@ -226,7 +237,7 @@ export async function exportUserData(
    * Last, and best-effort, for the reason every audit write on this module is:
    * the export has already been produced by the time this runs, and a database
    * that refused the row must not turn a completed answer into a 500 the
-   * operator would retry — producing a second copy of the same person's file.
+   * admin would retry — producing a second copy of the same person's file.
    */
   await recordExport(context, actorId, user.id, record, { written, received });
 
@@ -436,7 +447,7 @@ async function closeBlockers(
  * refuses a customer's closure while their own forward bookings stand, and
  * refunds a vendor's customers in full when the vendor goes — so a closure is
  * never priced against the person asking for it, and is always priced for the
- * person on the other end. The console needs the count because the operator
+ * person on the other end. The console needs the count because the admin
  * confirming the closure is the only person who can be told first.
  */
 async function vendorSideRefundsOnClose(
@@ -459,9 +470,9 @@ async function vendorSideRefundsOnClose(
   return held.filter((booking) => booking.customerId !== userId).length;
 }
 
-/** The last-operator refusal — one sentence for the unlocked read and the locked write. */
-export const LAST_OPERATOR_REFUSAL =
-  'This is the last operator account that can still sign in. Closing it would leave nobody able to reach the console, and only the identity provider could restore one.';
+/** The last-admin refusal — one sentence for the unlocked read and the locked write. */
+export const LAST_ADMIN_REFUSAL =
+  'This is the last admin account that can still sign in. Closing it would leave nobody able to reach the console, and only the identity provider could restore one.';
 
 /**
  * Closes an account on its holder's request, or **refuses** (D39).
@@ -556,6 +567,16 @@ async function deleteAndConfirm(
   return completed && removed;
 }
 
+/** The 409 that refuses a closure while future confirmed bookings stand (D39). */
+function blockedByBookings(blocked: AdminCloseBlocker[]): AppError {
+  return conflict(
+    `This account holds ${blocked.length} upcoming confirmed ${
+      blocked.length === 1 ? 'booking' : 'bookings'
+    }. Those have to be cancelled through the booking screens first — cancelling there prices the refund; closing the account here does not price anything.`,
+    { bookings: blocked },
+  );
+}
+
 export async function closeAccount(
   context: AdminContext,
   actorId: string,
@@ -572,32 +593,52 @@ export async function closeAccount(
   }
 
   /*
-   * Closing another operator is allowed, past friction (VEN-391, ruled
+   * Closing another admin is allowed, past friction (VEN-391, ruled
    * 2026-09-07: hurdles, not refusal — people leave). The friction is the
    * console's typed confirmation on the target's email, and this structural
-   * refusal: never the last operator who can still sign in.
+   * refusal: never the last admin who can still sign in.
    *
    * **Before the self-closure refusal, and not relying on it.** That refusal
    * happens to guarantee an actor survives, but a guard that depends on another
    * guard's side effect breaks silently when that one changes — so this answers
-   * the same 409 whoever asks. `retireOperatorById` repeats the check under a
-   * lock, because two operators closing each other at once both pass this read.
+   * the same 409 whoever asks. `retireAdminById` repeats the check under a
+   * lock, because two admins closing each other at once both pass this read.
    */
-  const operatorTarget = user.role === 'admin';
+  const adminTarget = user.role === 'admin';
 
-  if (operatorTarget && !user.deletedAt && !(await hasAnotherLiveOperator(context.db, userId))) {
-    throw conflict(LAST_OPERATOR_REFUSAL);
+  if (adminTarget && !user.deletedAt && !(await hasAnotherLiveAdmin(context.db, userId))) {
+    throw conflict(LAST_ADMIN_REFUSAL);
   }
 
   if (actorId === userId) {
     /*
-     * The same refusal `setUserBanned` makes, for a sharper reason: an operator
+     * The same refusal `setUserBanned` makes, for a sharper reason: an admin
      * who closed their own account would retire the actor of their own audit
      * rows, and an audit trail an actor can retire is not one. 403 rather than 400 — it is about who the caller is.
      */
     throw forbidden('You cannot close your own account');
   }
 
+  return runClosure(context, actorId, user, now, deleteIdentity, storage);
+}
+
+/**
+ * The closure itself, past the checks that are about **who is asking**: the
+ * admin route's last-admin and self-closure refusals stay in
+ * `closeAccount`, and a person closing their own account reaches this through
+ * `closeOwnAccount` with its own confirmation. One core, so both leave the
+ * marketplace in the same state.
+ */
+async function runClosure(
+  context: AdminContext,
+  actorId: string,
+  user: UserRow,
+  now: Date,
+  deleteIdentity: AuthIdentityDeleter | null,
+  storage: Pick<ObjectStorage, 'list' | 'remove'>,
+): Promise<AdminCloseAccountResult> {
+  const userId = user.id;
+  const adminTarget = user.role === 'admin';
   const profile = await findVendorProfileRecord(context.db, userId);
 
   /*
@@ -627,14 +668,14 @@ export async function closeAccount(
 
   /*
    * The audit row commits with the retirement or not at all (VEN-463): a closure
-   * that cannot be recorded does not happen, and the operator simply repeats it.
+   * that cannot be recorded does not happen, and the admin simply repeats it.
    * It is the intent row (VEN-478): the trail starts with the attempt, and what
    * the unwind then did is a row of its own, because rows cannot be updated.
    */
   const audit: RetirementAudit = (tx, { profileRetired }) =>
     insertAdminAction(tx, {
       actorId,
-      action: operatorTarget ? 'operator_account_closed' : 'user_closed',
+      action: adminTarget ? ADMIN_ACCESS_ACTIONS.accountClosed : 'user_closed',
       subjectType: 'user',
       subjectId: userId,
       detail: { profileRetired },
@@ -645,21 +686,16 @@ export async function closeAccount(
   if (resuming) {
     retired = { user, profileRetired: false };
   } else {
-    const result = operatorTarget
-      ? await retireOperatorById(context.db, userId, blockersOf, audit)
+    const result = adminTarget
+      ? await retireAdminById(context.db, userId, blockersOf, audit)
       : await retireUserById(context.db, userId, blockersOf, audit);
 
-    if (result === 'last-operator') {
-      throw conflict(LAST_OPERATOR_REFUSAL);
+    if (result === 'last-admin') {
+      throw conflict(LAST_ADMIN_REFUSAL);
     }
 
     if (result && 'blocked' in result) {
-      throw conflict(
-        `This account holds ${result.blocked.length} upcoming confirmed ${
-          result.blocked.length === 1 ? 'booking' : 'bookings'
-        }. Those have to be cancelled through the booking screens first — cancelling there prices the refund; closing the account here does not price anything.`,
-        { bookings: result.blocked },
-      );
+      throw blockedByBookings(result.blocked);
     }
 
     if (!result) {
@@ -696,7 +732,7 @@ export async function closeAccount(
      */
     context.log.error(
       { userId, actorId, ...unwound },
-      'An account closure left bookings confirmed; they need an operator',
+      'An account closure left bookings confirmed; they need an admin',
     );
   }
 
@@ -728,7 +764,7 @@ export async function closeAccount(
    *
    * Reported rather than thrown, through the same helper the unwind's
    * notifications use: the retirement has already committed and
-   * an operator cannot repeat a closure — the route answers 409 on a closed
+   * an admin cannot repeat a closure — the route answers 409 on a closed
    * account — so a failure at Neon Auth must not answer 500 and tell them
    * nothing happened. It comes back as `identityDeleted: false`, and the
    * console asks for a person, the shape a refused refund already takes.
@@ -784,6 +820,93 @@ export async function closeAccount(
     profileRetired: retired.profileRetired,
     identityDeleted,
   };
+}
+
+/** Refused for an admin account: the console is the only door, and it keeps its own guards. */
+export const ADMIN_SELF_CLOSURE_REFUSAL =
+  'Admin accounts cannot be closed from account settings. Ask another admin to close it from the console.';
+
+/** The address typed back is compared the way sign-in compares it. */
+function sameAddress(typed: string, onFile: string): boolean {
+  return typed.trim().toLowerCase() === onFile.trim().toLowerCase();
+}
+
+async function readOwnCloser(db: AppDatabase, userId: string): Promise<UserRow> {
+  const user = await findUserRecord(db, userId);
+
+  if (!user) {
+    throw notFound('No account with that id');
+  }
+
+  if (user.role === 'admin') {
+    throw forbidden(ADMIN_SELF_CLOSURE_REFUSAL);
+  }
+
+  return user;
+}
+
+/**
+ * What would refuse the caller's own closure right now, so the settings page
+ * can say so before it asks for a code (VEN-680).
+ */
+export async function readOwnCloseReadiness(
+  db: AppDatabase,
+  userId: string,
+  now: Date,
+): Promise<CloseOwnAccountReadiness> {
+  const user = await readOwnCloser(db, userId);
+
+  return { blockers: user.deletedAt ? [] : await closeBlockers(db, userId, now) };
+}
+
+/**
+ * A customer or vendor closes **their own** account (VEN-680): the closure an
+ * admin performs, run for the caller after a fresh proof — the address typed
+ * back and the emailed code — so a stolen session alone cannot do it.
+ *
+ * Order matters. The typed address and the D39 refusal are checked **before**
+ * the code is spent, so a mistyped address or a standing booking costs the
+ * person nothing; the core re-reads the blockers under the row lock, which is
+ * the check that holds. The audit row names the person as its actor: a retired
+ * row keeps its id, so the foreign key holds. An admin account is refused
+ * here and keeps its own guards on the console route.
+ *
+ * A closed account answers 409 through the core; one whose unwind was
+ * interrupted is finished by re-running the closure (VEN-478) and skips the
+ * proof, since nothing new is being ended. A closed person's session no longer
+ * resolves, so over HTTP the console's route is what finishes it; this branch
+ * is the service's own.
+ */
+export async function closeOwnAccount(
+  context: AdminContext,
+  userId: string,
+  confirmation: CloseOwnAccount,
+  now: Date,
+  deleteIdentity: AuthIdentityDeleter | null,
+  storage: Pick<ObjectStorage, 'list' | 'remove'>,
+  stepUp: StepUpStore,
+): Promise<CloseOwnAccountResult> {
+  const user = await readOwnCloser(context.db, userId);
+
+  if (!user.deletedAt) {
+    if (!sameAddress(confirmation.email, user.email)) {
+      throw validationFailed('That is not the email address on this account.');
+    }
+
+    const blockers = await closeBlockers(context.db, userId, now);
+
+    if (blockers.length > 0) {
+      throw blockedByBookings(blockers);
+    }
+
+    await completeStepUp(stepUp, userId, confirmation.code, now);
+    // The grant a spent code buys opens admin routes and nothing here needs it.
+    await stepUp.revoke(userId);
+  }
+
+  const closed = await runClosure(context, userId, user, now, deleteIdentity, storage);
+
+  return { closedAt: closed.closedAt };
 }
 
 /**

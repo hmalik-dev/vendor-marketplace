@@ -18,7 +18,7 @@ import { formatWholeDollars } from './fixtures-data.js';
 import { waitForHydration } from './hydration.js';
 
 /**
- * The checkout launch switch (VEN-404), acceptance 7: an operator pauses
+ * The checkout launch switch (VEN-404), acceptance 7: an admin pauses
  * checkout from `/admin/settings`, a customer's pay control lands on the paused
  * notice instead of a card form, and once the switch is off again the same
  * booking pays.
@@ -68,7 +68,7 @@ async function setCheckoutPaused(adminPage: Page, paused: boolean): Promise<void
 test.describe.configure({ timeout: JOURNEY_TIMEOUT_MS });
 
 test.describe('checkout launch switch', () => {
-  test('a paused checkout shows the notice, and pays once the operator lifts it', async ({
+  test('a paused checkout shows the notice, and pays once the admin lifts it', async ({
     adminPage,
     customerPage,
     vendorPage,

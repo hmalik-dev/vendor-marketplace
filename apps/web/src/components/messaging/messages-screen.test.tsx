@@ -100,7 +100,7 @@ function respondWith(messages: ReturnType<typeof message>[]): void {
       return page(messages);
     }
     if (path === '/conversations') {
-      return [conversation()];
+      return { items: [conversation()], nextBefore: null };
     }
     return null;
   });
@@ -114,6 +114,7 @@ describe('MessagesScreen', () => {
   it('shows Reconnecting for a dropped stream, and never for a refused one', async () => {
     respondWith([]);
     const props = {
+      initialNextBefore: null,
       initialConversations: [conversation()],
       viewerId: VIEWER,
       initialConversationId: null,
@@ -146,6 +147,7 @@ describe('MessagesScreen', () => {
     });
     render(
       <MessagesScreen
+        initialNextBefore={null}
         initialConversations={[conversation({ unreadCount: 3 })]}
         viewerId={VIEWER}
         initialConversationId={null}
@@ -164,11 +166,95 @@ describe('MessagesScreen', () => {
     await waitFor(() => expect(name().className).toContain('font-bold'));
   });
 
+  /*
+   * VEN-691. Two reads for one thread can be out at once (open + a message
+   * arriving on it). The first failing after the second succeeded must not put
+   * back a count the server already cleared.
+   */
+  it.each([
+    ['after', true],
+    ['before', false],
+  ])(
+    'stays read when an earlier read fails %s a later one succeeded',
+    async (_order, laterFirst) => {
+      const puts: Array<{ resolve: () => void; reject: (error: Error) => void }> = [];
+      call.mockImplementation(async (path: string) => {
+        if (path.endsWith('/messages')) {
+          return page([]);
+        }
+        if (path === `/conversations/${CONVERSATION}/read`) {
+          return new Promise<null>((resolve, reject) => {
+            puts.push({ resolve: () => resolve(null), reject });
+          });
+        }
+        return null;
+      });
+      render(
+        <MessagesScreen
+          initialNextBefore={null}
+          initialConversations={[conversation({ unreadCount: 3 })]}
+          viewerId={VIEWER}
+          initialConversationId={null}
+          listFailed={false}
+        />,
+      );
+
+      const name = () => within(screen.getByRole('list')).getByText('Kessler & Co.');
+      await waitFor(() => expect(puts).toHaveLength(1));
+
+      await act(async () => {
+        onEventRef.current?.({
+          type: 'new_message',
+          conversationId: CONVERSATION,
+          message: {
+            ...message('77777777-7777-4777-8777-777777777777', THEM, 'Just arrived'),
+            createdAt: new Date('2026-04-21T15:00:00Z').toISOString(),
+          },
+        });
+      });
+      await waitFor(() => expect(puts).toHaveLength(2));
+
+      if (laterFirst) {
+        await act(async () => puts[1]?.resolve());
+        await act(async () => puts[0]?.reject(new Error('nope')));
+      } else {
+        await act(async () => puts[0]?.reject(new Error('nope')));
+        await act(async () => puts[1]?.resolve());
+      }
+
+      await waitFor(() => expect(name().className).toContain('font-medium'));
+      expect(name().className).not.toContain('font-bold');
+    },
+  );
+
+  /*
+   * VEN-706. The header's `Messages` dot clears off this event, so a read that
+   * the API accepted has to announce itself — and one it refused must not.
+   */
+  it('announces a read the API accepted so the header dot can clear', async () => {
+    const heard = vi.fn();
+    window.addEventListener('conversations-changed', heard);
+    respondWith([]);
+    render(
+      <MessagesScreen
+        initialNextBefore={null}
+        initialConversations={[conversation({ unreadCount: 2 })]}
+        viewerId={VIEWER}
+        initialConversationId={null}
+        listFailed={false}
+      />,
+    );
+
+    await waitFor(() => expect(heard).toHaveBeenCalledTimes(1));
+    window.removeEventListener('conversations-changed', heard);
+  });
+
   /* The line that makes a list of names navigable. */
   it('carries the booking line on every conversation row', async () => {
     respondWith([]);
     render(
       <MessagesScreen
+        initialNextBefore={null}
         initialConversations={[conversation()]}
         viewerId={VIEWER}
         initialConversationId={null}
@@ -183,6 +269,7 @@ describe('MessagesScreen', () => {
     respondWith([]);
     render(
       <MessagesScreen
+        initialNextBefore={null}
         initialConversations={[
           conversation({ id: VIEWER, otherPartyName: 'Unread Co.', unreadCount: 3 }),
           conversation({ id: THEM, otherPartyName: 'Read Co.', unreadCount: 0 }),
@@ -203,6 +290,7 @@ describe('MessagesScreen', () => {
     respondWith([]);
     render(
       <MessagesScreen
+        initialNextBefore={null}
         initialConversations={[
           conversation({ id: VIEWER, otherPartyName: 'First Co.' }),
           conversation({ id: THEM, otherPartyName: 'Second Co.' }),
@@ -222,6 +310,7 @@ describe('MessagesScreen', () => {
     respondWith([]);
     render(
       <MessagesScreen
+        initialNextBefore={null}
         initialConversations={[conversation()]}
         viewerId={VIEWER}
         initialConversationId={null}
@@ -239,6 +328,7 @@ describe('MessagesScreen', () => {
     ]);
     render(
       <MessagesScreen
+        initialNextBefore={null}
         initialConversations={[conversation()]}
         viewerId={VIEWER}
         initialConversationId={null}
@@ -277,6 +367,7 @@ describe('MessagesScreen', () => {
     respondWith([message('44444444-4444-4444-8444-444444444444', THEM, content)]);
     render(
       <MessagesScreen
+        initialNextBefore={null}
         initialConversations={[conversation()]}
         viewerId={VIEWER}
         initialConversationId={null}
@@ -299,6 +390,7 @@ describe('MessagesScreen', () => {
     respondWith([]);
     render(
       <MessagesScreen
+        initialNextBefore={null}
         initialConversations={[conversation()]}
         viewerId={VIEWER}
         initialConversationId={null}
@@ -320,11 +412,12 @@ describe('MessagesScreen', () => {
         return page([]);
       }
       // A send refreshes the list, so this has to answer with one.
-      return path === '/conversations' ? [conversation()] : null;
+      return path === '/conversations' ? { items: [conversation()], nextBefore: null } : null;
     });
 
     render(
       <MessagesScreen
+        initialNextBefore={null}
         initialConversations={[conversation()]}
         viewerId={VIEWER}
         initialConversationId={null}
@@ -348,11 +441,12 @@ describe('MessagesScreen', () => {
       if (path.endsWith('/messages')) {
         return page([]);
       }
-      return path === '/conversations' ? [conversation()] : null;
+      return path === '/conversations' ? { items: [conversation()], nextBefore: null } : null;
     });
 
     render(
       <MessagesScreen
+        initialNextBefore={null}
         initialConversations={[conversation()]}
         viewerId={VIEWER}
         initialConversationId={null}
@@ -371,6 +465,7 @@ describe('MessagesScreen', () => {
     respondWith([]);
     render(
       <MessagesScreen
+        initialNextBefore={null}
         initialConversations={[conversation()]}
         viewerId={VIEWER}
         initialConversationId={null}
@@ -408,6 +503,7 @@ describe('MessagesScreen', () => {
       respondWith([message('55555555-5555-4555-8555-555555555555', THEM, 'Already here')]);
       render(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={[conversation()]}
           viewerId={VIEWER}
           initialConversationId={null}
@@ -464,6 +560,7 @@ describe('MessagesScreen', () => {
       respondWith([]);
       render(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={[conversation()]}
           viewerId={VIEWER}
           initialConversationId={null}
@@ -506,11 +603,12 @@ describe('MessagesScreen', () => {
         if (path === `/conversations/${OTHER_CONVERSATION}/messages`) {
           throw new Error('offline');
         }
-        return path === '/conversations' ? twoThreads() : null;
+        return path === '/conversations' ? { items: twoThreads(), nextBefore: null } : null;
       });
 
       render(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={twoThreads()}
           viewerId={VIEWER}
           initialConversationId={CONVERSATION}
@@ -539,11 +637,12 @@ describe('MessagesScreen', () => {
         if (path === `/conversations/${OTHER_CONVERSATION}/messages`) {
           return page([message('55555555-5555-4555-8555-555555555555', THEM, 'From Marlow')]);
         }
-        return path === '/conversations' ? twoThreads() : null;
+        return path === '/conversations' ? { items: twoThreads(), nextBefore: null } : null;
       });
 
       render(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={twoThreads()}
           viewerId={VIEWER}
           initialConversationId={CONVERSATION}
@@ -574,11 +673,12 @@ describe('MessagesScreen', () => {
         if (path.endsWith('/messages')) {
           return page([]);
         }
-        return path === '/conversations' ? twoThreads() : null;
+        return path === '/conversations' ? { items: twoThreads(), nextBefore: null } : null;
       });
 
       render(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={twoThreads()}
           viewerId={VIEWER}
           initialConversationId={CONVERSATION}
@@ -606,11 +706,12 @@ describe('MessagesScreen', () => {
         if (path.endsWith('/messages')) {
           return page([]);
         }
-        return path === '/conversations' ? twoThreads() : null;
+        return path === '/conversations' ? { items: twoThreads(), nextBefore: null } : null;
       });
 
       render(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={twoThreads()}
           viewerId={VIEWER}
           initialConversationId={CONVERSATION}
@@ -637,11 +738,12 @@ describe('MessagesScreen', () => {
         if (path.endsWith('/messages')) {
           return slow.promise;
         }
-        return path === '/conversations' ? [conversation()] : null;
+        return path === '/conversations' ? { items: [conversation()], nextBefore: null } : null;
       });
 
       render(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={[conversation()]}
           viewerId={VIEWER}
           initialConversationId={CONVERSATION}
@@ -665,6 +767,7 @@ describe('MessagesScreen', () => {
       respondWith([]);
       render(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={[conversation()]}
           viewerId={VIEWER}
           initialConversationId={null}
@@ -691,13 +794,14 @@ describe('MessagesScreen', () => {
         if (path.endsWith('/messages')) {
           return page([]);
         }
-        return path === '/conversations' ? twoThreads() : null;
+        return path === '/conversations' ? { items: twoThreads(), nextBefore: null } : null;
       });
 
       const conversations = twoThreads();
 
       const { rerender } = render(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={conversations}
           viewerId={VIEWER}
           initialConversationId={CONVERSATION}
@@ -714,6 +818,7 @@ describe('MessagesScreen', () => {
 
       rerender(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={conversations}
           viewerId={VIEWER}
           initialConversationId={OTHER_CONVERSATION}
@@ -740,6 +845,7 @@ describe('MessagesScreen', () => {
       respondWith([]);
       render(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={[conversation()]}
           viewerId={VIEWER}
           initialConversationId="12345678-1234-4234-8234-123456789012"
@@ -764,6 +870,7 @@ describe('MessagesScreen', () => {
       respondWith([]);
       render(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={[]}
           viewerId={VIEWER}
           initialConversationId={null}
@@ -779,6 +886,7 @@ describe('MessagesScreen', () => {
       respondWith([]);
       render(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={[]}
           viewerId={VIEWER}
           initialConversationId={null}
@@ -798,6 +906,7 @@ describe('MessagesScreen', () => {
       respondWith([]);
       render(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={[conversation()]}
           viewerId={VIEWER}
           initialConversationId={null}
@@ -817,6 +926,7 @@ describe('MessagesScreen', () => {
       respondWith([]);
       render(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={[conversation()]}
           viewerId={VIEWER}
           initialConversationId={CONVERSATION}
@@ -832,6 +942,7 @@ describe('MessagesScreen', () => {
       respondWith([]);
       render(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={[conversation()]}
           viewerId={VIEWER}
           initialConversationId="12345678-1234-4234-8234-123456789012"
@@ -870,11 +981,12 @@ describe('MessagesScreen', () => {
         ) {
           return page([]);
         }
-        return path === '/conversations' ? [conversation()] : null;
+        return path === '/conversations' ? { items: [conversation()], nextBefore: null } : null;
       });
 
       const { container } = render(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={[conversation()]}
           viewerId={VIEWER}
           initialConversationId={CONVERSATION}
@@ -914,11 +1026,12 @@ describe('MessagesScreen', () => {
         if (path.includes('?before=')) {
           return page([]);
         }
-        return path === '/conversations' ? [conversation()] : null;
+        return path === '/conversations' ? { items: [conversation()], nextBefore: null } : null;
       });
 
       render(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={[conversation()]}
           viewerId={VIEWER}
           initialConversationId={CONVERSATION}
@@ -936,6 +1049,7 @@ describe('MessagesScreen', () => {
       respondWith([message('44444444-4444-4444-8444-444444444444', THEM, 'Only one')]);
       render(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={[conversation()]}
           viewerId={VIEWER}
           initialConversationId={CONVERSATION}
@@ -957,6 +1071,7 @@ describe('MessagesScreen', () => {
       respondWith([]);
       render(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={[conversation()]}
           viewerId={VIEWER}
           initialConversationId={CONVERSATION}
@@ -995,11 +1110,12 @@ describe('MessagesScreen', () => {
         if (path.endsWith('/messages')) {
           return page([]);
         }
-        return path === '/conversations' ? [conversation()] : null;
+        return path === '/conversations' ? { items: [conversation()], nextBefore: null } : null;
       });
 
       render(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={[conversation()]}
           viewerId={VIEWER}
           initialConversationId={CONVERSATION}
@@ -1045,11 +1161,12 @@ describe('MessagesScreen', () => {
         if (path.endsWith('/messages')) {
           return page([]);
         }
-        return path === '/conversations' ? [conversation()] : null;
+        return path === '/conversations' ? { items: [conversation()], nextBefore: null } : null;
       });
 
       render(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={[conversation()]}
           viewerId={VIEWER}
           initialConversationId={CONVERSATION}
@@ -1092,6 +1209,7 @@ describe('MessagesScreen', () => {
       const { container } = render(
         <MessagesScreen
           viewerId={VIEWER}
+          initialNextBefore={null}
           initialConversations={[conversation()]}
           initialConversationId={CONVERSATION}
           listFailed={false}
@@ -1110,6 +1228,7 @@ describe('MessagesScreen', () => {
       const { container } = render(
         <MessagesScreen
           viewerId={VIEWER}
+          initialNextBefore={null}
           initialConversations={[conversation()]}
           initialConversationId={CONVERSATION}
           listFailed={false}
@@ -1139,6 +1258,7 @@ describe('MessagesScreen', () => {
       const { container } = render(
         <MessagesScreen
           viewerId={VIEWER}
+          initialNextBefore={null}
           initialConversations={[]}
           initialConversationId={null}
           listFailed={false}
@@ -1156,6 +1276,7 @@ describe('MessagesScreen', () => {
       render(
         <MessagesScreen
           viewerId={VIEWER}
+          initialNextBefore={null}
           initialConversations={[conversation()]}
           initialConversationId={CONVERSATION}
           listFailed={false}
@@ -1174,6 +1295,7 @@ describe('MessagesScreen', () => {
       respondWith([]);
       const { rerender } = render(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={[]}
           viewerId={VIEWER}
           initialConversationId={null}
@@ -1186,6 +1308,7 @@ describe('MessagesScreen', () => {
       // What `router.refresh()` delivers: new props, the same mounted component.
       rerender(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={twoThreads()}
           viewerId={VIEWER}
           initialConversationId={null}
@@ -1203,6 +1326,7 @@ describe('MessagesScreen', () => {
       respondWith([]);
       render(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={[]}
           viewerId={VIEWER}
           initialConversationId={CONVERSATION}
@@ -1219,6 +1343,7 @@ describe('MessagesScreen', () => {
       respondWith([]);
       render(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={[conversation()]}
           viewerId={VIEWER}
           initialConversationId={OTHER_CONVERSATION}
@@ -1257,6 +1382,7 @@ describe('MessagesScreen', () => {
       respondWith([]);
       render(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={[conversation()]}
           viewerId={VIEWER}
           initialConversationId={null}
@@ -1284,6 +1410,7 @@ describe('MessagesScreen', () => {
       respondWith([]);
       render(
         <MessagesScreen
+          initialNextBefore={null}
           initialConversations={[conversation()]}
           viewerId={VIEWER}
           initialConversationId={null}
@@ -1297,5 +1424,118 @@ describe('MessagesScreen', () => {
 
       await waitFor(() => expect(readCalls()).toHaveLength(2));
     });
+  });
+});
+
+/** The list pages (VEN-611): the first page renders, and older threads load on a control. */
+describe('MessagesScreen conversation paging', () => {
+  const OLDER = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const CURSOR = '2026-04-01T09:00:00.000001Z,55555555-5555-4555-8555-555555555555';
+
+  function pagingCalls(second: () => Promise<unknown>): void {
+    call.mockImplementation(async (path: string) => {
+      if (path.endsWith('/messages')) {
+        return page([]);
+      }
+      if (path === `/conversations?before=${encodeURIComponent(CURSOR)}`) {
+        return second();
+      }
+      return null;
+    });
+  }
+
+  function renderFirstPage(initialConversationId: string | null = null) {
+    return render(
+      <MessagesScreen
+        initialNextBefore={CURSOR}
+        initialConversations={[conversation({ id: CONVERSATION, otherPartyName: 'Kessler & Co.' })]}
+        viewerId={VIEWER}
+        initialConversationId={initialConversationId}
+        listFailed={false}
+      />,
+    );
+  }
+
+  it('appends the next page on "Load older conversations" and removes the control at the end', async () => {
+    pagingCalls(async () => ({
+      items: [conversation({ id: OLDER, otherPartyName: 'Marlow Sound' })],
+      nextBefore: null,
+    }));
+    renderFirstPage();
+
+    const list = () => within(screen.getByRole('list'));
+    expect(list().queryByText('Marlow Sound')).toBeNull();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Load older conversations' }));
+
+    expect(await list().findByText('Marlow Sound')).toBeDefined();
+    expect(list().getByText('Kessler & Co.')).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Load older conversations' })).toBeNull();
+  });
+
+  it('says so and keeps the control when the older page cannot be read', async () => {
+    pagingCalls(async () => {
+      throw new Error('ECONNREFUSED');
+    });
+    renderFirstPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Load older conversations' }));
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'We could not load older conversations.',
+    );
+    expect(screen.getByRole('button', { name: 'Load older conversations' })).toBeDefined();
+    expect(within(screen.getByRole('list')).getByText('Kessler & Co.')).toBeDefined();
+  });
+
+  it('keeps loading pages for a linked thread that is older than the first one', async () => {
+    pagingCalls(async () => ({
+      items: [conversation({ id: OLDER, otherPartyName: 'Marlow Sound' })],
+      nextBefore: null,
+    }));
+    renderFirstPage(OLDER);
+
+    expect(await within(screen.getByRole('list')).findByText('Marlow Sound')).toBeDefined();
+    expect(screen.queryByText(/may be out of date/)).toBeNull();
+  });
+});
+
+describe('MessagesScreen list refresh with paging', () => {
+  const OLDER = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const CURSOR = '2026-04-01T09:00:00.000001Z,55555555-5555-4555-8555-555555555555';
+
+  it('keeps the open thread when newer activity pushes it off the first page', async () => {
+    call.mockImplementation(async (path: string) => {
+      if (path.endsWith('/messages')) {
+        return page([]);
+      }
+      if (path === '/conversations') {
+        return {
+          items: [conversation({ id: OLDER, otherPartyName: 'Marlow Sound' })],
+          nextBefore: CURSOR,
+          hasUnread: false,
+        };
+      }
+      return null;
+    });
+    render(
+      <MessagesScreen
+        initialNextBefore={CURSOR}
+        initialConversations={[conversation({ id: CONVERSATION, otherPartyName: 'Kessler & Co.' })]}
+        viewerId={VIEWER}
+        initialConversationId={CONVERSATION}
+        listFailed={false}
+      />,
+    );
+    await screen.findByLabelText('Write a message');
+
+    await act(async () => {
+      onEventRef.current?.({ type: 'new_notification', notification: {} });
+    });
+
+    const list = within(screen.getByRole('list'));
+    expect(await list.findByText('Marlow Sound')).toBeDefined();
+    expect(list.getByText('Kessler & Co.')).toBeDefined();
+    expect(screen.getByLabelText('Write a message')).toBeDefined();
   });
 });

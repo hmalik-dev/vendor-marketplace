@@ -21,9 +21,9 @@ installed. It stops with a one-line message when Node is older than `engines`
 or Docker is not running. When there is no `.env` it creates one from
 `.env.example`, with `DATABASE_URL` set to the `postgres` service in
 `docker-compose.yml` and `DATABASE_URL_UNPOOLED`, `NEON_BRANCH`,
-`RESEND_WEBHOOK_SECRET` and `OPERATOR_ALERT_EMAIL` left empty. Their
+`RESEND_WEBHOOK_SECRET` and `ADMIN_ALERT_EMAIL` left empty. Their
 placeholders are not empty to the apps: the migrator would prefer the unpooled
-placeholder, and the API refuses to boot on `operator@...`. An existing `.env` is
+placeholder, and the API refuses to boot on `admin@...`. An existing `.env` is
 only ever read. It then lists every key the apps refuse to boot without that
 still holds its placeholder (Neon Auth, Stripe, Resend) and exits non-zero before
 `pnpm install`. The key lists are held against the env registry by
@@ -127,6 +127,20 @@ migrate it, run the reference seed and re-create its Neon Auth identities
 ([environments.md](environments.md#reset-and-reseed)); locally,
 `pnpm lane:down <id> && pnpm lane:up <id>`. Never run `pnpm db:seed:demo` or
 `pnpm db:seed:e2e` against production.
+
+**Reading an admin step-up code in a lane (VEN-641).** Do not set
+`EMAIL_SINK_ADDRESS` for this: the sink delivers through Resend, whose only
+working sender (`onboarding@resend.dev`) reaches the account owner's own address
+and never a test inbox, and a lane's `EMAIL_DAILY_SEND_CAP` is 0 so it sends
+nothing anyway. A lane needs no inbox. The local API keeps the last messages it
+was asked to send, log-only ones included, and serves the newest at
+`GET /__lane/mailbox/latest[?to=<address>]` (`{ to, subject, text }`), so a
+browser pass presses "Email me a code", reads the six digits from `text` and
+enters them; `apps/web/e2e/step-up.ts` does exactly this. The route exists only
+when `DEPLOY_ENV` is `local` on a process that is not a deployed runtime
+(`apps/api/src/plugins/email.test.ts` pins both absences), so no credential,
+inbox address or code is configured, logged or reachable on staging or
+production.
 
 **Neon Auth mail is outside the sink.** Neon Auth sends its own OTP and
 verification mail from each branch's Auth instance, not through the API's

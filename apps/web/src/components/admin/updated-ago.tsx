@@ -20,7 +20,7 @@ function label(minutes: number): string {
 /**
  * The count line's last clause — frame `13` draws "updated 2m ago".
  *
- * It has to age on the client: the server renders one moment and the operator
+ * It has to age on the client: the server renders one moment and the admin
  * leaves the console open. The first paint says "updated just now", which is
  * true of a server render and therefore hydrates without a mismatch; the tick
  * takes over from there. The page is `force-dynamic`, so a refresh really does

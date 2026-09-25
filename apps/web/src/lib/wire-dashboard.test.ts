@@ -50,12 +50,24 @@ const PAID_DASHBOARD = {
     },
     heldCents: 50_000,
     heldCount: 1,
+    debtOutstandingCents: 0,
+    debtRecoveredCents: 0,
+    backupWithholding: false,
   },
 };
 
 const OWED_NOTHING = {
   ...PAID_DASHBOARD,
-  payouts: { pendingCents: 0, pendingCount: 0, next: null, heldCents: 0, heldCount: 0 },
+  payouts: {
+    pendingCents: 0,
+    pendingCount: 0,
+    next: null,
+    heldCents: 0,
+    heldCount: 0,
+    debtOutstandingCents: 0,
+    debtRecoveredCents: 0,
+    backupWithholding: false,
+  },
 };
 
 /**
@@ -321,7 +333,7 @@ describe('the admin payments row at the wire boundary', () => {
  * the same `z.date()` with none, which is the failure mode inverted into its
  * nastiest shape: `payoutReleasedAt` is null on every outcome except the one
  * where the money moved, so the client parsed every failed retry cleanly and
- * threw on success — telling the operator a completed transfer had failed,
+ * threw on success — telling the admin a completed transfer had failed,
  * with the money already out of the platform balance. The route suite could not
  * see it, because it reads the response object rather than its JSON.
  */

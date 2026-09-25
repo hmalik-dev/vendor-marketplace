@@ -1,5 +1,5 @@
 import fp from 'fastify-plugin';
-import { runTick } from '../lib/sweep.js';
+import { createTickTracker, runTick } from '../lib/sweep.js';
 import type { ErrorReporter } from '../lib/error-reporting.js';
 import { purgeThrottleHits } from '../lib/throttle.js';
 import { expireLapsedRequests } from '../modules/booking-requests/booking-requests.service.js';
@@ -69,23 +69,18 @@ export const expirySweepPlugin = fp<ExpirySweepPluginOptions>(
       }
     };
 
-    const timer = setInterval(() => void tick(), options.intervalMs);
+    const ticks = createTickTracker();
+    const timer = setInterval(() => ticks.start(tick), options.intervalMs);
     timer.unref();
 
+    // Before `background` drains (its hook was registered first, so runs last): a tick queues emails.
     app.addHook('onClose', async () => {
       clearInterval(timer);
+      await ticks.settled();
     });
   },
   {
     name: 'expiry-sweep',
-    dependencies: [
-      'clock',
-      'database',
-      'email',
-      'background',
-      'stripe',
-      'events',
-      'operator-alerts',
-    ],
+    dependencies: ['clock', 'database', 'email', 'background', 'stripe', 'events', 'admin-alerts'],
   },
 );

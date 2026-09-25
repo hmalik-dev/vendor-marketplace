@@ -1,10 +1,26 @@
 import { sql } from 'drizzle-orm';
-import { boolean, check, index, integer, pgTable, timestamp, uuid } from 'drizzle-orm/pg-core';
-import { PLATFORM_SETTINGS_ID } from '@vendor-marketplace/shared';
+import {
+  boolean,
+  check,
+  index,
+  integer,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from 'drizzle-orm/pg-core';
+import {
+  PLATFORM_NOTICE_MAX_LENGTH,
+  PLATFORM_NOTICE_TONES,
+  PLATFORM_SETTINGS_ID,
+} from '@vendor-marketplace/shared';
 import { users } from './users.js';
 
+export const platformNoticeToneEnum = pgEnum('platform_notice_tone', PLATFORM_NOTICE_TONES);
+
 /**
- * The operator's launch switches (VEN-404), as **one row**.
+ * The admin's launch switches (VEN-404), as **one row**.
  *
  * A database row rather than environment variables because a switch that needs
  * a redeploy is useless in the incident it exists for. A singleton rather than
@@ -30,7 +46,10 @@ export const platformSettings = pgTable(
      * Off in a fresh database; the launch check requires it on in production.
      */
     vendorInviteOnly: boolean('vendor_invite_only').notNull().default(false),
-    /** The operator who last changed a value; null until the first change. */
+    /** The site-wide banner (VEN-616): plain text, or null when nothing is posted. */
+    noticeMessage: text('notice_message'),
+    noticeTone: platformNoticeToneEnum('notice_tone').notNull().default('info'),
+    /** The admin who last changed a value; null until the first change. */
     updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -42,6 +61,10 @@ export const platformSettings = pgTable(
     check(
       'platform_settings_max_booking_cents_positive',
       sql`${table.maxBookingCents} IS NULL OR ${table.maxBookingCents} > 0`,
+    ),
+    check(
+      'platform_settings_notice_message_length',
+      sql`${table.noticeMessage} IS NULL OR char_length(${table.noticeMessage}) BETWEEN 1 AND ${sql.raw(String(PLATFORM_NOTICE_MAX_LENGTH))}`,
     ),
     /* A user delete finds the rows naming it through this, not a scan (VEN-463). */
     index('platform_settings_updated_by_idx').on(table.updatedBy),

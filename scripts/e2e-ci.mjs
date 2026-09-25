@@ -121,7 +121,7 @@ export const SPEC_SELECTORS = [
       'admin-detail-patterns.spec.ts',
       'admin-filters.spec.ts',
       'admin-lists.spec.ts',
-      'admin-operator-closure.spec.ts',
+      'admin-account-closure.spec.ts',
       // /admin/settings toggles the checkout pause and the vendor invite gate.
       'launch-switches.spec.ts',
       'vendor-refusal-routing.spec.ts',

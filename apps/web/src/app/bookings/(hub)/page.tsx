@@ -2,10 +2,9 @@ import type { Metadata } from 'next';
 import { pageTitle, toDateString } from '@vendor-marketplace/shared';
 import { BookingsHub, BOOKING_TABS } from '@/components/bookings/bookings-hub';
 import { BookingsRail } from '@/components/bookings/bookings-rail';
-import { BookingsSidebar } from '@/components/bookings/bookings-sidebar';
 import { BOOKING_SORTS, toEntries, type BookingSort, type BookingTab } from '@/lib/booking-entries';
 import { getOwnBookingRequests, getOwnBookings } from '@/lib/customer-data';
-import { getOwnConversations } from '@/lib/messaging-data';
+import { getOwnConversationBand } from '@/lib/messaging-data';
 import { requireRole } from '@/lib/current-user';
 
 export const metadata: Metadata = {
@@ -88,7 +87,7 @@ export default async function BookingsPage({
    */
   const user = await requireRole('customer', `/bookings?tab=${tab}`);
 
-  const [requests, bookings, conversations] = await Promise.all([
+  const [requests, bookings, band] = await Promise.all([
     /*
      * Required: the hub's subject is these two lists, so a failed read reaches
      * the route's error boundary and its Try again rather than drawing "No
@@ -101,7 +100,7 @@ export default async function BookingsPage({
      * own — an unreachable messaging API costs the rail's second block, not the
      * page — so it is fetched alongside rather than gated behind the bookings.
      */
-    getOwnConversations(),
+    getOwnConversationBand(),
   ]);
   const entries = toEntries(requests, bookings);
   /*
@@ -123,16 +122,6 @@ export default async function BookingsPage({
 
   return (
     <div className="flex h-[calc(100dvh-var(--header-height))] overflow-hidden">
-      <BookingsSidebar
-        bookingCount={entries.length}
-        /*
-          Frame `07`'s unread dot on the `Messages` row. Read off the threads the
-          rail already fetched rather than a second request — and a boolean,
-          because the frame draws a dot and no number.
-        */
-        hasUnreadMessages={conversations.some((conversation) => conversation.unreadCount > 0)}
-        current="bookings"
-      />
       <BookingsHub
         entries={entries}
         tab={tab}
@@ -145,7 +134,7 @@ export default async function BookingsPage({
       <BookingsRail
         needsYou={needsYou}
         hasBookings={entries.length > 0}
-        conversations={conversations}
+        conversations={band.conversations}
       />
     </div>
   );

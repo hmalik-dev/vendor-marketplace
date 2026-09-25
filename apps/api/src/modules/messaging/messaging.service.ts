@@ -1,7 +1,7 @@
 import {
   EVENT_TYPE_LABELS,
   VENDOR_PAYMENTS_PATH,
-  type ConversationSummary,
+  type ConversationPage,
   type EventType,
   type NotificationItem,
   type OpenedConversation,
@@ -18,15 +18,15 @@ import { conflict, forbidden, notFound } from '../../lib/errors.js';
 import type { AuthenticatedUser } from '../../plugins/neon-auth.js';
 import { requireCustomerName } from '../users/customer-name.js';
 import {
-  countEarlierUnreadInConversation,
   countUnreadPerConversation,
   findConversationById,
   findConversationsFor,
+  hasUnreadMessages,
   findLastMessagePreviews,
   findMessagesBefore,
   findNotifications,
   findOpenableVendor,
-  insertMessage,
+  insertMessageReportingBacklog,
   insertNotification,
   markAllNotificationsRead,
   markConversationRead,
@@ -192,22 +192,25 @@ function sideOf(
 export async function listConversations(
   db: AppDatabase,
   user: AuthenticatedUser,
-): Promise<ConversationSummary[]> {
-  const rows = await findConversationsFor(db, user.id);
+  before: KeysetCursor | undefined,
+  pageSize: number,
+): Promise<ConversationPage> {
+  const { items: rows, nextBefore } = await findConversationsFor(db, user.id, pageSize, before);
 
   if (rows.length === 0) {
-    return [];
+    return { items: [], nextBefore: null, hasUnread: false };
   }
 
   const conversationIds = rows.map((row) => row.id);
-  const [previews, unread] = await withRequestIdentity(db, identityOf(user), (tx) =>
+  const [previews, unread, hasUnread] = await withRequestIdentity(db, identityOf(user), (tx) =>
     Promise.all([
       findLastMessagePreviews(tx, conversationIds, PREVIEW_LENGTH),
       countUnreadPerConversation(tx, user.id, conversationIds),
+      hasUnreadMessages(tx, user.id),
     ]),
   );
 
-  return rows.map((row) => {
+  const items = rows.map((row) => {
     const side = sideOf(row, user.id);
 
     // Each party sees the other, named by `nameOfSide`.
@@ -224,6 +227,8 @@ export async function listConversations(
       vendorSlug: row.vendorSlug,
     };
   });
+
+  return { items, nextBefore, hasUnread };
 }
 
 /**
@@ -354,8 +359,16 @@ export async function sendMessage(
     await requireCustomerName(db, user.id);
   }
 
-  const inserted = await withRequestIdentity(db, identityOf(user), (tx) =>
-    insertMessage(tx, { conversationId, senderId: user.id, content }),
+  const recipientId = side === 'customer' ? row.vendorUserId : row.customerId;
+  const { message: inserted, othersUnread } = await withRequestIdentity(
+    db,
+    identityOf(user),
+    (tx) =>
+      insertMessageReportingBacklog(
+        tx,
+        { conversationId, senderId: user.id, content },
+        recipientId,
+      ),
   );
 
   const message = toMessage(inserted);
@@ -377,7 +390,9 @@ export async function sendMessage(
    * The notification is the part that may be lost; the message is not (#408).
    */
   try {
-    await notifyRecipient(db, hub, user, row, side, inserted);
+    if (othersUnread === 0) {
+      await notifyRecipient(db, hub, row, side, recipientId);
+    }
   } catch (error) {
     log.error(
       { conversationId, messageId: inserted.id, err: error },
@@ -403,20 +418,10 @@ export async function sendMessage(
 async function notifyRecipient(
   db: AppDatabase,
   hub: EventHub,
-  user: AuthenticatedUser,
   row: ConversationParties,
   side: 'customer' | 'vendor',
-  sent: MessageRow,
+  recipientId: string,
 ): Promise<void> {
-  const recipientId = side === 'customer' ? row.vendorUserId : row.customerId;
-  const earlierWaiting = await withRequestIdentity(db, identityOf(user), (tx) =>
-    countEarlierUnreadInConversation(tx, row.id, recipientId, sent.id),
-  );
-
-  if (earlierWaiting > 0) {
-    return;
-  }
-
   const stored = await insertNotification(db, {
     userId: recipientId,
     type: 'new_message',

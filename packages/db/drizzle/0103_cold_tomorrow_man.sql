@@ -1,0 +1,1 @@
+ALTER TABLE "email_send_days" ADD COLUMN "cap" integer;

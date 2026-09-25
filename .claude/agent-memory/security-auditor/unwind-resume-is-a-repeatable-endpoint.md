@@ -29,6 +29,15 @@ no way to finish the refunds; the old rollback-the-flag path was worse.
   Stripe caps a refund at the charge's remaining amount — so the deliberately
   distinct `ban-refund:` / `close-refund:` / `delete-refund:` prefixes cannot
   pay twice. Do not re-report it.
+- VEN-693 (reviewed PASS 2026-09-24): a suspension unwind re-reads
+  `users.is_banned` before each booking (`reinstated()`, `initiatedBy ===
+'admin'` only, i.e. `SUSPENSION_UNWIND`; closure/deletion are
+  `account-holder` and a retired row reads null, so they never halt). Unban
+  commits `user_unbanned` in its own tx, so no silent undo; the halt goes in
+  the best-effort `account_unwind_finished` row. Accepted: the booking already
+  in its Stripe call when the unban lands still completes, and an
+  unban→re-ban between checks lets two unwinds overlap (same key prefix, the
+  point above covers it). Do not re-report either.
 - Both new transactions contain only Postgres work; no Stripe call sits inside
   `OPERATOR_RETIREMENT_LOCK`. Keep it that way.
 

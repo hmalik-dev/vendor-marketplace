@@ -6,7 +6,7 @@ import {
   categories,
   conversations,
   notifications,
-  operatorAlerts,
+  adminAlerts,
   users,
   vendorProfiles,
 } from '@vendor-marketplace/db/schema';
@@ -29,9 +29,10 @@ import {
   TEST_ENV,
   type TestHarness,
 } from '../../testing/test-server.js';
+import { setUserRole } from '../../testing/set-user-role.js';
 import { expireLapsedRequests } from '../booking-requests/booking-requests.service.js';
 import { recordReplacementIntent } from './payments.dao.js';
-import { bookingContextFor, expiryGuardFor } from './payments.service.js';
+import { bookingContextFor, expiryGuardFor, recordSuccessfulPayment } from './payments.service.js';
 
 const VENDOR = 'user_vendor';
 const CUSTOMER = 'user_customer';
@@ -272,7 +273,7 @@ describe('payments', () => {
     harness.stripe.cancelRequests.length = 0;
     harness.stripe.refundsToRefuse.clear();
     harness.email.sent.length = 0;
-    await harness.database.db.delete(operatorAlerts);
+    await harness.database.db.delete(adminAlerts);
     await harness.database.db.delete(bookings);
     await harness.database.db.delete(conversations);
     await harness.database.db.delete(notifications);
@@ -284,6 +285,23 @@ describe('payments', () => {
 
   afterAll(async () => {
     await harness.close();
+  });
+
+  describe('opening checkout as an admin (VEN-622)', () => {
+    it('answers 403 and mints no PaymentIntent', async () => {
+      const requestId = await acceptedRequest();
+      await setUserRole(harness.database.db, 'admin', eq(users.authUserId, CUSTOMER));
+
+      const response = await inject(
+        'POST',
+        `/v1/customer/booking-requests/${requestId}/checkout`,
+        CUSTOMER,
+      );
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error).toBe(ERROR_CODES.FORBIDDEN);
+      expect(harness.stripe.paymentIntents.size).toBe(0);
+    });
   });
 
   describe('opening checkout on a date that has passed (VEN-433)', () => {
@@ -475,7 +493,7 @@ describe('payments', () => {
 
       const alertsFor = async (requestId: string): Promise<{ kind: string }[]> => {
         await harness.app.background.drain();
-        return (await harness.database.db.select().from(operatorAlerts)).filter((alert) =>
+        return (await harness.database.db.select().from(adminAlerts)).filter((alert) =>
           alert.subjectId.startsWith(requestId),
         );
       };
@@ -919,7 +937,7 @@ describe('payments', () => {
         new RegExp(`^${stray.id}_duplicate_intent_\\d+$`),
       );
       const [mail] = harness.email.sent.filter(
-        (message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL,
+        (message) => message.to === TEST_ENV.ADMIN_ALERT_EMAIL,
       );
       expect(mail?.subject).toContain('second payment');
       expect(mail?.text).toContain(requestId);
@@ -971,6 +989,82 @@ describe('payments', () => {
       expect(booking?.requestId).toBe(requestId);
     });
 
+    describe('the fee rate fixed at acceptance (VEN-712)', () => {
+      const RAISED_RATE = 0.2;
+
+      /** Checks out and settles the intent, then books it under a rate other than the one accepted at. */
+      const payAtRate = async (requestId: string, rate: number): Promise<void> => {
+        const checkout = await inject(
+          'POST',
+          `/v1/customer/booking-requests/${requestId}/checkout`,
+          CUSTOMER,
+        );
+        const intentId: string = checkout.json().paymentIntentId;
+        harness.stripe.succeed(intentId);
+        const intent = harness.stripe.paymentIntents.get(intentId)!;
+
+        const recorded = await recordSuccessfulPayment(
+          {
+            ...bookingContextFor(harness.app, harness.app.log, 'https://web.test'),
+            platformFeeRate: rate,
+          },
+          intent,
+        );
+        expect(recorded.outcome).toBe('booked');
+      };
+
+      it('stores the accepted rate on the request and the booking', async () => {
+        const requestId = await acceptedRequest();
+        const [request] = await harness.database.db
+          .select({ bps: bookingRequests.platformFeeBps })
+          .from(bookingRequests)
+          .where(eq(bookingRequests.id, requestId));
+        expect(request?.bps).toBe(1200);
+
+        await payFor(requestId);
+
+        const [booking] = await harness.database.db.select().from(bookings);
+        expect(booking?.platformFeeBps).toBe(1200);
+      });
+
+      it('does not move the split when the env rate changes after acceptance', async () => {
+        const requestId = await acceptedRequest();
+
+        await payAtRate(requestId, RAISED_RATE);
+
+        const [booking] = await harness.database.db.select().from(bookings);
+        expect(booking?.platformFeeCents).toBe(EXPECTED_FEE_CENTS);
+        expect(booking?.vendorPayoutCents).toBe(EXPECTED_PAYOUT_CENTS);
+        expect(booking?.platformFeeBps).toBe(1200);
+      });
+
+      it('prices a request accepted before the column existed at the env rate', async () => {
+        const requestId = await acceptedRequest();
+        await harness.database.db
+          .update(bookingRequests)
+          .set({ platformFeeBps: null })
+          .where(eq(bookingRequests.id, requestId));
+
+        await payAtRate(requestId, RAISED_RATE);
+
+        const [booking] = await harness.database.db.select().from(bookings);
+        expect(booking?.platformFeeCents).toBe(29_000);
+        expect(booking?.vendorPayoutCents).toBe(116_000);
+        expect(booking?.platformFeeBps).toBe(2000);
+      });
+
+      it('refuses a rate outside 0..10000 basis points at the database', async () => {
+        const requestId = await acceptedRequest();
+
+        await expect(
+          harness.database.db
+            .update(bookingRequests)
+            .set({ platformFeeBps: 10_001 })
+            .where(eq(bookingRequests.id, requestId)),
+        ).rejects.toThrow();
+      });
+    });
+
     /**
      * Stripe retries a webhook it could not confirm for three days, so a second
      * delivery is the normal case rather than an error. It must report success
@@ -1001,7 +1095,7 @@ describe('payments', () => {
      * The platform refused the request (an account unwind declined it) while the
      * customer's tab still held a live client secret and confirmed against
      * Stripe.js. The money moved; booking it would sell a date the vendor no
-     * longer offers, so the webhook refunds the charge and tells the operator.
+     * longer offers, so the webhook refunds the charge and tells the admin.
      */
     it('refunds a payment on a declined request instead of booking it', async () => {
       const requestId = await acceptedRequest();
@@ -1034,7 +1128,7 @@ describe('payments', () => {
         new RegExp(`^${intentId}_declined_request_\\d+$`),
       );
       const [mail] = harness.email.sent.filter(
-        (message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL,
+        (message) => message.to === TEST_ENV.ADMIN_ALERT_EMAIL,
       );
       expect(mail?.subject).toContain('declined request');
       expect(mail?.text).toContain(requestId);
@@ -1143,7 +1237,7 @@ describe('payments', () => {
       expect(response.statusCode).toBe(500);
       expect(await harness.database.db.select().from(bookings)).toEqual([]);
       const [mail] = harness.email.sent.filter(
-        (message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL,
+        (message) => message.to === TEST_ENV.ADMIN_ALERT_EMAIL,
       );
       expect(mail?.text).toContain('has not been refunded');
 
@@ -1155,7 +1249,7 @@ describe('payments', () => {
       expect(retried.statusCode).toBe(200);
       expect(harness.stripe.refunds).toHaveLength(1);
       expect(
-        harness.email.sent.filter((message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL),
+        harness.email.sent.filter((message) => message.to === TEST_ENV.ADMIN_ALERT_EMAIL),
       ).toHaveLength(2);
     });
 
@@ -1633,7 +1727,7 @@ describe('payments', () => {
     /*
      * #415. The screens on both sides have to say who ended the booking and
      * what came back, and neither survived on the row: `cancellation_reason`
-     * is the customer's free text here and an operator's sentence on the ban
+     * is the customer's free text here and an admin's sentence on the ban
      * path, so telling them apart meant matching a string that is one copy
      * edit from being wrong — and the refund figure existed only in this
      * response, which nothing stores.
@@ -1686,16 +1780,16 @@ describe('payments', () => {
       expect(row?.status).toBe('cancelled');
       await harness.flushEmail();
       expect(
-        harness.email.sent.filter((message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL),
+        harness.email.sent.filter((message) => message.to === TEST_ENV.ADMIN_ALERT_EMAIL),
       ).toEqual([]);
     });
 
     /*
      * VEN-472. The refund is out and a payout sweep commits before the row is
      * written: the customer is refunded and the vendor paid, which is a person's
-     * problem, so the operator is told before the 409.
+     * problem, so the admin is told before the 409.
      */
-    it('alerts the operator and answers 409 when a payout release beats a cancel that refunded', async () => {
+    it('alerts the admin and answers 409 when a payout release beats a cancel that refunded', async () => {
       const requestId = await acceptedRequest();
       await payFor(requestId);
       const [booking] = await harness.database.db.select().from(bookings);
@@ -1717,7 +1811,7 @@ describe('payments', () => {
       expect(response.statusCode).toBe(409);
       expect(harness.stripe.refunds).toHaveLength(1);
       const alerts = harness.email.sent.filter(
-        (message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL,
+        (message) => message.to === TEST_ENV.ADMIN_ALERT_EMAIL,
       );
       expect(alerts).toHaveLength(1);
       expect(alerts[0]?.text).toContain(booking!.id);
@@ -1729,10 +1823,10 @@ describe('payments', () => {
     /*
      * VEN-607. The row write waits on a lock the payout sweep holds across its
      * Stripe calls and the session's `lock_timeout` ends the wait. The refund is
-     * out, so this is the same state as a lost predicate: the operator is told,
+     * out, so this is the same state as a lost predicate: the admin is told,
      * and the customer is asked to try again.
      */
-    it('alerts the operator and answers 503 when the row write times out on a lock after the refund', async () => {
+    it('alerts the admin and answers 503 when the row write times out on a lock after the refund', async () => {
       const requestId = await acceptedRequest();
       await payFor(requestId);
       const [booking] = await harness.database.db.select().from(bookings);
@@ -1762,7 +1856,7 @@ describe('payments', () => {
       expect(response.json().error).toBe('SERVICE_BUSY');
       expect(harness.stripe.refunds).toHaveLength(1);
       const alerts = harness.email.sent.filter(
-        (message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL,
+        (message) => message.to === TEST_ENV.ADMIN_ALERT_EMAIL,
       );
       expect(alerts).toHaveLength(1);
       expect(alerts[0]?.text).toContain(booking!.id);
@@ -1790,7 +1884,7 @@ describe('payments', () => {
 
       expect(response.statusCode).toBe(409);
       expect(
-        harness.email.sent.filter((message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL),
+        harness.email.sent.filter((message) => message.to === TEST_ENV.ADMIN_ALERT_EMAIL),
       ).toHaveLength(1);
     });
 
@@ -1882,6 +1976,39 @@ describe('payments', () => {
       });
       const [after] = await harness.database.db.select().from(bookings);
       expect(after).toMatchObject({ status: 'cancelled', refundAmountCents: PRICE_CENTS });
+    });
+
+    /*
+     * The customer's late-tier refund went out under `cancel_…_marked` and its row
+     * write has not landed: the vendor's top-up is the same amount, so it must not
+     * reuse that key or Stripe would answer with the first refund and the row
+     * would claim money that never moved.
+     */
+    it('tops a vendor cancel up under its own key after the customer late-tier refund', async () => {
+      const requestId = await acceptedRequest();
+      await payFor(requestId);
+      const [booking] = await harness.database.db.select().from(bookings);
+      const halfCents = PRICE_CENTS / 2;
+      harness.stripe.refunds.push({
+        paymentIntentId: booking!.stripePaymentIntentId!,
+        amountCents: halfCents,
+        reason: 'requested_by_customer',
+        idempotencyKey: `cancel_${booking!.id}_marked`,
+        reverseTransfer: false,
+        refundApplicationFee: false,
+      });
+
+      const response = await inject('PUT', `/v1/vendor/bookings/${booking!.id}/cancel`, VENDOR, {
+        reason: 'A family emergency.',
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().refundCents).toBe(PRICE_CENTS);
+      expect(harness.stripe.refunds).toHaveLength(2);
+      expect(harness.stripe.refunds[1]).toMatchObject({
+        amountCents: halfCents,
+        idempotencyKey: `vendor_cancel_${booking!.id}_marked`,
+      });
     });
 
     it('frees the date again', async () => {
@@ -2154,6 +2281,183 @@ describe('payments', () => {
         (await inject('PUT', `/v1/customer/bookings/${booking!.id}/cancel`, VENDOR, {})).statusCode,
       ).toBe(403);
       expect(harness.stripe.refunds).toEqual([]);
+    });
+
+    /*
+     * VEN-659. The vendor's own cancellation: a full refund at the timing where
+     * the customer's would be half, recorded as theirs, both sides told.
+     */
+    describe('by the vendor (VEN-659)', () => {
+      const vendorCancel = (
+        bookingId: string,
+        body: Record<string, unknown> = { reason: 'A family emergency.' },
+      ) => inject('PUT', `/v1/vendor/bookings/${bookingId}/cancel`, VENDOR, body);
+
+      it('refunds the full amount inside the customer late window, and frees the date', async () => {
+        const requestId = await acceptedRequest();
+        await payFor(requestId);
+        const [booking] = await harness.database.db.select().from(bookings);
+        const inLateWindow = new Date(clockNow.getTime() + 2 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .slice(0, 10);
+        await harness.database.db
+          .update(bookings)
+          .set({ eventDate: inLateWindow })
+          .where(eq(bookings.id, booking!.id));
+
+        const response = await vendorCancel(booking!.id);
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().refundCents).toBe(PRICE_CENTS);
+        expect(response.json().isFullRefund).toBe(true);
+        expect(harness.stripe.refunds).toEqual([
+          {
+            paymentIntentId: booking!.stripePaymentIntentId,
+            amountCents: PRICE_CENTS,
+            reason: 'requested_by_customer',
+            idempotencyKey: `vendor_cancel_${booking!.id}_marked`,
+            reverseTransfer: false,
+            refundApplicationFee: false,
+          },
+        ]);
+
+        const [row] = await harness.database.db.select().from(bookings);
+        expect(row).toMatchObject({
+          status: 'cancelled',
+          cancelledBy: 'vendor',
+          cancellationReason: 'A family emergency.',
+          refundAmountCents: PRICE_CENTS,
+          vendorPayoutCents: 0,
+        });
+      });
+
+      it('frees the date and tells both sides, in the app and by email', async () => {
+        const requestId = await acceptedRequest();
+        await payFor(requestId);
+        const [booking] = await harness.database.db.select().from(bookings);
+
+        await vendorCancel(booking!.id);
+        await harness.flushEmail();
+
+        const [held] = await harness.database.db.select().from(availability);
+        expect(held?.status).not.toBe('booked');
+
+        const rows = await harness.database.db
+          .select()
+          .from(notifications)
+          .where(eq(notifications.type, 'booking_cancelled'));
+        expect(rows.map((row) => row.title).sort()).toEqual([
+          'You cancelled a booking',
+          'Your booking was cancelled by the vendor',
+        ]);
+        expect(rows.find((row) => row.userId === booking!.customerId)?.body).toBe(
+          'The vendor cancelled this booking and your payment of $1,450 is refunded in full. Their reason: A family emergency.',
+        );
+        const cancellationMail = harness.email.sent
+          .filter((mail) => mail.subject.includes('cancel'))
+          .map((mail) => [mail.to, mail.subject]);
+        expect(cancellationMail).toEqual([
+          ['alan@example.com', 'Your booking was cancelled by the vendor'],
+          ['grace@example.com', 'You cancelled a booking'],
+        ]);
+      });
+
+      it('requires a reason', async () => {
+        const requestId = await acceptedRequest();
+        await payFor(requestId);
+        const [booking] = await harness.database.db.select().from(bookings);
+
+        expect((await vendorCancel(booking!.id, {})).statusCode).toBe(400);
+        expect((await vendorCancel(booking!.id, { reason: '   ' })).statusCode).toBe(400);
+        expect(harness.stripe.refunds).toEqual([]);
+      });
+
+      it('refuses the customer using the vendor route', async () => {
+        const requestId = await acceptedRequest();
+        await payFor(requestId);
+        const [booking] = await harness.database.db.select().from(bookings);
+
+        expect(
+          (
+            await inject('PUT', `/v1/vendor/bookings/${booking!.id}/cancel`, CUSTOMER, {
+              reason: 'x',
+            })
+          ).statusCode,
+        ).toBe(403);
+        expect(harness.stripe.refunds).toEqual([]);
+      });
+
+      it('refuses after the event, refunding nothing', async () => {
+        const booking = await pastBooking();
+
+        const response = await vendorCancel(booking.id);
+
+        expect(response.statusCode).toBe(409);
+        expect(response.json().message).toContain('too close to cancel');
+        expect(harness.stripe.refunds).toEqual([]);
+        const [row] = await harness.database.db.select().from(bookings);
+        expect(row?.status).toBe('confirmed');
+      });
+
+      it('refuses once the payout is released, reversing nothing', async () => {
+        const requestId = await acceptedRequest();
+        await payFor(requestId);
+        const [booking] = await harness.database.db.select().from(bookings);
+        await harness.database.db
+          .update(bookings)
+          .set({ payoutReleasedAt: new Date(), stripeTransferId: 'tr_test_released' })
+          .where(eq(bookings.id, booking!.id));
+
+        const response = await vendorCancel(booking!.id);
+
+        expect(response.statusCode).toBe(409);
+        expect(response.json().message).toContain('already been paid out');
+        expect(harness.stripe.refunds).toEqual([]);
+        expect(harness.stripe.reversals).toEqual([]);
+      });
+
+      it('refuses a booking under the customer report, in the vendor words', async () => {
+        const requestId = await acceptedRequest();
+        await payFor(requestId);
+        const [booking] = await harness.database.db.select().from(bookings);
+        await harness.database.db
+          .update(bookings)
+          .set({ status: 'disputed' })
+          .where(eq(bookings.id, booking!.id));
+
+        const response = await vendorCancel(booking!.id);
+
+        expect(response.statusCode).toBe(409);
+        expect(response.json().message).toBe(
+          'The customer has reported a problem with this booking, so it is being reviewed',
+        );
+        expect(harness.stripe.refunds).toEqual([]);
+      });
+
+      it('answers a repeat with the first and refunds once', async () => {
+        const requestId = await acceptedRequest();
+        await payFor(requestId);
+        const [booking] = await harness.database.db.select().from(bookings);
+
+        const first = await vendorCancel(booking!.id);
+        const second = await vendorCancel(booking!.id);
+
+        expect(second.statusCode).toBe(200);
+        expect(second.json()).toEqual(first.json());
+        expect(harness.stripe.refunds).toHaveLength(1);
+      });
+
+      it('leaves a booking the customer already cancelled a refusal', async () => {
+        const requestId = await acceptedRequest();
+        await payFor(requestId);
+        const [booking] = await harness.database.db.select().from(bookings);
+        await inject('PUT', `/v1/customer/bookings/${booking!.id}/cancel`, CUSTOMER, {});
+
+        const response = await vendorCancel(booking!.id);
+
+        expect(response.statusCode).toBe(409);
+        expect(response.json().message).toBe('That booking is already cancelled');
+      });
     });
 
     it('tells the vendor their date is free and that nothing is taken back', async () => {

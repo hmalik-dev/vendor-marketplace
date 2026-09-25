@@ -3,12 +3,58 @@ import {
   callerAddress,
   chargeAddress,
   chargeCaller,
+  chargeRequest,
   isAddressThrottled,
+  isMailPaced,
+  isSignInRefused,
   isThrottled,
+  recordSignInFailure,
   resetThrottle,
+  signInCaller,
 } from './proxy-throttle';
 
 const VERIFY = ['email-otp', 'verify-email'];
+
+describe('sign-in failures per account address and caller (VEN-630)', () => {
+  beforeEach(() => {
+    vi.stubEnv('WEB_TIER_KEY', '');
+    resetThrottle();
+  });
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  async function fail(address: string, caller: string, times: number) {
+    for (let i = 0; i < times; i++) await recordSignInFailure(address, caller, 1_000);
+  }
+
+  it('lets the owner from another caller in after ten failures elsewhere, and still refuses the failing caller', async () => {
+    await fail('owner@x.test', '1.1.1.1', 10);
+
+    expect(await isSignInRefused('owner@x.test', '2.2.2.2', 1_000)).toBe(false);
+    expect(await isSignInRefused('owner@x.test', '1.1.1.1', 1_000)).toBe(true);
+  });
+
+  it('refuses a caller that failed once itself while the address budget is spent', async () => {
+    for (let i = 0; i < 10; i++) await fail('owner@x.test', `9.9.9.${i}`, 1);
+    await fail('owner@x.test', '2.2.2.2', 1);
+
+    expect(await isSignInRefused('owner@x.test', '2.2.2.2', 1_000)).toBe(true);
+    expect(await isSignInRefused('owner@x.test', '3.3.3.3', 1_000)).toBe(false);
+  });
+
+  it('reads the address case-insensitively and per address', async () => {
+    await fail('Owner@X.test', '1.1.1.1', 10);
+
+    expect(await isSignInRefused('owner@x.test', '1.1.1.1', 1_000)).toBe(true);
+    expect(await isSignInRefused('other@x.test', '1.1.1.1', 1_000)).toBe(false);
+  });
+
+  it('forgives a caller after ten minutes', async () => {
+    await fail('owner@x.test', '1.1.1.1', 10);
+
+    expect(await isSignInRefused('owner@x.test', '1.1.1.1', 1_000 + 600_000)).toBe(false);
+  });
+});
 
 describe('isThrottled', () => {
   beforeEach(resetThrottle);
@@ -138,6 +184,99 @@ function fakeSharedCounter(): {
   return seen;
 }
 
+describe('sign-in failures through the shared counter (VEN-630)', () => {
+  beforeEach(() => {
+    vi.stubEnv('WEB_TIER_KEY', 'k'.repeat(40));
+    resetThrottle();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  /** The API's semantics: a read never adds a hit and refuses at `held >= limit`; a charge adds one and refuses past `limit`. */
+  function recordAwareCounter() {
+    const counts = new Map<string, number>();
+    const seen: Array<{ bucket: string; limit: number; record: boolean }> = [];
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init: RequestInit) => {
+        const body = JSON.parse(String(init.body)) as {
+          bucket: string;
+          limit: number;
+          record: boolean;
+        };
+        const held = counts.get(body.bucket) ?? 0;
+        seen.push(body);
+
+        if (!body.record) {
+          return Response.json({ throttled: held >= body.limit });
+        }
+
+        counts.set(body.bucket, held + 1);
+        return Response.json({ throttled: held + 1 > body.limit });
+      }),
+    );
+
+    return seen;
+  }
+
+  it('lets the owner in after a stranger spent the address budget, and reads without recording', async () => {
+    const seen = recordAwareCounter();
+
+    for (let i = 0; i < 10; i++) await recordSignInFailure('owner@x.test', '1.1.1.1');
+
+    const readsFrom = seen.length;
+    expect(await isSignInRefused('owner@x.test', '2.2.2.2')).toBe(false);
+    expect(await isSignInRefused('owner@x.test', '1.1.1.1')).toBe(true);
+    expect(seen.slice(readsFrom).every((call) => !call.record)).toBe(true);
+    expect(await isSignInRefused('owner@x.test', '2.2.2.2')).toBe(false);
+  });
+
+  it('stores opaque buckets, never the address or the caller', async () => {
+    const seen = recordAwareCounter();
+
+    await recordSignInFailure('Someone@Example.com', '9.9.9.9');
+
+    expect(JSON.stringify(seen)).not.toMatch(/example\.com|9\.9\.9\.9/);
+  });
+});
+
+describe('signInCaller', () => {
+  it('keeps an IPv4 address and takes an IPv6 address by its /64', () => {
+    expect(signInCaller('203.0.113.7')).toBe('203.0.113.7');
+    expect(signInCaller('2001:db8:0:1::5')).toBe('2001:0db8:0000:0001::/64');
+    expect(signInCaller('2001:DB8:0:1:aaaa:bbbb:cccc:dddd')).toBe('2001:0db8:0000:0001::/64');
+    expect(signInCaller('2001:db8::1')).toBe('2001:0db8:0000:0000::/64');
+    expect(signInCaller('::1')).toBe('0000:0000:0000:0000::/64');
+    expect(signInCaller('::ffff:203.0.113.7')).toBe('::ffff:203.0.113.7');
+  });
+});
+
+describe('the ceiling on wrong passwords per address (VEN-630)', () => {
+  beforeEach(() => {
+    vi.stubEnv('WEB_TIER_KEY', '');
+    resetThrottle();
+  });
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('refuses even a caller with no failure once a hundred came from many callers', async () => {
+    for (let i = 0; i < 100; i++) await recordSignInFailure('owner@x.test', `10.0.0.${i}`);
+
+    expect(await isSignInRefused('owner@x.test', '10.9.9.9')).toBe(true);
+  });
+
+  it('does not hand a fresh guess to every address inside one IPv6 /64', async () => {
+    for (let i = 1; i <= 10; i++) await recordSignInFailure('owner@x.test', `2001:db8::${i}`);
+
+    expect(await isSignInRefused('owner@x.test', '2001:db8::ffff')).toBe(true);
+    expect(await isSignInRefused('owner@x.test', '2001:db9::1')).toBe(false);
+  });
+});
+
 describe('the shared counter', () => {
   beforeEach(() => {
     resetThrottle();
@@ -220,5 +359,115 @@ describe('the shared counter', () => {
     await chargeCaller('1.2.3.4', ['email-otp', 'verify-email']);
 
     expect(seen.calls).toEqual([]);
+  });
+});
+
+describe('reset and code requests per account address and caller (VEN-718)', () => {
+  const RESET = ['email-otp', 'request-password-reset'];
+
+  beforeEach(() => {
+    vi.stubEnv('WEB_TIER_KEY', '');
+    resetThrottle();
+  });
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  async function ask(caller: string, times: number, path = RESET) {
+    const answers: boolean[] = [];
+    for (let i = 0; i < times; i++)
+      answers.push(await chargeRequest('owner@x.test', caller, path, 1_000));
+    return answers;
+  }
+
+  it('lets the owner from another caller in after a stranger spent the address budget, and still refuses the stranger', async () => {
+    expect(await ask('1.1.1.1', 5)).toEqual([false, false, false, false, false]);
+
+    expect(await ask('1.1.1.1', 1)).toEqual([true]);
+    expect(await ask('2.2.2.2', 1)).toEqual([false]);
+  });
+
+  it('refuses a caller that already used its own request while the address budget is spent', async () => {
+    for (let i = 0; i < 5; i++) await ask(`9.9.9.${i}`, 1);
+    await ask('2.2.2.2', 1);
+
+    expect(await ask('2.2.2.2', 1)).toEqual([true]);
+    expect(await ask('3.3.3.3', 1)).toEqual([false]);
+  });
+
+  it('keeps each path and each address to its own budget', async () => {
+    await ask('1.1.1.1', 6);
+
+    expect(await ask('1.1.1.1', 1, VERIFY)).toEqual([false]);
+    expect(await chargeRequest('other@x.test', '1.1.1.1', RESET, 1_000)).toBe(false);
+  });
+
+  it('refuses even a caller with no request of its own once fifty came from many callers', async () => {
+    for (let i = 0; i < 50; i++) await ask(`10.0.0.${i}`, 1);
+
+    expect(await ask('10.9.9.9', 1)).toEqual([true]);
+  });
+
+  it('holds a code check to ten guesses per address however many callers ask', async () => {
+    for (let i = 0; i < 10; i++) await ask(`10.0.0.${i}`, 1, VERIFY);
+
+    expect(await ask('10.9.9.9', 1, VERIFY)).toEqual([true]);
+    expect(await ask('10.9.9.9', 1, ['email-otp', 'reset-password'])).toEqual([false]);
+  });
+
+  it('refuses a request whose own charge went over the ceiling, as a parallel burst would', async () => {
+    const results = await Promise.all(
+      Array.from({ length: 12 }, (_, i) =>
+        chargeRequest('owner@x.test', `10.1.0.${i}`, VERIFY, 1_000),
+      ),
+    );
+
+    expect(results.filter((refused) => !refused)).toHaveLength(10);
+  });
+
+  it('counts an IPv6 /64 as one caller and forgives after ten minutes', async () => {
+    for (let i = 1; i <= 5; i++)
+      await chargeRequest('owner@x.test', `2001:db8::${i}`, RESET, 1_000);
+
+    expect(await chargeRequest('owner@x.test', '2001:db8::ffff', RESET, 1_000)).toBe(true);
+    expect(await chargeRequest('owner@x.test', '2001:db8::ffff', RESET, 1_000 + 600_000)).toBe(
+      false,
+    );
+  });
+});
+
+describe('reset mail per account address, per minute (VEN-719)', () => {
+  beforeEach(() => {
+    vi.stubEnv('WEB_TIER_KEY', '');
+    resetThrottle();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it('lets one through a minute for one address, whatever the case, and paces the rest', async () => {
+    expect(await isMailPaced('owner@x.test', 1_000)).toBe(false);
+    expect(await isMailPaced('Owner@X.test', 2_000)).toBe(true);
+    expect(await isMailPaced(' owner@x.test ', 3_000)).toBe(true);
+    expect(await isMailPaced('other@x.test', 3_000)).toBe(false);
+  });
+
+  it('records nothing for a paced request, and frees the send when the minute is up', async () => {
+    await isMailPaced('owner@x.test', 1_000);
+    for (const at of [30_000, 50_000]) expect(await isMailPaced('owner@x.test', at)).toBe(true);
+
+    expect(await isMailPaced('owner@x.test', 61_001)).toBe(false);
+    expect(await isMailPaced('owner@x.test', 61_002)).toBe(true);
+  });
+
+  it('stores an opaque bucket, never the address', async () => {
+    const seen = fakeSharedCounter();
+    vi.stubEnv('WEB_TIER_KEY', 'k'.repeat(40));
+
+    await isMailPaced('Someone@Example.com');
+
+    expect(seen.calls[0]?.bucket).toMatch(/^mail\|[0-9a-f]{64}$/);
+    expect(seen.calls[0]?.limit).toBe(1);
   });
 });

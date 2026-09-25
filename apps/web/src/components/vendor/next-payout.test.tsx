@@ -12,7 +12,17 @@ const TODAY = '2026-06-15';
 function payouts(
   overrides: Partial<WireVendorDashboard['payouts']> = {},
 ): WireVendorDashboard['payouts'] {
-  return { pendingCents: 0, pendingCount: 0, next: null, heldCents: 0, heldCount: 0, ...overrides };
+  return {
+    pendingCents: 0,
+    pendingCount: 0,
+    next: null,
+    heldCents: 0,
+    heldCount: 0,
+    debtOutstandingCents: 0,
+    debtRecoveredCents: 0,
+    backupWithholding: false,
+    ...overrides,
+  };
 }
 
 function next(
@@ -181,5 +191,102 @@ describe('NextPayout', () => {
     expect(screen.getByText('Paid out after each event')).toBeDefined();
     expect(screen.queryByText('$0')).toBeNull();
     expect(container.textContent).not.toContain('pays out');
+  });
+
+  it('says what is kept back from payouts to repay a lost chargeback, and what is already repaid (VEN-658)', () => {
+    const { container } = render(
+      <NextPayout
+        payouts={payouts({ debtOutstandingCents: 61_500, debtRecoveredCents: 20_000 })}
+        serverToday={TODAY}
+      />,
+    );
+
+    expect(container.textContent).toContain(
+      '$615 is kept back from your payouts until it is repaid: the card network ruled against a chargeback on a booking you were already paid for, and $200 is already repaid',
+    );
+  });
+
+  it('shows the next payout net of what is kept back, with the amount kept back beside its date (VEN-658)', () => {
+    render(
+      <NextPayout
+        payouts={payouts({
+          pendingCents: 175_000,
+          pendingCount: 1,
+          next: next(),
+          debtOutstandingCents: 61_500,
+        })}
+        serverToday={TODAY}
+      />,
+    );
+
+    expect(screen.getByText('$1,135')).toBeDefined();
+    expect(screen.getByText('Anjali · after $615 kept back · pays out Jun 18')).toBeDefined();
+  });
+
+  it('says nothing about debt when none is owed', () => {
+    const { container } = render(<NextPayout payouts={payouts()} serverToday={TODAY} />);
+
+    expect(container.textContent).not.toContain('kept back');
+  });
+
+  /* VEN-723: backup withholding comes off the share first, and debt is kept back from what is left. */
+  it('names the backup withholding beside the debt line, and prints the figure that is sent', () => {
+    render(
+      <NextPayout
+        payouts={payouts({
+          pendingCents: 100_000,
+          pendingCount: 1,
+          next: next({ cents: 100_000 }),
+          backupWithholding: true,
+        })}
+        serverToday={TODAY}
+      />,
+    );
+
+    expect(screen.getByText('$760')).toBeDefined();
+    expect(screen.getByText('Backup withholding (IRS): −$240')).toBeDefined();
+  });
+
+  it('keeps debt back from what is left after the withholding, in the order the sweep applies them', () => {
+    const { container } = render(
+      <NextPayout
+        payouts={payouts({
+          pendingCents: 100_000,
+          pendingCount: 1,
+          next: next({ cents: 100_000 }),
+          debtOutstandingCents: 30_000,
+          backupWithholding: true,
+        })}
+        serverToday={TODAY}
+      />,
+    );
+
+    // $1,000 less $240 withheld less $300 kept back.
+    expect(screen.getByText('$460')).toBeDefined();
+    expect(screen.getByText('Backup withholding (IRS): −$240')).toBeDefined();
+    expect(container.textContent).toContain('after $300 kept back');
+  });
+
+  it('says nothing about withholding when it is off, or when nothing is pending', () => {
+    const off = render(
+      <NextPayout
+        payouts={payouts({
+          pendingCents: 100_000,
+          pendingCount: 1,
+          next: next({ cents: 100_000 }),
+        })}
+        serverToday={TODAY}
+      />,
+    );
+
+    expect(off.container.textContent).not.toContain('Backup withholding');
+    expect(screen.getByText('$1,000')).toBeDefined();
+    cleanup();
+
+    const idle = render(
+      <NextPayout payouts={payouts({ backupWithholding: true })} serverToday={TODAY} />,
+    );
+
+    expect(idle.container.textContent).not.toContain('Backup withholding');
   });
 });

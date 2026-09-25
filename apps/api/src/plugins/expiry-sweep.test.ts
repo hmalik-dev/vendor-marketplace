@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import fp from 'fastify-plugin';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { expireLapsedRequests } from '../modules/booking-requests/booking-requests.service.js';
+import { backgroundPlugin } from './background.js';
 import { expirySweepPlugin } from './expiry-sweep.js';
 
 vi.mock('../modules/booking-requests/booking-requests.service.js', () => ({
@@ -13,7 +14,7 @@ const INTERVAL_MS = 60_000;
 /** The plugin name each decorator is registered under, where it differs. */
 const PLUGIN_NAMES: Record<string, string> = {
   db: 'database',
-  operatorAlerts: 'operator-alerts',
+  adminAlerts: 'admin-alerts',
 };
 
 describe('the expiry sweep (VEN-528)', () => {
@@ -40,7 +41,7 @@ describe('the expiry sweep (VEN-528)', () => {
       background: {},
       stripe: {},
       events: {},
-      operatorAlerts: { dispatch: () => undefined },
+      adminAlerts: { dispatch: () => undefined },
     };
 
     for (const [name, value] of Object.entries(decorations)) {
@@ -68,5 +69,69 @@ describe('the expiry sweep (VEN-528)', () => {
     expect(guard).toEqual({ settleBeforeExpiry: expect.any(Function) });
 
     await app.close();
+  });
+
+  /*
+   * VEN-688: a deploy during a tick expired the request and exited before the
+   * email the tick queued had a delivery row.
+   */
+  it('waits for the running sweep before draining the email queue, so its emails are sent', async () => {
+    const sent: string[] = [];
+    let finishSweep: () => void = () => undefined;
+    vi.mocked(expireLapsedRequests).mockImplementationOnce(async (_db, _now, mail) => {
+      await new Promise<void>((resolve) => {
+        finishSweep = resolve;
+      });
+      mail.background.run(async () => {
+        await Promise.resolve();
+        sent.push('request expired');
+      });
+
+      return 1;
+    });
+
+    const app = Fastify();
+    // First, as `buildServer` registers it, so its close hook runs after the sweep's.
+    await app.register(backgroundPlugin);
+    const decorations: Record<string, unknown> = {
+      clock: () => new Date('2026-06-01T12:00:00Z'),
+      db: {},
+      email: {},
+      stripe: {},
+      events: {},
+      adminAlerts: { dispatch: () => undefined },
+    };
+
+    for (const [name, value] of Object.entries(decorations)) {
+      await app.register(
+        fp(
+          async (instance) => {
+            instance.decorate(name, value as never);
+          },
+          { name: PLUGIN_NAMES[name] ?? name },
+        ),
+      );
+    }
+    await app.register(expirySweepPlugin, {
+      intervalMs: INTERVAL_MS,
+      webOrigin: 'https://web.test',
+      platformFeeRate: 0.12,
+      reporter: { capture: () => undefined },
+    } as never);
+    await app.ready();
+    await vi.advanceTimersByTimeAsync(INTERVAL_MS);
+
+    let closed = false;
+    const closing = app.close().then(() => {
+      closed = true;
+    });
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(closed).toBe(false);
+
+    finishSweep();
+    await closing;
+
+    expect(sent).toEqual(['request expired']);
   });
 });

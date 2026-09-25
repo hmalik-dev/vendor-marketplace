@@ -1,0 +1,24 @@
+name: Set up the workspace
+description: pnpm, Node from .nvmrc, the pnpm store and turbo caches, and a frozen install.
+
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      with:
+        node-version-file: .nvmrc
+        cache: pnpm
+
+    # One cache per job name: parallel jobs would otherwise race to save the same
+    # key, and the loser's outputs (a different package set) would be thrown away.
+    - name: Cache turbo build outputs
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: .turbo
+        key: turbo-${{ runner.os }}-${{ github.job }}-${{ github.sha }}
+        restore-keys: turbo-${{ runner.os }}-${{ github.job }}-
+
+    - run: pnpm install --frozen-lockfile
+      shell: bash

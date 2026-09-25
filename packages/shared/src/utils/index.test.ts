@@ -1,16 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BACKUP_WITHHOLDING_RATE_BPS,
   CURRENT_REFUND_TERMS,
   FULL_REFUND_CUTOFF_HOURS,
   PAYOUT_RELEASE_HOURS,
 } from '../constants/index.js';
 import {
   addDays,
+  backupWithholdingCents,
   calculateFees,
   calculateRefund,
+  vendorCancellationRefundCents,
   centsToDollars,
   dollarsToCents,
   expiryCountdown,
+  feeRateToBps,
   formatDurationHours,
   formatPrice,
   generateSlug,
@@ -134,6 +138,20 @@ describe('price conversion', () => {
   it('groups thousands so a four-figure price is readable at a glance', () => {
     expect(formatPrice(100000)).toBe('$1,000');
     expect(formatPrice(999999)).toBe('$9,999.99');
+  });
+});
+
+describe('feeRateToBps', () => {
+  it('converts a fee rate to whole basis points', () => {
+    expect(feeRateToBps(0.12)).toBe(1200);
+    expect(feeRateToBps(0.125)).toBe(1250);
+    expect(feeRateToBps(0)).toBe(0);
+  });
+
+  it('prices a split identically from the stored bps and the rate', () => {
+    expect(calculateFees(145_000, feeRateToBps(0.12) / 10_000)).toEqual(
+      calculateFees(145_000, 0.12),
+    );
   });
 });
 
@@ -731,7 +749,7 @@ describe('isPayoutFailing', () => {
 
   /*
    * A dispute filed after a failed attempt is `held`, and that is a different
-   * thing to tell an operator — the distinction `payoutStatusOf` exists for.
+   * thing to tell an admin — the distinction `payoutStatusOf` exists for.
    */
   it('is false while a reported problem holds the payout', () => {
     expect(isPayoutFailing({ ...FAILING, status: 'disputed' })).toBe(false);
@@ -742,7 +760,7 @@ describe('isPayoutFailing', () => {
    *
    * A full refund rewrites `vendor_payout_cents` to `0` (D37) and leaves the
    * release null, so the sweep drops the row for ever. A flag reading the
-   * attempt count alone would keep it in the operator's failing list
+   * attempt count alone would keep it in the admin's failing list
    * permanently, under an alert saying the scheduled release keeps trying.
    */
   it('is false for a failed transfer that was then fully refunded', () => {
@@ -789,6 +807,17 @@ describe('isLegacyDestinationPayout', () => {
     ).toBe(false);
   });
 
+  it('is false for a modern payout whose whole amount went to repaying a lost chargeback (VEN-658)', () => {
+    expect(
+      isLegacyDestinationPayout({
+        status: 'confirmed',
+        payoutReleasedAt: new Date('2026-06-18T00:00:00Z'),
+        stripeTransferId: null,
+        debtNettedCents: 127_600,
+      }),
+    ).toBe(false);
+  });
+
   it('is false for a booking that has not been released at all', () => {
     expect(
       isLegacyDestinationPayout({
@@ -827,7 +856,7 @@ describe('payoutStatusOf when the payout amount is known (VEN-423)', () => {
 });
 
 describe('unwindFloorDate', () => {
-  it("is yesterday in UTC, so the operator's tomorrow is still ahead", () => {
+  it("is yesterday in UTC, so the admin's tomorrow is still ahead", () => {
     expect(unwindFloorDate(new Date('2026-10-08T01:00:00Z'))).toBe('2026-10-07');
   });
 
@@ -867,5 +896,36 @@ describe('expiryCountdown', () => {
   it('counts calendar days rather than elapsed 24-hour blocks', () => {
     expect(expiryCountdown(local(12, 1), local(10, 23))).toBe('expires in 2d');
     expect(expiryCountdown(local(17, 9), local(10, 9))).toBe('expires in 7d');
+  });
+});
+
+describe('vendorCancellationRefundCents', () => {
+  it('refunds the whole payment whatever the timing', () => {
+    expect(vendorCancellationRefundCents(145_000)).toBe(145_000);
+    expect(vendorCancellationRefundCents(0)).toBe(0);
+  });
+
+  it('refuses a total that is not whole non-negative cents', () => {
+    expect(() => vendorCancellationRefundCents(12.5)).toThrow(/whole|integer/);
+    expect(() => vendorCancellationRefundCents(-1)).toThrow(/non-negative/);
+  });
+});
+
+describe('backupWithholdingCents (VEN-723)', () => {
+  it('is the IRS rate, 24 percent', () => {
+    expect(BACKUP_WITHHOLDING_RATE_BPS).toBe(2400);
+  });
+
+  it('keeps $240 of a $1,000 share, so $760 is sent', () => {
+    expect(backupWithholdingCents(100_000)).toBe(24_000);
+    expect(100_000 - backupWithholdingCents(100_000)).toBe(76_000);
+  });
+
+  it('rounds to whole cents and never exceeds the share', () => {
+    expect(backupWithholdingCents(127_600)).toBe(30_624);
+    expect(backupWithholdingCents(1)).toBe(0);
+    expect(backupWithholdingCents(3)).toBe(1);
+    expect(backupWithholdingCents(0)).toBe(0);
+    expect(backupWithholdingCents(-500)).toBe(0);
   });
 });

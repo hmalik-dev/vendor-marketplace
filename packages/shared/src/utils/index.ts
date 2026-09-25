@@ -1,4 +1,5 @@
 import {
+  BACKUP_WITHHOLDING_RATE_BPS,
   BOOKING_PAYMENT_WINDOW_DAYS,
   BOOKING_REQUEST_EXPIRY_DAYS,
   BPS_PER_UNIT,
@@ -14,6 +15,9 @@ import {
   type PayoutStatus,
   type RefundTerms,
 } from '../constants/index.js';
+import { trimTrailingSlashes } from './trim-slashes.js';
+
+export { trimTrailingSlashes };
 
 const SLUG_FALLBACK = 'vendor';
 const CALENDAR_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -229,6 +233,21 @@ export function calculateRefund(
   };
 }
 
+/**
+ * What a customer is refunded when the **vendor** cancels a confirmed booking
+ * (VEN-659, D48): all of it, whatever the timing. The customer never pays for
+ * the vendor's decision, so D3's late tier does not apply. This is the one
+ * place the policy lives; the API refunds it and the vendor's confirm step
+ * quotes it.
+ */
+export function vendorCancellationRefundCents(totalCents: number): number {
+  if (!Number.isInteger(totalCents) || totalCents < 0) {
+    throw new Error('vendorCancellationRefundCents: totalCents must be a non-negative integer');
+  }
+
+  return totalCents;
+}
+
 /** One window of the cancellation schedule, as the checkout block draws it. */
 export interface RefundScheduleRow {
   /**
@@ -376,7 +395,7 @@ export function refundSchedule(
     /*
      * Not a refund claim either. It is where the customer's money goes: #423
      * holds the payment until the event and releases it `PAYOUT_RELEASE_HOURS`
-     * later, so past this row a cancellation is an unwind an operator has to
+     * later, so past this row a cancellation is an unwind an admin has to
      * drive rather than a refund (D31).
      */
     { kind: 'release', from: releaseAt, until: null, refundCents: null },
@@ -388,6 +407,21 @@ export interface FeeBreakdown {
   totalCents: number;
   platformFeeCents: number;
   vendorPayoutCents: number;
+}
+
+/**
+ * What backup withholding keeps from one vendor share, in whole cents
+ * (VEN-723). The one computation the sweep, the vendor's dashboard and the
+ * admin's confirmation all read, so the figure a vendor is shown is the one
+ * that leaves.
+ */
+export function backupWithholdingCents(shareCents: number): number {
+  return Math.round((Math.max(shareCents, 0) * BACKUP_WITHHOLDING_RATE_BPS) / BPS_PER_UNIT);
+}
+
+/** A fee rate as the whole basis points a booking stores, so the rate is exact in the database. */
+export function feeRateToBps(rate: number): number {
+  return Math.round(rate * BPS_PER_UNIT);
 }
 
 /**
@@ -676,6 +710,11 @@ export interface PayoutSubject {
   status: BookingStatus;
   payoutReleasedAt: Date | null;
   stripeTransferId: string | null;
+  /**
+   * What the sweep kept back to repay a lost chargeback (VEN-658). A payout it
+   * consumed whole was released with no transfer, and that is not a legacy row.
+   */
+  debtNettedCents?: number;
 }
 
 /**
@@ -761,7 +800,7 @@ export type PayoutFailureSubject = PayoutStatusSubject & {
  * **Deliberately not a fourth `PayoutStatus`.** `payoutStatusOf` omits `failed`
  * on purpose: a failed transfer is retried every quarter of an hour and
  * self-heals, so surfacing it to a *vendor* would alarm them about something
- * already in hand. An operator is the one reader who has to know, and this is
+ * already in hand. An admin is the one reader who has to know, and this is
  * the fact they need — beside the shared status rather than as a rival reading
  * of it.
  *
@@ -769,7 +808,7 @@ export type PayoutFailureSubject = PayoutStatusSubject & {
  * clears.** `payout_attempts > 0 and not released` looks like the whole answer
  * and is not: a booking whose transfer failed once and was then *fully
  * refunded* has `vendor_payout_cents` rewritten to `0` (D37), which drops it
- * out of the sweep's own predicate for ever — so it would sit in the operator's
+ * out of the sweep's own predicate for ever — so it would sit in the admin's
  * failing list permanently, pinning an alert that says the scheduled release
  * keeps trying, about a row the scheduled release will never touch again. A
  * dispute filed after a failed attempt is the same shape: it is `held`, which
@@ -809,7 +848,7 @@ export type PayoutStrandedSubject = PayoutStatusSubject & {
  * The sweep still attempts and records failures for a merely-banned-or-closed
  * vendor's row, so this is not "the sweep leaves it out" any more — it is the
  * one case even the sweep's own retries cannot self-heal. It is a flag beside
- * the shared status for the same reason `isPayoutFailing` is: an operator's
+ * the shared status for the same reason `isPayoutFailing` is: an admin's
  * fact, not a fourth state a vendor or customer surface should have to draw.
  */
 export function isPayoutStranded(booking: PayoutStrandedSubject): boolean {
@@ -838,7 +877,11 @@ export function isPayoutStranded(booking: PayoutStrandedSubject): boolean {
  * means, on the money path.
  */
 export function isLegacyDestinationPayout(booking: PayoutSubject): boolean {
-  return booking.payoutReleasedAt !== null && booking.stripeTransferId === null;
+  return (
+    booking.payoutReleasedAt !== null &&
+    booking.stripeTransferId === null &&
+    (booking.debtNettedCents ?? 0) === 0
+  );
 }
 
 /**
@@ -985,7 +1028,7 @@ export function resolveImageUrl(
     return null;
   }
 
-  const base = publicBaseUrl?.replace(/\/+$/, '');
+  const base = publicBaseUrl ? trimTrailingSlashes(publicBaseUrl) : publicBaseUrl;
 
   if (/^https?:\/\//i.test(value)) {
     const legacyKey = base ? legacyR2ObjectKey(value) : null;
@@ -1060,7 +1103,7 @@ function decodeOnce(value: string): string {
  * Anything not under that base is left exactly as it is.
  */
 export function toObjectKey(publicBaseUrl: string, stored: string): string {
-  const base = publicBaseUrl.replace(/\/+$/, '');
+  const base = trimTrailingSlashes(publicBaseUrl);
 
   return stored.startsWith(`${base}/`) ? stored.slice(base.length + 1) : stored;
 }

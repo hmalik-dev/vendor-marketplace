@@ -91,7 +91,7 @@ function describe(
   if (row.kind === 'late') {
     return {
       label: `Until ${formatInstant(row.until ?? eventDate, timeZone)}`,
-      consequence: <>{formatPrice(row.refundCents ?? 0)} back — the rest holds the date</>,
+      consequence: <>{formatPrice(row.refundCents ?? 0)} back — the rest is not refunded</>,
     };
   }
 
@@ -122,8 +122,7 @@ function describe(
     label: `If ${vendorName} cancels`,
     consequence: (
       <>
-        <strong className="font-semibold">Full refund</strong>, whenever it happens — {vendorName}{' '}
-        cancels through support
+        <strong className="font-semibold">Full refund</strong>, whenever it happens
       </>
     ),
   };

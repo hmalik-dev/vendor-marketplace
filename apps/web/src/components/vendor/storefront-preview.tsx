@@ -53,7 +53,6 @@ export function StorefrontPreview({
         <span className="font-mono text-[0.625rem] font-medium tracking-[0.14em] text-stone-600 uppercase">
           Preview
         </span>
-        <span className="text-helper text-stone-600">Updates as you type</span>
       </div>
 
       {/*
@@ -115,12 +114,6 @@ export function StorefrontPreview({
       ) : (
         <ProfilePlacement vendor={vendor} />
       )}
-
-      <p className="text-helper leading-relaxed text-stone-600">
-        {placement === 'search'
-          ? 'This is the card a customer taps. The same photo heads your profile — switch tabs to see it.'
-          : 'This is how the photo heads your profile page.'}
-      </p>
     </aside>
   );
 }

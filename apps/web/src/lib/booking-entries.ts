@@ -101,7 +101,7 @@ export const BOOKING_PRESENTATION: Record<
  * on the server, such as folding it into the empty-state copy on the same page.
  *
  * `held` earns `needsYou` rather than `failed`: a dispute hold is deliberate
- * and correct, and painting it as a failure would tell an operator to fix
+ * and correct, and painting it as a failure would tell an admin to fix
  * something that is working.
  */
 export const PAYOUT_PRESENTATION: Record<PayoutStatus, { label: string; tone: StatusTone }> = {

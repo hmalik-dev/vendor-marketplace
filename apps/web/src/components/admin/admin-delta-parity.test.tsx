@@ -88,7 +88,7 @@ describe('the rail', () => {
       // them, so the rows are appended.
       'Vendor applications',
       // VEN-506: who can sign in to the console, also unframed.
-      'Operators',
+      'Admins',
       'Settings',
     ]);
   });
@@ -129,7 +129,7 @@ describe('the rail', () => {
    * both appended after the nine the delta draws.
    */
   it('is the nine drawn rows plus the unframed two, because the move was an order change', () => {
-    const unframed = ['Vendor applications', 'Operators', 'Settings'];
+    const unframed = ['Vendor applications', 'Admins', 'Settings'];
     expect(railLabels().filter((label) => !unframed.includes(label))).toHaveLength(9);
   });
 
@@ -157,7 +157,7 @@ describe('the rail', () => {
    * Correction 2: the route stays `/admin/tags`.
    *
    * The bundle names `/admin/categories` and nothing drawn depends on the path;
-   * a rename breaks operator bookmarks and every `admin_actions` subject link
+   * a rename breaks admin bookmarks and every `admin_actions` subject link
    * already written against the old one.
    */
   it('serves the taxonomy at /admin/tags, and the bundle records why', () => {
@@ -224,7 +224,7 @@ describe('/admin/activity against Pattern A', () => {
     render(<ActivityTable path="/admin/activity" filtered={false} rows={[ACTIVITY_ROW]} />);
 
     expect(screen.getAllByText('Actor').length).toBeGreaterThan(0);
-    expect(screen.queryByText('Operator')).toBeNull();
+    expect(screen.queryByText('Admin')).toBeNull();
   });
 
   /**
@@ -307,7 +307,7 @@ describe('/admin/cases against Pattern A', () => {
    * The default the queue exists for, and it must survive this change (#431).
    *
    * Open and oldest first: the top row is the case that has been waiting
-   * longest, which is the only ordering an operator can defend. Asserted on the
+   * longest, which is the only ordering an admin can defend. Asserted on the
    * two places that set it rather than on the rendered list, which is paginated
    * on the server.
    */
@@ -537,7 +537,7 @@ describe('the delta colour vocabulary', () => {
    * delta spends red on a failed payout attempt, a chargeback and a dispute
    * reason, and a hold is none of them — it is deliberate, correct, and drawn
    * gold. The shared map's own docstring says exactly what the copy did wrong:
-   * *"painting it as a failure would tell an operator to fix something that is
+   * *"painting it as a failure would tell an admin to fix something that is
    * working."*
    *
    * So the guard is that the screen has **no second map at all**, which is a

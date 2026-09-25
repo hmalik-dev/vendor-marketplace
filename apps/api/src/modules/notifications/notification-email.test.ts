@@ -195,7 +195,7 @@ describe('sendNotificationEmail', () => {
       } as unknown as NotificationEmailDeps['db'],
     });
 
-    await expect(sendNotificationEmail(d, ROW)).resolves.toBeUndefined();
+    await expect(sendNotificationEmail(d, ROW)).resolves.toBe(false);
     expect(sent).toEqual([]);
     expect(errors).toEqual([]);
   });
@@ -256,7 +256,7 @@ describe('sendNotificationEmail', () => {
       },
     });
 
-    await expect(sendNotificationEmail(d, ROW)).resolves.toBeUndefined();
+    await expect(sendNotificationEmail(d, ROW)).resolves.toBe(false);
     expect(errors).toHaveLength(1);
     expect(errors[0]?.[1]).toContain('the operation itself succeeded');
   });
@@ -284,7 +284,7 @@ describe('sendNotificationEmail', () => {
       }),
     } as unknown as NotificationEmailDeps['db'];
 
-    await expect(sendNotificationEmail(d, ROW)).resolves.toBeUndefined();
+    await expect(sendNotificationEmail(d, ROW)).resolves.toBe(false);
 
     // The email still went. That is the half that must never be lost.
     expect(sent).toHaveLength(1);

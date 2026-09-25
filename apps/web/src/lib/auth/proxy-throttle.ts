@@ -32,6 +32,8 @@ const TIGHT_PATHS: ReadonlySet<string> = new Set([
   'email-otp/request-password-reset',
   'email-otp/reset-password',
   'change-password',
+  'revoke-session',
+  'revoke-other-sessions',
 ]);
 
 const hits = new Map<string, number[]>();
@@ -209,8 +211,246 @@ export async function chargeAddress(
   return shared ?? isAddressThrottled(address, path, now, record);
 }
 
+const SIGN_IN = 'sign-in/email';
+const SIGN_IN_PATH: readonly string[] = ['sign-in', 'email'];
+const pairHits = new Map<string, number[]>();
+
+/**
+ * Counts failed password sign-ins per account address **and** caller (VEN-630).
+ * A budget shared by every caller lets a stranger who only knows an address
+ * spend it and lock the owner out. So a caller is refused for one of two
+ * reasons: it spent its own budget for the address, or the address budget is
+ * spent and it has already failed once itself. A caller with no failure of its
+ * own for the address is not refused by the address budget, so the owner gets
+ * in with the right password; a stranger rotating callers gets one guess from
+ * each, up to a hard ceiling per address that binds every caller. The product
+ * writes no cookie of its own (`no-cookie-consent.test.ts`), so there is no
+ * device token to exempt the owner by.
+ */
+async function chargePair(
+  route: string,
+  address: string,
+  caller: string,
+  limit: number,
+  record: boolean,
+  now: number,
+): Promise<boolean> {
+  const normalized = address.trim().toLowerCase();
+  // Hashed: the API stores the bucket, and neither an address nor a caller is data it needs.
+  const digest = createHash('sha256').update(normalized).digest('hex');
+  const callerDigest = createHash('sha256').update(caller).digest('hex');
+  const shared = await chargeShared(
+    `pair|${route}|${digest}|${callerDigest}`,
+    ADDRESS_WINDOW_MS,
+    limit,
+    record,
+  );
+
+  if (shared !== null) {
+    return shared;
+  }
+
+  const key = `${route}|${normalized}|${caller}`;
+  const recent = (pairHits.get(key) ?? []).filter((at) => now - at < ADDRESS_WINDOW_MS);
+
+  if (record) {
+    recent.push(now);
+    pairHits.set(key, recent);
+  }
+
+  if (pairHits.size > 5_000) {
+    for (const [stale, times] of pairHits) {
+      if (times.every((at) => now - at >= ADDRESS_WINDOW_MS)) {
+        pairHits.delete(stale);
+      }
+    }
+  }
+
+  return record ? recent.length > limit : recent.length >= limit;
+}
+
+/**
+ * Wrong passwords per account address, from every caller together, past which
+ * even a caller with no failure of its own is refused: the bound on guessing
+ * one account with many addresses (VEN-630). Ten times the per-caller budget, so
+ * a stranger has to hold that many failures' worth of callers to reach it.
+ */
+const SIGN_IN_CEILING = 10 * SIGN_IN_ADDRESS_LIMIT;
+/** Stands for "every caller" in a pair bucket; no address is written `*`. */
+const ALL_CALLERS = '*';
+
+/**
+ * The caller as the sign-in budget counts it: an IPv6 address by its /64, since
+ * one host holds a whole /64 and would otherwise be a fresh caller per request.
+ */
+export function signInCaller(caller: string): string {
+  if (!caller.includes(':') || caller.includes('.')) {
+    return caller;
+  }
+
+  const [head = '', tail] = caller.toLowerCase().split('::');
+  const front = head === '' ? [] : head.split(':');
+  const back = tail === undefined || tail === '' ? [] : tail.split(':');
+  const groups =
+    tail === undefined
+      ? front
+      : [
+          ...front,
+          ...Array<string>(Math.max(0, 8 - front.length - back.length)).fill('0'),
+          ...back,
+        ];
+
+  return `${groups
+    .slice(0, 4)
+    .map((group) => group.padStart(4, '0'))
+    .join(':')}::/64`;
+}
+
+/** Read-only: whether this caller may try a password for this address now. */
+export async function isSignInRefused(
+  address: string,
+  caller: string,
+  now: number = Date.now(),
+): Promise<boolean> {
+  const who = signInCaller(caller);
+
+  if (
+    (await chargePair(SIGN_IN, address, who, SIGN_IN_ADDRESS_LIMIT, false, now)) ||
+    (await chargePair(SIGN_IN, address, ALL_CALLERS, SIGN_IN_CEILING, false, now))
+  ) {
+    return true;
+  }
+
+  // Below the ceiling, the address budget binds only a caller that has already failed for it.
+  return (
+    (await chargeAddress(address, SIGN_IN_PATH, now, false)) &&
+    (await chargePair(SIGN_IN, address, who, 1, false, now))
+  );
+}
+
+/** Records one refused password against the address and against the caller. */
+export async function recordSignInFailure(
+  address: string,
+  caller: string,
+  now: number = Date.now(),
+): Promise<void> {
+  await chargeAddress(address, SIGN_IN_PATH, now);
+  await chargePair(SIGN_IN, address, signInCaller(caller), SIGN_IN_ADDRESS_LIMIT, true, now);
+  await chargePair(SIGN_IN, address, ALL_CALLERS, SIGN_IN_CEILING, true, now);
+}
+
+/**
+ * True when this reset, code or mail request is refused (VEN-718). Counted like
+ * a sign-in (`isSignInRefused`), but every request is a use of the budget, not
+ * only a failure: a caller is refused when it spent its own budget for the
+ * address, or the address budget is spent and it has already asked once itself,
+ * or a hard ceiling per address is spent by everyone: ten times the budget for mail, twice for
+ * a code check, where every extra caller is another guess at a six-digit code.
+ * A stranger who spent the address budget therefore cannot stop the owner's
+ * first request from another caller. A refused request records nothing.
+ */
+/** Calls that check a six-digit code: past the address budget each fresh caller is another guess, so the ceiling stays low. */
+const CODE_CHECK_PATHS: ReadonlySet<string> = new Set([
+  'email-otp/verify-email',
+  'email-otp/reset-password',
+]);
+
+export async function chargeRequest(
+  address: string,
+  caller: string,
+  path: readonly string[],
+  now: number = Date.now(),
+): Promise<boolean> {
+  const route = path.join('/');
+  const who = signInCaller(caller);
+  const limit = addressLimit(path) ?? ADDRESS_LIMIT;
+  const ceiling = (CODE_CHECK_PATHS.has(route) ? 2 : 10) * limit;
+
+  if (
+    (await chargePair(route, address, who, limit, false, now)) ||
+    (await chargePair(route, address, ALL_CALLERS, ceiling, false, now)) ||
+    ((await chargeAddress(address, path, now, false)) &&
+      (await chargePair(route, address, who, 1, false, now)))
+  ) {
+    return true;
+  }
+
+  await chargeAddress(address, path, now);
+
+  // The checks above are reads; a burst that passed them together is caught by the count of its own charge.
+  const own = await chargePair(route, address, who, limit, true, now);
+  const all = await chargePair(route, address, ALL_CALLERS, ceiling, true, now);
+
+  return own || all;
+}
+
+const MAIL_PACE_WINDOW_MS = 60_000;
+/**
+ * One send per address per window. The provider drops mail after a burst without a word, and not
+ * on a clean clock: after three sends inside a second, two owner requests 75s and 150s later went
+ * unmailed, while ten requests after a single earlier send (62s and 75s apart) all arrived.
+ */
+const MAIL_PACE_LIMIT = 1;
+const paceHits = new Map<string, number[]>();
+
+/**
+ * True when a reset mail for this address would be one send too many for the
+ * minute, whoever asked (VEN-719). The provider limits mail per address itself
+ * and drops the rest without a word, so a stranger's burst used up its allowance
+ * and the owner's next request was answered "sent" and never arrived. Sending
+ * one per minute keeps the owner's mail deliverable; past that the caller is
+ * told to wait. A refused request records nothing, so
+ * polling cannot hold the window shut. The same for every address, so it says
+ * nothing about whether an account exists. `record = false` only reads: asked
+ * before the request budgets are charged, so a request told to wait spends none
+ * of them and the retry it was told to make is not refused for it.
+ */
+export async function isMailPaced(
+  address: string,
+  now: number = Date.now(),
+  record = true,
+): Promise<boolean> {
+  const normalized = address.trim().toLowerCase();
+  // Hashed: the API stores the bucket, and an address is personal data it has no use for.
+  const bucket = `mail|${createHash('sha256').update(normalized).digest('hex')}`;
+  const recentLocal = (): number[] =>
+    (paceHits.get(normalized) ?? []).filter((at) => now - at < MAIL_PACE_WINDOW_MS);
+
+  const spent = await chargeShared(bucket, MAIL_PACE_WINDOW_MS, MAIL_PACE_LIMIT, false);
+
+  if (spent ?? recentLocal().length >= MAIL_PACE_LIMIT) {
+    return true;
+  }
+
+  if (!record) {
+    return false;
+  }
+
+  if (paceHits.size > 5_000) {
+    for (const [stale, times] of paceHits) {
+      if (times.every((at) => now - at >= MAIL_PACE_WINDOW_MS)) {
+        paceHits.delete(stale);
+      }
+    }
+  }
+
+  // The read passed; a burst that passed it together is caught by the count of its own charge.
+  const over = await chargeShared(bucket, MAIL_PACE_WINDOW_MS, MAIL_PACE_LIMIT, true);
+
+  if (over !== null) {
+    return over;
+  }
+
+  const recent = [...recentLocal(), now];
+  paceHits.set(normalized, recent);
+
+  return recent.length > MAIL_PACE_LIMIT;
+}
+
 /** Test seam: forgets every recorded call. */
 export function resetThrottle(): void {
   hits.clear();
   addressHits.clear();
+  pairHits.clear();
+  paceHits.clear();
 }

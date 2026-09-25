@@ -17,6 +17,7 @@ import {
   type SQLWrapper,
 } from 'drizzle-orm';
 import {
+  adminActions,
   bookings,
   legalAcceptances,
   supportCases,
@@ -103,7 +104,7 @@ export function payoutOwedClauses(): SQL[] {
  *
  * - `external_refund_cents > 0` — a refund made at Stripe outside the platform,
  *   written only by `recordExternalRefund`.
- * - an `open` chargeback case on the booking. It stays open until an operator
+ * - an `open` chargeback case on the booking. It stays open until an admin
  *   rules, so resolving it is what lifts the hold; the sweep then pays.
  *
  * Not folded into `payoutOwedClauses`: the vendor dashboard selects owed rows
@@ -146,7 +147,7 @@ export const DISPUTE_FUNDS_NOT_HELD: readonly string[] = [
   'warning_under_review',
 ];
 
-/** The outcomes under which an operator may close a chargeback case and release its payout. */
+/** The outcomes under which an admin may close a chargeback case and release its payout. */
 export const DISPUTE_RESOLVABLE_OUTCOMES: readonly string[] = ['won', 'warning_closed'];
 
 /**
@@ -177,7 +178,7 @@ export function vendorUnpayableExpr(
  * Banning or closing a vendor unwinds every **still-future** confirmed booking
  * by refunding it (`findConfirmedBookingsToUnwind`, `unwindAccountBookings`) —
  * and that refund can fail at Stripe. `account-unwind.ts`'s failure branch
- * alerts the operator and leaves the row exactly as it stood: `confirmed`,
+ * alerts the admin and leaves the row exactly as it stood: `confirmed`,
  * fully owed, with nothing durable on it besides the transient alert. D41's
  * "a ban must not change money already earned for an event that happened"
  * holds for every row the unwind actually finished, or never owned in the
@@ -191,7 +192,7 @@ export function vendorUnpayableExpr(
  * (`setBanned`, `closeAccount`) — is what tells the two cases apart without a
  * new column: a booking already due when banned was never the unwind's
  * concern and is `false` here; one still ahead of the ban was, and stays
- * excluded until an operator resolves it by hand.
+ * excluded until an admin resolves it by hand.
  */
 export function unfinishedUnwindExpr(
   owner: { isBanned: SQLWrapper; bannedAt: SQLWrapper; deletedAt: SQLWrapper },
@@ -204,7 +205,7 @@ export function unfinishedUnwindExpr(
 }
 
 /**
- * A transfer this sweep still owes and has already tried — the operator's
+ * A transfer this sweep still owes and has already tried — the admin's
  * question, as clauses (#432).
  *
  * The SQL twin of `isPayoutFailing`, and here rather than in the console
@@ -218,10 +219,10 @@ export function unfinishedUnwindExpr(
  * `payout_attempts > 0 and not released` reads like the whole answer and is
  * not: a booking whose transfer failed once and was then fully refunded has
  * `vendor_payout_cents` rewritten to `0` (D37), so this sweep will never work
- * it again — and it would sit in the operator's failing list for ever under an
+ * it again — and it would sit in the admin's failing list for ever under an
  * alert promising that the scheduled release keeps trying. The status bound
  * does the same job for a dispute filed after a failed attempt: that row is
- * `held`, which is a different thing to tell an operator.
+ * `held`, which is a different thing to tell an admin.
  */
 export function payoutFailingClauses(): SQL[] {
   return [
@@ -235,7 +236,7 @@ export function payoutFailingClauses(): SQL[] {
      * closed vendor's due row, because a ban must not change money already
      * earned for an event that happened. Only `vendorUnpayableExpr` — closed
      * *and* no connected account — can never self-heal, so that is the one the
-     * operator's failing list excludes; "the scheduled release keeps trying"
+     * admin's failing list excludes; "the scheduled release keeps trying"
      * is still true of every other banned or closed row. A subquery, so the
      * count queries need no new join.
      */
@@ -274,8 +275,10 @@ export interface ReleasableBookingRow {
   stripePaymentIntentId: string | null;
   vendorStripeAccountId: string | null;
   vendorStripeOnboarded: boolean;
-  /** An operator is holding this vendor's automatic payouts (VEN-404). */
+  /** An admin is holding this vendor's automatic payouts (VEN-404). */
   vendorPayoutHold: boolean;
+  /** An admin has backup withholding on for this vendor; the share is reduced by the statutory rate (VEN-723). */
+  vendorBackupWithholding: boolean;
   /** Whether the vendor has accepted any version of the vendor agreement (VEN-509). */
   vendorHasAcceptedAgreement: boolean;
 }
@@ -425,6 +428,7 @@ export async function claimReleasableBooking(
       vendorStripeAccountId: vendorProfiles.stripeAccountId,
       vendorStripeOnboarded: vendorProfiles.stripeOnboarded,
       vendorPayoutHold: vendorProfiles.payoutHold,
+      vendorBackupWithholding: sql<boolean>`${vendorProfiles.backupWithholdingReason} IS NOT NULL`,
       vendorHasAcceptedAgreement: sql<boolean>`EXISTS (
         SELECT 1 FROM ${legalAcceptances}
         WHERE ${legalAcceptances.acceptedByUserId} = ${vendorProfiles.userId}
@@ -459,21 +463,179 @@ export async function claimReleasableBooking(
   return rows?.[0] ?? null;
 }
 
-/** Records the transfer that moved this payout, and clears any prior failure. */
+/** One booking's share of a vendor's debt that a payout is about to recover. */
+export interface DebtRecovery {
+  bookingId: string;
+  cents: number;
+}
+
+/**
+ * Decides which of a vendor's outstanding debts a payout of `capCents` recovers
+ * (VEN-658): oldest first, never more than the cap, never more than is owed.
+ *
+ * Reads only; the writes are `applyDebtRecovery`, called once the transfer has
+ * succeeded, so a transfer that fails leaves every debt as it was. The rows are
+ * locked `SKIP LOCKED` in id order, so two sweeps netting the same vendor's
+ * debts cannot deadlock — the one that loses a row simply recovers less now and
+ * the rest carries over.
+ */
+export async function planDebtRecovery(
+  tx: AppDatabase,
+  vendorId: string,
+  capCents: number,
+): Promise<DebtRecovery[]> {
+  if (capCents <= 0) {
+    return [];
+  }
+
+  const rows = await tx
+    .select({
+      id: bookings.id,
+      outstandingCents: sql<number>`(${bookings.vendorOwedCents} - ${bookings.vendorOwedRecoveredCents})::int`,
+    })
+    .from(bookings)
+    .where(
+      and(
+        eq(bookings.vendorId, vendorId),
+        gt(bookings.vendorOwedCents, bookings.vendorOwedRecoveredCents),
+      ),
+    )
+    .orderBy(asc(bookings.id))
+    .for('update', { skipLocked: true });
+
+  const plan: DebtRecovery[] = [];
+  let remaining = capCents;
+
+  for (const row of rows) {
+    const cents = Math.min(row.outstandingCents, remaining);
+
+    if (cents > 0) {
+      plan.push({ bookingId: row.id, cents });
+      remaining -= cents;
+    }
+  }
+
+  return plan;
+}
+
+/** Writes a `planDebtRecovery` plan onto the debts it recovers. Same transaction as the release. */
+export async function applyDebtRecovery(tx: AppDatabase, plan: DebtRecovery[]): Promise<void> {
+  for (const { bookingId, cents } of plan) {
+    await tx
+      .update(bookings)
+      .set({
+        vendorOwedRecoveredCents: sql`${bookings.vendorOwedRecoveredCents} + ${cents}`,
+        updatedAt: sql`now()`,
+      })
+      .where(eq(bookings.id, bookingId));
+  }
+}
+
+/** A vendor's debt for lost chargebacks, and how much of it later payouts have recovered. */
+export interface VendorDebtTotals {
+  outstandingCents: number;
+  recoveredCents: number;
+}
+
+export async function findVendorDebtTotals(
+  db: AppDatabase,
+  vendorId: string,
+): Promise<VendorDebtTotals> {
+  const rows = await db
+    .select({
+      owed: sql<number>`coalesce(sum(${bookings.vendorOwedCents}), 0)::int`,
+      recovered: sql<number>`coalesce(sum(${bookings.vendorOwedRecoveredCents}), 0)::int`,
+    })
+    .from(bookings)
+    .where(eq(bookings.vendorId, vendorId));
+  const row = rows?.[0];
+
+  return {
+    outstandingCents: (row?.owed ?? 0) - (row?.recovered ?? 0),
+    recoveredCents: row?.recovered ?? 0,
+  };
+}
+
+/**
+ * Records the transfer that moved this payout, and clears any prior failure.
+ *
+ * `stripeTransferId` is null when recovery consumed the whole payout, so no
+ * transfer was made; the payout is released all the same.
+ */
 export async function recordPayoutRelease(
   tx: AppDatabase,
   bookingId: string,
-  release: { stripeTransferId: string; releasedAt: Date },
+  release: {
+    stripeTransferId: string | null;
+    releasedAt: Date;
+    debtNettedCents: number;
+    backupWithheldCents: number;
+  },
 ): Promise<void> {
   await tx
     .update(bookings)
     .set({
       stripeTransferId: release.stripeTransferId,
       payoutReleasedAt: release.releasedAt,
+      debtNettedCents: release.debtNettedCents,
+      backupWithheldCents: release.backupWithheldCents,
       payoutFailureReason: null,
       updatedAt: sql`now()`,
     })
     .where(eq(bookings.id, bookingId));
+}
+
+/**
+ * The admin who switched backup withholding on for a vendor (VEN-723): the
+ * actor the sweep's own audit row is written under, because the sweep has no
+ * actor of its own. Read **before** the transfer, and throws when no such row
+ * exists, so a payout the trail could not explain fails for a retry instead of
+ * moving money first.
+ */
+export async function findBackupWithholdingSetter(
+  tx: AppDatabase,
+  vendorId: string,
+): Promise<string> {
+  const setters = await tx
+    .select({ actorId: adminActions.actorId })
+    .from(adminActions)
+    .where(
+      and(
+        eq(adminActions.action, 'vendor_backup_withholding_set'),
+        eq(adminActions.subjectId, vendorId),
+      ),
+    )
+    .orderBy(desc(adminActions.createdAt))
+    .limit(1);
+  const actorId = setters[0]?.actorId;
+
+  if (!actorId) {
+    throw new Error('Backup withholding is on but no admin action records who set it');
+  }
+
+  return actorId;
+}
+
+/** The audit row for the cents one payout withheld, written in the transaction that claims it. */
+export async function recordBackupWithholdingWithheld(
+  tx: AppDatabase,
+  withheld: {
+    actorId: string;
+    bookingId: string;
+    vendorId: string;
+    cents: number;
+    rateBps: number;
+    at: Date;
+  },
+): Promise<void> {
+  await tx.insert(adminActions).values({
+    actorId: withheld.actorId,
+    action: 'backup_withholding_withheld',
+    subjectType: 'booking',
+    subjectId: withheld.bookingId,
+    detail: { vendorId: withheld.vendorId, cents: withheld.cents, rateBps: withheld.rateBps },
+    createdAt: withheld.at,
+  });
 }
 
 /**

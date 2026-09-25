@@ -21,7 +21,7 @@ import { bootEnv } from './config/boot.js';
 import {
   API_VERSION_PREFIX,
   MAX_UPLOAD_BYTES,
-  OPERATOR_DIGEST_POLL_INTERVAL_MS,
+  ADMIN_DIGEST_POLL_INTERVAL_MS,
   EMAIL_RETRY_SWEEP_INTERVAL_MS,
   EXPIRY_SWEEP_INTERVAL_MS,
   AUTH_RECONCILE_INTERVAL_MS,
@@ -52,7 +52,7 @@ import { createErrorReporter, type ErrorReporter } from './lib/error-reporting.j
 import { eventsPlugin } from './plugins/events.js';
 import type { ListenFn } from './lib/event-bus.js';
 import { postgresRateLimitStore } from './lib/rate-limit-store.js';
-import { operatorAlertsPlugin } from './plugins/operator-alerts.js';
+import { adminAlertsPlugin } from './plugins/admin-alerts.js';
 import { stepUpPlugin } from './plugins/step-up.js';
 import type { StepUpStore } from './lib/step-up.js';
 import { emailRetryPlugin } from './plugins/email-retry.js';
@@ -67,8 +67,10 @@ import { stripePlugin } from './plugins/stripe.js';
 import { availabilityRoutes } from './modules/availability/availability.routes.js';
 import { bookingRequestRoutes } from './modules/booking-requests/booking-requests.routes.js';
 import { adminRoutes } from './modules/admin/admin.routes.js';
+import { taxReportingRoutes } from './modules/tax-reporting/tax-reporting.routes.js';
 import { adminCategoryRoutes } from './modules/admin/admin-categories.routes.js';
 import { categoryRoutes } from './modules/categories/categories.routes.js';
+import { platformNoticeRoutes } from './modules/platform-settings/platform-notice.routes.js';
 import { messagingRoutes } from './modules/messaging/messaging.routes.js';
 import { placeRoutes } from './modules/places/places.routes.js';
 import { customerRoutes } from './modules/customers/customers.routes.js';
@@ -83,6 +85,7 @@ import { reportRoutes } from './modules/reports/reports.routes.js';
 import { supportRoutes } from './modules/support/support.routes.js';
 import { tagRoutes } from './modules/tags/tags.routes.js';
 import { uploadRoutes } from './modules/uploads/uploads.routes.js';
+import { ownClosureRoutes } from './modules/users/own-closure.routes.js';
 import { userRoutes } from './modules/users/users.routes.js';
 import { vendorRoutes } from './modules/vendors/vendors.routes.js';
 import { stripeConnectRoutes } from './modules/vendors/stripe-connect.routes.js';
@@ -151,10 +154,11 @@ export interface BuildServerOptions {
    */
   expirySweepIntervalMs?: number;
   /**
-   * How often an open event stream is kept alive and its account re-read, so a
-   * ban or deletion ends it on any instance. Default 30 s; suites shorten it.
+   * How often an open event stream is kept alive. Default 30 s; suites shorten it.
    */
   streamHeartbeatMs?: number;
+  /** How often an open stream's account is re-read, so a ban ends it on any instance. Default 5 min. */
+  streamSubjectRecheckMs?: number;
   /**
    * How often failed transactional email is re-sent; `0` disables it. On by
    * default for `payoutSweepIntervalMs`'s reason.
@@ -174,17 +178,17 @@ export interface BuildServerOptions {
   /** Log what the upload sweep would delete and delete nothing. */
   uploadSweepDryRun?: boolean;
   /**
-   * How often each instance asks whether the operator digest is due; `0`
+   * How often each instance asks whether the admin digest is due; `0`
    * disables it. On by default for `payoutSweepIntervalMs`'s reason.
    */
-  operatorDigestIntervalMs?: number;
+  adminDigestIntervalMs?: number;
   /**
    * How often the platform balance is reconciled against what it owes; `0`
    * disables it. On by default for `payoutSweepIntervalMs`'s reason.
    */
   platformBalanceIntervalMs?: number;
-  /** Pause between operator alert send retries; defaults to a real timer. */
-  operatorAlertWait?: (ms: number) => Promise<void>;
+  /** Pause between admin alert send retries; defaults to a real timer. */
+  adminAlertWait?: (ms: number) => Promise<void>;
   /** Step-up seam; the suites pass a store that is always fresh unless the suite is about step-up. */
   stepUp?: StepUpStore;
   /**
@@ -565,13 +569,13 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
     connectionString: env.NEON_AUTH_DATABASE_URL,
     ...(options.auth?.directory ? { directory: options.auth.directory } : {}),
   });
-  await app.register(operatorAlertsPlugin, {
-    to: env.OPERATOR_ALERT_EMAIL,
+  await app.register(adminAlertsPlugin, {
+    to: env.ADMIN_ALERT_EMAIL,
     webOrigin: canonicalWebOrigin(env),
-    timeZone: env.OPERATOR_TIMEZONE,
-    digestIntervalMs: options.operatorDigestIntervalMs ?? OPERATOR_DIGEST_POLL_INTERVAL_MS,
+    timeZone: env.ADMIN_TIMEZONE,
+    digestIntervalMs: options.adminDigestIntervalMs ?? ADMIN_DIGEST_POLL_INTERVAL_MS,
     reporter: errorReporter,
-    ...(options.operatorAlertWait ? { wait: options.operatorAlertWait } : {}),
+    ...(options.adminAlertWait ? { wait: options.adminAlertWait } : {}),
   });
   await app.register(stepUpPlugin, { ...(options.stepUp ? { store: options.stepUp } : {}) });
   await app.register(payoutReleasePlugin, {
@@ -618,13 +622,16 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
       await v1.register(sessionGenerationRoutes, { webTierKey: env.WEB_TIER_KEY });
       await v1.register(signUpRoleRoutes, { webTierKey: env.WEB_TIER_KEY });
       await v1.register(adminRoutes, { webOrigin: canonicalWebOrigin(env) });
+      await v1.register(taxReportingRoutes, { webOrigin: canonicalWebOrigin(env) });
       await v1.register(adminCategoryRoutes);
       await v1.register(adminVendorInviteRoutes, { webOrigin: canonicalWebOrigin(env) });
       await v1.register(vendorApplicationRoutes, { webOrigin: canonicalWebOrigin(env) });
       await v1.register(categoryRoutes);
+      await v1.register(platformNoticeRoutes);
       await v1.register(tagRoutes);
       await v1.register(placeRoutes);
       await v1.register(userRoutes);
+      await v1.register(ownClosureRoutes, { webOrigin: canonicalWebOrigin(env) });
       await v1.register(customerRoutes);
       await v1.register(vendorRoutes);
       await v1.register(recordingRoutes(stripeConnectRoutes, moneyRoutes), {
@@ -646,6 +653,9 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
         conversationRateLimitMax: env.CONVERSATION_RATE_LIMIT_MAX,
         messageRateLimitMax: env.MESSAGE_RATE_LIMIT_MAX,
         ...(options.streamHeartbeatMs ? { heartbeatMs: options.streamHeartbeatMs } : {}),
+        ...(options.streamSubjectRecheckMs
+          ? { subjectRecheckMs: options.streamSubjectRecheckMs }
+          : {}),
       });
       await v1.register(uploadRoutes, {
         rateLimitMax: env.UPLOAD_RATE_LIMIT_MAX,

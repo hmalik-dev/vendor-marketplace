@@ -26,7 +26,7 @@ const STATUS_LABELS: Record<string, string> = {
 /**
  * Categories &amp; tags — the moderation queue above the vocabulary it feeds.
  *
- * Two things on one screen because they are one job: an operator approving a
+ * Two things on one screen because they are one job: an admin approving a
  * suggestion needs to see whether something close to it already exists, and a
  * separate route would make them hold that in their head.
  */

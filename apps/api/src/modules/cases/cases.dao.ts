@@ -33,7 +33,7 @@ import { containsInsensitive } from '../../lib/like-pattern.js';
  * are here for the same reason the rows are one table: a case is a case.
  */
 
-/** The operator who closed a case, aliased off the sender already on the query. */
+/** The admin who closed a case, aliased off the sender already on the query. */
 const resolver = alias(users, 'case_resolver');
 
 export interface SupportCaseProjection {
@@ -187,7 +187,7 @@ export function otherCaseStatus(status: SupportCaseStatus): SupportCaseStatus {
  * the *other* status rather than both, because that is where its link goes;
  * `booking` is a genuine drop and counts the status held. A count that
  * described a different set from the destination would be worse than no number
- * at all — the operator would click it and find fewer rows than promised.
+ * at all — the admin would click it and find fewer rows than promised.
  *
  * No sender join, for the reason `countSupportCases` gives: nothing in
  * `caseFilterCondition` leaves `support_cases`, and a left join cannot change a
@@ -260,6 +260,8 @@ export interface CaseBookingProjection {
   totalAmountCents: number;
   platformFeeCents: number;
   vendorPayoutCents: number;
+  vendorOwedCents: number;
+  vendorOwedRecoveredCents: number;
   payoutModel: PayoutModel;
   refundAmountCents: number | null;
   paidAt: Date | null;
@@ -293,6 +295,8 @@ export async function findCaseBooking(
       totalAmountCents: bookings.totalAmountCents,
       platformFeeCents: bookings.platformFeeCents,
       vendorPayoutCents: bookings.vendorPayoutCents,
+      vendorOwedCents: bookings.vendorOwedCents,
+      vendorOwedRecoveredCents: bookings.vendorOwedRecoveredCents,
       payoutModel: bookings.payoutModel,
       refundAmountCents: bookings.refundAmountCents,
       paidAt: bookings.paidAt,
@@ -395,7 +399,7 @@ export async function insertSupportCase(
  *
  * This one query is the whole of the scope on `GET /admin/conversations/:id/messages`:
  * no open case naming the thread, no read. The case id and the conversation id
- * must match **in one row** — an operator holds a case id and could pass any
+ * must match **in one row** — an admin holds a case id and could pass any
  * conversation id beside it, so a case that names some other subject grants
  * nothing here.
  *
@@ -486,19 +490,61 @@ export async function findOpenChargebackCase(
  *
  * The id alone, because every caller uses this as a boolean — and it is the
  * first thing the webhook asks, ahead of the round trip to Stripe, so it must
- * be as small as the unique index can make it.
+ * be as small as the unique index can make it. The booking and the recorded
+ * network outcome ride along (VEN-645) so a redelivered `created` for a lost
+ * dispute can finish a settlement that failed after the case was written.
  */
 export async function findCaseByStripeDisputeId(
   db: AppDatabase,
   stripeDisputeId: string,
-): Promise<{ id: string } | null> {
+): Promise<{ id: string; bookingId: string | null; networkOutcome: string | null } | null> {
   const rows = await db
-    .select({ id: supportCases.id })
+    .select({
+      id: supportCases.id,
+      bookingId: supportCases.bookingId,
+      networkOutcome: supportCases.networkOutcome,
+    })
     .from(supportCases)
     .where(eq(supportCases.stripeDisputeId, stripeDisputeId))
     .limit(1);
 
   return rows[0] ?? null;
+}
+
+/**
+ * Writes the early fraud warning case for a booking, or answers `null` because
+ * one already exists (VEN-645).
+ *
+ * The uniqueness is a transaction-scoped advisory lock on the booking rather
+ * than an index: a partial unique index on `origin = 'fraud_warning'` cannot be
+ * created in the migration that adds that enum member, and Stripe does redeliver
+ * while a slow first attempt is still running.
+ */
+export async function insertFraudWarningCase(
+  db: AppDatabase,
+  values: NewSupportCaseRow & { bookingId: string },
+): Promise<SupportCaseRow | null> {
+  return db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${`fraud_warning:${values.bookingId}`}))`,
+    );
+
+    const existing = await tx
+      .select({ id: supportCases.id })
+      .from(supportCases)
+      .where(
+        and(eq(supportCases.bookingId, values.bookingId), eq(supportCases.origin, 'fraud_warning')),
+      )
+      .limit(1);
+
+    if (existing[0]) {
+      return null;
+    }
+
+    const rows = await tx.insert(supportCases).values(values).returning();
+
+    return rows[0] ?? null;
+  });
 }
 
 /** Records that the report never reached the inbox. See `email_failed_at`. */
@@ -550,7 +596,7 @@ export interface CaseResolutionState {
  *
  * **Whether the case is still open is deliberately not decided here.** Reading
  * it and acting on it would be a check-then-act across two statements, so two
- * operators pressing at once would both pass. `markCaseResolved` matches on
+ * admins pressing at once would both pass. `markCaseResolved` matches on
  * `status = 'open'` in the `UPDATE` itself and answers `null` to the loser,
  * which is the same question asked where it cannot race. `caseStatus` is read
  * only so the payout guard stands aside for a case someone already closed.
@@ -581,9 +627,9 @@ export async function findCaseResolutionState(
  * Closes a case, and **only one that is open**.
  *
  * The `status = 'open'` predicate is what makes the write idempotent under two
- * operators pressing at once: the second update matches nothing and answers
+ * admins pressing at once: the second update matches nothing and answers
  * `null`, so the caller can say "already resolved" rather than overwriting the
- * first operator's name and timestamp with their own.
+ * first admin's name and timestamp with their own.
  */
 export async function markCaseResolved(
   /** An executor, so the audit row can commit or roll back with the close. */

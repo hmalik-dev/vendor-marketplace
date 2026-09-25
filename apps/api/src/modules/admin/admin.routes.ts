@@ -29,8 +29,8 @@ import {
   adminReviewPageSchema,
   adminReviewQuerySchema,
   adminReviewVisibilityResultSchema,
-  adminOperatorChangeResultSchema,
-  adminOperatorListSchema,
+  adminAccountChangeResultSchema,
+  adminAccountListSchema,
   adminStepUpResultSchema,
   adminStepUpVerifySchema,
   adminTagListSchema,
@@ -47,7 +47,7 @@ import {
   adminVendorPublishResultSchema,
   adminVendorQuerySchema,
   bookingSchema,
-  grantOperatorSchema,
+  grantAdminSchema,
   resolveDisputeSchema,
   resolveTagSuggestionSchema,
   setPackageActiveSchema,
@@ -61,7 +61,7 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { assertRole, requireRoleBeforeValidation } from '../../lib/guards.js';
 import { perAccountRateLimit } from '../../lib/rate-limit.js';
 import { requireStepUp } from '../../lib/step-up.js';
-import { grantOperator, listOperators, revokeOperator } from './admin-operators.service.js';
+import { grantAdmin, listAdmins, revokeAdmin } from './admins.service.js';
 import { completeStepUp, startStepUp, withinDestructiveCeiling } from './admin-step-up.service.js';
 import { listCases, readCase, readCaseConversation, resolveCase } from '../cases/cases.service.js';
 import {
@@ -194,39 +194,34 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
   );
 
   /**
-   * Operator access (VEN-506): the only way after launch to add or remove an
-   * operator, so no admin change needs the database. Both writes take the
+   * Admin access (VEN-506): the only way after launch to add or remove an
+   * admin, so no admin change needs the database. Both writes take the
    * step-up; `users.role` stays the single authority.
    */
   app.get(
-    '/admin/operators',
-    { onRequest: adminOnly, schema: { response: { 200: adminOperatorListSchema } } },
-    async () => listOperators(app.db),
+    '/admin/admins',
+    { onRequest: adminOnly, schema: { response: { 200: adminAccountListSchema } } },
+    async () => listAdmins(app.db),
   );
 
   app.post(
-    '/admin/operators',
+    '/admin/admins',
     {
       onRequest: irreversible,
-      schema: { body: grantOperatorSchema, response: { 200: adminOperatorChangeResultSchema } },
+      schema: { body: grantAdminSchema, response: { 200: adminAccountChangeResultSchema } },
     },
     async (request) =>
-      grantOperator(
-        app.db,
-        assertRole(request.auth, ['admin']).id,
-        request.body.email,
-        app.clock(),
-      ),
+      grantAdmin(app.db, assertRole(request.auth, ['admin']).id, request.body.email, app.clock()),
   );
 
   app.delete(
-    '/admin/operators/:userId',
+    '/admin/admins/:userId',
     {
       onRequest: irreversible,
-      schema: { params: userParamsSchema, response: { 200: adminOperatorChangeResultSchema } },
+      schema: { params: userParamsSchema, response: { 200: adminAccountChangeResultSchema } },
     },
     async (request) =>
-      revokeOperator(
+      revokeAdmin(
         app.db,
         assertRole(request.auth, ['admin']).id,
         request.params.userId,
@@ -378,19 +373,19 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
   );
 
   /**
-   * An operator settles a reported problem, one way or the other (#423).
+   * An admin settles a reported problem, one way or the other (#423).
    *
-   * Here rather than in the payments plugin because the actor is an operator
+   * Here rather than in the payments plugin because the actor is an admin
    * and every route in this file is `admin` and nothing else — a dispute
    * resolution exposed on a customer- or vendor-guarded plugin would let one
    * party to the disagreement decide it. The money it moves is still
    * `payments.service.ts`'s: `resolveBookingDispute` is a wrapper that calls
    * the same function with this plugin's context, and adds the one thing only
-   * this plugin knows — which operator ruled (#434).
+   * this plugin knows — which admin ruled (#434).
    *
    * Deliberately not a case-management product. The hold needs an off switch
    * with two positions and it has one; the admin surfaces that already exist
-   * are where an operator reads the booking.
+   * are where an admin reads the booking.
    */
   app.put(
     '/admin/bookings/:bookingId/dispute',
@@ -413,12 +408,12 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
   );
 
   /**
-   * An operator retries one stuck payout (#432).
+   * An admin retries one stuck payout (#432).
    *
    * `PUT` because it is idempotent in the sense that matters: pressing it twice
    * on a payout that has landed is refused as already released, and on one that
    * has not it re-enters the same sweep the timer runs. The transfer is
-   * `payouts.service.ts`'s, unchanged — this route adds only the operator, and
+   * `payouts.service.ts`'s, unchanged — this route adds only the admin, and
    * `retryBookingPayout` records which one.
    */
   app.put(
@@ -442,7 +437,7 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
   /**
    * The launch switches (VEN-404): pause new requests, checkout or automatic
    * payouts, and cap booking value, without a deploy. Each field that changes
-   * writes its own `admin_actions` row with before and after, and the operator
+   * writes its own `admin_actions` row with before and after, and the admin
    * is emailed so an accidental flip is noticed the same hour.
    */
   app.get(
@@ -513,7 +508,11 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
       onRequest: adminOnly,
       schema: { params: vendorParamsSchema, response: { 200: adminVendorDetailSchema } },
     },
-    async (request) => readVendorDetail(app.db, request.params.vendorId, app.clock()),
+    async (request) =>
+      readVendorDetail(app.db, request.params.vendorId, app.clock(), {
+        stripe: context().stripe,
+        log: app.log,
+      }),
   );
 
   app.get(
@@ -637,14 +636,14 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
    * Graduated moderation (#435) — the four levers that are not a ban.
    *
    * All four are `PUT` or `DELETE` on a **state**, not a verb on an action:
-   * `{ isPublished: false }` rather than an `/unpublish` route. Two operators
+   * `{ isPublished: false }` rather than an `/unpublish` route. Two admins
    * working the same queue then converge on the state they both asked for
    * instead of toggling past one another, and the route that took a storefront
    * down is the one that puts it back — which is what makes the action
    * reversible in the API rather than only in the console.
    *
    * `409` where the state is already the requested one, matching ban and unban.
-   * Silently succeeding would tell an operator they had hidden a review a
+   * Silently succeeding would tell an admin they had hidden a review a
    * colleague hid an hour ago.
    */
   app.put(
@@ -790,7 +789,7 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
    * A read of `admin_actions`, which every mutating route above writes to. The
    * subject filter is what makes it usable rather than a firehose: it is the
    * answer to "what did the console do to this account", which is the question
-   * an operator actually arrives with.
+   * an admin actually arrives with.
    *
    * `admin` like everything else here, and pointedly so — the log records
    * actions taken on other people's accounts, so reading it is itself a
@@ -808,7 +807,7 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
     async (request) => listActivity(app.db, request.query),
   );
 
-  /** The operators the log names — `Actor ▾` on `/admin/activity` (VEN-388). */
+  /** The admins the log names — `Actor ▾` on `/admin/activity` (VEN-388). */
   app.get(
     '/admin/activity/actors',
     {
@@ -829,7 +828,7 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
    *
    * The service lives in `modules/cases/` rather than here: the table's other
    * two writers are the public support route and the Stripe webhook, and neither
-   * is an admin operation. This plugin is where an operator reaches it.
+   * is an admin operation. This plugin is where an admin reaches it.
    */
   app.get(
     '/admin/cases',
@@ -861,10 +860,10 @@ export const adminRoutes: FastifyPluginAsyncZod<AdminRoutesOptions> = async (app
    * writes an `admin_actions` row in the same transaction, which is why #434
    * was this ticket's prerequisite rather than a nicety.
    *
-   * **There is no `POST` beside it, deliberately.** The operator reads and then
+   * **There is no `POST` beside it, deliberately.** The admin reads and then
    * acts through moderation or through support; nothing in this console posts
    * into a thread, because a participant is a party to the conversation and an
-   * operator is not.
+   * admin is not.
    */
   app.get(
     '/admin/conversations/:conversationId/messages',

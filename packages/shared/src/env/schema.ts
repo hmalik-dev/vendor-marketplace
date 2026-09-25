@@ -56,7 +56,7 @@ export type RegistryShape<TConsumer extends Consumer, TCapability extends Capabi
  * Keys whose value is a credential, and must not be echoed into a boot log.
  *
  * The "still on its development default" message names the value so the
- * operator knows what to replace. That is right for a URL and wrong for a
+ * admin knows what to replace. That is right for a URL and wrong for a
  * secret: nothing sensitive defaults today, but the first row that does would
  * print itself into every failed deployment's log.
  */
@@ -70,7 +70,7 @@ function schemaFor(variable: EnvVariable, target: ShapeTarget): z.ZodTypeAny {
    * A row that *has* a default and must be stated anyway is the failure this
    * message exists for: on a deployment the development default is not a
    * fallback, it is the defect. Saying so names the fix, where a bare
-   * "is required" sends the operator looking for a value that is right there
+   * "is required" sends the admin looking for a value that is right there
    * in `.env.example`.
    */
   const fallback = SECRET_KEY.test(variable.key)

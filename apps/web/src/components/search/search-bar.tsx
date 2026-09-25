@@ -1,6 +1,11 @@
 'use client';
 
-import { isPastDate, todayDateString, type Category } from '@vendor-marketplace/shared';
+import {
+  isPastDate,
+  MAX_EVENT_DATE_MONTHS_AHEAD,
+  todayDateString,
+  type Category,
+} from '@vendor-marketplace/shared';
 import { useEffect, useId, useState } from 'react';
 import { useStableValue } from '@/lib/use-stable-value';
 import { useViewerToday } from '@/lib/use-viewer-today';
@@ -394,6 +399,7 @@ export function SearchBar({
         label={isHero ? 'Event date' : 'Date'}
         value={draft.date === '' ? null : draft.date}
         today={today}
+        monthsAhead={MAX_EVENT_DATE_MONTHS_AHEAD}
         width={isHero ? 'hero' : 'compact'}
         scrim={isHero}
         onChange={(next) => {

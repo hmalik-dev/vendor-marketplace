@@ -5,6 +5,7 @@ import {
   FULL_REFUND_CUTOFF_HOURS,
   LATE_CANCELLATION_REFUND_RATE,
   PAYOUT_RELEASE_HOURS,
+  SESSION_REVOKE_MARKER_MAX_AGE_SECONDS,
 } from './index.js';
 
 /**
@@ -91,7 +92,7 @@ export const LEGAL_ACCEPTANCE_LABELS: Record<LegalAcceptanceDocument, string> = 
  * and until they do, `hasCurrentVendorAgreement` reads false and the dashboard
  * carries the blocker banner. "Which version did I agree to" stays answerable.
  */
-export const CURRENT_VENDOR_AGREEMENT_VERSION = 'v1.0';
+export const CURRENT_VENDOR_AGREEMENT_VERSION = 'v1.1';
 
 /** How the agreement names itself on the vendor's own surfaces. */
 export const VENDOR_AGREEMENT_TITLE = 'Vendor agreement';
@@ -125,6 +126,7 @@ export function legalFactTokens(): Record<string, string> {
     lateRefundShare: formatRate(LATE_CANCELLATION_REFUND_RATE),
     payoutReleaseHours: `${PAYOUT_RELEASE_HOURS} hours`,
     requestExpiryDays: `${BOOKING_REQUEST_EXPIRY_DAYS} days`,
+    revokeMarkerLifetime: `${SESSION_REVOKE_MARKER_MAX_AGE_SECONDS / 60} minutes`,
   };
 }
 
@@ -207,7 +209,7 @@ export function vendorAgreementTerms(): readonly {
  * because a typo fix nobody needs to re-accept would move a derived one and put
  * every signed-in account back through the gate for a corrected comma.
  */
-export const CURRENT_TERMS_VERSION = 'v1.0';
+export const CURRENT_TERMS_VERSION = 'v1.1';
 
 /**
  * How an acceptance was made, recorded on the row.

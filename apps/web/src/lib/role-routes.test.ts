@@ -37,6 +37,37 @@ describe('roleCanReach', () => {
   });
 
   /*
+   * `/messages` is the inbox: customers and vendors have one, an admin has no
+   * one to write to and goes to the console (VEN-702).
+   */
+  it.each(['/messages', '/messages?conversation=abc'])(
+    'turns an admin away from %s only',
+    (path) => {
+      expect(roleCanReach('customer', path)).toBe(true);
+      expect(roleCanReach('vendor', path)).toBe(true);
+      expect(roleCanReach('admin', path)).toBe(false);
+    },
+  );
+
+  /*
+   * The vendor-application screens serve only a session that has no account
+   * yet: each page redirects any role to its own home (VEN-629). The rule says
+   * so up front, so sign-in never forwards to a page that would bounce.
+   */
+  it.each(['/waitlist', '/vendors/apply', '/sign-up/vendor-details'])(
+    'turns every role away from %s',
+    (path) => {
+      expect(roleCanReach('customer', path)).toBe(false);
+      expect(roleCanReach('vendor', path)).toBe(false);
+      expect(roleCanReach('admin', path)).toBe(false);
+    },
+  );
+
+  it('leaves a vendor storefront whose slug starts with apply reachable', () => {
+    expect(roleCanReach('customer', '/vendors/apply-studio')).toBe(true);
+  });
+
+  /*
    * The gate is `/vendors/<slug>/request`, not the storefront around it. A
    * prefix match on `/vendor` would have swallowed the whole public catalogue
    * and bounced every customer off every vendor's page.
@@ -46,7 +77,6 @@ describe('roleCanReach', () => {
     '/vendors/june-harlow',
     '/vendors/june-harlow?date=2026-06-14',
     '/search',
-    '/messages',
     '/vendor-guide',
     // The public vendor agreement (VEN-402); the accept step at /vendor/agreement stays gated.
     '/legal/vendor-agreement',
@@ -107,7 +137,7 @@ describe('POST_SIGN_IN_PATH_BY_ROLE', () => {
   });
 
   /*
-   * An operator signs in to operate. Like a vendor, and unlike a customer, they
+   * An admin signs in to operate. Like a vendor, and unlike a customer, they
    * have no use for a catalogue of vendors as a starting place.
    */
   it('starts an admin on the console rather than the marketplace home', () => {

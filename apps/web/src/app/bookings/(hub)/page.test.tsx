@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ReactNode } from 'react';
+import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getOwnBookingRequests = vi.fn();
 const getOwnBookings = vi.fn();
@@ -8,7 +10,17 @@ vi.mock('@/lib/customer-data', () => ({
   getOwnBookings: (options: unknown) => getOwnBookings(options),
 }));
 
-vi.mock('@/lib/messaging-data', () => ({ getOwnConversations: async () => [] }));
+vi.mock('@/lib/messaging-data', () => ({
+  getOwnConversationBand: async () => ({ conversations: [], hasUnread: false }),
+}));
+
+vi.mock('@/components/bookings/bookings-hub', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/bookings/bookings-hub')>()),
+  BookingsHub: (): ReactNode => <section aria-label="Bookings" />,
+}));
+vi.mock('@/components/bookings/bookings-rail', () => ({
+  BookingsRail: (): ReactNode => null,
+}));
 
 vi.mock('@/lib/current-user', () => ({
   requireRole: async () => ({ city: 'Austin' }),
@@ -44,5 +56,26 @@ describe('the bookings hub reads', () => {
     read.mockRejectedValue(failure);
 
     await expect(BookingsPage({ searchParams })).rejects.toBe(failure);
+  });
+});
+
+/*
+ * VEN-706. The customer's `Your account` sidebar is gone: Messages and Bookings
+ * are one click apart in the header, so the hub is a bookings page and nothing
+ * else.
+ */
+describe('the bookings hub chrome', () => {
+  beforeEach(() => {
+    getOwnBookingRequests.mockReset().mockResolvedValue([]);
+    getOwnBookings.mockReset().mockResolvedValue([]);
+  });
+
+  afterEach(cleanup);
+
+  it('renders no navigation labelled Your account', async () => {
+    render(await BookingsPage({ searchParams }));
+
+    expect(screen.getByRole('region', { name: 'Bookings' })).toBeDefined();
+    expect(screen.queryByRole('navigation', { name: 'Your account' })).toBeNull();
   });
 });

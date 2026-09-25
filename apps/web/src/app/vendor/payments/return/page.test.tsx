@@ -46,7 +46,7 @@ describe('VendorPaymentsReturnPage', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe("You're set up");
 
     const banner = screen.getByRole('status');
-    expect(banner.textContent).toContain('Nothing else to do here.');
+    expect(banner.textContent).toBe('Payouts connected');
     expect(document.body.textContent).toContain(
       `pays it out to you ${PAYOUT_RELEASE_HOURS} hours after the event date.`,
     );
@@ -62,6 +62,11 @@ describe('VendorPaymentsReturnPage', () => {
 
     const banner = screen.getByRole('status');
     expect(banner.textContent).toContain("You don't need to do anything.");
+    // How long Stripe takes is Stripe's; the page names no time for it or for the re-check.
+    const copy = document.body.textContent ?? '';
+    expect(copy).toContain('Stripe has your details and is verifying them.');
+    expect(copy).toContain('Check again later');
+    expect(copy).not.toMatch(/minute|hour/);
     /*
      * Steel, never red and never gold: nothing failed, and nothing is waiting on
      * the vendor — it is waiting on Stripe. `40-states.md` does not bend here.

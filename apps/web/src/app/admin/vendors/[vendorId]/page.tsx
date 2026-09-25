@@ -1,8 +1,10 @@
 import {
   ADMIN_VENDOR_STATUS_LABELS,
+  BACKUP_WITHHOLDING_REASON_LABELS,
   formatPrice,
   uuidSchema,
   type AdminAvailabilityLockStatus,
+  type TaxIdState,
 } from '@vendor-marketplace/shared';
 import { notFound } from 'next/navigation';
 import {
@@ -35,6 +37,14 @@ import type { WireAdminVendorDetail } from '@/lib/wire-schemas';
 export const dynamic = 'force-dynamic';
 
 type Lock = WireAdminVendorDetail['locks'][number];
+
+/** Stripe's own words for where the tax ID stands; the number is never shown (VEN-723). */
+const TAX_ID_LABELS: Record<TaxIdState, string> = {
+  verified: 'Verified',
+  provided: 'Provided',
+  mismatch: 'Mismatch',
+  missing: 'Missing',
+};
 
 /** 24-hour and UTC, like every stamp in the console (#454). */
 const STAMP = new Intl.DateTimeFormat('en-US', {
@@ -190,11 +200,33 @@ export default async function AdminVendorDetailPage({
               </KeyValue>
               <KeyValue label="Payouts">
                 {vendor.payoutHold ? (
-                  <span className="text-gold-600">Held by an operator</span>
+                  <span className="text-gold-600">Held by an admin</span>
                 ) : (
                   'Released by the sweep'
                 )}
               </KeyValue>
+              <KeyValue label="Tax ID">
+                {vendor.taxIdState ? (
+                  TAX_ID_LABELS[vendor.taxIdState]
+                ) : (
+                  <Absent>{vendor.stripeAccountId ? 'Could not be read' : 'No account'}</Absent>
+                )}
+              </KeyValue>
+              <KeyValue label="Backup withholding">
+                {vendor.backupWithholding ? (
+                  <span className="text-gold-600">
+                    On · {BACKUP_WITHHOLDING_REASON_LABELS[vendor.backupWithholding.reason]},{' '}
+                    {formatEventDate(vendor.backupWithholding.noticeDate)}
+                  </span>
+                ) : (
+                  'Off'
+                )}
+              </KeyValue>
+              {vendor.debtOutstandingCents > 0 ? (
+                <KeyValue label="Owed to the platform" kind="mono">
+                  {formatPrice(vendor.debtOutstandingCents)}
+                </KeyValue>
+              ) : null}
             </KeyValueList>
           </AdminCard>
 

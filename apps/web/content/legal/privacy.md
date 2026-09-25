@@ -1,6 +1,6 @@
 ---
 title: Privacy Policy
-lastUpdated: 2026-09-22
+lastUpdated: 2026-09-24
 note: Every mention of Vercel Web Analytics below, other than the closing note, is interim, AI-drafted wording pending the account holder's own version; the closing note was already approved.
 ---
 
@@ -32,7 +32,7 @@ Because you asked us to run a booking for you, and a booking cannot be run witho
 
 A vendor sees the requests and bookings addressed to them, and the messages you send them. A customer sees the profile a vendor published. Nobody sees anybody else's. Our processors — Stripe and Neon (which also runs sign-in and stores uploads) — see what the table above says they hold, and are contractually barred from doing anything else with it. Vercel receives anonymous page-view counts only, not tied to your account — see the analytics note further down.
 
-**One exception, and it is the reason reporting works at all: when a message thread is reported, the people who operate the platform can read it.** They can read that thread, and only that thread, and only while the report is open — a closed report stops being a key to the conversation. Every such read is written to an internal log naming the operator, the thread and the report it was read under. Staff never write into a thread: an operator reads and then acts, and nothing you see in a conversation is from us. We do not otherwise read your messages, and there is no way in the product for anybody to browse conversations they have no report about.
+**One exception, and it is the reason reporting works at all: when a message thread is reported, the people who operate the platform can read it.** They can read that thread, and only that thread, and only while the report is open — a closed report stops being a key to the conversation. Every such read is written to an internal log naming the admin, the thread and the report it was read under. Staff never write into a thread: an admin reads and then acts, and nothing you see in a conversation is from us. We do not otherwise read your messages, and there is no way in the product for anybody to browse conversations they have no report about.
 
 ## How long we keep it
 

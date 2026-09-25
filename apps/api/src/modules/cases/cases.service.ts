@@ -25,14 +25,16 @@ import { AppError, conflict, forbidden, notFound } from '../../lib/errors.js';
 import { insertAdminAction } from '../admin/admin.dao.js';
 import { fullName } from '../admin/admin.service.js';
 import {
+  earlyFraudWarningAlert,
   unmatchedDisputeAlert,
-  type OperatorAlerts,
-} from '../operator-alerts/operator-alerts.service.js';
+  type AdminAlerts,
+} from '../admin-alerts/admin-alerts.service.js';
 import {
   AlreadyHeldError,
   announceDisputeHold,
   disputeHoldAudience,
   placeDisputeHold,
+  settleLostChargeback,
   StaleBookingError,
   type BookingContext,
 } from '../payments/payments.service.js';
@@ -44,6 +46,7 @@ import {
   findBookingForDispute,
   findCaseBooking,
   findCaseByStripeDisputeId,
+  insertFraudWarningCase,
   findCaseResolutionState,
   findOpenCaseForConversation,
   findOpenChargebackCase,
@@ -161,7 +164,7 @@ export interface OpenSupportCaseInput {
  * time this runs the payout hold has been placed, and a throw here would answer
  * 502 on a report the customer has to re-send — which the hold would then refuse
  * as a duplicate, leaving them told they have already reported a booking they
- * have no record of reporting. Losing the row costs the operator a queue entry;
+ * have no record of reporting. Losing the row costs the admin a queue entry;
  * losing the send costs the customer their complaint and freezes a vendor's
  * money behind nothing.
  *
@@ -212,7 +215,7 @@ export interface OpenReportCaseInput {
  *
  * `topic` is filled in with `REPORT_CASE_TOPIC` rather than left null. A
  * chargeback's topic is null because nobody typed one; a report's is known by
- * construction, and filling it is what puts these cases in front of an operator
+ * construction, and filling it is what puts these cases in front of an admin
  * filtering the queue for trust and safety.
  */
 export async function openReportCase(
@@ -281,8 +284,8 @@ export interface ChargebackDeps extends CaseDeps {
   /** The payments module's context, so the hold is placed by its own primitive. */
   bookings: BookingContext;
   /** Told of a dispute that matches no booking; absent in a suite that does not care. */
-  alerts?: OperatorAlerts;
-  /** `DEPLOY_ENV`: a dispute on another deployment's charge is not this operator's to hear of. */
+  alerts?: AdminAlerts;
+  /** `DEPLOY_ENV`: a dispute on another deployment's charge is not this admin's to hear of. */
   deployEnv: string;
 }
 
@@ -299,7 +302,7 @@ function openOutcome(status: string): string | null {
 }
 
 /**
- * The sentence the operator reads. Composed here, from figures Stripe answered
+ * The sentence the admin reads. Composed here, from figures Stripe answered
  * with — never a field a payload could have carried arbitrary text in.
  */
 function chargebackMessage(dispute: StripeDisputeSnapshot): string {
@@ -321,14 +324,15 @@ interface HoldResult {
  *
  * Reached only when `placeDisputeHold` has refused, and only for the refusals
  * that are facts about this booking's money rather than advice for a customer.
- * Each one leaves an operator with a different job, which is why they are three
+ * Each one leaves an admin with a different job, which is why they are three
  * sentences and not one.
  */
 function describeHoldRefusal(target: DisputedBookingProjection): string {
   if (target.payoutReleasedAt) {
     return (
       'The payout had already been released when this chargeback arrived, so there was ' +
-      'nothing left to freeze. Recovering it is a conversation with the vendor, not a ruling here.'
+      'nothing left to freeze. If the network rules against the platform, the vendor owes it back ' +
+      'and it is kept from their next payouts.'
     );
   }
 
@@ -365,7 +369,7 @@ function describeHoldRefusal(target: DisputedBookingProjection): string {
  * booking whose payout has already been released and one whose event has not
  * happened yet; both are right for a customer's own report and neither is
  * something a card network's decision can be turned away by. So the refusal is
- * caught and recorded on the case, and the operator sees why the money is not
+ * caught and recorded on the case, and the admin sees why the money is not
  * frozen instead of seeing nothing. Letting it throw would also have made the
  * webhook 500 and Stripe retry the same refusal for three days.
  *
@@ -391,7 +395,19 @@ export async function openChargebackCase(
   reference: string,
   now: Date,
 ): Promise<ChargebackOutcome> {
-  if (await findCaseByStripeDisputeId(deps.db, disputeId)) {
+  const existing = await findCaseByStripeDisputeId(deps.db, disputeId);
+
+  if (existing) {
+    /* A settlement that failed after the case was written is finished by the redelivery (VEN-645). */
+    if (existing.networkOutcome === 'lost' && existing.bookingId) {
+      await settleLostChargeback(
+        deps.bookings,
+        existing.bookingId,
+        (await retrieve()).amountCents,
+        now,
+      );
+    }
+
     return 'already-recorded';
   }
 
@@ -424,7 +440,7 @@ export async function openChargebackCase(
    * than refused, for the reason the intent handler beside it gives: a 4xx
    * makes Stripe retry for three days and count the endpoint as failing, for
    * an event that could never be applied. But Stripe has still debited the
-   * platform and the evidence deadline still runs, so the operator is told
+   * platform and the evidence deadline still runs, so the admin is told
    * (VEN-430): with no case and no email it would pass by default.
    */
   if (!target) {
@@ -443,7 +459,7 @@ export async function openChargebackCase(
    * redelivered after a failure, so it can land after a `closed` that matched
    * no case and was answered `already-recorded` — placing the hold now would
    * freeze a vendor's payout for a dispute that is over. The case still opens,
-   * carrying the outcome that close would have written, so the operator sees it.
+   * carrying the outcome that close would have written, so the admin sees it.
    */
   if (CLOSED_DISPUTE_STATUSES.has(dispute.status)) {
     const recorded = await insertSupportCase(deps.db, {
@@ -495,7 +511,7 @@ export async function openChargebackCase(
        *
        * `placeDisputeHold`'s 409s are facts about the booking that will still be
        * true in a minute — the event has not happened, the payout has gone, the
-       * status cannot be disputed — so they are what an operator needs written on
+       * status cannot be disputed — so they are what an admin needs written on
        * the case. `StaleBookingError` is the exception the primitive now names:
        * it means only that the row moved between the read and the write, and
        * filing that as a settled refusal behind a 200 would tell Stripe never to
@@ -504,7 +520,7 @@ export async function openChargebackCase(
        * Everything else — a 403, a 404, a lost connection — is a real failure and
        * is thrown. Catching the base class would have filed a case claiming a
        * hold that a retry could still have placed, and would have quoted copy
-       * written for a customer's report form back at an operator.
+       * written for a customer's report form back at an admin.
        */
       if (
         error instanceof StaleBookingError ||
@@ -515,11 +531,11 @@ export async function openChargebackCase(
       }
 
       /*
-       * **The operator's sentence, composed from the row.** Not
+       * **The admin's sentence, composed from the row.** Not
        * `error.message`: `placeDisputeHold`'s refusals are second-person copy
        * written for the customer's report form, and the worst of them —
        * *"You have already reported a problem with this booking"* — would tell
-       * an operator that the payout is loose while the booking card beside it
+       * an admin that the payout is loose while the booking card beside it
        * says `On hold`. That is a contradiction on the screen where somebody
        * decides who keeps the money.
        *
@@ -596,6 +612,15 @@ export async function openChargebackCase(
     await announceDisputeHold(deps.bookings, audience, 'network');
   }
 
+  /*
+   * Whether or not this delivery wrote the case: a delivery that wrote it and
+   * then failed here is redelivered into `already-recorded`, and the settlement
+   * is idempotent.
+   */
+  if (dispute.status === 'lost') {
+    await settleLostChargeback(deps.bookings, target.bookingId, dispute.amountCents, now);
+  }
+
   return written ? 'dispute-opened' : 'already-recorded';
 }
 
@@ -604,7 +629,7 @@ export async function openChargebackCase(
  *
  * Stripe's outcome and the platform's disposition are different facts: winning a
  * chargeback does not decide whether the vendor was in the right, and losing one
- * does not decide that they were not. The case stays `open` until an operator
+ * does not decide that they were not. The case stays `open` until an admin
  * rules on it. Auto-resolving here would settle a dispute on a card network's
  * evidence rules.
  *
@@ -614,11 +639,21 @@ export async function openChargebackCase(
  * gone.
  */
 export async function recordChargebackOutcome(
-  deps: CaseDeps,
+  deps: Pick<ChargebackDeps, 'db' | 'log' | 'bookings'>,
   dispute: StripeDisputeSnapshot,
   now: Date,
 ): Promise<ChargebackOutcome> {
   const updated = await recordNetworkOutcome(deps.db, dispute.id, dispute.status, now);
+
+  /*
+   * A `lost` ruling is the one outcome that ends the booking's money (VEN-645):
+   * the customer is already whole and the platform has been debited. Every other
+   * outcome is recorded and left to an admin, as above. Idempotent, so a
+   * redelivered close settles nothing twice.
+   */
+  if (updated?.bookingId && dispute.status === 'lost') {
+    await settleLostChargeback(deps.bookings, updated.bookingId, dispute.amountCents, now);
+  }
 
   return updated ? 'dispute-recorded' : 'already-recorded';
 }
@@ -675,7 +710,7 @@ export async function listCases(db: AppDatabase, query: AdminCaseQuery): Promise
    * The counted ways out, and **only** for an empty page (#454).
    *
    * Pattern A's filtered-empty offers one widening per filter, each carrying
-   * the rows it would reveal, so an operator picks the widening that pays
+   * the rows it would reveal, so an admin picks the widening that pays
    * rather than clearing everything and rebuilding the query. The count has to
    * exist before the button is drawn — a route revealing zero is never
    * offered — which is why it rides home with the list rather than being
@@ -689,7 +724,7 @@ export async function listCases(db: AppDatabase, query: AdminCaseQuery): Promise
    * `rows.length === 0` is also true for every page past the last one, where
    * the filter is revealing plenty — so without it `?page=2` on a queue holding
    * four open cases renders "No open cases", which is false, above a count of
-   * rows the operator can already see on page one.
+   * rows the admin can already see on page one.
    */
   const widenings =
     rows.length === 0 && query.page === 1 ? await countCaseWidenings(db, query) : [];
@@ -754,16 +789,16 @@ function toCaseBooking(booking: CaseBookingProjection): AdminCaseBooking {
 }
 
 /**
- * An operator closes a case that has no money riding on it.
+ * An admin closes a case that has no money riding on it.
  *
  * **It refuses a case whose booking is still `disputed`**, and that refusal is
  * the whole reason this is a separate control from the two-position one. Closing
  * a case while the payout it froze stays frozen is precisely the state this
- * ticket exists to end: a hold with no complaint an operator can find. The
+ * ticket exists to end: a hold with no complaint an admin can find. The
  * dispute route lifts the hold *and* closes the case, so there is a right way to
  * do it and this says which.
  *
- * A second operator pressing the same button gets 409 rather than overwriting
+ * A second admin pressing the same button gets 409 rather than overwriting
  * the first one's name on the row — `markCaseResolved` matches on `open`.
  */
 export async function resolveCase(
@@ -819,7 +854,7 @@ export async function resolveCase(
    * and only if the operation has already committed an irreversible effect
    * outside Postgres. This one has not — it is a single `UPDATE` — so a failed
    * log write must roll the close back rather than leave a case closed with no
-   * record of who closed it. An operator simply presses the button again.
+   * record of who closed it. An admin simply presses the button again.
    */
   const closed = await deps.db.transaction(async (tx) => {
     const row = await markCaseResolved(tx, caseId, actorId, now);
@@ -854,7 +889,7 @@ export async function resolveCase(
 // --- What the console reads under a case's authority -----------------------
 
 /**
- * The dates a case lets an operator read of the thread it reports (VEN-412).
+ * The dates a case lets an admin read of the thread it reports (VEN-412).
  *
  * A booking dates the case, so the read is its **event date** — Pattern C's
  * `12 Sep only`. A report names no event, so the read is the **week ending on
@@ -905,7 +940,7 @@ export function reportedThreadWindow(grant: { createdAt: Date; eventDate: string
  *    exists for operations that have already committed something irreversible
  *    outside Postgres. A read has committed nothing, so the action row rides the
  *    same transaction as the select: a read that could not be logged did not
- *    happen, and the operator simply asks again. Logging afterwards, or
+ *    happen, and the admin simply asks again. Logging afterwards, or
  *    swallowing the failure, is how the console comes to have read messages it
  *    has no record of reading — which is the entire reason #434 was this
  *    ticket's prerequisite.
@@ -913,7 +948,7 @@ export function reportedThreadWindow(grant: { createdAt: Date; eventDate: string
  *    `reportedThreadWindow` narrows the read to the case's event date, or to the
  *    week before the report, and the response names that window (VEN-412).
  * 4. **Read only.** There is no counterpart that writes into a thread, and there
- *    is not meant to be: the operator reads, then acts through moderation or
+ *    is not meant to be: the admin reads, then acts through moderation or
  *    through support. A message from the platform inside a private conversation
  *    would make the marketplace a party to it.
  */
@@ -970,10 +1005,10 @@ export async function readCaseConversation(
       },
     });
 
-    // The audit row stays in this transaction; the thread is read under the operator's identity.
+    // The audit row stays in this transaction; the thread is read under the admin's identity.
     const [found, counted] = await withRequestIdentity(
       tx,
-      { userId: actorId, role: 'admin', operator: true },
+      { userId: actorId, role: 'admin', admin: true },
       (scoped) =>
         Promise.all([
           findMessages(scoped, conversationId, pageSize, (page - 1) * pageSize, bounds),
@@ -1007,4 +1042,67 @@ export async function readCaseConversation(
       pageSize,
     },
   };
+}
+
+/** What the early fraud warning handler did, for the webhook's response body. */
+export type FraudWarningOutcome = 'fraud-warning-opened' | 'fraud-warning-recorded' | 'ignored';
+
+/**
+ * A card issuer's early fraud warning opens a case and tells the admin
+ * (VEN-645).
+ *
+ * **Nothing is refunded and nothing is frozen** (D46): an early fraud warning is
+ * a signal, not a ruling. Auto-refunding on it would refund real customers whose
+ * charge the issuer merely flagged, and would forfeit the vendor's booking with
+ * no one having looked. The admin decides on the case, and a chargeback that
+ * follows takes the hold path above.
+ *
+ * One case per booking: Stripe redelivers, and a second warning on the same
+ * charge adds nothing an admin has not been told.
+ */
+export async function openFraudWarningCase(
+  deps: Pick<ChargebackDeps, 'db' | 'log' | 'bookings' | 'alerts' | 'deployEnv'>,
+  warning: { warningId: string; fraudType: string; paymentIntentId: string },
+  reference: string,
+): Promise<FraudWarningOutcome> {
+  if (
+    await isForeignEnvPaymentIntent(deps.bookings.stripe, warning.paymentIntentId, deps.deployEnv)
+  ) {
+    return 'ignored';
+  }
+
+  const target = await findBookingForDispute(deps.db, warning.paymentIntentId);
+
+  if (!target) {
+    deps.log.warn(
+      { warningId: warning.warningId, paymentIntentId: warning.paymentIntentId },
+      'Ignored an early fraud warning on a charge no booking here owns',
+    );
+    return 'ignored';
+  }
+
+  const written = await insertFraudWarningCase(deps.db, {
+    reference,
+    origin: 'fraud_warning',
+    message:
+      `A card issuer warned Stripe that this charge may be fraudulent ("${warning.fraudType}", warning ${warning.warningId}). ` +
+      'Nothing was refunded or frozen. Nobody typed this message; it is the platform recording a network event.',
+    senderUserId: target.customerId,
+    bookingId: target.bookingId,
+  });
+
+  if (!written) {
+    return 'fraud-warning-recorded';
+  }
+
+  deps.alerts?.dispatch(
+    earlyFraudWarningAlert({
+      caseId: written.id,
+      reference,
+      bookingId: target.bookingId,
+      fraudType: warning.fraudType,
+    }),
+  );
+
+  return 'fraud-warning-opened';
 }

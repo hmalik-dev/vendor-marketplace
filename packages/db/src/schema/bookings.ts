@@ -99,6 +99,13 @@ export const bookingRequests = pgTable(
      */
     acceptedAt: timestamp('accepted_at', { withTimezone: true }),
     /**
+     * The platform fee rate in force when the vendor accepted, in basis points
+     * (VEN-712). A booking row does not exist until payment, so the rate is
+     * fixed here and copied onto the booking. Null on a request accepted before
+     * this column, and on one not yet accepted: payment then reads the env rate.
+     */
+    platformFeeBps: integer('platform_fee_bps'),
+    /**
      * The intent the customer is paying through, recorded before they confirm.
      *
      * This is the reconciliation handle. A webhook that never arrives leaves a
@@ -149,6 +156,10 @@ export const bookingRequests = pgTable(
     check(
       'booking_requests_guest_count_non_negative',
       sql`${table.guestCount} IS NULL OR ${table.guestCount} >= 0`,
+    ),
+    check(
+      'booking_requests_platform_fee_bps_range',
+      sql`${table.platformFeeBps} IS NULL OR (${table.platformFeeBps} >= 0 AND ${table.platformFeeBps} <= 10000)`,
     ),
     index('booking_requests_customer_status_idx').on(table.customerId, table.status),
     index('booking_requests_vendor_status_idx').on(table.vendorId, table.status),
@@ -231,6 +242,12 @@ export const bookings = pgTable(
     /** Platform commission at the rate in force when payment succeeded. */
     platformFeeCents: integer('platform_fee_cents').notNull(),
     /**
+     * The rate `platformFeeCents` was priced at, in basis points: the one fixed
+     * when the vendor accepted, or the env rate for a request accepted before
+     * that existed (VEN-712). Nullable so the previous release can keep writing.
+     */
+    platformFeeBps: integer('platform_fee_bps'),
+    /**
      * What the vendor is still owed, in cents.
      *
      * The split settled at payment, and it stays that figure for the life of an
@@ -292,6 +309,35 @@ export const bookings = pgTable(
     payoutAttempts: integer('payout_attempts').notNull().default(0),
     /** Why the last transfer attempt failed. Cleared when one succeeds. */
     payoutFailureReason: text('payout_failure_reason'),
+    /**
+     * What the vendor owes the platform after a chargeback the platform lost on
+     * a payout that had already been released (VEN-645).
+     *
+     * Orla is the loss collector, so the network debits the platform for money
+     * the vendor already holds. Zero for every other booking. Recorded only: the
+     * recovery — netting it off the next transfers — is VEN-658's, and this is
+     * the figure it reads.
+     */
+    vendorOwedCents: integer('vendor_owed_cents').notNull().default(0),
+    /**
+     * How much of `vendor_owed_cents` later payouts have already netted off
+     * (VEN-658). What is still outstanding is `vendor_owed_cents` less this.
+     */
+    vendorOwedRecoveredCents: integer('vendor_owed_recovered_cents').notNull().default(0),
+    /**
+     * What this booking's payout was reduced by to recover a vendor's debt from
+     * another booking (VEN-658). The transfer sent is `vendor_payout_cents` less
+     * this; the vendor's payouts view names it.
+     */
+    debtNettedCents: integer('debt_netted_cents').notNull().default(0),
+    /**
+     * What this booking's payout was reduced by as backup withholding (VEN-723,
+     * D49). The transfer sent is `vendor_payout_cents` less this and less
+     * `debt_netted_cents`; the year's sum is what is reported on Form 945 and on
+     * the 1099-K's `federal_income_tax_withheld`. Written in the transaction
+     * that claims the payout, and never afterwards.
+     */
+    backupWithheldCents: integer('backup_withheld_cents').notNull().default(0),
     /**
      * The customer's own words about the problem they reported, kept while the
      * complaint is open and cleared when it is resolved.
@@ -408,7 +454,7 @@ export const bookings = pgTable(
      * above: a failing payout is a handful of rows against every booking the
      * platform has ever taken, and both queries run on every view of the
      * Payments screen. Without it each is a sequential scan plus a sort of the
-     * whole table, on the one screen an operator opens *because* money is
+     * whole table, on the one screen an admin opens *because* money is
      * stuck.
      *
      * **`nullsFirst` is not a preference, it is what makes the sort usable.**
@@ -438,7 +484,18 @@ export const bookings = pgTable(
      */
     check('bookings_total_amount_cents_positive', sql`${table.totalAmountCents} > 0`),
     check('bookings_platform_fee_cents_non_negative', sql`${table.platformFeeCents} >= 0`),
+    check(
+      'bookings_platform_fee_bps_range',
+      sql`${table.platformFeeBps} IS NULL OR (${table.platformFeeBps} >= 0 AND ${table.platformFeeBps} <= 10000)`,
+    ),
     check('bookings_vendor_payout_cents_non_negative', sql`${table.vendorPayoutCents} >= 0`),
+    check('bookings_vendor_owed_cents_non_negative', sql`${table.vendorOwedCents} >= 0`),
+    check(
+      'bookings_vendor_owed_recovered_cents_range',
+      sql`${table.vendorOwedRecoveredCents} >= 0 AND ${table.vendorOwedRecoveredCents} <= ${table.vendorOwedCents}`,
+    ),
+    check('bookings_debt_netted_cents_non_negative', sql`${table.debtNettedCents} >= 0`),
+    check('bookings_backup_withheld_cents_non_negative', sql`${table.backupWithheldCents} >= 0`),
     check(
       'bookings_refund_amount_cents_range',
       sql`${table.refundAmountCents} IS NULL OR (${table.refundAmountCents} >= 0 AND ${table.refundAmountCents} <= ${table.totalAmountCents})`,

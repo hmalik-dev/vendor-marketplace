@@ -54,7 +54,7 @@ function envFor(mode: Mode): NodeJS.ProcessEnv {
     DATABASE_URL: 'postgresql://ep-x.us-east-2.aws.neon.tech/db',
     NEON_BRANCH: live ? 'production' : 'dev',
     SENTRY_DSN: live ? 'https://abc123@o1.ingest.sentry.io/42' : 'https://...@sentry.io/...',
-    OPERATOR_ALERT_EMAIL: live ? 'ops@orla.test' : 'operator@...',
+    ADMIN_ALERT_EMAIL: live ? 'ops@orla.test' : 'admin@...',
     SUPPORT_EMAIL_TO: live ? 'help@orla.test' : '',
     RATE_LIMIT_MAX: live ? '120' : '100000',
   };
@@ -201,7 +201,7 @@ describe('launch:check against test-mode doubles', () => {
     expect(find(results, 'SENTRY_DSN').detail).toBe(
       'still the placeholder https://...@sentry.io/...',
     );
-    expect(find(results, 'OPERATOR_ALERT_EMAIL').detail).toBe('still the placeholder operator@...');
+    expect(find(results, 'ADMIN_ALERT_EMAIL').detail).toBe('still the placeholder admin@...');
     expect(find(results, 'SUPPORT_EMAIL_TO').detail).toBe('unset');
     expect(find(results, 'RATE_LIMIT_MAX').detail).toBe('100000 (expected 30–1000)');
     expect(find(results, 'api /ready').detail).toBe('503 (expected 200)');
@@ -577,6 +577,9 @@ describe('the Stripe webhook subscription', () => {
         'refund.failed',
         'refund.updated',
         'charge.refund.updated',
+        'transfer.reversed',
+        'payout.failed',
+        'radar.early_fraud_warning.created',
       ]);
 
       // Mutation: a type added to the route's set is one the check now demands.

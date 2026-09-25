@@ -10,7 +10,7 @@ import {
   legalAcceptances,
   messages,
   notifications,
-  operatorAlerts,
+  adminAlerts,
   portfolioItems,
   reviews,
   users,
@@ -30,7 +30,7 @@ import {
   SUSPENSION_UNWIND,
   refundedBody,
 } from './account-unwind.js';
-import { LAST_OPERATOR_REFUSAL } from './data-rights.service.js';
+import { LAST_ADMIN_REFUSAL } from './data-rights.service.js';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 import { reconcileAuthUsers } from '../auth-sync/auth-sync.reconcile.js';
 import { bookingContextFor } from '../payments/payments.service.js';
@@ -470,12 +470,12 @@ describe('data rights', () => {
     });
 
     /*
-     * VEN-423. At 01:00Z on Oct 8 an operator in US Eastern is still on Oct 7,
+     * VEN-423. At 01:00Z on Oct 8 an admin in US Eastern is still on Oct 7,
      * so the booking dated Oct 8 is ahead of them. The blocker check used the
      * UTC date and read it as today, so the closure went through over a
      * confirmed booking. The Oct 6 booking is a day gone and must not count.
      */
-    it("counts the booking on the operator's next local day as a close blocker", async () => {
+    it("counts the booking on the admin's next local day as a close blocker", async () => {
       clockNow = new Date('2026-10-08T01:00:00Z');
       await signIn(ADMIN, true);
       await signIn(VENDOR);
@@ -589,7 +589,7 @@ describe('data rights', () => {
 
     /**
      * VEN-463, AC2. The audit row rides the retirement's transaction, so an
-     * insert that fails takes the retirement with it: the operator sees an error
+     * insert that fails takes the retirement with it: the admin sees an error
      * and the account is still live, rather than closed with nothing on record.
      * The failure is forced by a trigger, which is the one place a test can make
      * the insert itself raise without mocking the DAO.
@@ -771,7 +771,7 @@ describe('data rights', () => {
      * A refund Stripe refuses leaves the booking **confirmed** — the money did
      * not come back, so it must not be cancelled underneath the customer — on
      * an account that is nonetheless closed. The result carries the count so
-     * the console can say so; without it an operator sees a clean closure while
+     * the console can say so; without it an admin sees a clean closure while
      * the money is still at Stripe and neither party has been told.
      */
     it('reports a refund Stripe refused rather than counting the closure clean', async () => {
@@ -1130,7 +1130,7 @@ describe('data rights', () => {
      *
      * The auth provider is a network call the committed retirement cannot roll back, so a
      * refusal there leaves an account closed here and signed in there. That is
-     * reported rather than thrown: a 500 would tell an operator nothing had
+     * reported rather than thrown: a 500 would tell an admin nothing had
      * happened, when in fact everything except the identity had.
      */
     it('reports an auth deletion it could not make, and closes the account anyway', async () => {
@@ -1300,12 +1300,12 @@ describe('data rights', () => {
 
       expect(response.statusCode).toBe(200);
       expect(response.json()).toMatchObject({ identityDeleted: false });
-      // VEN-649: a delete that removed nothing pages the operator, not only the log.
+      // VEN-649: a delete that removed nothing pages the admin, not only the log.
       await harness.flushEmail();
       const alerts = await harness.database.db
-        .select({ kind: operatorAlerts.kind, subjectId: operatorAlerts.subjectId })
-        .from(operatorAlerts)
-        .where(eq(operatorAlerts.subjectId, unheld[0]!.id));
+        .select({ kind: adminAlerts.kind, subjectId: adminAlerts.subjectId })
+        .from(adminAlerts)
+        .where(eq(adminAlerts.subjectId, unheld[0]!.id));
       expect(alerts).toEqual([{ kind: 'auth_identity_kept', subjectId: unheld[0]!.id }]);
     });
 
@@ -1345,8 +1345,8 @@ describe('data rights', () => {
         expect(
           await harness.database.db
             .select()
-            .from(operatorAlerts)
-            .where(eq(operatorAlerts.subjectId, neonUser[0]!.id)),
+            .from(adminAlerts)
+            .where(eq(adminAlerts.subjectId, neonUser[0]!.id)),
         ).toEqual([]);
       } finally {
         harness.app.authDirectory = directory;
@@ -1423,7 +1423,7 @@ describe('data rights', () => {
      *
      * The closed account is searched for by its id: closure replaced the name
      * and address with `closed+<id>@invalid` (VEN-614), so the id is what an
-     * operator still has to find it by.
+     * admin still has to find it by.
      */
     it('counts the other set as the status route out of an empty customers search', async () => {
       await signIn(ADMIN, true);
@@ -1477,11 +1477,11 @@ describe('data rights', () => {
     });
 
     /**
-     * Hurdles, not refusal (VEN-391): another operator's account closes, and the
-     * row says it was an operator's. Two live operators, then one — so the
-     * last-operator refusal is observed both not firing and firing.
+     * Hurdles, not refusal (VEN-391): another admin's account closes, and the
+     * row says it was an admin's. Two live admins, then one — so the
+     * last-admin refusal is observed both not firing and firing.
      */
-    describe('an operator account', () => {
+    describe('an admin account', () => {
       async function close(actor: string, userId: string) {
         return harness.app.inject({
           method: 'POST',
@@ -1490,7 +1490,7 @@ describe('data rights', () => {
         });
       }
 
-      it('closes past a second live operator, recorded as an operator closure', async () => {
+      it('closes past a second live admin, recorded as an admin closure', async () => {
         const actorId = await signIn(ADMIN, true);
         const peerId = await signIn(OUTSIDER, true);
 
@@ -1508,19 +1508,25 @@ describe('data rights', () => {
           })
           .from(adminActions)
           .where(eq(adminActions.subjectId, peerId));
-        expect(rows.find((row) => row.action === 'operator_account_closed')).toEqual({
+        expect(rows.find((row) => row.action === 'admin_account_closed')).toEqual({
           actorId,
-          action: 'operator_account_closed',
+          action: 'admin_account_closed',
           subjectId: peerId,
         });
         expect(rows.some((row) => row.action === 'user_closed')).toBe(false);
+
+        const [closed] = await harness.database.db
+          .select({ firstName: users.firstName })
+          .from(users)
+          .where(eq(users.id, peerId));
+        expect(closed).toEqual({ firstName: 'Former admin' });
       });
 
-      it('refuses the last live operator with a 409, even when they are the actor', async () => {
+      it('refuses the last live admin with a 409, even when they are the actor', async () => {
         const actorId = await signIn(ADMIN, true);
         const peerId = await signIn(OUTSIDER, true);
 
-        // Two live: the self-closure refusal answers, not the last-operator one.
+        // Two live: the self-closure refusal answers, not the last-admin one.
         const whileTwo = await close(ADMIN, actorId);
         expect(whileTwo.statusCode).toBe(403);
 
@@ -1529,7 +1535,7 @@ describe('data rights', () => {
         // One live: the structural refusal answers first, on its own terms.
         const whileOne = await close(ADMIN, actorId);
         expect(whileOne.statusCode).toBe(409);
-        expect(whileOne.json().message).toBe(LAST_OPERATOR_REFUSAL);
+        expect(whileOne.json().message).toBe(LAST_ADMIN_REFUSAL);
 
         const [account] = await harness.database.db
           .select({ deletedAt: users.deletedAt })
@@ -1538,7 +1544,7 @@ describe('data rights', () => {
         expect(account!.deletedAt).toBeNull();
       });
 
-      it('does not count a banned operator as one who can still sign in', async () => {
+      it('does not count a banned admin as one who can still sign in', async () => {
         const actorId = await signIn(ADMIN, true);
         const bannedId = await signIn(OUTSIDER, true);
         await harness.database.db
@@ -1549,7 +1555,7 @@ describe('data rights', () => {
         const response = await close(ADMIN, actorId);
 
         expect(response.statusCode).toBe(409);
-        expect(response.json().message).toBe(LAST_OPERATOR_REFUSAL);
+        expect(response.json().message).toBe(LAST_ADMIN_REFUSAL);
       });
 
       it('still writes user_closed for an ordinary account', async () => {
@@ -1569,12 +1575,12 @@ describe('data rights', () => {
       });
 
       /**
-       * AC6's source guard: the flat refusal of operator targets is gone, so the
+       * AC6's source guard: the flat refusal of admin targets is gone, so the
        * only 403 left in `closeAccount` is the self-closure one. Counted on the
        * code with comments stripped, because a needle a comment can carry is a
        * guard that cannot fail.
        */
-      it('keeps no refusal of operator targets in closeAccount', () => {
+      it('keeps no refusal of admin targets in closeAccount', () => {
         const source = readFileSync(new URL('./data-rights.service.ts', import.meta.url), 'utf8');
         const start = source.indexOf('export async function closeAccount(');
         const end = source.indexOf('\nexport ', start + 1);
@@ -1609,9 +1615,9 @@ describe('data rights', () => {
       expect(second.json().message).toContain('already closed');
     });
 
-    it('refuses an operator closing their own account', async () => {
+    it('refuses an admin closing their own account', async () => {
       const actorId = await signIn(ADMIN, true);
-      // A second live operator, so the last-operator refusal cannot be what answers.
+      // A second live admin, so the last-admin refusal cannot be what answers.
       await signIn(OUTSIDER, true);
 
       const response = await harness.app.inject({
@@ -1715,7 +1721,7 @@ describe('data rights', () => {
       });
       expect(threads.statusCode).toBe(200);
       expect(
-        threads.json().map((thread: { otherPartyName: string }) => thread.otherPartyName),
+        threads.json().items.map((thread: { otherPartyName: string }) => thread.otherPartyName),
       ).toEqual(['Former customer']);
     });
 
@@ -1829,7 +1835,7 @@ describe('data rights', () => {
      * The closure and the auth provider backstop are the **same decision** about the
      * account holder's own bookings, so they must select the same branch.
      *
-     * `account-holder` on a closure an operator typed is deliberate: the word
+     * `account-holder` on a closure an admin typed is deliberate: the word
      * names whose decision it is, not whose hands were on the keyboard, and it
      * is what makes the branch leave a slipped-through booking standing instead
      * of refunding it in full — the money decision D39 refuses to make.
@@ -1837,7 +1843,7 @@ describe('data rights', () => {
     it('closure and deletion both refuse to price the account holder’s bookings', () => {
       expect(CLOSURE_UNWIND.initiatedBy).toBe('account-holder');
       expect(DELETION_UNWIND.initiatedBy).toBe('account-holder');
-      expect(SUSPENSION_UNWIND.initiatedBy).toBe('operator');
+      expect(SUSPENSION_UNWIND.initiatedBy).toBe('admin');
     });
 
     /** One mechanism, one set of words — everything but the namespacing agrees. */
@@ -1963,7 +1969,7 @@ describe('data rights', () => {
      * console cannot report a record the export does not hand over, and these
      * two fields are personal data that survives closure.
      */
-    it('reports a stale address to the operator and to the subject alike', async () => {
+    it('reports a stale address to the admin and to the subject alike', async () => {
       await signIn(ADMIN, true);
       const customerId = await signIn(CUSTOMER);
 

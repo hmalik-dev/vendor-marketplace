@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { SessionSync } from '@/components/auth/session-sync';
 import { Show } from '@/components/auth/show';
 import type { UserRole } from '@vendor-marketplace/shared';
 import { AccountMenu } from '@/components/account-menu';
@@ -10,12 +11,14 @@ import { MarketingNav } from '@/components/marketing-nav';
 import { SignedInDrawer, SignedOutDrawer } from '@/components/header-drawer';
 import { HeaderNav } from '@/components/header-nav';
 import { HeaderQuery } from '@/components/search/header-query';
+import { roleHasMessages } from '@/components/account-links';
+import { MessagesLink } from '@/components/messaging/messages-link';
 import { NotificationBell } from '@/components/messaging/notification-bell';
 import { Button } from '@/components/ui/button';
 import { getCategories } from '@/lib/vendor-data';
 import { isTermsGatedForChrome, readUserForChrome } from '@/lib/current-user';
 import type { WireUser } from '@/lib/wire-schemas';
-import { DASHBOARD_LABEL_BY_ROLE } from '@/lib/role-routes';
+import { DASHBOARD_LABEL_BY_ROLE, DASHBOARD_PATH_BY_ROLE } from '@/lib/role-routes';
 
 /**
  * Global site header. Server Component — the `Show` gates read the session
@@ -43,11 +46,15 @@ import { DASHBOARD_LABEL_BY_ROLE } from '@/lib/role-routes';
  * control in this bar already uses, and it means a role that changes underneath
  * a cached header still lands somewhere it is allowed.
  *
- * Everyone else keeps `/`. A customer's home is the marketplace, and an admin
- * renders it too — `ROLE_ROUTE_RULES` gates only the vendor out.
+ * An admin's home is the console (VEN-702), though they may still browse `/`.
+ * A customer's home is the marketplace.
  */
 function homeFor(role: UserRole | null): string {
-  return role === 'vendor' ? '/dashboard' : '/';
+  if (role === 'vendor') {
+    return '/dashboard';
+  }
+
+  return role === 'admin' ? DASHBOARD_PATH_BY_ROLE.admin : '/';
 }
 
 /**
@@ -95,7 +102,10 @@ export async function SiteHeader(): Promise<React.ReactElement> {
    * case, and the label is cosmetic either way: the route handler resolves the
    * role again and authorizes there.
    */
-  const dashboardLabel = DASHBOARD_LABEL_BY_ROLE[role ?? 'customer'];
+  const menuRole = role ?? 'customer';
+  const dashboardLabel = DASHBOARD_LABEL_BY_ROLE[menuRole];
+  // Messages and the bell are about conversations, bookings and reviews: an admin has none.
+  const hasMessages = roleHasMessages(menuRole);
 
   return (
     // The height sits on the header, not the nav inside it, so the bottom
@@ -209,14 +219,13 @@ export async function SiteHeader(): Promise<React.ReactElement> {
           </Show>
 
           <Show when="signed-in">
+            <SessionSync />
             {/*
               Nav links, like "Sign in" above — frame `02` draws both in
               `stone-700` at 500, and ghost's `clay-500` is for tertiary
               actions in a pane (VEN-413).
             */}
-            <Link href="/messages" className={MARKETING_LINK_CLASS}>
-              Messages
-            </Link>
+            {hasMessages ? <MessagesLink gated={gated} /> : null}
             {/*
               Four items do not fit at 390 — they pushed the header past the
               viewport. Dashboard is the one that gives way, and since #26 it
@@ -227,7 +236,7 @@ export async function SiteHeader(): Promise<React.ReactElement> {
             <Link href="/dashboard" className={`${MARKETING_LINK_CLASS} max-sm:hidden`}>
               {dashboardLabel}
             </Link>
-            <NotificationBell gated={gated} />
+            {hasMessages ? <NotificationBell gated={gated} /> : null}
             {/*
               The account control is the app's own, never a
               provider-hosted one (VEN-403). A hosted menu offers email changes
@@ -239,9 +248,9 @@ export async function SiteHeader(): Promise<React.ReactElement> {
             <AccountMenu
               name={displayNameFor(user)}
               avatarUrl={user?.avatarUrl ?? null}
-              dashboardLabel={dashboardLabel}
+              role={menuRole}
             />
-            <SignedInDrawer dashboardLabel={dashboardLabel} />
+            <SignedInDrawer role={menuRole} />
           </Show>
         </div>
       </HeaderNav>

@@ -22,7 +22,6 @@ import { readRoleForChrome, redirectVendorToDashboard } from '@/lib/current-user
 import { FOR_VENDORS_PATH } from '@/lib/for-vendors';
 import { GENERIC_TRUST_COPY } from '@/lib/landing-status';
 import type { TrustTitle } from '@/lib/landing-status';
-import { offeredJumpCategories } from '@/lib/jump-categories';
 import { getCategories, getFeaturedVendors } from '@/lib/vendor-data';
 
 /**
@@ -232,7 +231,7 @@ function landingCategories(categories: readonly Category[]): Category[] {
 
 /**
  * What a reader with no bookings of their own has to show — a visitor, an
- * operator, and a customer whose hub could not be read.
+ * admin, and a customer whose hub could not be read.
  *
  * A value rather than a branch, so the strip and the trust band ask the same
  * question of the same shape whoever is looking: both reads degrade to an empty
@@ -278,7 +277,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
    * A vendor never reaches this line — the redirect above sends them to their
    * own dashboard, because roles are exclusive and `/` is a catalogue of other
    * vendors. So the reader here is a signed-out visitor, a customer, or an
-   * operator, and only the customer gets the signed-in composition: an admin
+   * admin, and only the customer gets the signed-in composition: an admin
    * has no bookings to summarise and is looking at the marketplace, not at
    * their own things.
    *
@@ -379,7 +378,7 @@ export default async function HomePage(): Promise<React.ReactElement> {
             copy and the bar stacked. Grid distributes that surplus across the
             rows it spans, so row 1 — the copy — grew by half of it and carried
             the bar down with it: the bar measured y=372.25 against the frame's
-            352.5, and the jump chips inherited the same +19.75.
+            352.5.
 
             Sizing row 1 to `min-content` pins it to the copy, and `1fr` gives
             row 2 the whole surplus, which the bar then sits at the top of. The
@@ -445,33 +444,6 @@ export default async function HomePage(): Promise<React.ReactElement> {
 
             <div className="md:col-span-2 md:row-start-2 lg:col-span-1 lg:col-start-1 lg:pr-5.5 min-[90rem]:pr-8.5">
               <HeroSearch categories={categories} />
-
-              {/*
-                The shortcut past the bar for a visitor who already knows what
-                they need. Plain links, so they work before hydration and can
-                be opened in a new tab — the bar is the only part that needs a
-                client boundary.
-
-                `14 Landing tablet` does not draw this row: at 768 the bar has
-                just taken the full width and the category cards are directly
-                beneath it, so a third row of category shortcuts between them
-                repeats the same navigation twice in 120px.
-              */}
-              <div className="mt-3.25 hidden flex-wrap items-center gap-[7px] max-md:flex lg:flex min-[90rem]:mt-4 min-[90rem]:gap-2">
-                {/* Steps with the chips beside it: 11.5px/1px, 12.5px/2px at 1440. */}
-                <span className="mr-px text-[11.5px] text-stone-600 min-[90rem]:mr-0.5 min-[90rem]:text-sm">
-                  Or jump straight to
-                </span>
-                {offeredJumpCategories(categories).map(({ slug, name }) => (
-                  <Link
-                    key={slug}
-                    href={`/search?category=${slug}`}
-                    className="rounded-full border border-stone-300 bg-stone-0 px-2.5 py-1.25 text-[11.5px] font-semibold text-stone-900 transition-colors duration-(--duration-fast) min-[90rem]:px-3 min-[90rem]:py-1.5 min-[90rem]:text-sm hover:border-clay-300 hover:text-clay-600"
-                  >
-                    {name}
-                  </Link>
-                ))}
-              </div>
             </div>
 
             {/*

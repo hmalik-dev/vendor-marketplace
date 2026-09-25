@@ -45,8 +45,8 @@ attribute. Ruled 2026-09-04 (D30); the worked example is in `04-laws.md`.
 **Where a ruling has already overruled a frame, the frame is the record of what
 was overruled.** Do not file it again. Live overrides: sub-16px avatar monograms
 render Instrument Sans though the frames draw serif (D24); **no trigger draws the
-`▾` the frames draw except the vendor-type picker** (D25, amended by #426 on
-2026-09-06); `01-foundations.md` records two colour values as accepted
+`▾` the frames draw except the vendor-type picker and the date picker's month
+title** (D25, amended by #426 on 2026-09-06 and VEN-710); `01-foundations.md` records two colour values as accepted
 deviations; and the hero badge reads **"Early access"** where frame `01
 Landing` and `31-content-voice.md` draw "Now booking in Austin" (VEN-639,
 2026-09-23) — the account holder ruled the city claim a stale placeholder
@@ -66,7 +66,11 @@ in **two** directions, and only one of them is a finding:
   `clay-400` is a fill and never text on cream.
 - On the other thirteen sites, the frames draw a caret and the app must not.
   That is still D25 and still not a finding. `app/dropdown-caret.test.ts`
-  enforces it and exempts exactly one file.
+  enforces it and exempts exactly two files: the vendor-type picker, and the
+  date picker's month title. That title is a button with no frame: it draws `▾`
+  in `stone-600` (never `▴`) after "September 2026" because nothing else says
+  it opens the month and year view (VEN-710, account holder, 2026-09-23). A
+  parity pass reading that caret against frame `28` is reading this ruling.
 
 **The open state is both signals, deliberately.** The value turns
 `font-semibold text-clay-600` **and** the caret flips — `42-dropdowns.md` states
@@ -177,7 +181,7 @@ twice. All three of these are decisions, not drift:
   D=17 → 25, D=20 → 32 — so no single one satisfies them. `WORDMARK_SIZES`
   exists since VEN-388 but holds only the corroborated D=15 → 23 (the desktop
   header, including the admin header); measuring D=17 is **#118's**.
-- **The admin header's operator line renders `stone-480`** (`#d8d0c2`), where
+- **The admin header's admin line renders `stone-480`** (`#d8d0c2`), where
   frame `13` draws `#D5CEC2` — which is `stone-400`'s hex. That is the frame
   naming a colour rather than a role: `stone-400` is a **border** value, drawn
   on a light ground at thirty-nine sites and as text on ink at none. The two
@@ -296,6 +300,22 @@ right way: the first version wrote the character class `bg-stone-9[05]0` and
 naming a ramp step that does not exist. **An existing guard catching the new
 guard's own text is the system working** — and the ratchet is at zero, so do not
 add a line to it to get past something.
+
+**The landing hero draws no "Or jump straight to" row (VEN-709, ruled
+2026-09-23).** Frames `01 Landing`, `27 Landing — 1024` and `14 Landing mobile`
+draw a row of category pills under the search bar; the account holder removed it
+because the `Browse by category` cards sit directly below and repeat it. The
+footer's category links stay. A parity pass reading the missing row is reading
+this ruling; the frames are corrected by a design pass, not by a ticket.
+
+**Helper and reassurance lines that add no fact are gone (VEN-707, ruled
+2026-09-23).** Frame `29 Contact support` draws the message helper ("What you
+were doing, and what you expected instead.") and "One email, no ticket to
+track." beside `Send message`; frame `09` draws "Updates as you type" and the
+preview caption under the storefront card. The account holder removed them: each
+restates the control, placeholder or toggle beside it. A parity pass reading
+them as missing text is reading this ruling; the frames are corrected by a
+design pass, not by a ticket.
 
 **The Florals category no longer exists (#419, ruled 2026-09-06).** It was
 folded into `Decor`, so the taxonomy is ten categories and three frames now

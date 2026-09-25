@@ -1,12 +1,16 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { FakeBroadcastChannel } from '@/testing/fake-broadcast-channel';
 import {
   changePassword,
+  endSessions,
+  listSessions,
   requestPasswordReset,
   signInWithEmail,
   signOut,
   signUpWithEmail,
   verifyEmailCode,
 } from './auth-requests';
+import { resetSessionEndedForTests } from './session-ended';
 
 const INPUT = {
   email: 'new@example.com',
@@ -207,6 +211,49 @@ describe('signOut', () => {
 
     await expect(signOut()).resolves.toBeUndefined();
   });
+
+  /*
+   * VEN-699: the other tabs of this browser hear it. Only after the request
+   * succeeded — a failed sign-out leaves the session live, so it must not log
+   * anyone else out.
+   */
+  describe("announcing to the browser's other tabs", () => {
+    beforeEach(() => {
+      resetSessionEndedForTests();
+      vi.stubGlobal('BroadcastChannel', FakeBroadcastChannel);
+    });
+
+    afterEach(() => {
+      resetSessionEndedForTests();
+      FakeBroadcastChannel.instances = [];
+    });
+
+    it('posts session-ended once the proxy confirms', async () => {
+      stubFetch(200);
+
+      await signOut();
+
+      expect(FakeBroadcastChannel.instances.map((channel) => channel.posted)).toEqual([
+        ['session-ended'],
+      ]);
+    });
+
+    it.each([500, 429])('posts nothing when the proxy answers %i', async (status) => {
+      stubFetch(status);
+
+      await expect(signOut()).rejects.toThrow();
+
+      expect(FakeBroadcastChannel.instances.flatMap((channel) => channel.posted)).toEqual([]);
+    });
+
+    it('posts nothing when the request never reaches the proxy', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('fetch failed')));
+
+      await expect(signOut()).rejects.toThrow();
+
+      expect(FakeBroadcastChannel.instances.flatMap((channel) => channel.posted)).toEqual([]);
+    });
+  });
 });
 
 describe('an auth proxy with no auth configuration (VEN-635)', () => {
@@ -222,6 +269,14 @@ describe('an auth proxy with no auth configuration (VEN-635)', () => {
     stubFetchBody(503, { code: 'AUTH_UNAVAILABLE' });
 
     await expect(requestPasswordReset('nobody@example.invalid')).resolves.toBe('unreachable');
+  });
+
+  it('reads a paced reset request as mailPaced, and any other 429 as throttled (VEN-719)', async () => {
+    stubFetchBody(429, { code: 'RESET_MAIL_PACED' });
+    await expect(requestPasswordReset('a@example.com')).resolves.toBe('mailPaced');
+
+    stubFetchBody(429, { message: 'Too many attempts' });
+    await expect(requestPasswordReset('a@example.com')).resolves.toBe('throttled');
   });
 });
 
@@ -271,5 +326,65 @@ describe('changePassword (VEN-677)', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('fetch failed')));
 
     await expect(changePassword(CHANGE)).resolves.toBe('unreachable');
+  });
+});
+
+describe('the devices calls (VEN-681)', () => {
+  const ROW = { id: 's1', userAgent: null, lastActiveAt: null, current: true };
+
+  it('lists the rows the proxy answers with, dropping any that are not rows', async () => {
+    stubFetchBody(200, { sessions: [ROW, { id: 7 }, null] });
+
+    await expect(listSessions()).resolves.toEqual([ROW]);
+  });
+
+  it.each([
+    [401, 'signedOut'],
+    [429, 'throttled'],
+    [502, 'unreachable'],
+  ])('reads a list answered %i as %s', async (status, outcome) => {
+    stubFetch(status);
+
+    await expect(listSessions()).resolves.toBe(outcome);
+  });
+
+  it('reads a list that is not a list as unreachable', async () => {
+    stubFetchBody(200, { sessions: 'nope' });
+
+    await expect(listSessions()).resolves.toBe('unreachable');
+  });
+
+  it('ends one device by its id', async () => {
+    const fetchMock = stubFetch(200);
+
+    await expect(endSessions('s2')).resolves.toBe('ok');
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/auth/revoke-session');
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({ id: 's2' });
+  });
+
+  it('ends every other device when no id is given', async () => {
+    const fetchMock = stubFetch(200);
+
+    await expect(endSessions()).resolves.toBe('ok');
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/auth/revoke-other-sessions');
+  });
+
+  it('reads a device that ended in the meantime (404) as done', async () => {
+    stubFetch(404);
+
+    await expect(endSessions('gone')).resolves.toBe('ok');
+  });
+
+  it.each([
+    [401, 'signedOut'],
+    [429, 'throttled'],
+    [400, 'unreachable'],
+    [502, 'unreachable'],
+  ])('reads a revoke answered %i as %s', async (status, outcome) => {
+    stubFetch(status);
+
+    await expect(endSessions('s2')).resolves.toBe(outcome);
   });
 });

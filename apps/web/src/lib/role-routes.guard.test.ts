@@ -33,6 +33,9 @@ const REQUIRE_ROLE = /\brequireRole\(\s*['"](customer|vendor|admin)['"]/g;
 /** `/`'s own gate. It turns a vendor away without naming a role to admit. */
 const VENDOR_BOUNCE = /\bredirectVendorToDashboard\(/;
 
+/** `/messages`' and `/account/settings/close`'s gate: it turns an admin away without naming a role to admit. */
+const ADMIN_BOUNCE = /\brequireNonAdmin\(/;
+
 /**
  * A stand-in for a dynamic segment. Any concrete value does: the rules match
  * segment shapes, never slugs, and a value that changed the answer would be a
@@ -84,6 +87,20 @@ function routesCoveredBy(name: string, route: string): readonly string[] {
     : [route];
 }
 
+/**
+ * The vendor-application screens (VEN-629): each serves a session with no
+ * account yet and sends an account holder of any role to their own home with
+ * `redirect(DASHBOARD_PATH_BY_ROLE[account.role])`. That gate names no role, so
+ * the scan below cannot see it; the files are pinned here and read directly.
+ */
+const NO_ACCOUNT_PAGES: Readonly<Record<string, string>> = {
+  '/waitlist': 'waitlist/page.tsx',
+  '/vendors/apply': 'vendors/apply/page.tsx',
+  '/sign-up/vendor-details': 'sign-up/vendor-details/page.tsx',
+};
+
+const ACCOUNT_BOUNCE = /redirect\(DASHBOARD_PATH_BY_ROLE\[account\.role\]\)/;
+
 let gates: Gate[] = [];
 
 beforeAll(async () => {
@@ -108,6 +125,10 @@ beforeAll(async () => {
       found.push({ file: file.name, routes, admits: null, denies: 'vendor' });
     }
 
+    if (ADMIN_BOUNCE.test(file.code)) {
+      found.push({ file: file.name, routes, admits: null, denies: 'admin' });
+    }
+
     return found;
   });
 });
@@ -125,6 +146,8 @@ describe('the role-route table against the gates in app/', () => {
     expect(gates.filter((gate) => gate.admits === 'admin').length).toBeGreaterThan(0);
     // `/` and `/for-vendors`, the two `redirectVendorToDashboard` pages.
     expect(gates.filter((gate) => gate.denies === 'vendor').length).toBe(2);
+    // `/messages` and `/account/settings/close`, the `requireNonAdmin` pages.
+    expect(gates.filter((gate) => gate.denies === 'admin').length).toBe(2);
   });
 
   /*
@@ -156,11 +179,27 @@ describe('the role-route table against the gates in app/', () => {
    */
   it('carries no rule that no gate backs', () => {
     const unbacked = ROLE_ROUTE_RULES.filter(
-      (rule) => !gates.some((gate) => gate.routes.some((route) => rule.pattern.test(route))),
+      (rule) =>
+        !gates.some((gate) => gate.routes.some((route) => rule.pattern.test(route))) &&
+        !Object.keys(NO_ACCOUNT_PAGES).some((route) => rule.pattern.test(route)),
     ).map((rule) => String(rule.pattern));
 
     expect(unbacked).toEqual([]);
   });
+
+  /*
+   * The no-account pages: each still bounces every account holder, and the table
+   * turns every role away from it, so sign-in never forwards to the bounce.
+   */
+  it.each(Object.entries(NO_ACCOUNT_PAGES))(
+    'turns every role away from %s, as its page does',
+    async (route, file) => {
+      const code = await readFile(path.join(APP, file), 'utf8');
+
+      expect(withoutComments(code)).toMatch(ACCOUNT_BOUNCE);
+      expect(ROLES.filter((role) => roleCanReach(role, route))).toEqual([]);
+    },
+  );
 });
 
 /*

@@ -1,0 +1,1 @@
+ALTER TYPE "public"."booking_cancelled_by" ADD VALUE 'vendor' BEFORE 'admin';

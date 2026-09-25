@@ -18,7 +18,7 @@ import { userFacingError } from '@/lib/user-facing-error';
  * The taxonomy in the tag table's shape: the same `DataTable`, state pill and
  * soft-remove dialog, plus the order the public list follows.
  *
- * Names and slugs are read-only here — they belong to the seeds. An operator
+ * Names and slugs are read-only here — they belong to the seeds. An admin
  * decides whether a category is offered and where it sits; the public pages
  * follow within the taxonomy's one-minute cache window.
  */

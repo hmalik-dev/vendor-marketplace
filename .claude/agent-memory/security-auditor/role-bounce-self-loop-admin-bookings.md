@@ -61,5 +61,10 @@ sees literal `requireRole('<role>')` and `redirectVendorToDashboard(` under
 `app/`, so an inline `user.role !== 'admin'` check (as in
 `app/admin/vendors/export/route.ts`) is invisible to it.
 
+**VEN-702 (2026-09-24, PASS):** `requireNonAdmin()` gates `app/messages/layout.tsx`
+(admin → `/admin`, after `requireCurrentUser`), with a matching `/messages`
+rule `['customer','vendor']`. Stricter than before; the API still authorizes
+conversation data on its own. Chrome hiding (`roleHasMessages`) is cosmetic.
+
 Related: [[validate-before-normalize-return-path]],
 [[route-handlers-do-not-inherit-layout-gates]]

@@ -29,7 +29,7 @@ export interface ConfirmActionProps {
    * Radix restores focus on close to whatever was focused when the dialog
    * opened. For a dialog opened from an **overflow menu** that element is a menu
    * item which has already unmounted, so the restore lands on `document.body` —
-   * a keyboard operator who cancels is dropped at the top of the document, about
+   * a keyboard admin who cancels is dropped at the top of the document, about
    * twenty tab stops from their row. Calling `focus()` from `onOpenChange` does
    * not fix it: that runs *before* Radix's own restore, which then overwrites
    * it. `onCloseAutoFocus` is the documented seam, and preventing its default is
@@ -38,7 +38,7 @@ export interface ConfirmActionProps {
   restoreFocus?: () => void;
   title: string;
   /**
-   * What this will do, in the operator's terms and naming the consequence:
+   * What this will do, in the admin's terms and naming the consequence:
    * how many bookings get cancelled, how many vendors keep a tag. Never
    * "Are you sure?", which names nothing.
    */
@@ -56,7 +56,7 @@ export interface ConfirmActionProps {
    */
   cancelLabel?: string;
   /**
-   * The thing operators get wrong, in a gold panel below the description.
+   * The thing admins get wrong, in a gold panel below the description.
    *
    * `40-states.md`: gold is waiting on someone, and every caution drawn here is
    * about something still in flight after the press — a refund that takes days
@@ -69,7 +69,7 @@ export interface ConfirmActionProps {
   /** `true` when the action is irreversible, which is what earns the red fill. */
   destructive?: boolean;
   /**
-   * Text the operator has to type, exactly, before the confirm enables.
+   * Text the admin has to type, exactly, before the confirm enables.
    *
    * For the actions nothing inside the product can undo (VEN-391): a second
    * click is a reflex, and typing the target's own address is not. The mismatch
@@ -77,6 +77,8 @@ export interface ConfirmActionProps {
    * clears whenever the dialog closes so a reopened dialog starts from nothing.
    */
   typedConfirmation?: { phrase: string; label: string };
+  /** Holds the confirm back while the fields the description asks for are incomplete. */
+  confirmDisabled?: boolean;
   onConfirm: () => Promise<void>;
 }
 
@@ -86,7 +88,7 @@ export interface ConfirmActionProps {
  *
  * `AlertDialog` rather than `Dialog`: it traps focus on the cancel action, has
  * no dismiss-by-click-outside, and is announced as an alert — which is the
- * difference between a confirmation and a modal an operator dismisses by reflex.
+ * difference between a confirmation and a modal an admin dismisses by reflex.
  */
 export function ConfirmAction({
   trigger,
@@ -100,6 +102,7 @@ export function ConfirmAction({
   caution,
   destructive = false,
   typedConfirmation,
+  confirmDisabled = false,
   onConfirm,
 }: ConfirmActionProps): React.ReactElement {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
@@ -160,7 +163,7 @@ export function ConfirmAction({
       }
 
       /*
-       * The dialog stays open on failure. Closing it would leave the operator
+       * The dialog stays open on failure. Closing it would leave the admin
        * looking at an unchanged table with no explanation, which reads as the
        * action having silently done nothing.
        *
@@ -269,7 +272,7 @@ export function ConfirmAction({
               type="button"
               size="sm"
               variant={destructive ? 'destructive' : 'primary'}
-              disabled={busy || stepUpNeeded || !typedMatches}
+              disabled={busy || stepUpNeeded || !typedMatches || confirmDisabled}
               onClick={() => void confirm()}
             >
               {busy ? 'Working…' : confirmLabel}

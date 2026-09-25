@@ -37,10 +37,14 @@ export function caseSubject(supportCase: {
     return 'Chargeback';
   }
 
+  if (supportCase.origin === 'fraud_warning') {
+    return 'Early fraud warning';
+  }
+
   /*
    * An in-product report's topic is `trust-and-safety` by construction (#436),
    * so printing it would label every one of them identically. The reason and
-   * the subject are what an operator triages on — "Harassment · Message
+   * the subject are what an admin triages on — "Harassment · Message
    * thread" — and both are on the row for exactly that.
    */
   if (supportCase.origin === 'user_report') {
@@ -54,12 +58,12 @@ export function caseSubject(supportCase: {
 }
 
 /**
- * Which door the case came through, in the operator's words.
+ * Which door the case came through, in the admin's words.
  *
  * A `Record` keyed by the enum rather than the ternary this replaced. That
  * ternary read `origin === 'chargeback' ? 'Stripe webhook' : 'Contact support'`
  * — a two-way branch on a three-member enum — so #436's in-product reports fell
- * through the else and told an operator they arrived by a door they did not,
+ * through the else and told an admin they arrived by a door they did not,
  * on the one screen where somebody weighs how much the account of events is
  * worth. Keyed by the enum, a fourth origin is a type error here rather than a
  * wrong sentence on a case.
@@ -68,6 +72,7 @@ export const CASE_ARRIVAL: Record<SupportCaseOrigin, string> = {
   support_message: 'Contact support',
   chargeback: 'Stripe webhook',
   user_report: 'Reported in the product',
+  fraud_warning: 'Stripe Radar webhook',
 };
 
 /**
@@ -89,7 +94,7 @@ export const CASE_PRESENTATION: Record<SupportCaseStatus, { tone: StatusTone; la
  * The number the queue exists for, and it is computed rather than stored: the
  * age of the oldest open case is money somebody is not being paid, and a column
  * holding it would be wrong the moment nobody wrote to it. Whole days because
- * that is the granularity an operator acts on — nothing changes between "four
+ * that is the granularity an admin acts on — nothing changes between "four
  * hours" and "seven hours", and everything changes at "eleven days".
  */
 export function ageInDays(createdAt: Date, now: number): number {

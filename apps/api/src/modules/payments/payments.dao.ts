@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, isNull, lt, ne, notExists, sql } from 'drizzle-orm';
+import { and, eq, gt, gte, inArray, isNotNull, isNull, lt, ne, notExists, sql } from 'drizzle-orm';
 import {
   availability,
   bookingRequests,
@@ -63,6 +63,8 @@ export interface PayableRequestRow {
   eventTimezone: string | null;
   currency: string;
   acceptedAt: Date | null;
+  /** The fee rate fixed when the vendor accepted, in basis points; `null` before VEN-712. */
+  platformFeeBps: number | null;
   /** The intent recorded when checkout was opened, for reconciliation. */
   stripePaymentIntentId: string | null;
   /** Canceled intents replaced so far; the creation key is built from it (VEN-547). */
@@ -118,6 +120,7 @@ export async function findPayableRequest(
       eventTimezone: bookingRequests.eventTimezone,
       currency: bookingRequests.currency,
       acceptedAt: bookingRequests.acceptedAt,
+      platformFeeBps: bookingRequests.platformFeeBps,
       stripePaymentIntentId: bookingRequests.stripePaymentIntentId,
       paymentIntentReplacements: bookingRequests.paymentIntentReplacements,
       vendorSlug: vendorProfiles.slug,
@@ -372,17 +375,51 @@ export async function confirmBooking(
   input: ConfirmBookingInput,
 ): Promise<BookingRow | null> {
   return db.transaction(async (tx) => {
+    /*
+     * One delivery per request at a time (VEN-727). `ON CONFLICT (request_id)`
+     * only absorbs a collision that its own pre-check sees. Two intents for one
+     * request that both pass that check before either row exists insert side by
+     * side, and the loser then meets the winner in `bookings_confirmed_date_key`,
+     * which is not the arbiter: Postgres raises 23505 rather than skip, the
+     * webhook answers 500 and the loser's refund waits on Stripe's retry. Behind
+     * this lock the loser's insert starts after the winner commits, sees its
+     * row, and takes the `DO NOTHING` path. An advisory lock rather than a lock
+     * on the request row: a closure holds the user row and then writes the
+     * request, and this insert's foreign key waits on that user row, so a row
+     * lock taken first here would deadlock against it.
+     */
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${input.booking.requestId}, 0))`,
+    );
+
     const inserted = await tx
       .insert(bookings)
       .values(input.booking)
       .onConflictDoNothing({ target: bookings.requestId })
       .returning();
 
-    const row = inserted?.[0];
+    const inserted0 = inserted?.[0];
 
-    if (!row) {
+    if (!inserted0) {
       return null;
     }
+
+    /*
+     * The location is read again from the request, inside this transaction
+     * (VEN-687). The caller copied it before the insert, and the insert's
+     * foreign key waits behind a closure of the customer holding the user row;
+     * that closure has scrubbed the request by the time this runs, and would
+     * not have seen this booking, which was not yet committed.
+     */
+    const [current] = await tx
+      .update(bookings)
+      .set({
+        eventLocation: sql`(select ${bookingRequests.eventLocation} from ${bookingRequests} where ${bookingRequests.id} = ${inserted0.requestId})`,
+      })
+      .where(eq(bookings.id, inserted0.id))
+      .returning();
+
+    const row = current ?? inserted0;
 
     /*
      * `booked`, not `blocked`. The distinction is the product's: a `blocked`
@@ -535,7 +572,7 @@ export async function applyBookingTransition(
  */
 export interface CancellationRecord {
   cancelledAt: Date;
-  /** The customer's own words, the operator's sentence, or nothing. */
+  /** The customer's own words, the admin's sentence, or nothing. */
   cancellationReason: string | null;
   cancelledBy: BookingCancelledBy;
   /** What Stripe actually moved. `null` when there was no payment to return. */
@@ -662,4 +699,101 @@ export async function cancelBookingAndFreeDate(
 
     return row;
   });
+}
+
+/** The booking a transfer paid, or `null` for a transfer this platform's rows do not name. */
+export async function findBookingIdByTransferId(
+  db: AppDatabase,
+  transferId: string,
+): Promise<string | null> {
+  const rows = await db
+    .select({ id: bookings.id })
+    .from(bookings)
+    .where(eq(bookings.stripeTransferId, transferId))
+    .limit(1);
+
+  return rows[0]?.id ?? null;
+}
+
+/**
+ * Lowers what the vendor was paid to what is left after a reversal Stripe holds
+ * (VEN-645). Written only downward: a cancellation rewrites the same figure
+ * itself, so its echo matches nothing here, and neither does a replay of this
+ * one. A released booking that was cancelled is followed too, since the sweep
+ * pays a cancelled booking's leftover share.
+ */
+export async function lowerReleasedVendorPayout(
+  db: AppDatabase,
+  transferId: string,
+  netCents: number,
+): Promise<string | null> {
+  /*
+   * What Stripe holds is the payout less what netting and backup withholding
+   * (VEN-723) kept back, so those gaps are not reversals.
+   */
+  const expectedCents = sql`(${netCents} + ${bookings.debtNettedCents} + ${bookings.backupWithheldCents})`;
+  const rows = await db
+    .update(bookings)
+    .set({
+      vendorPayoutCents: expectedCents,
+      /* Money taken back from the vendor is money they no longer owe, but never less than was already recovered. */
+      vendorOwedCents: sql`greatest(${bookings.vendorOwedCents} - (${bookings.vendorPayoutCents} - ${expectedCents}), ${bookings.vendorOwedRecoveredCents})`,
+      updatedAt: sql`now()`,
+    })
+    .where(
+      and(
+        eq(bookings.stripeTransferId, transferId),
+        isNotNull(bookings.payoutReleasedAt),
+        gt(bookings.vendorPayoutCents, expectedCents),
+      ),
+    )
+    .returning({ id: bookings.id });
+
+  return rows[0]?.id ?? null;
+}
+
+/**
+ * Lowers what backup withholding is recorded as having kept from a booking's
+ * payout to at most `cents` (VEN-723). Never raises it, so the retry of an
+ * unwind that half-landed lowers it once.
+ */
+export async function lowerBackupWithheld(
+  db: AppDatabase,
+  bookingId: string,
+  cents: number,
+): Promise<void> {
+  await db
+    .update(bookings)
+    .set({
+      backupWithheldCents: sql`least(${bookings.backupWithheldCents}, ${Math.max(cents, 0)})`,
+      updatedAt: sql`now()`,
+    })
+    .where(eq(bookings.id, bookingId));
+}
+
+/** Records what a vendor owes after a lost chargeback on a payout that had already left. */
+export async function recordVendorOwed(
+  db: AppDatabase,
+  bookingId: string,
+  cents: number,
+): Promise<void> {
+  await db
+    .update(bookings)
+    .set({ vendorOwedCents: cents, updatedAt: sql`now()` })
+    .where(eq(bookings.id, bookingId));
+}
+
+/** Raises what a vendor owes on a booking to at least `cents`; never lowers it, so a retry records it once. */
+export async function raiseVendorOwed(
+  db: AppDatabase,
+  bookingId: string,
+  cents: number,
+): Promise<void> {
+  await db
+    .update(bookings)
+    .set({
+      vendorOwedCents: sql`greatest(${bookings.vendorOwedCents}, ${cents})`,
+      updatedAt: sql`now()`,
+    })
+    .where(eq(bookings.id, bookingId));
 }

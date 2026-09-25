@@ -10,6 +10,7 @@ import {
 import {
   authConfigured,
   forgetSessionsFor,
+  markSessionsRevoked,
   mintedUserIdForCaller,
   neonAuth,
 } from '@/lib/auth/server';
@@ -19,7 +20,11 @@ import {
   addressLimit,
   callerAddress,
   chargeAddress,
+  chargeRequest,
+  isMailPaced,
   chargeCaller,
+  isSignInRefused,
+  recordSignInFailure,
 } from '@/lib/auth/proxy-throttle';
 
 /**
@@ -42,7 +47,7 @@ import {
  * longer doing it, so the browser gets a fixed 200 at once and the call to Neon
  * finishes after the response. Status, body and timing then say nothing about
  * whether the address has an account. That call and the code check are also
- * budgeted per address (`chargeAddress`).
+ * budgeted per address and per caller (`chargeRequest`, VEN-718).
  *
  * Built per request, because `neonAuth()` reads the environment on first use
  * and a module-level `auth.handler()` would read it at build.
@@ -94,6 +99,18 @@ const forward =
 
     if (method === 'POST' && joined === 'change-password') {
       return forwardChangePassword(request, context, path);
+    }
+
+    if (method === 'GET' && joined === LIST_SESSIONS) {
+      return forwardListSessions(request);
+    }
+
+    if (method === 'POST' && joined === REVOKE_SESSION) {
+      return forwardRevokeSession(request, path);
+    }
+
+    if (method === 'POST' && joined === REVOKE_OTHER_SESSIONS) {
+      return forwardRevokeOtherSessions(request, path);
     }
 
     if (method === 'POST' && addressLimit(path) !== null) {
@@ -169,16 +186,23 @@ async function resolveCallerId(): Promise<string | undefined> {
     return cached;
   }
 
-  const session = await Promise.race([
+  return (await readSession()).data?.user?.id;
+}
+
+/** The caller's session at the provider, bounded and never throwing: `data` is `null` when unknown. */
+async function readSession(): Promise<
+  Awaited<ReturnType<ReturnType<typeof neonAuth>['getSession']>>
+> {
+  const unknown = { data: null, error: null } as const;
+
+  return Promise.race([
     neonAuth()
       .getSession()
-      .catch(() => ({ data: null })),
-    new Promise<{ data: null }>((resolve) => {
-      setTimeout(() => resolve({ data: null }), CALLER_ID_TIMEOUT_MS);
+      .catch(() => unknown),
+    new Promise<typeof unknown>((resolve) => {
+      setTimeout(() => resolve(unknown), CALLER_ID_TIMEOUT_MS);
     }),
   ]);
-
-  return session.data?.user?.id;
 }
 
 /**
@@ -245,6 +269,7 @@ async function invalidateSessionsAtApi(userId: string | undefined): Promise<void
 
 const MAX_BODY_BYTES = 4096;
 const SIGN_UP = 'sign-up/email';
+const SIGN_IN = 'sign-in/email';
 const SIGN_UP_ROLE_TIMEOUT_MS = 2_000;
 const SIGN_UP_ROLE_ATTEMPTS = 2;
 const REQUEST_RESET = 'email-otp/request-password-reset';
@@ -340,13 +365,18 @@ async function forwardBudgeted(
   }
 
   /*
-   * A password sign-in is charged for its failures only: the budget is shared
-   * and durable, so charging every attempt would let anyone lock an account out
-   * by naming its address. Codes and mail are charged as they are asked for.
+   * A password sign-in is charged for its failures only, and per caller as well
+   * as per address (VEN-630): the address budget binds only a caller that has
+   * already failed for it, so naming an address cannot lock out its owner.
+   * Codes and mail are charged as they are asked for.
    */
-  const failuresOnly = path.join('/') === 'sign-in/email';
+  const failuresOnly = path.join('/') === SIGN_IN;
+  const caller = callerAddress(request.headers);
+  const refused = failuresOnly
+    ? await isSignInRefused(email, caller)
+    : await chargeRequest(email, caller, path);
 
-  if (await chargeAddress(email, path, Date.now(), !failuresOnly)) {
+  if (refused) {
     return NextResponse.json(
       { message: 'Too many attempts' },
       { status: 429, headers: { 'Retry-After': '600' } },
@@ -365,14 +395,120 @@ async function forwardBudgeted(
 
   // Only the provider's refusal of the credential counts; its outage must not spend anyone's budget.
   if (failuresOnly && (response.status === 401 || response.status === 403)) {
-    await chargeAddress(email, path);
+    await recordSignInFailure(email, caller);
   }
 
+  const mintsSession = await mintsUnusedSession(path, response);
+
   if (role !== undefined && response.ok && !(await recordSignUpRole(response, role))) {
+    // The browser is told the sign-up failed and keeps no cookie, so the session it opened is ended too.
+    await endMintedSession(request, response);
     return NextResponse.json({ code: 'SIGN_UP_UNRECORDED' }, { status: 503 });
   }
 
+  if (mintsSession) {
+    return discardMintedSession(request, response);
+  }
+
   return response;
+}
+
+const VERIFY_EMAIL = 'email-otp/verify-email';
+
+/**
+ * Whether this answer opened a provider session the browser must not keep
+ * (VEN-714): a sign-up and an address verification are followed by a sign-in
+ * with the credentials the form already holds, and a sign-in the provider
+ * answers 200 for an unverified address is followed by the code step and a
+ * second sign-in. The session cookie of the last is the one the device uses;
+ * the others would list as devices nobody used.
+ */
+async function mintsUnusedSession(path: string[], response: Response): Promise<boolean> {
+  const joined = path.join('/');
+
+  if (!response.ok) {
+    return false;
+  }
+
+  if (joined === SIGN_IN) {
+    return isUnverifiedSignIn(response);
+  }
+
+  return joined === SIGN_UP || joined === VERIFY_EMAIL;
+}
+
+/**
+ * Ends the session a provider answer just opened, with its own cookie, and
+ * reports a failure rather than throwing (VEN-714). Nothing happens when the
+ * answer set no cookie.
+ */
+async function endMintedSession(request: NextRequest, response: Response): Promise<void> {
+  const cookie = response.headers
+    .getSetCookie()
+    .map((line) => line.split(';')[0])
+    .join('; ');
+
+  if (cookie === '') {
+    return;
+  }
+
+  try {
+    const headers = callerHeaders(request);
+    headers.delete('authorization');
+    headers.set('cookie', cookie);
+    const signOut = segments(SIGN_OUT);
+    const ended = await neonAuth()
+      .handler()
+      .POST(authCall(request, signOut, headers, '{}') as NextRequest, {
+        params: Promise.resolve({ path: signOut }),
+      });
+
+    if (!ended.ok) {
+      Sentry.captureMessage('Could not end a session the browser will not keep', {
+        level: 'warning',
+        extra: { status: ended.status },
+      });
+    }
+  } catch (error) {
+    Sentry.captureException(error);
+  }
+}
+
+/**
+ * Ends the session a sign-up, verification or unverified sign-in just opened
+ * and answers without any `Set-Cookie`, so the browser never holds it
+ * (VEN-714). Best-effort: the answer is returned either way, since the account
+ * itself was created.
+ */
+async function discardMintedSession(request: NextRequest, response: Response): Promise<Response> {
+  await endMintedSession(request, response);
+
+  // Copied one by one, cookies left out: the product writes no cookie of its own (`no-cookie-consent.test.ts`).
+  const headers = new Headers();
+  for (const [name, value] of response.headers) {
+    if (!/^set-cookie$/i.test(name)) {
+      headers.append(name, value);
+    }
+  }
+  headers.delete('content-length');
+  headers.delete('content-encoding');
+
+  return new Response(await response.text(), {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+/** A sign-in answer that names an account whose address is not verified. */
+async function isUnverifiedSignIn(response: Response): Promise<boolean> {
+  try {
+    const body = (await response.clone().json()) as { user?: { emailVerified?: unknown } } | null;
+    return body?.user?.emailVerified === false;
+  } catch {
+    // An answer that is not JSON names no unverified account, so it is left as it came.
+    return false;
+  }
 }
 
 /** The sign-up body with its role taken out, or `null` when it carries no sign-up role. */
@@ -546,8 +682,17 @@ async function forwardReset(
     return NextResponse.json({ message: 'Bad request' }, { status: 400 });
   }
 
-  const overBudget = await chargeAddress(email, path);
   const isRequest = path.join('/') === REQUEST_RESET;
+
+  // Asked before any budget is charged: a request told to wait spends none, so its retry is not refused for it.
+  if (isRequest && (await isMailPaced(email, Date.now(), false))) {
+    return NextResponse.json(
+      { code: 'RESET_MAIL_PACED' },
+      { status: 429, headers: { 'Retry-After': '60' } },
+    );
+  }
+
+  const overBudget = await chargeRequest(email, callerAddress(request.headers), path);
 
   if (overBudget && !isRequest) {
     return NextResponse.json(
@@ -580,6 +725,13 @@ async function forwardReset(
     return response.status >= 400 && response.status < 500
       ? NextResponse.json({ message: 'Invalid' }, { status: 400 })
       : response;
+  }
+
+  if (!overBudget && (await isMailPaced(email))) {
+    return NextResponse.json(
+      { code: 'RESET_MAIL_PACED' },
+      { status: 429, headers: { 'Retry-After': '60' } },
+    );
   }
 
   if (!overBudget) {
@@ -703,9 +855,291 @@ async function forwardChangePassword(
 
   if (response.ok) {
     forgetSessionsFor(userId);
+    await markSessionsRevoked();
   }
 
   return response;
+}
+
+const LIST_SESSIONS = 'list-sessions';
+const REVOKE_SESSION = 'revoke-session';
+const REVOKE_OTHER_SESSIONS = 'revoke-other-sessions';
+
+/** A provider session, cut down to what the proxy may use. `token` never leaves this file. */
+interface ProviderSession {
+  id: string;
+  token: string;
+  userAgent: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+/** What the browser gets for one device: an opaque id and what helps recognise it, never a secret. */
+interface SessionRow {
+  id: string;
+  userAgent: string | null;
+  createdAt: string | null;
+  lastActiveAt: string | null;
+  current: boolean;
+}
+
+function isoOrNull(value: unknown): string | null {
+  if (typeof value !== 'string' && typeof value !== 'number' && !(value instanceof Date)) {
+    return null;
+  }
+
+  const at = new Date(value);
+  return Number.isNaN(at.getTime()) ? null : at.toISOString();
+}
+
+/** The sessions in Better Auth's `list-sessions` answer, or `null` when the body is not a list. */
+function providerSessionsIn(body: unknown): ProviderSession[] | null {
+  const list = Array.isArray(body) ? body : (body as { sessions?: unknown } | null)?.sessions;
+
+  if (!Array.isArray(list)) {
+    return null;
+  }
+
+  return list.flatMap((entry: unknown): ProviderSession[] => {
+    const row = entry as Record<string, unknown> | null;
+
+    if (typeof row?.id !== 'string' || typeof row.token !== 'string') {
+      return [];
+    }
+
+    return [
+      {
+        id: row.id,
+        token: row.token,
+        userAgent: typeof row.userAgent === 'string' ? row.userAgent : null,
+        createdAt: isoOrNull(row.createdAt),
+        updatedAt: isoOrNull(row.updatedAt),
+      },
+    ];
+  });
+}
+
+function callerHeaders(request: NextRequest): Headers {
+  const headers = new Headers(request.headers);
+  headers.delete('content-length');
+  headers.delete('content-encoding');
+  headers.set('content-type', 'application/json');
+  return headers;
+}
+
+/** Every session the caller's account holds at the provider, or the response to answer with instead. */
+async function providerSessions(request: NextRequest): Promise<ProviderSession[] | Response> {
+  try {
+    const headers = callerHeaders(request);
+    headers.delete('content-type');
+    const response = await neonAuth()
+      .handler()
+      .GET(
+        new Request(new URL(`/api/auth/${LIST_SESSIONS}`, request.url), {
+          method: 'GET',
+          headers,
+        }) as NextRequest,
+        { params: Promise.resolve({ path: segments(LIST_SESSIONS) }) },
+      );
+
+    if (response.status === 401) {
+      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+    }
+
+    const sessions = response.ok ? providerSessionsIn(await response.json()) : null;
+
+    return sessions ?? NextResponse.json({ message: 'Unavailable' }, { status: 502 });
+  } catch (error) {
+    Sentry.captureException(error);
+    return NextResponse.json({ message: 'Unavailable' }, { status: 502 });
+  }
+}
+
+/**
+ * The devices the caller's account is signed in on (VEN-681). Better Auth's
+ * answer carries each session's `token`, which is the credential itself, so it
+ * is rebuilt field by field: the browser gets an opaque id, the user agent,
+ * two times and whether the row is this device. No IP address (VEN-681's
+ * ruling: nothing that does not help recognise a device).
+ */
+async function forwardListSessions(request: NextRequest): Promise<Response> {
+  const [found, current] = await Promise.all([providerSessions(request), readSession()]);
+
+  if (found instanceof Response) {
+    return found;
+  }
+
+  const currentId = current.data?.session?.id;
+
+  // With no current session known, no row could be marked, and this device would offer to end itself.
+  if (currentId === undefined) {
+    return NextResponse.json({ message: 'Unavailable' }, { status: 502 });
+  }
+
+  /*
+   * The provider caps its list (100 rows, oldest first), so an account that
+   * has piled up sessions may not list this one. It is drawn from what the
+   * provider says about the caller's own session, so it is still marked and
+   * still cannot be ended from here. The empty token is never read or sent.
+   */
+  const own = current.data?.session;
+  const listed = found.some((session) => session.id === currentId);
+  const rows: ProviderSession[] = listed
+    ? found
+    : [
+        {
+          id: currentId,
+          token: '',
+          userAgent: typeof own?.userAgent === 'string' ? own.userAgent : null,
+          createdAt: isoOrNull(own?.createdAt),
+          updatedAt: isoOrNull(own?.updatedAt),
+        },
+        ...found,
+      ];
+
+  const sessions: SessionRow[] = rows
+    .map((session) => ({
+      id: session.id,
+      userAgent: session.userAgent,
+      createdAt: session.createdAt,
+      lastActiveAt: session.updatedAt ?? session.createdAt,
+      current: session.id === currentId,
+    }))
+    .sort(
+      (a, b) =>
+        Number(b.current) - Number(a.current) ||
+        (b.lastActiveAt ?? '').localeCompare(a.lastActiveAt ?? ''),
+    );
+
+  return NextResponse.json({ sessions }, { headers: { 'Cache-Control': 'no-store' } });
+}
+
+/**
+ * After sessions end at the provider: forget this process's minted tokens for
+ * the account and bound every JWT issued before now at the API, as sign-out
+ * does (VEN-628, VEN-670). This device re-mints on its next read, after the
+ * bump, so it stays signed in.
+ */
+async function afterSessionsEnded(userId: string): Promise<void> {
+  forgetSessionsFor(userId);
+  await invalidateSessionsAtApi(userId);
+  await markSessionsRevoked();
+}
+
+function sessionIdIn(body: string): string | null {
+  try {
+    const id = (JSON.parse(body) as { id?: unknown } | null)?.id;
+    return typeof id === 'string' && id !== '' ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Ending sessions is budgeted per account, whichever address asks, and every
+ * attempt is charged: a guessed id spends the budget too.
+ */
+async function refuseOverRevokeBudget(userId: string, path: string[]): Promise<Response | null> {
+  if (!(await chargeAddress(userId, path))) {
+    return null;
+  }
+
+  return NextResponse.json(
+    { message: 'Too many attempts' },
+    { status: 429, headers: { 'Retry-After': '600' } },
+  );
+}
+
+/**
+ * Ends one other device. The browser names a session by the opaque id the list
+ * gave it; the token the provider wants is looked up here, in the caller's own
+ * list, so an id belonging to another account is simply not found (404) and the
+ * caller's own session is refused (400: that is sign-out).
+ */
+async function forwardRevokeSession(request: NextRequest, path: string[]): Promise<Response> {
+  const text = await readBounded(request);
+  const id = text === null ? null : sessionIdIn(text);
+
+  if (id === null) {
+    return NextResponse.json({ message: 'Bad request' }, { status: 400 });
+  }
+
+  const [userId, current] = await Promise.all([resolveCallerId(), readSession()]);
+  const currentId = current.data?.session?.id;
+
+  if (userId === undefined || currentId === undefined) {
+    return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+  }
+
+  const refused = await refuseOverRevokeBudget(userId, path);
+
+  if (refused) {
+    return refused;
+  }
+
+  const found = await providerSessions(request);
+
+  if (found instanceof Response) {
+    return found;
+  }
+
+  const target = found.find((session) => session.id === id);
+
+  if (target === undefined) {
+    return NextResponse.json({ message: 'Not found' }, { status: 404 });
+  }
+
+  if (target.id === currentId) {
+    return NextResponse.json({ message: 'Bad request' }, { status: 400 });
+  }
+
+  const revoke = segments(REVOKE_SESSION);
+  const body = JSON.stringify({ token: target.token });
+  const response = await neonAuth()
+    .handler()
+    .POST(authCall(request, revoke, callerHeaders(request), body) as NextRequest, {
+      params: Promise.resolve({ path: revoke }),
+    });
+
+  return finishRevoke(response, userId);
+}
+
+/** Ends every device but this one. Better Auth keeps the caller's own session. */
+async function forwardRevokeOtherSessions(request: NextRequest, path: string[]): Promise<Response> {
+  // A live session is required before anything is charged, so a revoked cookie
+  // this instance still has cached cannot spend the owner's budget.
+  const [userId, current] = await Promise.all([resolveCallerId(), readSession()]);
+
+  if (userId === undefined || current.data?.session?.id === undefined) {
+    return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+  }
+
+  const refused = await refuseOverRevokeBudget(userId, path);
+
+  if (refused) {
+    return refused;
+  }
+
+  const revoke = segments(REVOKE_OTHER_SESSIONS);
+  const response = await neonAuth()
+    .handler()
+    .POST(authCall(request, revoke, callerHeaders(request), '{}') as NextRequest, {
+      params: Promise.resolve({ path: revoke }),
+    });
+
+  return finishRevoke(response, userId);
+}
+
+async function finishRevoke(response: Response, userId: string): Promise<Response> {
+  if (!response.ok) {
+    return NextResponse.json(
+      { message: 'Not ended' },
+      { status: response.status === 401 ? 401 : 502 },
+    );
+  }
+
+  await afterSessionsEnded(userId);
+  return NextResponse.json({ success: true });
 }
 
 export const GET = forward('GET');

@@ -3,6 +3,7 @@ import { ADMIN_CUSTOMER_FLAGS, ADMIN_CUSTOMER_STATUSES } from '@vendor-marketpla
 import { AdminSurface } from '@/components/admin/admin-surface';
 import { DataTable } from '@/components/admin/data-table';
 import { FilterBar, FilterSelect } from '@/components/admin/filter-bar';
+import { OutOfRange } from '@/components/admin/out-of-range';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FilteredEmpty, type ActiveFilter } from '@/components/admin/filtered-empty';
 import { StatusPill } from '@/components/ui/status-pill';
@@ -51,7 +52,7 @@ export default async function AdminCustomersPage({
    * Every filter is read, not just the search (#462). Pairing a search with
    * the flag is two clicks away and returns nothing whenever the person being
    * searched for is not one of the diverged accounts — and answering that with
-   * "No customers match ada" would send an operator looking for a typo rather
+   * "No customers match ada" would send an admin looking for a typo rather
    * than at the filter they left on.
    */
   const subject = status ? 'closed customers' : 'customers';
@@ -125,7 +126,7 @@ export default async function AdminCustomersPage({
             ]}
           />
           {/*
-            The state an operator could not find (#462). A `user.updated`
+            The state an admin could not find (#462). A `user.updated`
             carrying an address another account already holds cannot be
             written, so the row keeps the **old** address and every
             notification for it goes there. Nothing said so before this.
@@ -156,7 +157,15 @@ export default async function AdminCustomersPage({
            * `role = 'customer'` is the screen's domain rather than a filter, so
            * it is not offered: widening past it would list vendors.
            */
-          filtered ? (
+          customers.items.length === 0 && customers.total > 0 ? (
+            <OutOfRange
+              path={PATH}
+              params={{ q, status, flag }}
+              page={customers.page}
+              pageSize={customers.pageSize}
+              total={customers.total}
+            />
+          ) : filtered ? (
             <FilteredEmpty
               headline={headline}
               path={PATH}
@@ -179,7 +188,7 @@ export default async function AdminCustomersPage({
             /*
              * The way into the customer's record (VEN-400), and through its
              * Records card to the data-rights page (#438). A request arrives
-             * naming a person, and this table is where an operator finds them —
+             * naming a person, and this table is where an admin finds them —
              * so the name is the link rather than a second control in a column
              * nobody would look in, and the table itself is unchanged.
              */
@@ -195,7 +204,7 @@ export default async function AdminCustomersPage({
             header: 'Email',
             /*
               Marked in the column it is about rather than in one of its own,
-              and on every row rather than only inside the filter — an operator
+              and on every row rather than only inside the filter — an admin
               scanning the table finds these without having to already know the
               filter exists, which is the whole failure this replaces.
 

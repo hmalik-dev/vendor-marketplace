@@ -39,7 +39,7 @@ const WHEN = new Intl.DateTimeFormat('en-US', {
 });
 
 /**
- * What the operator did, in their words rather than the column's.
+ * What the admin did, in their words rather than the column's.
  *
  * `user_banned` is the enum member the row stores and the filter sends; this is
  * what an operations table should read as. Keyed by the enum so a member added
@@ -57,14 +57,15 @@ export const ACTION_LABELS: Record<AdminAction, string> = {
   payout_retried: 'Retried a payout',
   user_data_exported: 'Exported an account record',
   admin_exported: 'Exported a CSV',
+  tax_report_exported: 'Exported 1099-K figures',
   admin_data_read: 'Read customer data',
   user_closed: 'Closed an account',
-  operator_account_closed: 'Closed an operator account',
-  operator_granted: 'Granted operator access',
-  operator_revoked: 'Revoked operator access',
+  admin_account_closed: 'Closed an admin account',
+  admin_granted: 'Admin granted',
+  admin_revoked: 'Admin revoked',
   /*
    * Graduated moderation (#435). Written in the same register as the seven above
-   * — what the operator did, past tense — and deliberately **not** using the
+   * — what the admin did, past tense — and deliberately **not** using the
    * word "suspended" for any of them, because none of these is a ban and the
    * activity feed is where a reader reconstructs which happened.
    *
@@ -83,6 +84,9 @@ export const ACTION_LABELS: Record<AdminAction, string> = {
   platform_setting_changed: 'Changed a launch switch',
   vendor_payout_hold_set: "Held a vendor's payouts",
   vendor_payout_hold_released: "Released a vendor's payout hold",
+  vendor_backup_withholding_set: 'Switched on backup withholding',
+  vendor_backup_withholding_cleared: 'Cleared backup withholding',
+  backup_withholding_withheld: 'Withheld from a payout',
   category_deactivated: 'Deactivated a category',
   category_reactivated: 'Reactivated a category',
   category_reordered: 'Moved a category',
@@ -148,12 +152,14 @@ export interface ActivityTableProps {
    * The counted filtered-empty state (#454), supplied by the page.
    *
    * Here rather than built inside this component because the words on each
-   * widening button are the *screen's* copy — "Any operator", "Any action" —
+   * widening button are the *screen's* copy — "Any admin", "Any action" —
    * and this table has no business knowing them. It still owns the **true**
    * empty below, which is one sentence about where rows come from and carries
    * no button at all.
    */
   filteredEmpty?: React.ReactNode;
+  /** A page past the last one, supplied by the page; shown before either empty state. */
+  pastEnd?: React.ReactNode;
 }
 
 /**
@@ -165,7 +171,7 @@ export interface ActivityTableProps {
  *
  * The two id cells are **links that filter by themselves**, which is what makes
  * the subject filter reachable without a dropdown of every uuid the platform
- * holds. "What else did this operator do" and "what else happened to this
+ * holds. "What else did this admin do" and "what else happened to this
  * account" are one click from any row.
  */
 export function ActivityTable({
@@ -173,6 +179,7 @@ export function ActivityTable({
   path,
   filtered,
   filteredEmpty,
+  pastEnd,
 }: ActivityTableProps): React.ReactElement {
   /*
    * Everything each cell needs, computed once per row.
@@ -195,11 +202,13 @@ export function ActivityTable({
       rows={prepared}
       rowKey={({ row }) => row.id}
       empty={
-        filtered && filteredEmpty ? (
+        pastEnd ? (
+          pastEnd
+        ) : filtered && filteredEmpty ? (
           filteredEmpty
         ) : (
           /*
-           * **True empty carries no button.** Nothing an operator does creates
+           * **True empty carries no button.** Nothing an admin does creates
            * an activity row, so a control here would offer an action that
            * cannot help; the copy's only job is to say where rows come from, so
            * the silence reads as calm rather than broken.
@@ -209,7 +218,7 @@ export function ActivityTable({
             description={
               filtered
                 ? 'Clear the filter to see everything the console has done.'
-                : 'Every suspension, deletion and ruling an operator makes is recorded here.'
+                : 'Every suspension, deletion and ruling an admin makes is recorded here.'
             }
           />
         )
@@ -224,7 +233,7 @@ export function ActivityTable({
        * The bundle was written at pattern level and the column was not
        * considered. Its width is the one it already had; the delta draws none.
        *
-       * `Actor`, not `Operator`: the delta names the column, and the log
+       * `Actor`, not `Admin`: the delta names the column, and the log
        * records actions taken by the platform's own sweeps as well as by
        * people.
        */

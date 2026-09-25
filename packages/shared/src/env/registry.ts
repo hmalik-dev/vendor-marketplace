@@ -20,11 +20,11 @@ export type Consumer = 'api' | 'web' | 'tooling';
 export type EnvironmentScope = 'shared' | 'per-environment';
 
 export interface EnvSetup {
-  /** Where the operator obtains or configures the value. */
+  /** Where the admin obtains or configures the value. */
   readonly url: string;
   /**
    * Where the *live-mode* value comes from, when that is a different page.
-   * Without it, `--env production` tells the operator they need a live key and
+   * Without it, `--env production` tells the admin they need a live key and
    * then links them to the one page that only issues test keys.
    */
   readonly productionUrl?: string;
@@ -67,11 +67,11 @@ export interface EnvVariable {
   /**
    * What each target's mode is called, for a credential that carries one in its
    * prefix. Preflight reports "is a live key" instead of printing a regex — an
-   * operator shown a regex pastes the same key back.
+   * admin shown a regex pastes the same key back.
    */
   readonly modes?: { readonly local: string; readonly production: string };
   /**
-   * The literal stand-in written to `.env.example` for a value the operator
+   * The literal stand-in written to `.env.example` for a value the admin
    * must supply. Every placeholder must fail its own `shape` — that property is
    * what makes the gate work, and `registry.test.ts` asserts it.
    */
@@ -736,7 +736,7 @@ export const ENV_REGISTRY = [
     /*
      * Signing secret for `POST /webhooks/resend` (#439). Required on a
      * deployment: without it a bounce or complaint is never learned, so a real
-     * user's failed invite or booking email is invisible to the operator. A
+     * user's failed invite or booking email is invisible to the admin. A
      * laptop has no public URL for Resend to call, so it stays optional there.
      *
      * The property that must survive any change here is that **absence is
@@ -839,34 +839,34 @@ export const ENV_REGISTRY = [
   },
   {
     /*
-     * Where operator alerts and the morning digest go (VEN-405). No default,
+     * Where admin alerts and the morning digest go (VEN-405). No default,
      * unlike `SUPPORT_EMAIL_TO`: a laptop has nobody to page, so development
      * boots without it and logs each alert instead, while a deployment refuses
      * to start — an alert address that silently defaulted would be a pager
      * wired to nobody.
      */
-    key: 'OPERATOR_ALERT_EMAIL',
+    key: 'ADMIN_ALERT_EMAIL',
     capability: 'email',
     audience: 'server',
     consumers: ['api'],
     environments: 'per-environment',
     optionalFor: ['baseline', 'local'],
     shape: /^[^\s@,]+@[^\s@,]+\.[A-Za-z]{2,}$/,
-    placeholder: 'operator@...',
+    placeholder: 'admin@...',
     description:
-      'Where operator alerts (disputes, failed payouts and refunds) and the daily digest are sent. Required on a deployment; development logs alerts instead.',
+      'Where admin alerts (disputes, failed payouts and refunds) and the daily digest are sent. Required on a deployment; development logs alerts instead.',
     setup: RESEND_SETUP,
   },
   {
     /* The zone whose 07:00 the daily digest waits for. */
-    key: 'OPERATOR_TIMEZONE',
+    key: 'ADMIN_TIMEZONE',
     capability: 'email',
     audience: 'server',
     consumers: ['api'],
     environments: 'shared',
     shape: /^[A-Za-z]+(?:\/[A-Za-z0-9_+-]+)*$/,
     defaultValue: 'America/New_York',
-    description: 'IANA time zone of the operator; the daily digest is sent at 07:00 there.',
+    description: 'IANA time zone of the admin; the daily digest is sent at 07:00 there.',
     setup: RESEND_SETUP,
   },
 

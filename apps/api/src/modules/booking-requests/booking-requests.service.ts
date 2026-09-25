@@ -8,6 +8,7 @@ import {
   isUniversallyPastDate,
   pageWindow,
   parseDurationHours,
+  feeRateToBps,
   paymentDeadline,
   replyDeadline,
   requestStatusAsRead,
@@ -79,11 +80,12 @@ import type { CustomerIdentityRow, VendorSummaryRow } from './booking-requests.d
 /** The four things either party can do to a live request. */
 export type RequestAction = 'quote' | 'accept' | 'decline' | 'cancel';
 
-function invalidTransition(from: BookingRequestStatus, to: BookingRequestStatus): AppError {
+/** Worded without an article, so a vowel-led status ("accepted", "expired") reads right. */
+export function invalidTransition(from: BookingRequestStatus, to: BookingRequestStatus): AppError {
   return new AppError(
     409,
     ERROR_CODES.INVALID_STATE_TRANSITION,
-    `A ${from} request cannot become ${to}`,
+    `This request is already ${from}, so it can't be ${to}.`,
   );
 }
 
@@ -990,6 +992,8 @@ interface TransitionOptions {
   mail?: NotificationEmailDeps;
   /** Present when the caller can reach Stripe; settles an intent before a request expires. */
   guard?: ExpiryPaymentGuard;
+  /** `STRIPE_PLATFORM_FEE_RATE`, fixed onto the request when it is accepted (VEN-712). */
+  platformFeeRate?: number;
 }
 
 /**
@@ -1179,7 +1183,7 @@ async function prepareTransition({
 
   /*
    * Create refuses an invisible vendor; accept has to as well, or a storefront
-   * an operator pulled after the quote still takes the booking (VEN-556). The
+   * an admin pulled after the quote still takes the booking (VEN-556). The
    * request stays as it was: unpublishing is reversible, so nothing is declined.
    */
   const availability = await findVendorAvailability(db, row.vendorId);
@@ -1277,7 +1281,13 @@ async function prepareTransition({
    * The deadline moves from "reply by" to "pay by": an accepted request that
    * nobody pays for lapses and frees the vendor's date (VEN-433).
    */
-  const acceptance = { acceptedAt, expiresAt: paymentDeadline(acceptedAt, row.eventDate) };
+  const acceptance = {
+    acceptedAt,
+    expiresAt: paymentDeadline(acceptedAt, row.eventDate),
+    // The rate the vendor agreed to; payment prices from it, not from the env (VEN-712).
+    platformFeeBps:
+      options.platformFeeRate === undefined ? null : feeRateToBps(options.platformFeeRate),
+  };
 
   const finalPriceCents = row.finalPriceCents ?? row.quotedPriceCents;
   const [servicePackage] = row.packageId ? await findPackagesByIds(db, [row.packageId]) : [];

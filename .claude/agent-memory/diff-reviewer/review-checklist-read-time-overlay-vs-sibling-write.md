@@ -35,5 +35,13 @@ view shows in that state. Both are cheap to prove with a throwaway
 `*.test.ts` next to the module's route test, reusing `createTestHarness` (the
 Docker Postgres is usually already up) — write, run, delete.
 
+3. **Does the status freeze once the row hands off?** A paid request stays
+   `accepted` for ever (`recordSuccessfulPayment` writes `accepted`, completion
+   never touches the request). VEN-622's "open request" check on
+   `EXPIRABLE_BOOKING_REQUEST_STATUSES` therefore refused every account that had
+   ever booked; its test seeded the request as `cancelled` and hid it. Reuse
+   `readsAs(status, now)` (lazy expiry + booking-behind backstop), and check the
+   fixture's request status matches what production leaves behind.
+
 Related: [[review-checklist-derived-src-flips-after-commit]] — same family: the
 value the user sees comes from a different source than the one the test asserts.

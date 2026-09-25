@@ -4,9 +4,17 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   plugins: [react()],
+  /*
+   * No PostCSS in tests. `postcss.config.mjs` names its plugin by string, which
+   * Next accepts and Vite 8 refuses, so any test whose import graph reaches
+   * `globals.css` — `global-error.tsx` does — failed to transform it. Nothing
+   * here paints CSS, and the tests that read the stylesheet read it as text.
+   */
+  css: { postcss: { plugins: [] } },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      'server-only': fileURLToPath(new URL('./vitest.server-only.ts', import.meta.url)),
     },
   },
   test: {

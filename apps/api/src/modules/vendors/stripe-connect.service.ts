@@ -146,11 +146,53 @@ export async function startPayoutOnboarding(
     accountId = claimed.stripeAccountId;
   }
 
+  /*
+   * The 1099-K capability is what makes the hosted form ask for the address and
+   * TIN (VEN-723, D49). Requested here, after the account is saved, on every
+   * visit: it is a read for an account that already has it, and an account made
+   * before it existed catches up at its next visit. Requesting it inside the
+   * create instead would fail after the account existed but before it was
+   * stored, orphaning it.
+   */
+  await deps.stripe.ensureTaxReportingCapability(accountId);
+
   return deps.stripe.createOnboardingLink({
     accountId,
     returnUrl: `${deps.returnOrigin}${VENDOR_PAYMENTS_RETURN_PATH}`,
     refreshUrl: `${deps.returnOrigin}${VENDOR_PAYMENTS_RESUME_PATH}`,
   });
+}
+
+/** The hosts a Stripe Express login link is served from. */
+const DASHBOARD_LINK_HOSTS: ReadonlySet<string> = new Set([
+  'connect.stripe.com',
+  'express.stripe.com',
+]);
+
+/**
+ * A single-use link into the vendor's own Stripe Express dashboard (VEN-725).
+ * The account is read from the caller's profile, never from the request. The
+ * URL is checked to be on a Stripe host before it is handed to a browser that
+ * will navigate to it.
+ */
+export async function createDashboardLink(
+  deps: StripeConnectDeps,
+  userId: string,
+): Promise<{ url: string }> {
+  const vendor = await findVendorProfileByUserId(deps.db, userId);
+
+  if (!vendor?.stripeAccountId) {
+    throw notFound('Payouts are not connected yet');
+  }
+
+  const link = await deps.stripe.createDashboardLink(vendor.stripeAccountId);
+  const { protocol, hostname } = new URL(link.url);
+
+  if (protocol !== 'https:' || !DASHBOARD_LINK_HOSTS.has(hostname)) {
+    throw new Error('Stripe returned a dashboard link on an unexpected host');
+  }
+
+  return link;
 }
 
 /**

@@ -4,8 +4,13 @@ import {
   EXPIRY_HOLD_MAX_ATTEMPTS,
   EXPIRY_HOLD_SPACING_MS,
   MIN_BOOKING_AMOUNT_CENTS,
+  STRIPE_DISPUTE_FEE_CENTS,
+  BPS_PER_UNIT,
+  backupWithholdingCents,
   calculateFees,
+  feeRateToBps,
   calculateRefund,
+  vendorCancellationRefundCents,
   formatPrice,
   isLegacyDestinationPayout,
   isUniversallyFutureDate,
@@ -61,8 +66,8 @@ import {
   paymentRefusedAlert,
   type RefusedPaymentCause,
   refundFailedAlert,
-  type OperatorAlerts,
-} from '../operator-alerts/operator-alerts.service.js';
+  type AdminAlerts,
+} from '../admin-alerts/admin-alerts.service.js';
 import { notificationHref } from '../messaging/messaging.service.js';
 import { assertCheckoutOpen } from '../platform-settings/platform-settings.service.js';
 import {
@@ -70,7 +75,13 @@ import {
   cancelBookingAndFreeDate,
   confirmBooking,
   findBookingById,
+  findBookingIdByTransferId,
   lockBookingById,
+  lowerBackupWithheld,
+  lowerReleasedVendorPayout,
+  raiseVendorOwed,
+  recordVendorOwed,
+  zeroUnreleasedVendorPayout,
   findAnyBookingByRequest,
   findBookingByRequest,
   findPayableRequest,
@@ -84,7 +95,7 @@ import {
  * What a booking action needs, whoever is taking it.
  *
  * Split from `PaymentContext` for `resolveDispute`, which is reached from the
- * admin plugin: an operator settling a complaint moves the same money through
+ * admin plugin: an admin settling a complaint moves the same money through
  * the same code, but `AdminContext` has no `platformFeeRate` and should not
  * grow one for it. Only the paths that *price* a charge need the rate.
  */
@@ -102,10 +113,10 @@ export interface BookingContext {
    */
   mail: NotificationEmailDeps;
   /**
-   * The operator's pager, for a refund that did not go through (VEN-405).
+   * The admin's pager, for a refund that did not go through (VEN-405).
    * Optional so a suite that builds a context by hand is not made to fake one.
    */
-  alerts?: Pick<OperatorAlerts, 'dispatch'>;
+  alerts?: Pick<AdminAlerts, 'dispatch'>;
 }
 
 /**
@@ -127,7 +138,7 @@ export function bookingContextFor(
     hub: app.events,
     log,
     mail: { db: app.db, email: app.email, log, webOrigin, background: app.background },
-    alerts: app.operatorAlerts,
+    alerts: app.adminAlerts,
   };
 }
 
@@ -138,7 +149,7 @@ export interface BookingContextSource {
   events: EventHub;
   email: NotificationEmailDeps['email'];
   background: NotificationEmailDeps['background'];
-  operatorAlerts?: Pick<OperatorAlerts, 'dispatch'>;
+  adminAlerts?: Pick<AdminAlerts, 'dispatch'>;
 }
 
 /** A booking action that also has to price a charge. */
@@ -516,7 +527,7 @@ export type RecordedPayment =
  * Stripe's three-day retry schedule requires of it.
  *
  * A request that is no longer `accepted` is **not booked**: the charge is
- * refunded in full and the operator is told (see `refuseDeclinedPayment`).
+ * refunded in full and the admin is told (see `refuseDeclinedPayment`).
  */
 export async function recordSuccessfulPayment(
   context: PaymentContext,
@@ -590,9 +601,15 @@ export async function recordSuccessfulPayment(
    * not charged.
    */
   const totalAmountCents = intent.amountReceivedCents;
+  /*
+   * The rate the vendor accepted at, not the one in the env today (VEN-712). A
+   * request accepted before the column existed has none, and only that one
+   * falls back to the env rate, which boot already pins to the legal copy.
+   */
+  const platformFeeBps = row.platformFeeBps ?? feeRateToBps(context.platformFeeRate);
   const { platformFeeCents, vendorPayoutCents } = calculateFees(
     totalAmountCents,
-    context.platformFeeRate,
+    platformFeeBps / BPS_PER_UNIT,
   );
 
   const booking = await confirmBooking(context.db, {
@@ -604,6 +621,7 @@ export async function recordSuccessfulPayment(
       eventLocation: row.eventLocation,
       totalAmountCents,
       platformFeeCents,
+      platformFeeBps,
       vendorPayoutCents,
       status: 'confirmed',
       /*
@@ -663,7 +681,7 @@ export function expiryGuardFor(context: PaymentContext): ExpiryPaymentGuard {
 
 /**
  * Holds the expiry, unless it has been held `EXPIRY_HOLD_MAX_ATTEMPTS` times
- * already (VEN-551): then the request is released and the operator told, the
+ * already (VEN-551): then the request is released and the admin told, the
  * intent left exactly as it is. A date held forever costs the vendor bookings;
  * a payment that lands after the release takes the refund path it always did.
  */
@@ -746,7 +764,7 @@ async function settleBeforeExpiry(
  * A booking is held, so this charge is a *second* one unless it is the intent
  * that made the booking: after Stripe's 24-hour idempotency window a reopened
  * checkout used to mint another intent, and both could be paid. Nothing pointed
- * at the extra money, so it is refunded and the operator told. The answer stays
+ * at the extra money, so it is refunded and the admin told. The answer stays
  * 200 `already-booked` — the booking is fine, and a 5xx would only make Stripe
  * redeliver a decided event. A failed refund is rethrown by
  * `refuseDeclinedPayment` and does redeliver.
@@ -1214,7 +1232,7 @@ async function refundAndUnwind(
    * drifted suffix is not a test failure, it is an `idempotency_error` from
    * Stripe on a retry — the path nobody is watching.
    */
-  keyPrefix: 'cancel' | 'dispute',
+  keyPrefix: 'cancel' | 'vendor_cancel' | 'dispute',
 ): Promise<UnwoundRefund> {
   if (!booking.stripePaymentIntentId) {
     throw new AppError(
@@ -1257,13 +1275,13 @@ async function refundAndUnwind(
    */
   /*
    * A refund Stripe would not give is money a customer was promised, so the
-   * operator hears of it (VEN-405) before the error goes on to the caller.
+   * admin hears of it (VEN-405) before the error goes on to the caller.
    */
   const reportRefundFailure = (error: unknown): never => {
     context.alerts?.dispatch(
       refundFailedAlert({
         bookingId: booking.id,
-        during: keyPrefix === 'cancel' ? 'a cancellation' : 'an upheld dispute',
+        during: keyPrefix === 'dispute' ? 'an upheld dispute' : 'a cancellation',
       }),
     );
     throw error;
@@ -1422,12 +1440,29 @@ async function reverseOutstanding(
       );
     }
 
+    await owePayoutRecoveredByNetting(context, booking, reversal.target);
+
     return false;
   }
 
   const outstanding = reversal.target - transfer.reversedCents;
 
   if (outstanding <= 0) {
+    return true;
+  }
+
+  /*
+   * A transfer carries the payout less what the sweep kept back to repay a lost
+   * chargeback (VEN-658), so it cannot be reversed for more than it holds; Stripe
+   * refuses an over-reversal and the booking could then never be cancelled. What
+   * it cannot give back was already spent on that other debt, so it is owed again.
+   */
+  const reversibleCents = transfer.amountCents - transfer.reversedCents;
+  const reverseCents = Math.min(outstanding, reversibleCents);
+
+  await owePayoutRecoveredByNetting(context, booking, outstanding - reverseCents);
+
+  if (reverseCents <= 0) {
     return true;
   }
 
@@ -1439,7 +1474,7 @@ async function reverseOutstanding(
   await underAttemptKey(context, reversal.paymentIntentId, reversal.scope, (attempt) =>
     context.stripe.reverseTransfer({
       transferId: transfer.transferId,
-      amountCents: outstanding,
+      amountCents: reverseCents,
       idempotencyKey: attempt === 0 ? reversal.scope : `${reversal.scope}_${attempt}`,
     }),
   );
@@ -1448,9 +1483,64 @@ async function reverseOutstanding(
 }
 
 /**
- * The customer cancels, and the refund follows D3's fixed tiers.
+ * Settles the part of a refund's clawback that the payout's transfer no longer
+ * holds, because the sweep kept it back (VEN-658, VEN-723). It is settled in
+ * the order the sweep took it:
  *
- * The tiers are untouched by #423 — only what a refund has to reverse changed.
+ * - what was netted against a chargeback debt is owed by the vendor again,
+ *   capped at what was netted, and set rather than added, so the retry of a
+ *   reversal that half-landed records it once (VEN-658);
+ * - the rest was withheld for the IRS and never reached the vendor. The platform
+ *   still holds it, and it has just paid the customer back with it, so it is no
+ *   longer withheld: the booking's figure falls by it, or Form 945 would report
+ *   money the refund already spent. Set from the row's own figures and never
+ *   raised, so a retry lowers it once (VEN-723).
+ */
+async function owePayoutRecoveredByNetting(
+  context: BookingContext,
+  booking: BookingRow,
+  shortfallCents: number,
+): Promise<void> {
+  const owedCents = Math.min(shortfallCents, booking.debtNettedCents);
+
+  if (owedCents > 0) {
+    await raiseVendorOwed(context.db, booking.id, owedCents);
+  }
+
+  const unwithheldCents = shortfallCents - owedCents;
+
+  if (unwithheldCents > 0 && booking.backupWithheldCents > 0) {
+    /* What the release withheld: the stored figure, or what the payout implies if a retry has already lowered it. */
+    const releasedCents = Math.max(
+      booking.backupWithheldCents,
+      backupWithholdingCents(booking.vendorPayoutCents),
+    );
+
+    await lowerBackupWithheld(context.db, booking.id, Math.max(releasedCents - unwithheldCents, 0));
+  }
+}
+
+/** What the vendor is told when the customer's report has frozen the booking. */
+const VENDOR_NOT_CANCELLABLE: typeof NOT_CANCELLABLE = {
+  ...NOT_CANCELLABLE,
+  disputed: 'The customer has reported a problem with this booking, so it is being reviewed',
+};
+
+const VENDOR_EVENT_PASSED_CANCEL_MESSAGE =
+  'That event is too close to cancel online. Contact support and we will look into it.';
+
+/**
+ * A confirmed booking is cancelled by whichever side holds it.
+ *
+ * The customer's refund follows D3's fixed tiers, untouched by #423 — only what
+ * a refund has to reverse changed. A vendor's cancellation refunds the customer
+ * in full whatever the timing (VEN-659, D48): the tier is the customer's cost of
+ * changing their mind, and the vendor changing theirs is not that. Everything
+ * after the quote is one path — the same refund, the same idempotency keys, the
+ * same guarded write — so the two cannot drift.
+ *
+ * `actor` is which door the caller came through, and the caller's side must
+ * match it: the customer's route refuses a vendor and the reverse.
  */
 export async function cancelBooking(
   context: PaymentContext,
@@ -1459,19 +1549,27 @@ export async function cancelBooking(
   reason: string | undefined,
   now: Date,
   expectedRefundCents?: number,
+  actor: 'customer' | 'vendor' = 'customer',
 ): Promise<CancelledBooking> {
   const { booking, side } = await participantIn(context, user, bookingId);
 
-  if (side !== 'customer') {
-    throw forbidden('Only the customer can cancel a confirmed booking');
+  if (side !== actor) {
+    throw forbidden(
+      actor === 'customer'
+        ? 'Only the customer can cancel a confirmed booking'
+        : 'Only the vendor can cancel a booking this way',
+    );
   }
 
+  const byVendor = actor === 'vendor';
+
   /*
-   * A cancel that finds the customer's own cancellation already written — the
+   * A cancel that finds the caller's own cancellation already written — the
    * second tab, or a retry after a dropped response — is told it worked
-   * (VEN-472). Cancelled by an operator or the ban path it stays a refusal.
+   * (VEN-472). Cancelled by the other side, an admin or the ban path it
+   * stays a refusal.
    */
-  if (booking.status === 'cancelled' && booking.cancelledBy === 'customer') {
+  if (booking.status === 'cancelled' && booking.cancelledBy === actor) {
     const refundCents = booking.refundAmountCents ?? 0;
 
     return {
@@ -1482,7 +1580,7 @@ export async function cancelBooking(
   }
 
   if (booking.status !== 'confirmed') {
-    throw conflict(NOT_CANCELLABLE[booking.status]);
+    throw conflict((byVendor ? VENDOR_NOT_CANCELLABLE : NOT_CANCELLABLE)[booking.status]);
   }
 
   /*
@@ -1491,17 +1589,20 @@ export async function cancelBooking(
    * hours at zero, which puts every past date in the late tier: without this a
    * delivered event refunded half and clawed it back out of a payout that had
    * already been released. A customer with a complaint about a delivered event
-   * takes the report path, where an operator decides.
+   * takes the report path, where an admin decides. A vendor who cannot
+   * deliver a past date is sent to support for the same reason.
    */
   if (booking.payoutReleasedAt) {
     throw conflict(PAID_OUT_CANCEL_MESSAGE);
   }
 
   if (!isUniversallyFutureDate(booking.eventDate, now)) {
-    throw conflict(EVENT_PASSED_CANCEL_MESSAGE);
+    throw conflict(byVendor ? VENDOR_EVENT_PASSED_CANCEL_MESSAGE : EVENT_PASSED_CANCEL_MESSAGE);
   }
 
-  const quote = calculateRefund(booking.totalAmountCents, booking.eventDate, booking, now);
+  const refundCents = byVendor
+    ? vendorCancellationRefundCents(booking.totalAmountCents)
+    : calculateRefund(booking.totalAmountCents, booking.eventDate, booking, now).refundCents;
 
   /*
    * The amount the customer was shown and confirmed (VEN-425). The page quotes
@@ -1510,13 +1611,26 @@ export async function cancelBooking(
    * button that said "in full". Nothing has moved yet, so refusing is free, and
    * the message carries the true figure for the second confirm.
    */
-  if (expectedRefundCents !== undefined && expectedRefundCents !== quote.refundCents) {
+  if (expectedRefundCents !== undefined && expectedRefundCents !== refundCents) {
     throw conflict(
-      `The refund for this booking is now ${formatPrice(quote.refundCents)}, not ${formatPrice(expectedRefundCents)}. Review it and confirm again`,
+      `The refund for this booking is now ${formatPrice(refundCents)}, not ${formatPrice(expectedRefundCents)}. Review it and confirm again`,
     );
   }
 
-  const refund = await refundAndUnwind(context, booking, quote.refundCents, 'cancel');
+  /*
+   * The vendor's refund has its own key prefix. Under the customer's, a customer
+   * cancel that had refunded the late tier and not yet written its row would leave
+   * this one topping up the *same* amount under the *same* key, which Stripe
+   * answers with the first refund: the row would then claim a full refund that
+   * Stripe never made. Distinct keys make the top-up a real refund, or the
+   * charge cap's refusal.
+   */
+  const refund = await refundAndUnwind(
+    context,
+    booking,
+    refundCents,
+    byVendor ? 'vendor_cancel' : 'cancel',
+  );
 
   /*
    * Written down rather than left to be inferred (#415), and what the vendor keeps is
@@ -1525,7 +1639,7 @@ export async function cancelBooking(
   const cancellation = {
     cancelledAt: now,
     cancellationReason: reason ?? null,
-    cancelledBy: 'customer',
+    cancelledBy: actor,
     refundAmountCents: refund.amountCents,
     vendorPayoutCents: refund.retainedPayoutCents,
     disputeReason: null,
@@ -1533,7 +1647,7 @@ export async function cancelBooking(
 
   /*
    * The refund is already out, so the money moved and the row did not: the
-   * one state that needs a human, and the operator is told rather than left
+   * one state that needs a human, and the admin is told rather than left
    * to find a log line.
    */
   const alertRefundUnrecorded = (): void => {
@@ -1594,30 +1708,41 @@ export async function cancelBooking(
    * answers with it (VEN-472). Cancelled by anyone else it stays a refusal.
    */
   const settled =
-    cancelled ??
-    (lostTo?.status === 'cancelled' && lostTo.cancelledBy === 'customer' ? lostTo : null);
+    cancelled ?? (lostTo?.status === 'cancelled' && lostTo.cancelledBy === actor ? lostTo : null);
 
   if (!settled) {
     alertRefundUnrecorded();
     throw conflict('That booking changed while you were cancelling it');
   }
 
-  const vendorUserId = cancelled ? await findVendorUserId(context.db, cancelled.vendorId) : null;
+  if (cancelled) {
+    await bestEffortNotice(context, { bookingId: cancelled.id }, async () => {
+      const vendorUserId = await findVendorUserId(context.db, cancelled.vendorId);
 
-  if (cancelled && vendorUserId) {
-    await bestEffortNotice(context, { bookingId: cancelled.id }, () =>
-      notify(
-        context,
-        vendorUserId,
-        'booking_cancelled',
-        {
-          title: 'A booking was cancelled',
-          body: `The date is free again on your calendar. ${unwindSentence(refund.transferReversed)}`,
+      if (byVendor) {
+        await notify(context, cancelled.customerId, 'booking_cancelled', {
+          title: 'Your booking was cancelled by the vendor',
+          body: `The vendor cancelled this booking and your payment of ${formatPrice(refund.amountCents)} is refunded in full. Their reason: ${reason ?? ''}`,
           bookingId: cancelled.id,
-        },
-        'vendor',
-      ),
-    );
+        });
+      }
+
+      if (vendorUserId) {
+        await notify(
+          context,
+          vendorUserId,
+          'booking_cancelled',
+          {
+            title: byVendor ? 'You cancelled a booking' : 'A booking was cancelled',
+            body: byVendor
+              ? `The date is free again on your calendar and the customer is refunded in full. ${unwindSentence(refund.transferReversed)}`
+              : `The date is free again on your calendar. ${unwindSentence(refund.transferReversed)}`,
+            bookingId: cancelled.id,
+          },
+          'vendor',
+        );
+      }
+    });
   }
 
   return {
@@ -1681,7 +1806,7 @@ export async function findOwnBookingForReport(
  *   nothing left to hold. #423 acceptance 11 offered a choice here and this
  *   takes the refusal: routing it into the post-release refund path would let a
  *   self-serve button claw a third party's balance negative on one party's
- *   say-so, which is an operator's judgement rather than a customer's. They are
+ *   say-so, which is an admin's judgement rather than a customer's. They are
  *   sent to support, where a human can still unwind it.
  * - **On a booking that is not theirs**, `participantIn` answers 404 — the same
  *   rule every read here applies, so a stranger walking ids learns nothing.
@@ -1691,7 +1816,7 @@ export async function findOwnBookingForReport(
  * routed the report through `/support/messages` instead, because the hold and
  * the complaint have to be one act. Leaving that route standing left a second
  * way to freeze a vendor's payout that filed no complaint at all — a hold an
- * operator finds with nothing to act on, and the exact half of acceptance 4
+ * admin finds with nothing to act on, and the exact half of acceptance 4
  * that must not be able to land alone. So the hold is a primitive now, with one
  * orchestrator: `sendSupportMessage`, which places it, sends the report, and
  * takes the hold back if it cannot.
@@ -1707,7 +1832,7 @@ export async function findOwnBookingForReport(
  *
  * A **type** rather than a message a caller matches on, because the caller
  * that needs to tell them apart is the chargeback webhook: it records the
- * permanent refusals on the operator's case and answers 200, and doing that
+ * permanent refusals on the admin's case and answers 200, and doing that
  * to a lost optimistic lock would file a retryable failure as a settled fact
  * and stop Stripe ever retrying it. Matching on the prose would have worked
  * until somebody edited the prose. The wire shape is unchanged: it is still a
@@ -1746,7 +1871,7 @@ export class StaleBookingError extends AppError {}
  *   regression to fix.** They have already claimed the money back through their
  *   bank; letting them cancel on D3's tiers as well would refund one charge
  *   twice from a platform that has been debited once. The vendor's date stays
- *   blocked until an operator rules, which is the cost of a live chargeback
+ *   blocked until an admin rules, which is the cost of a live chargeback
  *   rather than a defect in handling one.
  * - A second report from the customer on that booking is **not** refused.
  *   `AlreadyHeldError` below exists for exactly that case, because the
@@ -1878,9 +2003,9 @@ export async function liftDisputeHold(
    * `updated_at` as the caller last saw it, for a caller lifting **its own**
    * hold rather than whichever one is current.
    *
-   * `resolveDispute` passes nothing, and should: an operator's ruling settles
+   * `resolveDispute` passes nothing, and should: an admin's ruling settles
    * the complaint that is open now. #425's unwind passes the row it wrote,
-   * because between its hold and its failure an operator could have resolved
+   * because between its hold and its failure an admin could have resolved
    * that complaint and the customer filed a second one — and lifting *that*
    * would release a payout against a report already in the inbox.
    */
@@ -1965,7 +2090,7 @@ export async function announceDisputeHold(
 }
 
 /**
- * An operator settles the complaint, and the money follows.
+ * An admin settles the complaint, and the money follows.
  *
  * In the **vendor's** favour the hold is simply lifted: the booking goes back
  * to whichever status it was in — `completed` if the vendor had marked it so,
@@ -1976,7 +2101,7 @@ export async function announceDisputeHold(
  *
  * In the **customer's** favour the booking is cancelled and refunded **in
  * full**. Not on D3's tiers: those price a customer changing their mind against
- * how much notice they gave, and this is an operator's ruling that the service
+ * how much notice they gave, and this is an admin's ruling that the service
  * was not delivered — a 50% refund because the complaint happened to be about
  * an event two days ago would price the vendor's failure as the customer's
  * lateness. Nothing has been transferred, so the refund is plain and no
@@ -2068,7 +2193,7 @@ export async function resolveDispute(
 
   /*
    * **The row is locked before Stripe is asked anything** (VEN-545). Two
-   * operators ruling at once, or a ruling racing the sweep, used to both pass the
+   * admins ruling at once, or a ruling racing the sweep, used to both pass the
    * `disputed` check above; the vendor ruling then lifted the hold while this one
    * was mid-refund, and the row write here matched nothing — a customer refunded
    * in full on a booking whose vendor the sweep then paid in full.
@@ -2085,7 +2210,7 @@ export async function resolveDispute(
 
   /*
    * The customer is repaid and the row may still say payable: the one state that
-   * needs a human, so the operator is told which refund it was.
+   * needs a human, so the admin is told which refund it was.
    */
   const alertUnreconciled = (): void => {
     if (!refunded) {
@@ -2132,7 +2257,7 @@ export async function resolveDispute(
       refunded = refund;
 
       /*
-       * `admin`, because an operator ended it and not the customer. The distinction
+       * `admin`, because an admin ended it and not the customer. The distinction
        * is what the customer's own screen reads to choose its words (#415), and a
        * booking somebody asked to have reviewed is not one they cancelled.
        */
@@ -2200,4 +2325,192 @@ export async function resolveDispute(
   });
 
   return toBookingView(cancelled);
+}
+
+/** What a transfer reversal Stripe reported did to the booking it paid. */
+export type TransferReversalOutcome = 'transfer-reversed' | 'transfer-unchanged';
+
+/**
+ * A transfer was reversed at Stripe — from the Dashboard, or by our own
+ * cancellation — and the booking's payout state follows it (VEN-645).
+ *
+ * **What the row records is what Stripe holds.** The reversal is read back from
+ * Stripe and the vendor's share is lowered to the unreversed remainder. It never
+ * clears `payout_released_at`, so the sweep does not pay a reversed transfer
+ * out again, and a cancellation's own reversal changes nothing because that path
+ * has already written the same remainder.
+ */
+export async function recordTransferReversal(
+  context: Pick<BookingContext, 'db' | 'stripe' | 'log'>,
+  transferId: string,
+): Promise<TransferReversalOutcome> {
+  /* Before Stripe is asked: a transfer no booking here paid is not ours to read. */
+  if (!(await findBookingIdByTransferId(context.db, transferId))) {
+    return 'transfer-unchanged';
+  }
+
+  const transfer = await context.stripe.retrieveTransfer(transferId);
+  const bookingId = await lowerReleasedVendorPayout(
+    context.db,
+    transferId,
+    Math.max(transfer.amountCents - transfer.reversedCents, 0),
+  );
+
+  if (!bookingId) {
+    return 'transfer-unchanged';
+  }
+
+  context.log.warn(
+    { bookingId, transferId, reversedCents: transfer.reversedCents },
+    'A payout transfer was reversed at Stripe and the booking now records the remainder',
+  );
+
+  return 'transfer-reversed';
+}
+
+/** How a lost chargeback ended a booking's money. */
+export type LostChargebackOutcome = 'vendor-owes' | 'payout-ended' | 'unchanged';
+
+const LOST_CHARGEBACK_REASON =
+  'The card network ruled against the platform on a chargeback and took the payment back';
+
+/**
+ * The card network ruled against the platform for `amountCents`: the customer has
+ * that money back and the platform has been debited, so the booking reaches an
+ * end state (VEN-645).
+ *
+ * - **The whole payment, payout not yet sent:** the vendor's share is zero and
+ *   the booking is cancelled, which frees the date. Nothing is refunded, because
+ *   the network already made the customer whole — a second refund would pay
+ *   them twice.
+ * - **A payout already sent, or a loss smaller than the payment:** the vendor
+ *   holds money the platform lost, so the amount they owe (never more than their
+ *   share, plus Stripe's dispute fee) is recorded on the booking, and the
+ *   payout sweep keeps it back from their next transfers (VEN-658). The booking stands, and a hold a partial loss placed is lifted,
+ *   because the event still happened.
+ *
+ * Idempotent under redelivery: the second run finds a zero payout, or an owed
+ * figure already written, and changes nothing.
+ */
+export async function settleLostChargeback(
+  context: BookingContext,
+  bookingId: string,
+  amountCents: number,
+  now: Date,
+): Promise<LostChargebackOutcome> {
+  const settled = await context.db.transaction(async (tx) => {
+    const locked = await lockBookingById(tx, bookingId);
+
+    if (!locked) {
+      return null;
+    }
+
+    const paid = locked.payoutReleasedAt !== null || locked.payoutModel === 'destination';
+
+    if (paid || amountCents < locked.totalAmountCents) {
+      const shareCents = Math.min(amountCents, locked.vendorPayoutCents);
+      /*
+       * The part of the lost share that backup withholding kept (VEN-723): the
+       * platform holds it, so the vendor owes only what actually reached them,
+       * and it stops being withheld. Proportional to the share lost, so a
+       * partial loss unwinds a partial withholding.
+       */
+      const withheldShareCents =
+        locked.vendorPayoutCents > 0
+          ? Math.min(
+              locked.backupWithheldCents,
+              Math.round((locked.backupWithheldCents * shareCents) / locked.vendorPayoutCents),
+            )
+          : 0;
+      const receivedCents = shareCents - withheldShareCents;
+      /* Stripe's dispute fee rides on the vendor's own share, so a booking that paid them nothing owes nothing. */
+      const owedCents = receivedCents > 0 ? receivedCents + STRIPE_DISPUTE_FEE_CENTS : 0;
+      const record = locked.vendorOwedCents === 0 && owedCents > 0;
+
+      if (record) {
+        await recordVendorOwed(tx, bookingId, owedCents);
+        await lowerBackupWithheld(tx, bookingId, locked.backupWithheldCents - withheldShareCents);
+      }
+
+      if (locked.status === 'disputed') {
+        /* A destination payout is already the vendor's, so that booking ends; a partial loss on money still held does not. */
+        await (paid
+          ? cancelBookingAndFreeDate(
+              tx,
+              bookingId,
+              {
+                cancelledAt: now,
+                cancellationReason: LOST_CHARGEBACK_REASON,
+                cancelledBy: 'admin',
+                refundAmountCents: null,
+                vendorPayoutCents: locked.vendorPayoutCents,
+                disputeReason: null,
+              },
+              'disputed',
+              locked.payoutReleasedAt,
+            )
+          : liftDisputeHold({ ...context, db: tx }, locked));
+      }
+
+      return {
+        outcome: record ? ('vendor-owes' as const) : ('unchanged' as const),
+        cancelled: null,
+      };
+    }
+
+    if (locked.status === 'cancelled') {
+      if (locked.vendorPayoutCents === 0) {
+        return { outcome: 'unchanged' as const, cancelled: null };
+      }
+
+      await zeroUnreleasedVendorPayout(tx, bookingId);
+
+      return { outcome: 'payout-ended' as const, cancelled: null };
+    }
+
+    const cancelled = await cancelBookingAndFreeDate(
+      tx,
+      bookingId,
+      {
+        cancelledAt: now,
+        cancellationReason: LOST_CHARGEBACK_REASON,
+        cancelledBy: 'admin',
+        refundAmountCents: null,
+        vendorPayoutCents: 0,
+        disputeReason: null,
+      },
+      locked.status,
+      null,
+    );
+
+    return { outcome: 'payout-ended' as const, cancelled };
+  });
+
+  if (!settled) {
+    return 'unchanged';
+  }
+
+  const { outcome, cancelled } = settled;
+
+  if (cancelled) {
+    const vendorUserId = await findVendorUserId(context.db, cancelled.vendorId);
+
+    if (vendorUserId) {
+      await bestEffortNotice(context, { bookingId }, () =>
+        notify(
+          context,
+          vendorUserId,
+          'booking_cancelled',
+          {
+            title: 'A booking was cancelled after a chargeback',
+            body: "The customer's bank took the payment back and the card network upheld it, so this booking is cancelled and its payout will not be sent.",
+            bookingId,
+          },
+          'vendor',
+        ),
+      );
+    }
+  }
+
+  return outcome;
 }

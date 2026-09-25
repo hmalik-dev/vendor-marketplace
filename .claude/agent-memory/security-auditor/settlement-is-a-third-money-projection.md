@@ -35,3 +35,13 @@ split and the Stripe ids must never appear here; the wire-shape guard in
 `booking-requests.routes.test.ts` asserts key sets for `booking` only, so
 nothing would fail. See also
 [[response-schemas-are-a-second-write-boundary]].
+
+**Fifth: the vendor's yearly statement CSV (VEN-725, audited 2026-09-24, PASS).**
+`GET /v1/vendor/tax/statement.csv` hands the vendor their own fee split and
+debt netting. Tenancy rests on `settledBookings(db, year, vendorId?)` and
+`taxYearsWithSettledBookings(db, vendorId?)` in `tax-reporting.dao.ts`, whose
+filter is `vendorId ? eq(...) : undefined` — **fail-open**: an `undefined` or
+`''` id silently returns every vendor's rows (the admin 1099-K path relies on
+that). Safe only because `ownVendorId` throws when the caller has no live
+profile. A new caller of either DAO with a vendor scope must pass a non-empty
+id or it becomes the admin export.

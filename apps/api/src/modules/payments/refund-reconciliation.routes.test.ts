@@ -5,7 +5,7 @@ import {
   categories,
   conversations,
   notifications,
-  operatorAlerts,
+  adminAlerts,
   refundAttempts,
   users,
   vendorProfiles,
@@ -131,7 +131,7 @@ describe('a refund made outside the app', () => {
         db: harness.database.db,
         stripe: harness.stripe,
         log: harness.app.log,
-        alerts: harness.app.operatorAlerts,
+        alerts: harness.app.adminAlerts,
       },
       AFTER_RELEASE,
     );
@@ -139,7 +139,7 @@ describe('a refund made outside the app', () => {
 
   async function refundAlerts(): Promise<string[]> {
     await harness.flushEmail();
-    const rows = await harness.database.db.select().from(operatorAlerts);
+    const rows = await harness.database.db.select().from(adminAlerts);
 
     return rows.filter((row) => row.kind === 'refund_unrecorded').map((row) => row.subjectId);
   }
@@ -184,7 +184,7 @@ describe('a refund made outside the app', () => {
     harness.stripe.refundsToRefuse.clear();
     harness.stripe.failedRefundKeys.clear();
     harness.email.sent.length = 0;
-    await harness.database.db.delete(operatorAlerts);
+    await harness.database.db.delete(adminAlerts);
     await harness.database.db.delete(refundAttempts);
     await harness.database.db.delete(bookings);
     await harness.database.db.delete(conversations);
@@ -200,7 +200,7 @@ describe('a refund made outside the app', () => {
   });
 
   describe('charge.refunded', () => {
-    it('holds the payout, records the difference and tells the operator, and the sweep then leaves it', async () => {
+    it('holds the payout, records the difference and tells the admin, and the sweep then leaves it', async () => {
       const paid = await paidBooking();
       harness.stripe.refundExternally(paid.intentId, GOODWILL_CENTS);
 
@@ -212,7 +212,7 @@ describe('a refund made outside the app', () => {
       expect(held.status).toBe('disputed');
       expect(held.externalRefundCents).toBe(GOODWILL_CENTS);
       expect(held.disputeReason).toBe(
-        '$100 was refunded at Stripe outside the platform, so the payout is on hold until an operator rules',
+        '$100 was refunded at Stripe outside the platform, so the payout is on hold until an admin rules',
       );
       expect(await refundAlerts()).toEqual([`${paid.id}:${GOODWILL_CENTS}`]);
 

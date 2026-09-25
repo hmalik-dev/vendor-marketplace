@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getServerSession = vi.fn();
+const refreshRefusedToken = vi.fn();
 const authConfigured = vi.fn<() => boolean>();
 
 vi.mock('@/lib/auth/server', () => ({
   authConfigured: () => authConfigured(),
   getServerSession: () => getServerSession(),
+  refreshRefusedToken: (refused: string) => refreshRefusedToken(refused),
 }));
 
 const { GET } = await import('./route');
@@ -13,13 +15,14 @@ const { GET } = await import('./route');
 describe('GET /api/session/token', () => {
   beforeEach(() => {
     getServerSession.mockReset();
+    refreshRefusedToken.mockReset();
     authConfigured.mockReset().mockReturnValue(true);
   });
 
   it('answers 503 AUTH_UNAVAILABLE, uncached, when auth is not configured (VEN-635)', async () => {
     authConfigured.mockReturnValue(false);
 
-    const response = await GET();
+    const response = await GET(new Request('http://localhost/api/session/token'));
 
     expect(response.status).toBe(503);
     expect(response.headers.get('Cache-Control')).toBe('no-store');
@@ -30,7 +33,7 @@ describe('GET /api/session/token', () => {
   it('answers 401 with no token, uncached, when nobody is signed in', async () => {
     getServerSession.mockResolvedValue(null);
 
-    const response = await GET();
+    const response = await GET(new Request('http://localhost/api/session/token'));
 
     expect(response.status).toBe(401);
     expect(response.headers.get('Cache-Control')).toBe('no-store');
@@ -40,10 +43,39 @@ describe('GET /api/session/token', () => {
   it('answers 200 with the bearer token and the user id, uncached, when signed in', async () => {
     getServerSession.mockResolvedValue({ userId: 'user-1', token: 'jwt.payload.sig' });
 
-    const response = await GET();
+    const response = await GET(new Request('http://localhost/api/session/token'));
 
     expect(response.status).toBe(200);
     expect(response.headers.get('Cache-Control')).toBe('no-store');
     await expect(response.json()).resolves.toEqual({ token: 'jwt.payload.sig', userId: 'user-1' });
+  });
+
+  it('re-mints instead of serving the cache when the caller names the token the API refused (VEN-717)', async () => {
+    refreshRefusedToken.mockResolvedValue({ userId: 'user-1', token: 'fresh.payload.sig' });
+
+    const response = await GET(
+      new Request('http://localhost/api/session/token', {
+        headers: { 'x-refused-token': 'stale.payload.sig' },
+      }),
+    );
+
+    expect(refreshRefusedToken).toHaveBeenCalledWith('stale.payload.sig');
+    expect(getServerSession).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toEqual({
+      token: 'fresh.payload.sig',
+      userId: 'user-1',
+    });
+  });
+
+  it('answers 401 to a refused token whose session the provider has ended (VEN-717)', async () => {
+    refreshRefusedToken.mockResolvedValue(null);
+
+    const response = await GET(
+      new Request('http://localhost/api/session/token', {
+        headers: { 'x-refused-token': 'stale.payload.sig' },
+      }),
+    );
+
+    expect(response.status).toBe(401);
   });
 });

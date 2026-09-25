@@ -60,7 +60,7 @@ import { lockHeldDate, syncHeldDate } from '../booking-requests/booking-requests
  * It is `payoutOwedClauses` plus an attempt, and it looks trivial — which is
  * exactly why the owed clauses were written out by hand in three places before
  * #424 and drifted. The Payments filter and the Overview's count have to name
- * the same rows the transfer names, or the number an operator acts on describes
+ * the same rows the transfer names, or the number an admin acts on describes
  * a set the sweep does not work.
  */
 import {
@@ -88,7 +88,7 @@ import {
  * | `findAdminMetricTotals` (`NOT_RETIRED` vendors, `usersCount`) | excluded | present-tense counts |
  * | `findAdminMetricSeries` (`signupsByDay`) | excluded | must stay the set the accounts card counts |
  *
- * A list an operator navigates shows closed accounts; a present-tense count and
+ * A list an admin navigates shows closed accounts; a present-tense count and
  * a lookup behind a write do not.
  */
 
@@ -216,7 +216,7 @@ function statusCondition(status: AdminVendorStatus) {
  * excluded were fixtures. Now that deleting an auth identity retires the
  * storefront, that same line would make every deleted vendor vanish from the
  * one screen that has to answer "what happened to this account" — and it is
- * `admin_actions` and the bookings they unwound that the operator is looking
+ * `admin_actions` and the bookings they unwound that the admin is looking
  * for. The `retired` status labels them and filters to them instead.
  */
 function vendorFilterCondition(filters: AdminVendorFilters) {
@@ -224,7 +224,7 @@ function vendorFilterCondition(filters: AdminVendorFilters) {
 
   if (filters.q) {
     /*
-     * A contains rather than a prefix: an operator working a support ticket has
+     * A contains rather than a prefix: an admin working a support ticket has
      * a fragment of a name, not its beginning.
      *
      * `containsInsensitive`, never Drizzle's `ilike` — the term is user text and
@@ -390,7 +390,7 @@ export async function countAdminVendors(
    * The scan is the status-free set, and **both** numbers are `FILTER`
    * aggregates over it — `total` by the requested status, `awaitingReview`
    * always by `review`. Filtering the scan itself by status and counting
-   * `awaitingReview` inside it would report 0 waiting the moment an operator
+   * `awaitingReview` inside it would report 0 waiting the moment an admin
    * looked at the live vendors, which is the badge saying the queue is empty
    * because you filtered it away.
    */
@@ -418,7 +418,7 @@ export type VendorFilterKey = (typeof VENDOR_FILTER_KEYS)[number];
  * This is the screen #443's sixth finding was filed against — *"the filtered
  * empty state offers no way out where every other console empty state does"* —
  * and the one where the counts earn their cost: five filters is where clearing
- * everything and rebuilding the query is genuinely expensive for an operator.
+ * everything and rebuilding the query is genuinely expensive for an admin.
  *
  * The `FROM` repeats the list's `innerJoin` on `users`, unlike the two feeds
  * above, and it has to: `q` matches `users.email` and `status` reads
@@ -449,7 +449,7 @@ export async function findVendorFilterFacets(db: AppDatabase): Promise<{
     db
       /*
        * Every listed vendor's city, retired ones included (#433). The table
-       * lists them so an operator can answer "what happened to this account";
+       * lists them so an admin can answer "what happened to this account";
        * excluding their city here left the only Austin vendor findable by
        * status and not by the City control beside it.
        */
@@ -476,7 +476,7 @@ export async function findVendorFilterFacets(db: AppDatabase): Promise<{
  * Soft-deleted accounts are excluded, the same way `users.dao.ts` excludes them
  * from every other read. It is deliberately **not** the wider read it looks
  * like: a deleted account has nothing left to ban, and letting one resolve here
- * would let an operator "suspend" a row no other surface believes exists.
+ * would let an admin "suspend" a row no other surface believes exists.
  *
  * Deliberately unchanged by VEN-382, which lists closed customers: that is a
  * read, and this is the lookup behind `setUserBanned` and `setVendorPublished`,
@@ -539,6 +539,7 @@ export interface BanAffectedBooking {
   status: BookingStatus;
   payoutReleasedAt: Date | null;
   stripeTransferId: string | null;
+  debtNettedCents: number;
 }
 
 export async function findConfirmedBookingsToUnwind(
@@ -582,6 +583,7 @@ export async function findConfirmedBookingsToUnwind(
       status: bookings.status,
       payoutReleasedAt: bookings.payoutReleasedAt,
       stripeTransferId: bookings.stripeTransferId,
+      debtNettedCents: bookings.debtNettedCents,
     })
     .from(bookings)
     .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookings.vendorId))
@@ -726,7 +728,12 @@ export async function declineOpenRequests(
  *
  * **Unban does not republish.** The vendor publishes again themselves, which is
  * the ticket's rule: reinstating an account is not the same as reinstating a
- * listing, and the operator does not decide when a vendor is ready to trade.
+ * listing, and the admin does not decide when a vendor is ready to trade.
+ *
+ * A change only writes an account that is not already in the target state, and
+ * returns `null` when nothing changed (VEN-636), as `banAdminById` does: two
+ * bans at once claim the row in turn, so the loser neither moves `bannedAt` nor lets its caller write
+ * a second audit row.
  */
 export async function setBanned(
   db: AppDatabase,
@@ -734,12 +741,17 @@ export async function setBanned(
   vendorProfileId: string | null,
   isBanned: boolean,
   now: Date,
-): Promise<{ profileUnpublished: boolean }> {
+): Promise<{ profileUnpublished: boolean } | null> {
   return db.transaction(async (tx) => {
-    await tx
+    const changed = await tx
       .update(users)
       .set({ isBanned, bannedAt: isBanned ? now : null, updatedAt: now })
-      .where(eq(users.id, userId));
+      .where(and(eq(users.id, userId), eq(users.isBanned, !isBanned)))
+      .returning({ id: users.id });
+
+    if (changed.length === 0) {
+      return null;
+    }
 
     if (isBanned && vendorProfileId) {
       const unpublished = await tx
@@ -785,11 +797,11 @@ export async function lockVendorProfile(db: AppDatabase, vendorId: string): Prom
 }
 
 /**
- * A service package, seen from "may an operator switch this off?".
+ * A service package, seen from "may an admin switch this off?".
  *
  * Read here rather than through `findPackageById`, which is keyed by the
  * **vendor** as well as the package because every other caller is the vendor
- * who owns it. An operator reaches a package by its id alone and has to be told
+ * who owns it. An admin reaches a package by its id alone and has to be told
  * who it belongs to, not asked.
  */
 export async function findServicePackageForModeration(
@@ -825,7 +837,7 @@ export async function findServicePackageForModeration(
  *
  * `reapObjects` checks the owner segment of the storage key against a user id
  * before it removes anything, so an admin delete has to carry the **vendor's**
- * user id — passing the operator's would fail that check silently and leave
+ * user id — passing the admin's would fail that check silently and leave
  * every removed photo in the bucket.
  */
 export async function findPortfolioItemForModeration(
@@ -954,7 +966,7 @@ export async function findAdminCustomers(
  *
  * `status` cannot be dropped, because no URL spans live and closed accounts, so
  * its route *toggles* to the other set (VEN-382). It is offered whenever the
- * operator filtered anything: a name searched on the live view after that
+ * admin filtered anything: a name searched on the live view after that
  * person's account closed is the case it exists for.
  */
 export const CUSTOMER_FILTER_KEYS = ['q', 'status', 'flag'] as const;
@@ -1040,7 +1052,7 @@ function refundStuck(floorDate: string): SQL<boolean> {
    * refused or one this platform deliberately declines to price — but writes
    * `deleted_at` and `is_deleted`, never `is_banned`. Keyed on the ban alone,
    * the one surface built to find stranded money filtered out every booking a
-   * deletion stranded, and told the operator "No refunds are stuck" while a
+   * deletion stranded, and told the admin "No refunds are stuck" while a
    * customer's payment sat at Stripe.
    */
   return sql<boolean>`(
@@ -1059,7 +1071,7 @@ function refundStuck(floorDate: string): SQL<boolean> {
  * The customer is a `users` row and the vendor a `vendor_profiles` row, so this
  * is two joins of two different tables rather than an aliased self-join — no
  * `alias()` is needed or used. Both are inner: a booking whose vendor or
- * customer row is gone is not a row an operator can act on, and both foreign
+ * customer row is gone is not a row an admin can act on, and both foreign
  * keys cascade, so it cannot occur.
  */
 function bookingSelection() {
@@ -1080,7 +1092,7 @@ function bookingSelection() {
     residualHeld: payoutResidualHeld(),
     /*
      * Either a permanently unpayable account, or one the ban's own unwind may
-     * still owe a refund to (VEN-569): both read as stranded to the operator,
+     * still owe a refund to (VEN-569): both read as stranded to the admin,
      * because neither self-heals without a person acting on it.
      */
     vendorUnpayable: sql<boolean>`(
@@ -1257,7 +1269,7 @@ function paymentFilterCondition(flag: AdminPaymentFlag | undefined): SQL | undef
  * The one filter the payments table can be narrowed by.
  *
  * `paid_at is not null` is not on this list and must not be: it is the screen's
- * *domain* rather than a filter an operator applied, so offering to widen past
+ * *domain* rather than a filter an admin applied, so offering to widen past
  * it would offer a payments list containing bookings nobody has paid for.
  */
 export const PAYMENT_FILTER_KEYS = ['flag'] as const;
@@ -1569,7 +1581,7 @@ export interface ResolveSuggestionWrite {
 /**
  * Marks a suggestion resolved, but **only while it is still pending**.
  *
- * That predicate is the concurrency rule the ticket asks for — two operators
+ * That predicate is the concurrency rule the ticket asks for — two admins
  * acting on one suggestion means the first wins and the second is told so,
  * rather than the second silently overwriting the first's decision. Returns
  * `null` when the row was already resolved.
@@ -1930,7 +1942,7 @@ export interface AdminActionRecord {
 }
 
 /**
- * Whether this operator already has a read row for the subject and surface
+ * Whether this admin already has a read row for the subject and surface
  * since `since` (VEN-475).
  */
 export async function hasRecentAdminRead(
@@ -2089,9 +2101,9 @@ export async function countActionWidenings(
 }
 
 /**
- * Every operator the log names, for the `Actor ▾` facet (VEN-388).
+ * Every admin the log names, for the `Actor ▾` facet (VEN-388).
  *
- * Read from the log rather than from `users.role`: an operator who was demoted
+ * Read from the log rather than from `users.role`: an admin who was demoted
  * still authored their rows, and an admin who never acted would be a choice
  * that narrows to nothing.
  */
@@ -2106,7 +2118,7 @@ export async function findAdminActionActors(
 }
 
 /**
- * Bans and closures one operator has completed since `since`, for the hourly
+ * Bans and closures one admin has completed since `since`, for the hourly
  * ceiling (VEN-500). Reads the audit log, so the count is the record itself
  * rather than a second counter that could drift from it.
  */

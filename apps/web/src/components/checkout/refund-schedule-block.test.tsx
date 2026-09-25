@@ -64,6 +64,17 @@ describe('the refund schedule block', () => {
     expect(container.textContent).not.toContain('30 days');
   });
 
+  /*
+   * A cancelled booking frees the date (`cancelBooking` releases the hold), so
+   * the late row must say what stays with the booking, which is the money.
+   */
+  it('says the unrefunded remainder is not refunded, and claims no hold on the date', () => {
+    const { container } = block();
+
+    expect(screen.getByText('$1,025 back — the rest is not refunded')).toBeDefined();
+    expect(container.textContent).not.toContain('holds the date');
+  });
+
   /** Acceptance 14, on the surface the design got wrong. */
   it('draws no non-refundable tier, because the code has none', () => {
     const { container } = block();
@@ -72,14 +83,17 @@ describe('the refund schedule block', () => {
   });
 
   /*
-   * VEN-615 ruling 2: a vendor cannot cancel a confirmed booking in the app,
-   * so the row names the route it actually takes.
+   * VEN-659 reverses VEN-615 ruling 2: a vendor now cancels from their own
+   * bookings page, so the row no longer sends the customer's vendor to support.
    */
-  it('says a vendor cancels through support and the customer is refunded in full', () => {
-    block();
+  it('says the customer is refunded in full whenever the vendor cancels', () => {
+    const { container } = block();
 
     expect(screen.getByText('If June cancels')).toBeDefined();
-    expect(screen.getByText(/June cancels through support/).textContent).toContain('Full refund');
+    expect(screen.getByText(/whenever it happens/).textContent).toBe(
+      'Full refund, whenever it happens',
+    );
+    expect(container.textContent).not.toContain('through support');
     expect(screen.getAllByRole('definition')).toHaveLength(5);
   });
 

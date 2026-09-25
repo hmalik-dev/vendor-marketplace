@@ -6,6 +6,7 @@ import {
   formatPrice,
   MAX_SUPPORT_MESSAGE_LENGTH,
   SUPPORT_TOPICS,
+  SUPPORT_TOPIC_FEATURE_REQUEST,
   SUPPORT_TOPIC_LABELS,
   SUPPORT_TOPIC_WITH_BOOKING,
   SUPPORT_TOPIC_WITH_REFERENCE,
@@ -281,6 +282,12 @@ export function SupportScreen({
    */
   const incomplete = topic === '' || message.trim() === '' || !emailIsUsable;
 
+  /*
+   * A feature request is not a report: it never holds a payout, so the booking
+   * is neither sent with it nor described as held, and the API refuses the pair.
+   */
+  const heldBooking = topic === SUPPORT_TOPIC_FEATURE_REQUEST ? null : bookingContext;
+
   async function send(): Promise<void> {
     /*
      * Re-entrancy guard as well as the disabled button, because the two fail
@@ -305,7 +312,7 @@ export function SupportScreen({
           message,
           ...(accountEmail === null ? { email } : {}),
           ...(errorContext ? { errorContext } : {}),
-          ...(bookingContext ? { bookingId: bookingContext.id } : {}),
+          ...(heldBooking ? { bookingId: heldBooking.id } : {}),
         },
       });
 
@@ -365,7 +372,7 @@ export function SupportScreen({
           window is written down, and a sentence here repeating it as a number
           is the copy that goes stale the day the constant moves (D16).
         */}
-        {bookingContext === null ? null : (
+        {heldBooking === null ? null : (
           <p className="mt-2.25 max-w-[290px] text-[13px] leading-[1.6] text-stone-700">
             The payment for this booking is on hold while we look into it.
           </p>
@@ -441,10 +448,10 @@ export function SupportScreen({
         Submitting this holds the vendor's payment, and a control whose
         consequence is only discovered afterwards has been described too late.
       */}
-      {bookingContext ? (
+      {heldBooking ? (
         <AttachedBlock
-          reference={bookingContext.id}
-          meta={bookingMeta(bookingContext)}
+          reference={heldBooking.id}
+          meta={bookingMeta(heldBooking)}
           note="Sending this puts the vendor's payment for this booking on hold while we look into it. Nothing to copy, and no field to accidentally clear."
         />
       ) : null}
@@ -530,7 +537,6 @@ export function SupportScreen({
           readOnly={locked}
           className={cn(FIELD, 'mt-1.5 min-h-[132px] leading-[1.6]')}
         />
-        <p className={HELPER}>What you were doing, and what you expected instead.</p>
       </div>
 
       {/*
@@ -572,9 +578,6 @@ export function SupportScreen({
           */}
           {locked ? 'Sending…' : phase === 'failed' ? 'Try again' : 'Send message'}
         </Button>
-        <span className="text-[12.5px] text-stone-600">
-          {locked ? 'Fields locked' : 'One email, no ticket to track.'}
-        </span>
       </div>
 
       {/*

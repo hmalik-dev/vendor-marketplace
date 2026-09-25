@@ -26,7 +26,7 @@ const EMAIL_FROM = findVariable('EMAIL_FROM')!;
 /*
  * Live-mode fixtures are assembled from a row's own placeholder rather than
  * written out, following the idiom in `secrets/scan.test.ts`: the checker sees
- * exactly what an operator would paste, while the source file holds no live-key
+ * exactly what an admin would paste, while the source file holds no live-key
  * token for a scanner — this repository's own included — to trip over.
  */
 function liveKeyFor(variable: EnvVariable): string {
@@ -117,7 +117,7 @@ describe('evaluateVariable', () => {
     expect(result.ok).toBe(false);
     expect(result.detail).toBe('is a test key — the production target needs a live key');
     // Naming the mode is only half the fix: a hint that links to the page which
-    // issues test keys sends the operator straight back to the value that just
+    // issues test keys sends the admin straight back to the value that just
     // failed.
     expect(result.fix).toContain('https://dashboard.stripe.com/apikeys');
     expect(result.fix).not.toContain('/test/apikeys');
@@ -155,7 +155,7 @@ describe('evaluateVariable', () => {
 
   it('reports a malformed live-prefixed value as a shape failure, not a mode failure', () => {
     // Prefix alone is not a mode: this matches neither target's shape, so the
-    // operator needs the syntax, not a lecture about environments.
+    // admin needs the syntax, not a lecture about environments.
     const truncated = liveKeyFor(STRIPE_KEY).slice(0, 8);
     const result = evaluateVariable(STRIPE_KEY, contextWith({ [STRIPE_KEY.key]: truncated }));
 
@@ -184,7 +184,7 @@ describe('evaluateVariable', () => {
     expect(evaluateVariable(EMAIL_FROM, contextWith({ EMAIL_FROM: '' })).ok).toBe(true);
   });
 
-  it('tells the operator to create .env when there is no file at all', () => {
+  it('tells the admin to create .env when there is no file at all', () => {
     const result = evaluateVariable(STRIPE_KEY, {
       ...contextWith({}),
       envFileFound: false,

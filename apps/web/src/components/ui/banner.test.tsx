@@ -20,6 +20,13 @@ describe('Banner', () => {
     ['settled', 'bg-sage-50', 'bg-sage-400'],
   ];
 
+  it('renders no body paragraph when there is only a title', () => {
+    const { container } = render(<Banner status="settled" title="Payouts connected" />);
+
+    expect(container.querySelectorAll('p')).toHaveLength(1);
+    expect(screen.getByRole('status').textContent).toBe('Payouts connected');
+  });
+
   it.each(CASES)('paints %s with its own surface and dot', (status, surface, dot) => {
     const { container } = render(<Banner status={status}>A sentence.</Banner>);
     const banner = screen.getByRole('status');
@@ -77,6 +84,17 @@ describe('Banner', () => {
 
     expect(screen.getByText('Payout connected')).toBeDefined();
     expect(screen.getByText(/paid the day after each event/)).toBeDefined();
+  });
+
+  /*
+   * The sentence sits in a `<p>`, which is why a caller may pass it phrasing
+   * content only: a block element there is closed out of the paragraph by the
+   * browser's parser and the page fails to hydrate (React error 418, VEN-725).
+   */
+  it('holds its sentence in a paragraph, so callers pass phrasing content only', () => {
+    render(<Banner status="settled">No payment was taken.</Banner>);
+
+    expect(screen.getByText('No payment was taken.').tagName).toBe('P');
   });
 
   /*

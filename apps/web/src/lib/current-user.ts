@@ -1,3 +1,4 @@
+import 'server-only';
 import { getServerSession } from './auth/server';
 import * as Sentry from '@sentry/nextjs';
 import { redirect } from 'next/navigation';
@@ -146,6 +147,22 @@ export async function requireRole(role: UserRole, returnTo?: string): Promise<Wi
 }
 
 /**
+ * Loads the caller and sends an admin to their console: the gate for a surface
+ * an admin has no use for, `/messages` (VEN-702). `requireRole` admits one
+ * role; this turns one away, and `role-routes.guard.test.ts` reads it as a
+ * gate that denies `admin`.
+ */
+export async function requireNonAdmin(returnTo?: string): Promise<WireUser> {
+  const user = await requireCurrentUser(returnTo);
+
+  if (user.role === 'admin') {
+    redirect(DASHBOARD_PATH_BY_ROLE.admin);
+  }
+
+  return user;
+}
+
+/**
  * Guards the authentication pages. Somebody who already holds a session has
  * nothing to do on sign-in or sign-up, so send them to `/after-sign-in`, which
  * resolves the role from the local record and forwards on.
@@ -165,7 +182,7 @@ export async function redirectIfSignedIn(returnTo?: string | null): Promise<void
 
   /*
    * A session the API does not honour is not a reason to leave this page. An
-   * account an operator has closed keeps its provider cookie, but `/users/me`
+   * account an admin has closed keeps its provider cookie, but `/users/me`
    * answers it 401 and `/after-sign-in` would send it straight back here —
    * a redirect loop with no sign-out control to break it. Only a caller the
    * API resolves has somewhere to be sent.

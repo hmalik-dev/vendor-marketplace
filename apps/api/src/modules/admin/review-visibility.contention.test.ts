@@ -20,14 +20,14 @@ import {
 } from '../../testing/test-server.js';
 
 /**
- * Two operators reaching the same review at once — the debt PGlite cannot pay.
+ * Two admins reaching the same review at once — the debt PGlite cannot pay.
  *
  * `setReviewVisibilityAndRecalculate` decides whether a review is *already* in
  * the requested state and then recomputes the vendor's rating from the rows that
  * remain public. Both halves are read-then-write, so without the `FOR UPDATE`
- * that guards the row the second operator reads `is_public = true`, agrees the
+ * that guards the row the second admin reads `is_public = true`, agrees the
  * hide is needed, and recomputes from a snapshot taken before the first
- * operator's commit — persisting an average that counts a review it has just
+ * admin's commit — persisting an average that counts a review it has just
  * been told to exclude. Nothing ever corrects it: the next recompute only runs
  * when somebody moderates again.
  *
@@ -36,7 +36,7 @@ import {
  * deleted (#399). This suite runs on a real Postgres for the same reason
  * `accept.contention.test.ts` does.
  */
-describe('hiding one review from two operators at once', () => {
+describe('hiding one review from two admins at once', () => {
   const ADMIN_ONE = 'user_admin_one';
   const ADMIN_TWO = 'user_admin_two';
   const VENDOR = 'user_vendor';

@@ -6,33 +6,49 @@ import {
   pageTitle,
   type BudgetTier,
 } from '@vendor-marketplace/shared';
-import { BookingsSidebar } from '@/components/bookings/bookings-sidebar';
-import { getOwnConversations } from '@/lib/messaging-data';
-import { CustomerHistory, CustomerReviews } from '@/components/customer/customer-history';
+import { CustomerReviews } from '@/components/customer/customer-history';
 import { CustomerProfileForm } from '@/components/customer/customer-profile-form';
 import { Avatar } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { toEntries } from '@/lib/booking-entries';
-import { getOwnBookingRequests, getOwnBookings, getOwnCustomerReviews } from '@/lib/customer-data';
+import { getOwnCustomerReviews } from '@/lib/customer-data';
+import type { WireCustomerReview } from '@/lib/wire-schemas';
 import { requireRole } from '@/lib/current-user';
+import { isNavigationSignal } from '@/lib/navigation-signal';
+import { reportSwallowedError } from '@/lib/report-error';
 
 export const metadata: Metadata = {
   title: pageTitle('Your profile'),
   robots: { index: false, follow: false },
 };
 
-const TABS = ['profile', 'active', 'past', 'reviews'] as const;
+const TABS = ['profile', 'reviews'] as const;
 type Tab = (typeof TABS)[number];
 
 const TAB_LABELS: Record<Tab, string> = {
   profile: 'Profile',
-  active: 'Active',
-  past: 'Past',
   reviews: 'Reviews about you',
 };
 
 function isTab(value: string | undefined): value is Tab {
   return (TABS as readonly string[]).includes(value ?? '');
+}
+
+/**
+ * The reviews read in required mode, reporting failure as `null`. The Reviews tab
+ * draws an error with a retry for it, never "No reviews yet". 401 and
+ * `TERMS_REQUIRED` redirect inside the read, and those signals pass through.
+ */
+async function readReviewsOrNull(): Promise<WireCustomerReview[] | null> {
+  try {
+    return await getOwnCustomerReviews({ required: true });
+  } catch (error) {
+    if (isNavigationSignal(error)) {
+      throw error;
+    }
+    reportSwallowedError('customer profile: loading reviews failed', error);
+
+    return null;
+  }
 }
 
 interface PageProps {
@@ -42,9 +58,8 @@ interface PageProps {
 /**
  * The customer's own profile, history and reviews.
  *
- * `/bookings` and the bookings hub are **#22b**, deliberately not built here —
- * this page owns the customer record and the history *data*, and the hub will
- * mount the same pieces in its sidebar when it lands.
+ * Bookings live on `/bookings`; this page owns the customer record and the
+ * reviews about them, so it has no booking tabs of its own (VEN-706).
  *
  * The tab lives in `?tab=` rather than component state so it is linkable and
  * survives a reload, matching how the vendor profile does it.
@@ -55,28 +70,7 @@ export default async function CustomerProfilePage({
   const [user, query] = await Promise.all([requireRole('customer'), searchParams]);
   const tab: Tab = isTab(query.tab) ? query.tab : 'profile';
 
-  const [requests, bookings, reviews, conversations] = await Promise.all([
-    getOwnBookingRequests(),
-    getOwnBookings(),
-    getOwnCustomerReviews(),
-    /*
-      For the sidebar's unread dot, which is shared with `/bookings` and must not
-      say different things on the two pages that draw it. `getOwnConversations`
-      fails soft to `[]`, so an unreachable messaging API costs the dot rather
-      than this page.
-    */
-    getOwnConversations(),
-  ]);
-
-  /*
-   * The hub's own count, from the hub's own flattening — not `requests.length +
-   * bookings.length`. Every accepted request that was paid for exists in *both*
-   * lists, so the sum double-counted it: the badge read 9 here and 7 on
-   * `/bookings`, in the one navigation element the two pages share. `toEntries`
-   * is what drops the paid request in favour of its booking, and it is the only
-   * place that rule may live.
-   */
-  const bookingCount = toEntries(requests, bookings).length;
+  const reviews = await readReviewsOrNull();
 
   const settledRate = completionRate(user.completedBookingsCount, user.cancelledBookingsCount);
   const budget = user.budgetTier ? BUDGET_TIER_LABELS[user.budgetTier as BudgetTier] : null;
@@ -84,16 +78,7 @@ export default async function CustomerProfilePage({
   const fullName = `${user.firstName} ${user.lastName}`.trim();
 
   return (
-    /*
-      The same shell as `/bookings`, so the sidebar's own "My profile" link
-      does not navigate the sidebar away from under the reader.
-    */
     <div className="flex min-h-[calc(100dvh-var(--header-height))]">
-      <BookingsSidebar
-        bookingCount={bookingCount}
-        hasUnreadMessages={conversations.some((conversation) => conversation.unreadCount > 0)}
-        current="profile"
-      />
       <div className="min-w-0 flex-1 px-6 pt-6.5 pb-12 xl:px-10">
         <div className="flex items-center gap-4">
           {/* Initials from a full name only, the header's rule: a placeholder first name alone is not the person's. */}
@@ -155,12 +140,6 @@ export default async function CustomerProfilePage({
 
         <div className="pt-6">
           {tab === 'profile' ? <CustomerProfileForm user={user} /> : null}
-          {tab === 'active' ? (
-            <CustomerHistory requests={requests} bookings={bookings} scope="active" />
-          ) : null}
-          {tab === 'past' ? (
-            <CustomerHistory requests={requests} bookings={bookings} scope="past" />
-          ) : null}
           {tab === 'reviews' ? <CustomerReviews reviews={reviews} /> : null}
         </div>
       </div>

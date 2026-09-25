@@ -613,7 +613,7 @@ describe('the operations case queue (#431)', () => {
 
     const detail = await readCase((await readCases()).items[0]!.id);
     // The money had already left, so there was nothing to freeze — and the
-    // operator is told that rather than left looking at a case with no hold.
+    // admin is told that rather than left looking at a case with no hold.
     expect(detail.holdRefusal).toContain('already been released');
     // The platform's own words, never `placeDisputeHold`'s customer-facing copy.
     expect(detail.holdRefusal).not.toContain('Contact support');
@@ -707,11 +707,14 @@ describe('the operations case queue (#431)', () => {
     const detail = await readCase((await readCases()).items[0]!.id);
     expect(detail.networkOutcome).toBe('lost');
     /*
-     * Stripe's outcome and the platform's disposition are different facts. The
-     * case stays open and the booking stays held until an operator rules.
+     * Stripe's outcome and the platform's disposition are different facts, so the
+     * case stays open for an admin. A `lost` ruling does end the booking's
+     * money (VEN-645): the network already repaid the customer, so the booking is
+     * cancelled with nothing left for the vendor.
      */
     expect(detail.status).toBe('open');
-    expect(detail.booking?.status).toBe('disputed');
+    expect(detail.booking?.status).toBe('cancelled');
+    expect(detail.booking?.vendorPayoutCents).toBe(0);
 
     const reinstated = await deliverDispute('charge.dispute.funds_reinstated', {
       ...dispute,
@@ -811,20 +814,19 @@ describe('the operations case queue (#431)', () => {
       expect(await bookingStatus(fixture.bookingId)).toBe('disputed');
     });
 
-    it('refuses both rulings once the network has taken the money back', async () => {
+    it('ends the booking once the network has taken the money back, so neither ruling can pay it twice', async () => {
       const fixture = await openChargeback('needs_response', 'lost');
 
-      const customer = await rule(fixture.bookingId, 'customer');
-      expect(customer.statusCode).toBe(409);
-      expect(customer.json().message).toContain('already taken this payment back');
+      /* Cancelled, not left `disputed` forever (VEN-645); there is no open report to rule on. */
+      expect(await bookingStatus(fixture.bookingId)).toBe('cancelled');
 
-      const vendor = await rule(fixture.bookingId, 'vendor');
-      expect(vendor.statusCode).toBe(409);
-      expect(vendor.json().message).toContain('cannot be paid it out as well');
+      for (const outcome of ['customer', 'vendor'] as const) {
+        const ruled = await rule(fixture.bookingId, outcome);
+        expect(ruled.statusCode).toBe(409);
+        expect(ruled.json().message).toBe('That booking has no open report to resolve');
+      }
 
       expect(harness.stripe.refunds).toHaveLength(0);
-      // Still on hold: the sweep has nothing to pay.
-      expect(await bookingStatus(fixture.bookingId)).toBe('disputed');
     });
 
     it('carries a loss the network reached before the case existed, so the vendor is not paid it', async () => {
@@ -837,7 +839,138 @@ describe('the operations case queue (#431)', () => {
 
       const vendor = await rule(fixture.bookingId, 'vendor');
       expect(vendor.statusCode).toBe(409);
+      expect(await bookingStatus(fixture.bookingId)).toBe('cancelled');
+    });
+
+    async function bookingMoney(bookingId: string) {
+      const [row] = await harness.database.db
+        .select({
+          vendorPayoutCents: bookings.vendorPayoutCents,
+          vendorOwedCents: bookings.vendorOwedCents,
+          refundAmountCents: bookings.refundAmountCents,
+          cancelledBy: bookings.cancelledBy,
+        })
+        .from(bookings)
+        .where(eq(bookings.id, bookingId));
+
+      return row;
+    }
+
+    it('zeroes an unreleased payout on a lost chargeback and refunds nothing, however often it is redelivered (VEN-645)', async () => {
+      const fixture = await openChargeback('needs_response');
+      const dispute = {
+        id: 'dp_ruling_needs_response',
+        status: 'lost',
+        reason: 'fraudulent',
+        amountCents: TOTAL_CENTS,
+        intentId: fixture.paymentIntentId,
+      };
+
+      for (let delivery = 0; delivery < 2; delivery += 1) {
+        expect((await deliverDispute('charge.dispute.closed', dispute)).statusCode).toBe(200);
+      }
+
+      expect(await bookingMoney(fixture.bookingId)).toEqual({
+        vendorPayoutCents: 0,
+        vendorOwedCents: 0,
+        refundAmountCents: null,
+        cancelledBy: 'admin',
+      });
+      expect(harness.stripe.refunds).toHaveLength(0);
+    });
+
+    it('records what the vendor owes when the lost chargeback lands after the payout was released (VEN-645)', async () => {
+      const fixture = await seed({ payoutReleasedAt: new Date('2020-06-05T00:00:00Z') });
+      const dispute = {
+        id: 'dp_lost_after_release',
+        status: 'needs_response',
+        reason: 'fraudulent',
+        amountCents: TOTAL_CENTS,
+        intentId: fixture.paymentIntentId,
+      };
+      expect((await deliverDispute('charge.dispute.created', dispute)).statusCode).toBe(200);
+
+      for (let delivery = 0; delivery < 2; delivery += 1) {
+        const closed = await deliverDispute('charge.dispute.closed', {
+          ...dispute,
+          status: 'lost',
+        });
+        expect(closed.statusCode).toBe(200);
+      }
+
+      /* The payout left, so the booking is as it was and the vendor's debt is written down. */
+      expect(await bookingStatus(fixture.bookingId)).toBe('confirmed');
+      expect(await bookingMoney(fixture.bookingId)).toMatchObject({
+        vendorPayoutCents: 105_600,
+        vendorOwedCents: 107_100,
+      });
+
+      const detail = await readCase((await readCases()).items[0]!.id);
+      /* The vendor's share plus Stripe's $15 dispute fee. */
+      expect(detail.booking?.vendorOwedCents).toBe(107_100);
+      expect(detail.booking?.vendorOwedRecoveredCents).toBe(0);
+    });
+
+    it('records a loss smaller than the payment as a debt and lifts the hold, instead of cancelling the event (VEN-645)', async () => {
+      const fixture = await seed();
+      const dispute = {
+        id: 'dp_partial_loss',
+        status: 'needs_response',
+        reason: 'fraudulent',
+        amountCents: 10_000,
+        intentId: fixture.paymentIntentId,
+      };
+      expect((await deliverDispute('charge.dispute.created', dispute)).statusCode).toBe(200);
       expect(await bookingStatus(fixture.bookingId)).toBe('disputed');
+
+      expect(
+        (await deliverDispute('charge.dispute.closed', { ...dispute, status: 'lost' })).statusCode,
+      ).toBe(200);
+
+      expect(await bookingStatus(fixture.bookingId)).toBe('confirmed');
+      expect(await bookingMoney(fixture.bookingId)).toMatchObject({
+        vendorPayoutCents: 105_600,
+        vendorOwedCents: 11_500,
+      });
+    });
+
+    it('ends a lost chargeback on a destination booking, whose payout left at charge time (VEN-645)', async () => {
+      const fixture = await seed();
+      await harness.database.db
+        .update(bookings)
+        .set({ payoutModel: 'destination' })
+        .where(eq(bookings.id, fixture.bookingId));
+      const dispute = {
+        id: 'dp_destination_loss',
+        status: 'needs_response',
+        reason: 'fraudulent',
+        amountCents: TOTAL_CENTS,
+        intentId: fixture.paymentIntentId,
+      };
+      expect((await deliverDispute('charge.dispute.created', dispute)).statusCode).toBe(200);
+      expect(await bookingStatus(fixture.bookingId)).toBe('disputed');
+
+      expect(
+        (await deliverDispute('charge.dispute.closed', { ...dispute, status: 'lost' })).statusCode,
+      ).toBe(200);
+
+      expect(await bookingStatus(fixture.bookingId)).toBe('cancelled');
+      expect(await bookingMoney(fixture.bookingId)).toMatchObject({ vendorOwedCents: 107_100 });
+    });
+
+    it('settles a chargeback that was already lost when the platform first heard of it, on redelivery too (VEN-645)', async () => {
+      const fixture = await openChargeback('lost');
+
+      expect(await bookingStatus(fixture.bookingId)).toBe('cancelled');
+      const replay = await deliverDispute('charge.dispute.created', {
+        id: 'dp_ruling_lost',
+        status: 'lost',
+        reason: 'fraudulent',
+        amountCents: TOTAL_CENTS,
+        intentId: fixture.paymentIntentId,
+      });
+      expect(replay.json().outcome).toBe('already-recorded');
+      expect((await bookingMoney(fixture.bookingId))?.vendorPayoutCents).toBe(0);
     });
 
     it('still lifts the hold for the vendor while the dispute is live', async () => {
@@ -937,7 +1070,7 @@ describe('the operations case queue (#431)', () => {
       ).toHaveLength(1);
     });
 
-    it("still records that a customer's report placed the hold, as the operator's sentence", async () => {
+    it("still records that a customer's report placed the hold, as the admin's sentence", async () => {
       const fixture = await seed();
       expect((await report({ bookingId: fixture.bookingId })).statusCode).toBe(200);
 
@@ -1023,7 +1156,7 @@ describe('the operations case queue (#431)', () => {
     /*
      * `NOT_DISPUTABLE.disputed` is *"You have already reported a problem with
      * this booking"* — second-person copy written for the customer's report
-     * form. Printed here it would tell an operator, on the screen where they
+     * form. Printed here it would tell an admin, on the screen where they
      * decide who keeps the money, that the payout is loose while it is frozen.
      */
     expect(detail.holdRefusal).not.toContain('You have already reported');

@@ -31,6 +31,15 @@ sends uncounted when the reservation hits a DB error; the plugin's boot runs
 env shape is bounded to six digits. Only a `quota` closure stays until UTC
 midnight, which is Resend's own refusal anyway.
 
+**VEN-688 (audited 2026-09-24, PASS):** `email_send_days.cap` records the highest
+env cap any instance used today (`greatest`); only env values reach it, so lowering
+waits for UTC midnight (documented; `0` still kills sending at once). A cap refusal
+writes a `failed` row with the literal `SEND_CLOSED_FAILURE_REASON`, excluded from
+attempt counts. Webhook `bounceReason` can write that exact text (bare
+`bounce.message` from the remote MTA), but only onto a `bounced` row with a provider
+id, which already blocks retries; the 24h window bounds Resend attempts whatever
+the count says. If refusals ever get a column or outcome, prefer it over the text.
+
 **How to apply:** do not re-report the stickiness or the step-up lockout;
 check instead that new operator-bound senders set `essential: true`.
 Related: [[operator-alert-dedupe-is-attacker-armable]], [[public-mail-endpoint-echoes-to-any-address]].

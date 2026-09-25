@@ -173,7 +173,7 @@ describe('the vendor gate', () => {
       authUserId: ADMIN,
       email: 'gate-admin@example.com',
       firstName: 'Ada',
-      lastName: 'Operator',
+      lastName: 'Admin',
       roleHint: 'customer',
       avatarUrl: null,
     });
@@ -462,7 +462,7 @@ describe('the vendor gate', () => {
     });
   });
 
-  describe('the operator switch', () => {
+  describe('the admin switch', () => {
     it('flips through /admin/settings with an audit row', async () => {
       const response = await inject('PUT', '/v1/admin/settings', ADMIN, { vendorInviteOnly: true });
 
@@ -679,7 +679,7 @@ describe('the vendor gate', () => {
       expect(decided.json()).toMatchObject({ id: row.id, status: 'invited' });
       const invites = (await inject('GET', '/v1/admin/vendor-invites', ADMIN)).json().items;
       expect(invites).toMatchObject([
-        { email: 'newcomer@example.com', invitedByName: 'Ada Operator', acceptedAt: null },
+        { email: 'newcomer@example.com', invitedByName: 'Ada Admin', acceptedAt: null },
       ]);
       const audit = await harness.database.db
         .select()

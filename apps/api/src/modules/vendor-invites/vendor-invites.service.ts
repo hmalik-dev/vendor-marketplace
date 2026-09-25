@@ -80,7 +80,7 @@ import {
  *
  * While `vendorInviteOnly` is on, the Terms acceptance — the one place an
  * account comes into existence — creates a **vendor** account only for an
- * address the operator has invited. A customer is never asked.
+ * address the admin has invited. A customer is never asked.
  */
 
 /** What the invite email needs to leave this process. */
@@ -143,12 +143,13 @@ export async function seedApplicationOnRefusal(
   db: AppDatabase,
   error: unknown,
   email: string,
+  log?: { error: (details: unknown, message: string) => void },
 ): Promise<never> {
   if (error instanceof AppError && error.code === ERROR_CODES.VENDOR_NOT_INVITED) {
     /*
      * An address with a live account is refused by `hasLiveAccount` wherever
      * it later tries to complete the waitlist, so a row for it would sit on
-     * the operator's list unable ever to be invited. The only caller this can
+     * the admin's list unable ever to be invited. The only caller this can
      * reach for is the existing-account acceptance path (a `users` row with
      * `role = 'vendor'` and no acceptance yet, refused because its invite was
      * revoked or never existed) — rare, but cheap to exclude.
@@ -159,7 +160,10 @@ export async function seedApplicationOnRefusal(
      * into an opaque 500.
      */
     if (!(await hasLiveAccount(db, email))) {
-      await seedApplication(db, email).catch(() => undefined);
+      // The payload is the error alone: the address is personal data and stays out of the log.
+      await seedApplication(db, email).catch((err: unknown) => {
+        log?.error({ err }, 'waitlist seed failed');
+      });
     }
   }
 
@@ -388,7 +392,7 @@ export async function listVendorInvites(
  * The invite email, in one of two variants (VEN-516, frame 38): `hasApplication`
  * is true for an address that already has a waitlist application, which is
  * true for every address that has ever signed up — a login already exists, so
- * the invite tells them to sign in. False is a direct invite the operator sent
+ * the invite tells them to sign in. False is a direct invite the admin sent
  * with no application behind it: nobody, so the invite tells them to sign up.
  * Wording is frame 38's, not restated here so it cannot drift.
  */
@@ -485,7 +489,7 @@ export function renderVendorApplicationConfirmationEmail(details: {
 /**
  * Sends one invite email and records the attempt on the invite, on the handle
  * the caller holds (`tx` when it holds the row's lock). **Never throws for a
- * failed send** — that is recorded, which is what the operator's list shows and
+ * failed send** — that is recorded, which is what the admin's list shows and
  * what the sweep retries; only a failed write of the record itself propagates.
  * The idempotency key is the same on every attempt, so a retry cannot deliver
  * twice. Returns whether the send itself failed, for a caller that reports it
@@ -522,7 +526,7 @@ async function sendInviteEmail(
   return failureReason !== null;
 }
 
-/** Sends the invite off the request path; a failed send is recorded, never the operator's error. */
+/** Sends the invite off the request path; a failed send is recorded, never the admin's error. */
 function queueInviteEmail(deps: VendorInviteMailDeps, inviteId: string, to: string): void {
   deps.background.run(async () => {
     try {
@@ -666,7 +670,7 @@ export async function retryFailedApplicationConfirmationEmails(
 }
 
 /**
- * `POST /admin/vendor-invites/:inviteId/resend`: the operator's retry of an
+ * `POST /admin/vendor-invites/:inviteId/resend`: the admin's retry of an
  * invite whose email did not go out. The same send the sweep makes, under the
  * same row lock — so it waits for a sweep mid-send and then finds the email
  * already sent, rather than sending twice.
@@ -700,9 +704,9 @@ export async function resendVendorInvite(
   }
 
   /*
-   * The attempt is recorded (it committed above), but the operator asked for an
+   * The attempt is recorded (it committed above), but the admin asked for an
    * email to go out and it did not: a 200 would read as success in the console.
-   * 502, the provider's failure rather than the operator's.
+   * 502, the provider's failure rather than the admin's.
    */
   if (row.emailStatus === 'failed') {
     throw new AppError(
@@ -928,7 +932,7 @@ export async function decideVendorApplication(
 }
 
 /**
- * `POST /admin/vendor-applications/invite`: the operator ticks several waitlist
+ * `POST /admin/vendor-applications/invite`: the admin ticks several waitlist
  * rows and invites them in one action (VEN-513).
  *
  * Each id gets its own transaction and, on success, its own synchronous email
@@ -966,7 +970,7 @@ async function bulkInviteOne(
   const outcome = await deps.db.transaction(async (tx) => {
     const row = await lockApplication(tx, applicationId);
 
-    // Unknown, or declined: the operator's own decision, not overridden by a bulk selection.
+    // Unknown, or declined: the admin's own decision, not overridden by a bulk selection.
     if (!row || row.status === 'declined') {
       return { status: 'not_found_or_decided' as const, invite: null };
     }

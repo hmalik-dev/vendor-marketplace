@@ -15,7 +15,7 @@ const REQUIRED: NodeJS.ProcessEnv = {
   STORAGE_SECRET_ACCESS_KEY: 'vendor_marketplace_dev',
   STORAGE_BUCKET: 'vendor-marketplace-uploads',
   STORAGE_PUBLIC_URL: 'http://localhost:9000/vendor-marketplace-uploads',
-  OPERATOR_ALERT_EMAIL: 'operator@example.com',
+  ADMIN_ALERT_EMAIL: 'admin@example.com',
 };
 
 /*
@@ -495,26 +495,26 @@ describe('parseEnv on a deployment', () => {
 
   /*
    * VEN-405: a laptop has nobody to page and logs each alert, but a deployment
-   * with no operator address would send its disputes and failed payouts to
+   * with no admin address would send its disputes and failed payouts to
    * nobody, so it refuses to start.
    */
-  it('refuses a deployment with no operator alert address', () => {
+  it('refuses a deployment with no admin alert address', () => {
     const source = { ...DEPLOYED };
-    delete source.OPERATOR_ALERT_EMAIL;
+    delete source.ADMIN_ALERT_EMAIL;
 
-    expect(() => parseEnv(source)).toThrow(/OPERATOR_ALERT_EMAIL is required/);
-    expect(parseEnv(DEPLOYED).OPERATOR_ALERT_EMAIL).toBe('operator@example.com');
+    expect(() => parseEnv(source)).toThrow(/ADMIN_ALERT_EMAIL is required/);
+    expect(parseEnv(DEPLOYED).ADMIN_ALERT_EMAIL).toBe('admin@example.com');
   });
 
-  it('boots development with no operator alert address, and the digest zone defaulted', () => {
+  it('boots development with no admin alert address, and the digest zone defaulted', () => {
     const development = { ...REQUIRED };
-    delete development.OPERATOR_ALERT_EMAIL;
+    delete development.ADMIN_ALERT_EMAIL;
     const env = parseEnv(development);
 
-    expect(env.OPERATOR_ALERT_EMAIL).toBeUndefined();
-    expect(env.OPERATOR_TIMEZONE).toBe('America/New_York');
-    expect(() => parseEnv({ ...REQUIRED, OPERATOR_ALERT_EMAIL: 'not-an-address' })).toThrow(
-      /OPERATOR_ALERT_EMAIL/,
+    expect(env.ADMIN_ALERT_EMAIL).toBeUndefined();
+    expect(env.ADMIN_TIMEZONE).toBe('America/New_York');
+    expect(() => parseEnv({ ...REQUIRED, ADMIN_ALERT_EMAIL: 'not-an-address' })).toThrow(
+      /ADMIN_ALERT_EMAIL/,
     );
   });
 
@@ -526,6 +526,10 @@ describe('parseEnv on a deployment', () => {
     expect(env.STRIPE_PLATFORM_FEE_RATE).toBe(0.12);
   });
 
+  /*
+   * The env rate is also what a request accepted before VEN-712 is priced at
+   * (payments.service), so a deployment must not hold any other than the legal one.
+   */
   it('refuses a commission that differs from the rate the legal copy states', () => {
     expect(() => parseEnv({ ...DEPLOYED, STRIPE_PLATFORM_FEE_RATE: '0.15' })).toThrow(
       /STRIPE_PLATFORM_FEE_RATE: must equal the 0\.12 the legal copy states/,

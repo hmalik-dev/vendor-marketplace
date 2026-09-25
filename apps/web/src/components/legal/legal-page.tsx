@@ -10,9 +10,9 @@ import { JumpRail } from './jump-rail';
  * day for half the planet, and "last updated 3 June" against a file that says
  * the 4th is the kind of discrepancy this page exists not to have.
  */
-const LAST_UPDATED = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'long',
+const LAST_UPDATED = new Intl.DateTimeFormat('en-US', {
+  day: '2-digit',
+  month: '2-digit',
   year: 'numeric',
   timeZone: 'UTC',
 });

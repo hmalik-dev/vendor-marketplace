@@ -36,7 +36,7 @@ import { cn } from '@/lib/utils';
  * queue with a subject, a reason and an optional sentence. Four dialogs would
  * be four wordings for one question and four places for the copy to drift.
  *
- * **It says what a report is and is not.** A report reaches an operator, it is
+ * **It says what a report is and is not.** A report reaches an admin, it is
  * not a reply to the person reported, and there is no status to come back and
  * check — the same scope `/support` states about itself, for the same reason:
  * somebody who expects a conversation and gets a reference is worse off than

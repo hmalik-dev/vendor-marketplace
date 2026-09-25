@@ -13,7 +13,7 @@ import type { EmailGateway } from '../../lib/email.js';
 import { AppError, notFound } from '../../lib/errors.js';
 import { escapeHtml } from '../../lib/html-escape.js';
 import type { StepUpStore } from '../../lib/step-up.js';
-import type { OperatorAlerts } from '../operator-alerts/operator-alerts.service.js';
+import type { AdminAlerts } from '../admin-alerts/admin-alerts.service.js';
 import { findUserById } from '../users/users.dao.js';
 import { countAdminActionsSince } from './admin.dao.js';
 
@@ -28,16 +28,22 @@ export interface StepUpDeps {
 }
 
 /**
- * Emails the operator a code, to the address on **their own account** — never
+ * Emails the admin a code, to the address on **their own account** — never
  * one the request supplies, so a stolen session cannot redirect it.
  *
- * The send is awaited: an operator who asked for a code and never got one
+ * The send is awaited: an admin who asked for a code and never got one
  * must be told, not left to wait. The code is never logged or returned.
  */
 export async function startStepUp(
   deps: StepUpDeps,
   adminId: string,
   now: Date,
+  /**
+   * Whether the send may take the daily cap's reserved headroom. Only an admin's
+   * code may: a customer's closure code (VEN-680) must never use up the slots
+   * that keep admin bans, closures and exports reachable on a busy day.
+   */
+  essential = true,
 ): Promise<AdminStepUpResult> {
   const admin = await findUserById(deps.db, adminId);
 
@@ -62,7 +68,7 @@ export async function startStepUp(
         .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
         .join(''),
       idempotencyKey: randomUUID(),
-      essential: true,
+      essential,
     });
   } catch (error) {
     await deps.store.cancelChallenge(adminId);
@@ -97,23 +103,23 @@ export async function completeStepUp(
   return { expiresAt };
 }
 
-/** Destructive actions in flight per operator, which the audit row does not yet show. */
+/** Destructive actions in flight per admin, which the audit row does not yet show. */
 const inFlight = new Map<string, number>();
 
 export interface CeilingDeps {
   db: AppDatabase;
   log: FastifyBaseLogger;
-  alerts?: Pick<OperatorAlerts, 'dispatch'> | undefined;
+  alerts?: Pick<AdminAlerts, 'dispatch'> | undefined;
 }
 
 /**
- * Runs a ban, closure or export only while the operator is under the hourly ceiling
- * (VEN-500), and tells the operator when it is not.
+ * Runs a ban, closure or export only while the admin is under the hourly ceiling
+ * (VEN-500), and tells the admin when it is not.
  *
  * The audit row lands **last** on a ban, after the refunds (a closure's rides its
  * retirement, first), so the count alone would let concurrent requests all read "under" — `inFlight` closes that
  * within an instance. Across replicas it can overshoot by the concurrency of
- * one operator's own requests, which the hourly bound tolerates.
+ * one admin's own requests, which the hourly bound tolerates.
  *
  * The refusal is checked before the work, so no refund is issued for it.
  */
@@ -144,11 +150,11 @@ export async function withinDestructiveCeiling<T>(
   if (completed + pending >= ADMIN_DESTRUCTIVE_ACTIONS_PER_HOUR) {
     deps.alerts?.dispatch({
       kind: 'launch_switch_flipped',
-      // Once per operator per dedupe window, however hard they keep pressing.
+      // Once per admin per dedupe window, however hard they keep pressing.
       subjectId: `ceiling:${adminId}`,
-      summary: 'An operator reached the hourly ban, closure and export ceiling',
+      summary: 'An admin reached the hourly ban, closure and export ceiling',
       details: [
-        `Operator: ${adminId}`,
+        `Admin: ${adminId}`,
         `Limit: ${ADMIN_DESTRUCTIVE_ACTIONS_PER_HOUR} bans, closures and exports per hour`,
         'The next one was refused. If this was not them, their session is stolen.',
       ],

@@ -31,6 +31,13 @@ visible in the SQL.
   holds only `messages as newest`. Alias the outer table, or call the DAO with
   ids that did not come from `findConversationsFor`, and the scoping is gone.
 
+VEN-611 (2026-09-24) paged the list. The `before` cursor is ANDed onto the
+tenancy predicate (`olderThan` over `coalesce(last_message_at, epoch)`), and its
+values are bound parameters cast to `::timestamptz` and `::uuid` after the
+shared regex plus a real-instant check. The page size is a server constant.
+Previews and unread counts still take ids only from the page's rows. Audited
+clean.
+
 The negative case for the vendor arm is held by `does not list another vendor
 thread to a vendor who has their own profile` (`messaging.routes.test.ts`),
 added in #402 after this was flagged. It gives `OTHER_VENDOR` a real profile
@@ -40,6 +47,13 @@ the `ownedIds.length === 0` branch. Any further test here must do the same or it
 re-tests the empty branch. Verified to fail when the `user_id` filter is dropped
 from the first statement. See [[booking-reads-gate-on-two-separate-paths]] for
 the same shape elsewhere.
+
+VEN-726 (2026-09-24) added `select ... for update` on `conversations` inside
+the send tx. Under `app_api` that table is `app_api_unscoped` (USING true), so
+RLS never gates the lock; the gate is `sendMessage`'s `findConversationById` +
+`sideOf` in JS, which runs before it. `insertMessage` already row-locked it via
+the `last_message_at` UPDATE, so no new contention. The backlog count stays
+internal. Audited clean.
 
 `POST /conversations` is `requireRole('customer')` as of #402; rows written
 before that where `customer_id` belongs to a vendor or admin account are still

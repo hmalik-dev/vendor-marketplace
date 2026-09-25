@@ -188,7 +188,7 @@ export interface RetryableEmailQuery {
 /**
  * The next unaccepted invite whose email failed and is still inside the retry
  * budget, locked with `SKIP LOCKED` so a second sweep passes over it rather than
- * sending it twice. An operator's resend takes `lockInviteById` instead, which
+ * sending it twice. An admin's resend takes `lockInviteById` instead, which
  * waits for the holder and is then refused because the email already went out.
  */
 export async function lockRetryableInvite(

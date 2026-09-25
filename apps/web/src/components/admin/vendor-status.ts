@@ -28,7 +28,7 @@ import type { StatusTone } from '@/components/ui/status-pill';
  *
  * `Held` (#457) arrives the same way and takes the same route: `needsYou`, the
  * tone `Flagged` already spends, because both are the console saying *an
- * operator did this and only an operator can undo it*. Sharing a tone with the
+ * admin did this and only an admin can undo it*. Sharing a tone with the
  * other moderation state is the point — the pair a reader must not confuse is
  * `Held` and `Paused`, and those are now a colour apart where before they were
  * the same label.

@@ -58,8 +58,14 @@ export interface BannerProps {
   status: BannerStatus;
   /** The headline. One line — the sentence goes in `children`. */
   title?: ReactNode;
-  /** One sentence per job, per `40-states.md`. */
-  children: ReactNode;
+  /**
+   * One sentence per job, per `40-states.md`. Omitted when the title says it all.
+   * Rendered inside a `<p>`, so text and inline elements only: a `<div>`, list
+   * or table here is closed out of the paragraph by the browser's parser and
+   * the page then fails to hydrate (React error 418). Put a block beside the
+   * banner, or in `action`.
+   */
+  children?: ReactNode;
   /**
    * The one control that fixes what the banner reports, held right of the
    * sentence — frames `20` and `27 Vendor dashboard — empty · 1024` draw the
@@ -111,9 +117,11 @@ export function Banner({
       <span aria-hidden="true" className={cn('mt-0.25 size-4 shrink-0 rounded-full', tokens.dot)} />
       <div className="min-w-0 flex-1">
         {title ? <p className="text-[13px] font-semibold text-stone-900">{title}</p> : null}
-        <p className={cn('text-[12.5px] leading-[1.55]', tokens.body, title && 'mt-0.75')}>
-          {children}
-        </p>
+        {children ? (
+          <p className={cn('text-[12.5px] leading-[1.55]', tokens.body, title && 'mt-0.75')}>
+            {children}
+          </p>
+        ) : null}
       </div>
       {action ? <div className="shrink-0 self-center">{action}</div> : null}
     </div>

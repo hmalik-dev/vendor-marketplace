@@ -4,6 +4,7 @@ import { Slot } from 'radix-ui';
 import { toast } from 'sonner';
 import { AUTH_COPY } from '@/app/auth-copy';
 import { signOut } from '@/lib/auth/auth-requests';
+import { endSession } from '@/lib/auth/session-ended';
 
 interface SignOutButtonProps {
   /** Exactly one element; it receives the click handler. */
@@ -34,7 +35,7 @@ export function SignOutButton({
     <Slot.Root
       onClick={() => {
         void signOut().then(
-          () => window.location.assign(redirectUrl),
+          () => endSession(redirectUrl),
           () => toast.error(AUTH_COPY.unreachable),
         );
       }}

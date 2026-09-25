@@ -19,7 +19,7 @@ import { getCategories } from '@/lib/vendor-data';
  * The recovery is *category links*, not "go home". A 404 on a marketplace is
  * almost always a stale vendor URL, and the fastest route back to what the
  * visitor wanted is the kind of vendor they were looking for. They follow the
- * live taxonomy so a category an operator hid is not offered (VEN-416); a
+ * live taxonomy so a category an admin hid is not offered (VEN-416); a
  * failed read degrades to the full list rather than failing a second page.
  */
 export async function NotFoundScreen(): Promise<React.ReactElement> {

@@ -38,7 +38,7 @@ const ACCEPTED = new Intl.DateTimeFormat('en-US', {
 /**
  * Why the two addresses disagree, said once (#462).
  *
- * A sentence rather than a link to the mechanism: the operator reading it is
+ * A sentence rather than a link to the mechanism: the admin reading it is
  * deciding what to do about one account, and what they need is that neither
  * side is broken and that the repair is on the other row.
  */
@@ -55,7 +55,7 @@ const RETAINED_LABELS: Record<string, string> = {
   legalAcceptances: 'Legal acceptances',
 };
 
-/** Where the breadcrumb goes back to; an operator's own account has no list. */
+/** Where the breadcrumb goes back to; an admin's own account has no list. */
 const ROLE_LISTS: Record<string, { label: string; href: string }> = {
   customer: { label: 'Customers', href: '/admin/customers' },
   vendor: { label: 'Vendors', href: '/admin/vendors' },
@@ -71,7 +71,7 @@ const TABLE_ROW = 'grid grid-cols-[minmax(0,1fr)_110px] items-center gap-2.5 px-
  * are declared read-only and carry no control at all.
  *
  * **It shows a closed account rather than hiding one.** The privacy policy says
- * records are kept, so an operator asked "what do you still hold about me" gets
+ * records are kept, so an admin asked "what do you still hold about me" gets
  * the same answer the export gives — counted here, enumerated there, from one
  * gather on the API so the two cannot drift.
  */
@@ -93,7 +93,7 @@ export default async function AdminUserDataRightsPage({
 
   /*
    * Who is looking, so the page can refuse what the API refuses. `close`
-   * answers 403 to an operator closing their own account — they would take
+   * answers 403 to an admin closing their own account — they would take
    * the `admin_actions` log that names them with it — and a control that
    * offers an action the server will refuse is a control that lies.
    */
@@ -106,7 +106,7 @@ export default async function AdminUserDataRightsPage({
   } catch (error) {
     /*
      * A malformed or unknown id is a wrong URL, not an error boundary. Every
-     * other failure — a 403 for a suspended operator, a 500 — is rethrown, so
+     * other failure — a 403 for a suspended admin, a 500 — is rethrown, so
      * this cannot turn a real fault into a quiet "no such person".
      */
     if (error instanceof ApiClientError && (error.statusCode === 404 || error.statusCode === 400)) {
@@ -146,7 +146,7 @@ export default async function AdminUserDataRightsPage({
               The account's address stopped agreeing with the identity provider
               (#462). First in the record, because every card below describes
               the record while this says the record is wrong — and it is read
-              from the row, so an operator has no other way to learn it.
+              from the row, so an admin has no other way to learn it.
 
               `failed` rather than `pending`: this is a write that was refused,
               not one still in flight, and `Banner` derives the colour from that
@@ -276,7 +276,7 @@ export default async function AdminUserDataRightsPage({
                 bookingsRefundedOnClose={rights.bookingsRefundedOnClose}
                 isSelf={viewer?.id === rights.userId}
                 email={rights.email}
-                isOperator={rights.role === 'admin'}
+                isAdmin={rights.role === 'admin'}
                 isBanned={rights.isBanned}
                 unwindPending={rights.unwindPending}
               />

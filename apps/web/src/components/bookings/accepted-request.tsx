@@ -212,8 +212,7 @@ export function AcceptedRequest({ request, booking }: AcceptedRequestProps): Rea
               )}
             </p>
             <p className="text-[12.5px] leading-[1.55] text-stone-600">
-              If {request.vendor.businessName} cancels, they do it through support and you&apos;re
-              refunded in full.
+              If {request.vendor.businessName} cancels, you&apos;re refunded in full.
             </p>
           </>
         ) : pulled !== null || prePaymentClause === null ? null : (
@@ -269,7 +268,7 @@ export function AcceptedRequest({ request, booking }: AcceptedRequestProps): Rea
             </>
           ) : pulled === null ? (
             <Button asChild variant="primary" disabled={price === null}>
-              <Link href={`/bookings/${request.id}/checkout`}>
+              <Link href={`/bookings/${request.id}/checkout`} prefetch={false}>
                 Pay {price === null ? 'now' : formatPrice(price)}
               </Link>
             </Button>

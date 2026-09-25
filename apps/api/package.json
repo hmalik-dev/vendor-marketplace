@@ -11,6 +11,7 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
     "reconcile:auth": "tsx src/modules/auth-sync/auth-sync.reconcile.cli.ts",
+    "tax:request-1099-capability": "tsx src/modules/tax-reporting/request-1099-capability.cli.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

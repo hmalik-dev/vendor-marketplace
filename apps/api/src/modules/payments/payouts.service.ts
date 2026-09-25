@@ -1,4 +1,6 @@
 import {
+  BACKUP_WITHHOLDING_RATE_BPS,
+  backupWithholdingCents,
   isPayoutFailing,
   PAYOUT_RELEASE_HOURS,
   payoutDueThroughDate,
@@ -10,17 +12,18 @@ import type { AppDatabase } from '../../lib/database.js';
 import type { FastifyBaseLogger } from 'fastify';
 import { conflict, notFound } from '../../lib/errors.js';
 import { transferGroupFor, type StripeConnectGateway } from '../../lib/stripe.js';
-import {
-  payoutFailedAlert,
-  type OperatorAlerts,
-} from '../operator-alerts/operator-alerts.service.js';
+import { payoutFailedAlert, type AdminAlerts } from '../admin-alerts/admin-alerts.service.js';
 import { findVendorUserId } from '../booking-requests/booking-requests.dao.js';
 import { notifyVendorUser, PAYOUT_NOTICES, type NotifyDeps } from '../notifications/notify-user.js';
 import { readPlatformSwitchesUncached } from '../platform-settings/platform-settings.service.js';
 import { findBookingById } from './payments.dao.js';
 import {
+  applyDebtRecovery,
   claimReleasableBooking,
+  planDebtRecovery,
   findDuePayoutBookingIds,
+  findBackupWithholdingSetter,
+  recordBackupWithholdingWithheld,
   recordPayoutFailure,
   recordPayoutRelease,
 } from './payouts.dao.js';
@@ -47,10 +50,10 @@ export interface PayoutContext {
   log: FastifyBaseLogger;
   /**
    * Where a payout that keeps failing is reported (VEN-405). The scheduled
-   * sweep passes it; an operator's own retry does not, because the operator is
+   * sweep passes it; an admin's own retry does not, because the admin is
    * already looking at the result.
    */
-  alerts?: Pick<OperatorAlerts, 'dispatch'>;
+  alerts?: Pick<AdminAlerts, 'dispatch'>;
   /** How the vendor is told a payout went out (VEN-525). Absent in a suite that does not read the bell. */
   notify?: NotifyDeps;
 }
@@ -130,11 +133,11 @@ async function payoutReleasePaused(context: PayoutContext): Promise<boolean> {
 }
 
 /**
- * What one operator-driven retry did, and the payout state it left behind.
+ * What one admin-driven retry did, and the payout state it left behind.
  *
  * The refreshed row travels back with the outcome so the console can redraw the
  * row it acted on without a second request — and, more importantly, so the
- * operator is told the **new** failure reason rather than the one they were
+ * admin is told the **new** failure reason rather than the one they were
  * looking at when they pressed the button.
  */
 export interface PayoutRetryResult {
@@ -154,10 +157,10 @@ export interface PayoutRetryResult {
 }
 
 /**
- * Retries one stuck payout on an operator's say-so, through the **sweep's own
+ * Retries one stuck payout on an admin's say-so, through the **sweep's own
  * path** rather than a second transfer implementation (#432).
  *
- * The sweep already retries every fifteen minutes, so this buys the operator an
+ * The sweep already retries every fifteen minutes, so this buys the admin an
  * answer *now* — did it work, and if not what does Stripe say today — rather
  * than a capability the platform lacked. That is also why it reuses
  * `releaseOnePayout` verbatim: a separate transfer call here would be a second
@@ -168,7 +171,7 @@ export interface PayoutRetryResult {
  * `payout_<bookingId>_<attempt>` and the attempt is read from the row inside
  * the claim; a failure increments that counter durably, so a retry necessarily
  * mints a different key from the one whose refusal Stripe has cached. Reusing
- * it would replay that cached failure for 24 hours and the operator would learn
+ * it would replay that cached failure for 24 hours and the admin would learn
  * nothing, which is the state the sweep itself was in before #423.
  */
 export async function retryPayoutRelease(
@@ -187,7 +190,7 @@ export async function retryPayoutRelease(
 
   /*
    * Neither the platform pause nor a vendor hold applies here (VEN-404): this
-   * is the operator releasing one payout by hand, which is what both exist to
+   * is the admin releasing one payout by hand, which is what both exist to
    * make the only way money moves.
    */
   const outcome = await releaseOnePayout(context, bookingId, dueThroughDate, now, {
@@ -202,7 +205,7 @@ export async function retryPayoutRelease(
   return {
     /*
      * A `skipped` claim means a concurrent sweep holds the row lock — it is
-     * neither a refusal nor a failure, and telling the operator "that failed"
+     * neither a refusal nor a failure, and telling the admin "that failed"
      * would be false. `busy` is the honest third answer: nothing was attempted
      * here because something else is attempting it right now.
      */
@@ -219,14 +222,14 @@ export async function retryPayoutRelease(
 /**
  * The states a retry is refused from, most specific first, each saying which.
  *
- * Refusing rather than quietly returning "nothing happened": the operator
+ * Refusing rather than quietly returning "nothing happened": the admin
  * pressed a button on a row they believed was stuck, and the one thing they
  * must not be handed is a no-op that reads like a retry.
  *
  * **`cancelled` is refused even though the sweep releases it.** A cancellation
  * inside D3's window leaves the vendor a residual the sweep still pays on the
  * original schedule (D31), so no money is stranded by this refusal — the
- * fifteen-minute sweep keeps working the row. What is withheld is the operator
+ * fifteen-minute sweep keeps working the row. What is withheld is the admin
  * *forcing* it on the one status where the amount owed was rewritten after the
  * fact, and the message says that rather than implying nothing is owed.
  */
@@ -236,7 +239,7 @@ function refusePayoutRetry(subject: BookingRow, dueThroughDate: string): void {
    * `status === 'disputed'` read by hand. That function's own comment forbids
    * the literal: `HELD_PAYOUT_STATUSES` is what the vendor dashboard and the
    * booking report test membership in, and a hold status added there but read
-   * as an equality here would leave the operator retry refusing on a set the
+   * as an equality here would leave the admin retry refusing on a set the
    * rest of the product no longer agrees with.
    */
   const payoutStatus = payoutStatusOf(subject);
@@ -303,7 +306,7 @@ async function releaseOnePayout(
   let failure: string | null = null;
   let owedCents = 0;
   let releasedVendorId: string | null = null;
-  /** Refunds made outside the platform that this claim found; told to the operator once the transaction has committed. */
+  /** Refunds made outside the platform that this claim found; told to the admin once the transaction has committed. */
   const findings: ExternalRefundFinding[] = [];
 
   const outcome = await context.db.transaction(async (tx) => {
@@ -402,28 +405,87 @@ async function releaseOnePayout(
        */
       const existing = await context.stripe.findTransfer(transferGroup, { live: true });
 
+      /*
+       * Backup withholding comes off the vendor's share first (VEN-723, D49): it
+       * is owed to the IRS, so debts are recovered from what is left, never
+       * from that money. Read from the claimed row, and computed by the one
+       * function the vendor's dashboard shows it with.
+       *
+       * A transfer found under the group carries what its own attempt withheld,
+       * stamped on it, and that is what is recorded: today's setting may have
+       * moved since, and neither clearing it nor switching it on rewrites a
+       * payment already made.
+       */
+      const backupCents = existing
+        ? Math.min(existing.backupWithheldCents ?? 0, booking.vendorPayoutCents)
+        : booking.vendorBackupWithholding
+          ? backupWithholdingCents(booking.vendorPayoutCents)
+          : 0;
+      const payableCents = booking.vendorPayoutCents - backupCents;
+      /* Before any money moves: a withholding nobody can be named for fails the payout, not the audit. */
+      const withholdingActorId =
+        backupCents > 0 ? await findBackupWithholdingSetter(tx, booking.vendorId) : null;
+
+      /*
+       * What the vendor owes from lost chargebacks is kept back from this
+       * payout (VEN-658), oldest debt first, and whatever is left carries to
+       * the next. A transfer found under the group was already sent for a
+       * netted amount, so the recovery follows what Stripe holds rather than
+       * being planned again; planned either way, it is only written after the
+       * transfer stands, so a failed transfer recovers nothing.
+       *
+       * The idempotency key is per attempt and the amount can differ between
+       * attempts when a debt appears in between. That is safe: `findTransfer`
+       * catches the retry of a transfer that landed, and a request Stripe
+       * refuses for a changed amount is a failure that increments the attempt.
+       */
+      /* What a found transfer already withheld is a fact to record, not a plan to redo against today's debts. */
+      const withheldCents = existing
+        ? Math.max(payableCents - (existing.amountCents - existing.reversedCents), 0)
+        : 0;
+      const recovery = await planDebtRecovery(
+        tx,
+        booking.vendorId,
+        existing ? withheldCents : payableCents,
+      );
+      const plannedCents = recovery.reduce((sum, item) => sum + item.cents, 0);
+
+      if (existing && plannedCents < withheldCents) {
+        context.log.warn(
+          { bookingId, withheldCents, plannedCents },
+          'A transfer withheld more than the vendor now owes; the difference is recorded as netted',
+        );
+      }
+
+      const nettedCents = existing ? withheldCents : plannedCents;
+      const sendCents = payableCents - nettedCents;
+
       const transfer =
         existing ??
-        (await context.stripe.createTransfer({
-          bookingId,
-          /*
-           * The attempt this is, so a retry is a new request at Stripe rather
-           * than a replay of the last failure. Read from the row, which is
-           * where the count durably lives — a rolled-back transaction never
-           * incremented it, so the one case that *must* replay (a transfer that
-           * reached Stripe under a commit that did not land) still does.
-           */
-          attempt: booking.payoutAttempts,
-          /*
-           * The stored figure, never a freshly computed fee. The rate in force
-           * when the card succeeded is already written to this row, and
-           * recomputing the split at release time would silently reprice every
-           * unreleased booking the moment `STRIPE_PLATFORM_FEE_RATE` changed.
-           */
-          amountCents: booking.vendorPayoutCents,
-          destinationAccountId: booking.vendorStripeAccountId,
-          transferGroup,
-        }));
+        (sendCents > 0
+          ? await context.stripe.createTransfer({
+              bookingId,
+              /*
+               * The attempt this is, so a retry is a new request at Stripe rather
+               * than a replay of the last failure. Read from the row, which is
+               * where the count durably lives — a rolled-back transaction never
+               * incremented it, so the one case that *must* replay (a transfer that
+               * reached Stripe under a commit that did not land) still does.
+               */
+              attempt: booking.payoutAttempts,
+              /*
+               * The stored figure less the debt recovered, never a freshly computed
+               * fee. The rate in force when the card succeeded is already written to
+               * this row, and recomputing the split at release time would silently
+               * reprice every unreleased booking the moment `STRIPE_PLATFORM_FEE_RATE`
+               * changed.
+               */
+              amountCents: sendCents,
+              destinationAccountId: booking.vendorStripeAccountId,
+              transferGroup,
+              backupWithheldCents: backupCents,
+            })
+          : null);
 
       /*
        * A transfer found under the group was made for the obligation as it
@@ -432,25 +494,40 @@ async function releaseOnePayout(
        * is clawed back before the release is recorded — otherwise the full
        * share is booked as the release of a half-share.
        */
-      const surplusCents =
-        transfer.amountCents - (existing?.reversedCents ?? 0) - booking.vendorPayoutCents;
+      const surplusCents = existing
+        ? existing.amountCents - existing.reversedCents - payableCents
+        : 0;
 
       if (existing && surplusCents > 0) {
         context.log.warn(
-          { bookingId, transferId: transfer.transferId, surplusCents },
+          { bookingId, transferId: existing.transferId, surplusCents },
           'Found a transfer larger than what is owed; reversing the surplus',
         );
         await context.stripe.reverseTransfer({
-          transferId: transfer.transferId,
+          transferId: existing.transferId,
           amountCents: surplusCents,
           idempotencyKey: `release_${bookingId}_surplus_${booking.payoutAttempts}`,
         });
       }
 
+      await applyDebtRecovery(tx, recovery);
       await recordPayoutRelease(tx, bookingId, {
-        stripeTransferId: transfer.transferId,
+        stripeTransferId: transfer?.transferId ?? null,
         releasedAt: now,
+        debtNettedCents: nettedCents,
+        backupWithheldCents: backupCents,
       });
+
+      if (withholdingActorId !== null) {
+        await recordBackupWithholdingWithheld(tx, {
+          actorId: withholdingActorId,
+          bookingId,
+          vendorId: booking.vendorId,
+          cents: backupCents,
+          rateBps: BACKUP_WITHHOLDING_RATE_BPS,
+          at: now,
+        });
+      }
 
       releasedVendorId = booking.vendorId;
 

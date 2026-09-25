@@ -371,7 +371,9 @@ export const wireConversationSchema = conversationSummarySchema.extend({
   lastMessageAt: z.coerce.date().nullable(),
 });
 export type WireConversation = z.infer<typeof wireConversationSchema>;
-export const wireConversationListSchema = z.array(wireConversationSchema);
+export const wireConversationPageSchema = cursorPageSchema(wireConversationSchema).extend({
+  hasUnread: z.boolean(),
+});
 
 export const wireMessageSchema = sendMessageResultSchema.extend({
   readAt: z.coerce.date().nullable(),
@@ -558,13 +560,29 @@ export const wireAdminPaymentPageSchema =
   paginatedSchema(wireAdminPaymentRowSchema).extend(wideningShape);
 export type WireAdminPaymentPage = z.infer<typeof wireAdminPaymentPageSchema>;
 
+/** Calendar years with settled bookings, for the 1099-K downloads (VEN-722). */
+export const wireAdminTaxYearsSchema = z.object({
+  years: z.array(z.number().int()),
+  /** What backup withholding kept in each year, for Form 945 (VEN-723); only years that withheld something. */
+  backupWithheld: z.array(z.object({ year: z.number().int(), cents: z.number().int() })),
+});
+export type WireAdminTaxYears = z.infer<typeof wireAdminTaxYearsSchema>;
+
+/**
+ * The years a vendor has a yearly statement for (VEN-725): `GET /vendor/tax/years`
+ * answers `years` alone. It is not the admin's schema: that one requires
+ * `backupWithheld`, which the vendor route never sends, so aliasing it made
+ * every vendor's Payments page throw once VEN-723 added the field.
+ */
+export const wireVendorTaxYearsSchema = z.object({ years: z.array(z.number().int()) });
+
 /**
  * The retry's answer, with its date coerced — **the one that gets away** (#432).
  *
  * `payoutReleasedAt` is null on the `failed` and `busy` outcomes and a string
  * on `released`, so passing the shared schema straight to `useApi` parses fine
  * for every retry that did not work and throws for the one that did: the
- * operator is told a completed transfer failed, in the API client's own words,
+ * admin is told a completed transfer failed, in the API client's own words,
  * while the money has already left the platform balance. Found by review, not
  * by the suite — the route tests read the response object rather than its JSON.
  */
@@ -643,7 +661,7 @@ export type WireAdminVendorInviteList = z.infer<typeof wireAdminVendorInviteList
  *
  * Five coercions rather than one, because the case detail is the console's only
  * read with dates on **two** levels — the case's own, and the booking's money
- * timestamps. A missing coercion on either 500s the screen an operator opens to
+ * timestamps. A missing coercion on either 500s the screen an admin opens to
  * decide who keeps the money, which is the worst place in the product for a
  * `.getTime is not a function`.
  */
@@ -713,7 +731,7 @@ export type WireAdminTagSuggestionResult = z.infer<typeof wireAdminTagSuggestion
  *
  * No `.extend` with a coerced date on any of the three: every date in these
  * schemas is already `z.coerce.date()` at the source, because they are read by
- * an operator's browser as well as by the API's own response validator and a
+ * an admin's browser as well as by the API's own response validator and a
  * `z.date()` would reject the ISO string the wire actually carries.
  */
 export const wireAdminUserDataRightsSchema = adminUserDataRightsSchema;

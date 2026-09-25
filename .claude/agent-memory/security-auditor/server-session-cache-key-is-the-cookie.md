@@ -46,6 +46,27 @@ JWTs are refused, and every other instance's cache keeps serving the refused JWT
 until it lapses; `iat` is whole seconds, so a re-mint in the sign-out's own
 second is refused and then cached. Pair a per-user bump with `revoke-sessions`.
 
+**VEN-699 cross-tab sign-out (audited 2026-09-24, PASS):** the focus probe
+reads `/api/session/token`, so it inherits this cache's revocation lag — an
+other-device sign-out shows up only after the entry lapses (correctness, not a
+leak). The `BroadcastChannel` message is a constant string and is same-origin
+and storage-partitioned. Forging it only makes the tab clear its cached token
+and reload. The server still sees the cookie, so the reload is not a logout.
+The `endSession()` destinations are constants or `signInPathReturningTo`. The
+reload uses `location.pathname`, and Next 308s `//` paths before it renders.
+
+**VEN-717 `x-refused-token` re-mint (audited 2026-09-24, PASS):** the header
+drops every entry whose token equals it (needs the victim's JWT, a bearer
+anyway), then mints only for the caller's own cookie through `getSession` —
+same gate as a cache miss. The early return ignores the marker but serves only
+the caller's own cookie's entry, which a plain GET already hands out. Sentry's
+`CREDENTIAL_HEADER` `token` substring redacts it. Forcing a mint costs 2
+upstream calls per request with no web-side limit, but a bogus cookie already
+costs 1, so it is not new exposure. Every in-route API 401 fires before a side
+effect (reports, support, terms), so the one write replay is safe. The SDK dist
+is deny-listed, so whether `getSession`/`/token` trust `session_data` for 5 min
+after a revoke is unverified. That gap predates this change (any miss mints).
+
 **How to apply:** any future cache in front of a session read is judged on its
 key, not its TTL — ask what a caller can put in the key and who else can hold
 the same one. Related: [[neon-auth-cutover-boundaries]],

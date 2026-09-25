@@ -1,0 +1,378 @@
+import type { Metadata } from 'next';
+import {
+  BRAND_NAME,
+  addDays,
+  pageTitle,
+  parseDateString,
+  serialiseJsonLd,
+  toDateString,
+  type AvailabilityStatus,
+} from '@vendor-marketplace/shared';
+import { cspNonce } from '@/lib/csp-nonce';
+import { AboutPane } from '@/components/vendors/profile/about-pane';
+import { AvailabilityPane } from '@/components/vendors/profile/availability-pane';
+import { BookingRail } from '@/components/vendors/profile/booking-rail';
+import { PackagesPane } from '@/components/vendors/profile/packages-pane';
+import { PortfolioPane } from '@/components/vendors/profile/portfolio-pane';
+import { ProfileHeader } from '@/components/vendors/profile/profile-header';
+import { ProfileTabs } from '@/components/vendors/profile/profile-tabs';
+import { ReviewsPane } from '@/components/vendors/profile/reviews-pane';
+import { siteOrigin } from '@/config/env';
+import { SITE_OPEN_GRAPH } from '@/lib/canonical';
+import { readRoleForChrome } from '@/lib/current-user';
+import { gateVendorSlug } from '@/lib/vendor-route';
+import {
+  getPublicVendorAvailability,
+  getPublicVendorProfile,
+  getPublicVendorReviews,
+  readOwnVendorProfileIdForChrome,
+} from '@/lib/vendor-data';
+
+/**
+ * How far ahead the header chip looks for a free day.
+ *
+ * The chip is a fact about the vendor, not a promise about the year: a vendor
+ * blocked solid for three months has nothing useful to say in a chip, and
+ * saying nothing is the designed state — frame `03` draws the chip beside the
+ * category chips, where an absent one simply closes the gap.
+ */
+const FREE_DATE_HORIZON_DAYS = 90;
+
+/*
+ * `Jun 14`, matching the vendor's card in search exactly — the header IS that
+ * card unpacked, and the chip is the one element that persists between the two
+ * surfaces, so a different month format would break the resemblance the whole
+ * composition is built on. UTC because a calendar date is a `DATE` column and
+ * must not be re-read in the viewer's zone.
+ */
+const FREE_CHIP_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'UTC',
+});
+
+/**
+ * The nearest day this vendor is free, as the chip draws it, or null.
+ *
+ * Read from the same calendar the booking rail reads, so the header and the
+ * rail cannot contradict each other. A date the calendar does not mention is
+ * available — the endpoint returns only the days a vendor has marked.
+ */
+function nearestFreeDate(
+  calendar: Readonly<Record<string, AvailabilityStatus>>,
+  today: string,
+): string | null {
+  const start = parseDateString(today);
+  if (start === null) {
+    return null;
+  }
+
+  for (let offset = 0; offset < FREE_DATE_HORIZON_DAYS; offset += 1) {
+    const date = toDateString(addDays(start, offset));
+
+    if ((calendar[date] ?? 'available') === 'available') {
+      return FREE_CHIP_FORMATTER.format(new Date(`${date}T00:00:00Z`));
+    }
+  }
+
+  return null;
+}
+
+interface PageProps {
+  params: Promise<{ slug: string }>;
+}
+
+/**
+ * The public vendor profile — frame `03`, the page where the decision happens.
+ *
+ * Every search result, every featured card on the landing page and the
+ * storefront editor's Preview button lands here.
+ */
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { slug } = await params;
+
+  /*
+    This read is **deliberately not guarded against a timeout** (#390).
+
+    Next runs `generateMetadata` in a separate React cache scope from the page
+    component, and after it, so the `cache()` on this read does not dedupe
+    between the two and each spends its own `API_REQUEST_TIMEOUT_MS`. Against
+    a suspended API the route therefore answers in ~16s rather than ~8s —
+    twice the deadline, and the one part of this ticket's second acceptance
+    line still outstanding. It is recorded here rather than hidden because
+    this is the only place that can see it.
+
+    Catching the timeout here was tried and reverted: it does not save the
+    second deadline (the read still runs), and the neutral title it falls back
+    to is `Page not found`, which measurably labelled a **500** response as a
+    missing page. A wedged upstream is not a 404, and telling a visitor and a
+    crawler that it is, is worse than an unhelpful title. The fix that would
+    actually close the gap is to stop reading the profile here at all — a
+    title derived from the slug — which is a change to what this page tells
+    crawlers, not a change to its timeout behaviour.
+
+    Since VEN-610 the read is shared for a minute in-process (`readShared`), so
+    the two scopes share one entry: the page's read is a hit, not a second API
+    call, and only a cold miss can still spend a deadline here.
+  */
+  const vendor = await getPublicVendorProfile(slug);
+
+  if (!vendor) {
+    // The 404 page supplies its own title; anything invented here would be
+    // indexed against a page that does not exist.
+    return { title: pageTitle('Page not found') };
+  }
+
+  const location = [vendor.city, vendor.state].filter(Boolean).join(', ');
+  const description =
+    vendor.bio?.slice(0, 160) ??
+    `Book ${vendor.businessName}${location ? ` in ${location}` : ''} on ${BRAND_NAME}.`;
+
+  return {
+    title: pageTitle(vendor.businessName),
+    description,
+    alternates: { canonical: `/vendors/${vendor.slug}` },
+    openGraph: {
+      type: 'profile',
+      siteName: BRAND_NAME,
+      url: `/vendors/${vendor.slug}`,
+      title: vendor.businessName,
+      description,
+      // No cover falls back to the site card rather than to no image at all.
+      images: vendor.coverImageUrl ? [{ url: vendor.coverImageUrl }] : SITE_OPEN_GRAPH.images,
+    },
+  };
+}
+
+export default async function VendorProfilePage({
+  params,
+}: PageProps): Promise<React.ReactElement> {
+  const { slug } = await params;
+  const nonce = await cspNonce();
+
+  /*
+    One wave, not two (#390).
+
+    These used to run as the profile, and then — once it had landed — these
+    other two. Each wave is bounded by `API_REQUEST_TIMEOUT_MS`, so against a
+    wedged upstream the route spent two full deadlines in series: measured at
+    16.1s for an 8s timeout, which is not "the timeout plus a margin" by any
+    reading. Neither of the other two needs anything from the profile; both
+    take only the slug, which is in hand on the line above. Issuing all three
+    together makes the page's worst case one deadline rather than the sum of
+    two.
+
+    `Promise.all` rather than starting them and awaiting later, so that every
+    rejection has a handler. The profile comes from `gateVendorSlug`, the gate
+    `layout.tsx` runs above the loading boundary (VEN-715): a missing, unpublished,
+    deleted or renamed slug is its 404 or 308, raised here as the same refusal.
+  */
+  const [vendor, availability, reviews, viewerRole] = await Promise.all([
+    gateVendorSlug(slug),
+    getPublicVendorAvailability(slug),
+    getPublicVendorReviews(slug),
+    /*
+     * Which role is reading, not whether they may read: this page is public and
+     * stays public. It decides only whether the rail's two CTAs are offered —
+     * both are customer-only at the API, so a vendor or an admin
+     * was being shown a pair of controls neither of them can use, and a
+     * vendor's own storefront offered them against themselves.
+     *
+     * `readRoleForChrome` rather than `readIdentityOnPublicRoute`: this needs
+     * the role and nothing else, and it must not add a *redirect* to a public
+     * page that had none. It degrades to `null`, which is the signed-out
+     * answer — the CTAs are offered and the refusal stays with the API, where
+     * it is load-bearing.
+     */
+    readRoleForChrome(),
+  ]);
+
+  /*
+   * Whether the reader is this storefront's own vendor (#458).
+   *
+   * A vendor previewing their own profile was offered *Report this profile*
+   * and *Report this photo* over their own record, and filing one succeeded —
+   * `POST /reports` accepts any signed-in caller for a public subject,
+   * deliberately, because restricting that would only stop the passer-by who
+   * noticed. The cost was a real case in the operations queue naming a vendor
+   * as their own reporter. The refusal therefore belongs to the viewer, not
+   * the API: answering 403 to the owner alone would turn the endpoint into an
+   * oracle for who owns a storefront.
+   *
+   * It reaches the About and Portfolio panes only. The Reviews pane keeps its
+   * control for the owner — see the note at its call site below.
+   *
+   * A second wave rather than a fourth entry in the one above (#390): the role
+   * is not known until that wave lands, and asking `/vendor/profile` before it
+   * would spend a request on every customer and every signed-out visitor to
+   * learn nothing. Only a signed-in vendor pays it, and only they can be the
+   * owner.
+   */
+  const viewerOwnsProfile =
+    viewerRole === 'vendor' && (await readOwnVendorProfileIdForChrome()) === vendor.id;
+
+  /*
+   * The server's UTC day. Both client panes below take it as a seed only and
+   * re-anchor on the visitor's own day after mount (#409); nothing on this
+   * page compares against it except `nearestFreeDate`, and that one stays here
+   * deliberately. It is a ninety-day forward scan, so the server's day is a
+   * floor rather than an answer: west of UTC it can skip a visitor's own today,
+   * but starting a day earlier to catch that would name a day already behind a
+   * visitor east of UTC — and a chip promising a date that has passed is the
+   * worse of the two. Naming the visitor's today needs the visitor's clock, and
+   * the chip is rendered by `ProfileHeader` on the server.
+   */
+  const serverToday = toDateString(new Date());
+
+  /* The same keyed view of availability the request form takes, so the rail's
+     free-date line and that form read one source. */
+  const calendar: Record<string, AvailabilityStatus> = {};
+  for (const entry of availability) {
+    calendar[entry.date] = entry.status;
+  }
+
+  /**
+   * `LocalBusiness` rather than `Organization`, matching the landing page: a
+   * vendor serves a metro, and the search result that matters is a local one.
+   * The rating is only claimed when there is one — a review-less vendor with an
+   * `aggregateRating` of 0 is a lie search engines will repeat.
+   */
+  const structuredData = {
+    '@context': 'https://schema.org',
+    '@type': 'LocalBusiness',
+    name: vendor.businessName,
+    // The origin this deployment answers on — structured data a crawler
+    // follows must not point at a domain that does not serve this app.
+    url: `${siteOrigin()}/vendors/${vendor.slug}`,
+    ...(vendor.bio ? { description: vendor.bio } : {}),
+    ...(vendor.profileImageUrl ? { image: vendor.profileImageUrl } : {}),
+    ...(vendor.city
+      ? {
+          address: {
+            '@type': 'PostalAddress',
+            addressLocality: vendor.city,
+            ...(vendor.state ? { addressRegion: vendor.state } : {}),
+          },
+        }
+      : {}),
+    ...(vendor.reviewCount > 0
+      ? {
+          aggregateRating: {
+            '@type': 'AggregateRating',
+            ratingValue: vendor.avgRating,
+            reviewCount: vendor.reviewCount,
+          },
+        }
+      : {}),
+  };
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        nonce={nonce}
+        /*
+          `serialiseJsonLd`, not `JSON.stringify`: the payload carries the
+          vendor's own business name and bio, and `dangerouslySetInnerHTML` is
+          the only way to put JSON-LD on a page, so an unescaped `</script>` in
+          either one closed this element and opened another (#398).
+        */
+        dangerouslySetInnerHTML={{ __html: serialiseJsonLd(structuredData) }}
+        // VEN-578: see the matching comment on `/`'s JSON-LD block — the
+        // browser hides this attribute post-insertion, not a real divergence.
+        suppressHydrationWarning
+      />
+
+      <ProfileHeader
+        businessName={vendor.businessName}
+        coverImageUrl={vendor.coverImageUrl}
+        profileImageUrl={vendor.profileImageUrl}
+        tagline={vendor.tagline}
+        avgRating={vendor.avgRating}
+        reviewCount={vendor.reviewCount}
+        city={vendor.city}
+        state={vendor.state}
+        freeOn={nearestFreeDate(calendar, serverToday)}
+        categories={vendor.categories}
+        tags={vendor.tags}
+        rail={
+          <BookingRail
+            businessName={vendor.businessName}
+            slug={vendor.slug}
+            startingPriceCents={vendor.startingPriceCents}
+            packages={vendor.packages}
+            reviewCount={vendor.reviewCount}
+            serverToday={serverToday}
+            calendar={calendar}
+            canBook={viewerRole === null || viewerRole === 'customer'}
+          />
+        }
+      >
+        <ProfileTabs
+          panes={{
+            about: (
+              <AboutPane
+                bio={vendor.bio}
+                yearsInBusiness={vendor.yearsInBusiness}
+                completedEventCount={vendor.completedEventCount}
+                serviceRadiusKm={vendor.serviceRadiusKm}
+                packages={vendor.packages}
+                onSeePackagesHref={`/vendors/${vendor.slug}?tab=packages`}
+                vendorProfileId={vendor.id}
+                signedIn={viewerRole !== null}
+                viewerOwnsProfile={viewerOwnsProfile}
+              />
+            ),
+            packages: (
+              <PackagesPane packages={vendor.packages} businessName={vendor.businessName} />
+            ),
+            portfolio: (
+              <PortfolioPane
+                items={vendor.portfolio}
+                businessName={vendor.businessName}
+                signedIn={viewerRole !== null}
+                viewerOwnsProfile={viewerOwnsProfile}
+              />
+            ),
+            reviews: (
+              <ReviewsPane
+                slug={vendor.slug}
+                businessName={vendor.businessName}
+                /* From the profile read, so the pane can tell "none" from
+                   "we couldn't load them" when its own read fails. */
+                reviewCount={vendor.reviewCount}
+                initial={reviews}
+                signedIn={viewerRole !== null}
+                /*
+                  Deliberately **not** given `viewerOwnsProfile` (#458).
+
+                  The other two panes report the vendor's own record, and the
+                  owner reporting one of those is self-reporting. A review is a
+                  different subject with a different author: a customer wrote
+                  it *about* them, and objecting to it is the ordinary case
+                  rather than the noise this ticket removes. It is also their
+                  only channel — there is no vendor-side reviews surface — so
+                  hiding it would trade a case an admin dismisses for one
+                  nobody can raise.
+                */
+              />
+            ),
+            availability: (
+              <AvailabilityPane
+                /*
+                  The keyed projection, never the rows. The pane is a client
+                  component, so its props are serialized into this public page's
+                  flight payload — and an `Availability` row carries the
+                  vendor's private per-date `note`.
+                */
+                calendar={calendar}
+                serverToday={serverToday}
+                businessName={vendor.businessName}
+              />
+            ),
+          }}
+        />
+      </ProfileHeader>
+    </>
+  );
+}

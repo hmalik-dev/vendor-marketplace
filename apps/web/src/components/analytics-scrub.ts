@@ -5,7 +5,7 @@ import type { BeforeSendEvent } from '@vercel/analytics';
  *
  * - `public`: the segment is public (a vendor's slug), reported as it is.
  * - `normalised`: the segment is a record id, reported as its `[param]` name.
- * - `dropped`: never reported (the operator console, non-page handlers).
+ * - `dropped`: never reported (the admin console, non-page handlers).
  *
  * `analytics-scrub.test.ts` derives the dynamic routes from the directory and
  * fails on one missing here, so a new `[param]` route cannot ship un-reviewed.
@@ -54,7 +54,7 @@ function normalisePath(segments: readonly string[]): string {
 }
 
 /**
- * `beforeSend` for Vercel Web Analytics: the operator console and every
+ * `beforeSend` for Vercel Web Analytics: the admin console and every
  * `dropped` route are never reported, a record id is reported as its route
  * pattern, and the query string and fragment never leave the browser.
  */

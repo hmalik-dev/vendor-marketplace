@@ -10,7 +10,7 @@ import type { NewUserRow, UserRow } from '@vendor-marketplace/db/schema';
  *
  * The address becomes `closed+<id>@invalid`: unique per row, and RFC 2606's
  * `.invalid` can never deliver, so a stray notification cannot reach anyone.
- * The name becomes "Former customer" (or vendor, or operator), whole in the
+ * The name becomes "Former customer" (or vendor, or admin), whole in the
  * first name with an empty surname: surfaces that print a first name and an
  * initial (messages, a vendor's request row) would otherwise read "Former c",
  * and an empty surname is what each of them already renders as no initial.
@@ -32,7 +32,7 @@ export function closedAccountFields(
 > {
   return {
     email: `closed+${user.id}@invalid`,
-    firstName: `Former ${user.role === 'admin' ? 'operator' : user.role}`,
+    firstName: `Former ${user.role}`,
     lastName: '',
     phone: null,
     avatarUrl: null,

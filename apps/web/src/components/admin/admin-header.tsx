@@ -1,11 +1,11 @@
 import Link from 'next/link';
 import { AccountMenu } from '@/components/account-menu';
-import { DASHBOARD_LABEL_BY_ROLE, DASHBOARD_PATH_BY_ROLE } from '@/lib/role-routes';
+import { SessionSync } from '@/components/auth/session-sync';
 import { Logo, LOGO_SIZES } from '@/components/brand/logo';
 import { TierMarker } from '@/components/brand/tier-marker';
 
 export interface AdminHeaderProps {
-  /** The signed-in operator's email — frame `13` prints it beside the avatar. */
+  /** The signed-in admin's email — frame `13` prints it beside the avatar. */
   email: string;
   /** Drives the avatar's initial. One word, so one letter — as frame `13` draws. */
   name: string;
@@ -19,13 +19,13 @@ export interface AdminHeaderProps {
  * sitting beneath it — see `OutsideAdmin` in `public-chrome.tsx`.
  *
  * The avatar opens the same account menu the site header's does (ruled by the
- * account holder on VEN-677), so an operator reaches `Account settings`,
+ * account holder on VEN-677), so an admin reaches `Account settings`,
  * `Contact support` and `Sign out` from the console; its first row returns to
  * the console. `tone="dark"` draws it as frame `13` does: the shared `Avatar`
  * at its 30px `xs` step with the ground and the initial swapped for the
  * inverted pair. The colours are an override rather than a new tone: the
  * fallback ramp exists to distinguish *people* from each other, and there is
- * exactly one operator in this header.
+ * exactly one admin in this header.
  */
 export function AdminHeader({ email, name }: AdminHeaderProps): React.ReactElement {
   /*
@@ -89,13 +89,8 @@ export function AdminHeader({ email, name }: AdminHeaderProps): React.ReactEleme
         <span className="truncate text-action text-stone-480" title={email}>
           Logged in as {email}
         </span>
-        <AccountMenu
-          name={name}
-          avatarUrl={null}
-          dashboardLabel={DASHBOARD_LABEL_BY_ROLE.admin}
-          dashboardHref={DASHBOARD_PATH_BY_ROLE.admin}
-          tone="dark"
-        />
+        <SessionSync />
+        <AccountMenu name={name} avatarUrl={null} role="admin" tone="dark" />
       </div>
     </header>
   );

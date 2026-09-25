@@ -1,3 +1,4 @@
+import 'server-only';
 import { MAX_PAGE_SIZE, toDateString, type AdminExport } from '@vendor-marketplace/shared';
 import type { NextRequest } from 'next/server';
 import { recordAdminExport } from '@/lib/admin-export-audit';
@@ -23,7 +24,7 @@ const MAX_PAGES = 50;
  * it just shows the wrong city. A leading `=`, `+`, `-` or `@` is additionally
  * prefixed with a tab, because a spreadsheet reads those as a formula: these
  * are files of user-supplied text, and CSV injection is the one way an export
- * of untrusted text becomes code on the operator's machine.
+ * of untrusted text becomes code on the admin's machine.
  */
 export function csvField(value: string | number | null): string {
   const raw = value === null ? '' : String(value);
@@ -58,7 +59,7 @@ export function rawSearchParams(request: NextRequest): Record<string, string[]> 
  */
 export async function refuseUnlessAdmin(request: NextRequest): Promise<Response | null> {
   /*
-   * `getCurrentUser` propagates a 403, which for a **suspended** operator is an
+   * `getCurrentUser` propagates a 403, which for a **suspended** admin is an
    * unhandled render error rather than an answer. The pages avoid that by going
    * through `requireCurrentUser`; a route handler has no redirect to offer, so
    * it catches and states the refusal.
@@ -69,10 +70,10 @@ export async function refuseUnlessAdmin(request: NextRequest): Promise<Response 
     user = await getCurrentUser();
   } catch (error) {
     /*
-     * Two different 403s since #429. An operator held at the acceptance gate is
+     * Two different 403s since #429. An admin held at the acceptance gate is
      * one tick from usable and has somewhere to go, so this link takes them
      * there — a download is a navigation, and the browser follows it. A
-     * suspended operator gets a refusal rather than a redirect: this is a
+     * suspended admin gets a refusal rather than a redirect: this is a
      * bulk-data URL.
      */
     if (isTermsRequired(error)) {
@@ -115,7 +116,7 @@ export interface CsvExport<T> {
  *
  * Exporting only the visible page would be the surprising half of a control
  * that looks like it exports the table. The filters travel with it, so what
- * comes out is exactly what the operator was looking at.
+ * comes out is exactly what the admin was looking at.
  */
 export async function csvExport<T>({
   name,
@@ -158,7 +159,7 @@ export async function csvExport<T>({
 
   /*
    * Say so when the walk stopped short. A file that quietly ends at 5,000 rows
-   * is worse than one that says where it stopped — an operator reconciling
+   * is worse than one that says where it stopped — an admin reconciling
    * numbers would have no way to tell.
    */
   if (lines.length - 1 < total) {

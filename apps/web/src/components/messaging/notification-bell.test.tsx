@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,8 +8,12 @@ const call = vi.fn(async () => ({ items: [], total: 0, page: 1, pageSize: 20 }))
 vi.mock('next/navigation', () => ({ usePathname: () => pathname }));
 vi.mock('@/lib/use-api', () => ({ useApi: () => call }));
 vi.mock('@/lib/report-error', () => ({ reportSwallowedError: vi.fn() }));
+let streamHandlers: { onEvent: (event: { type: string }) => void; onReconnect?: () => void };
 vi.mock('@/lib/use-event-stream', () => ({
-  useEventStream: () => ({ connected: true }),
+  useEventStream: (handlers: typeof streamHandlers) => {
+    streamHandlers = handlers;
+    return { connected: true };
+  },
 }));
 
 const { NotificationBell } = await import('./notification-bell');
@@ -335,6 +339,46 @@ describe('a mark-read the API refuses', () => {
   });
 });
 
+/*
+ * VEN-691. A stream refresh whose GET read the database before the PUT
+ * committed returns the pre-write page; it must not un-read the item.
+ */
+describe('a mark-read the API accepted', () => {
+  const UNREAD = {
+    id: 'n1',
+    type: 'new_request',
+    title: 'New booking request',
+    body: 'A customer asked about Dec 19.',
+    data: {},
+    readAt: null,
+    createdAt: new Date('2026-12-19T15:00:00.000Z'),
+  };
+
+  it('stays read when a refresh returns the page from before the write', async () => {
+    let commit: () => void = () => {};
+    call.mockImplementation((async (path: string) => {
+      if (path === '/notifications/n1/read') {
+        return new Promise((resolve) => {
+          commit = () => resolve(null);
+        });
+      }
+      return { items: [UNREAD], total: 1, page: 1, pageSize: 20 };
+    }) as never);
+
+    const user = userEvent.setup();
+    render(<NotificationBell />);
+    await user.click(await screen.findByRole('button', { name: 'Notifications, 1 unread' }));
+    await user.click(screen.getByRole('button', { name: /New booking request/ }));
+
+    // The stream's refresh lands while the PUT is out, and reads the old row.
+    await act(async () => streamHandlers.onEvent({ type: 'new_notification' }));
+    await act(async () => commit());
+
+    expect(screen.getByRole('button', { name: 'Notifications' })).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Notifications, 1 unread' })).toBeNull();
+  });
+});
+
 describe('the bell announcements (VEN-542)', () => {
   it('says the unread count in a live region and points aria-controls at the open panel', async () => {
     call.mockResolvedValueOnce({
@@ -358,5 +402,38 @@ describe('the bell announcements (VEN-542)', () => {
     const controls = button.getAttribute('aria-controls');
     expect(controls).toBeTruthy();
     expect(document.getElementById(controls ?? '')).not.toBeNull();
+  });
+});
+
+/*
+ * VEN-706. The header's `Messages` link opens no stream of its own — the API
+ * allows five per user — so it hears about arrivals through the bell's.
+ */
+describe('the bell announcing conversation changes', () => {
+  it.each([
+    ['a message arrives', () => streamHandlers.onEvent({ type: 'new_message' })],
+    ['the stream reconnects', () => streamHandlers.onReconnect?.()],
+  ])('dispatches conversations-changed when %s', async (_when, trigger) => {
+    const heard = vi.fn();
+    window.addEventListener('conversations-changed', heard);
+    render(<NotificationBell />);
+    await waitFor(() => expect(call).toHaveBeenCalled());
+
+    trigger();
+
+    expect(heard).toHaveBeenCalledTimes(1);
+    window.removeEventListener('conversations-changed', heard);
+  });
+
+  it('does not for a notification alone', async () => {
+    const heard = vi.fn();
+    window.addEventListener('conversations-changed', heard);
+    render(<NotificationBell />);
+    await waitFor(() => expect(call).toHaveBeenCalled());
+
+    streamHandlers.onEvent({ type: 'new_notification' });
+
+    expect(heard).not.toHaveBeenCalled();
+    window.removeEventListener('conversations-changed', heard);
   });
 });

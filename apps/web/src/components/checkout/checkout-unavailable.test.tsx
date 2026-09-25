@@ -1,6 +1,12 @@
 import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
-import { CheckoutUnavailable } from './checkout-unavailable';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+  usePathname: () => '/bookings/1af86d43-0000-4000-8000-000000000000/checkout',
+}));
+
+const { CheckoutUnavailable } = await import('./checkout-unavailable');
 
 const REQUEST_ID = '1af86d43-0000-4000-8000-000000000000';
 
@@ -96,7 +102,7 @@ describe('CheckoutUnavailable', () => {
     expect(screen.queryByRole('link', { name: 'Try this payment again' })).toBeNull();
   });
 
-  /* VEN-404: the operator paused checkout. The notice, and a retry that works once it lifts. */
+  /* VEN-404: the admin paused checkout. The notice, and a retry that works once it lifts. */
   it('tells a customer checkout is paused and that nothing was charged', () => {
     render(<CheckoutUnavailable reason="paused" requestId={REQUEST_ID} vendorName={null} />);
 

@@ -166,8 +166,6 @@ interface Decline {
   message: string;
   /** Stripe's own code, shown verbatim under the field — frame `21`. */
   code: string | null;
-  /** A second failure in a row changes the advice, per frame `21`. */
-  attempts: number;
 }
 
 function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.ReactElement {
@@ -189,7 +187,6 @@ function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.React
   const [unreachable, setUnreachable] = useState(false);
 
   const event = eventDay(checkout.eventDate);
-
   const pay = useCallback(
     async (submitted: React.FormEvent) => {
       submitted.preventDefault();
@@ -227,7 +224,6 @@ function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.React
         setDecline({
           message: result.error.message ?? 'Your bank refused the payment without giving a reason.',
           code: result.error.decline_code ?? result.error.code ?? null,
-          attempts: (decline?.attempts ?? 0) + 1,
         });
         inFlight.current = false;
         setPaying(false);
@@ -242,7 +238,7 @@ function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.React
        */
       router.push(`/bookings/${requestId}/confirmed`);
     },
-    [decline?.attempts, elements, requestId, router, stripe],
+    [elements, requestId, router, stripe],
   );
 
   return (
@@ -264,7 +260,7 @@ function CheckoutForm({ checkout, requestId }: CheckoutScreenProps): React.React
         <p className="mb-5.5 text-cta text-stone-700">
           {checkout.vendor.businessName} accepted your request
           {checkout.acceptedAt ? ` on ${ACCEPTED_ON.format(checkout.acceptedAt)}` : ''}. Paying now
-          locks {SHORT_DAY.format(event)} in their calendar.
+          confirms your booking for {SHORT_DAY.format(event)}.
         </p>
 
         {/* This screen refuses in its own voice; the browser must not do it first. */}
@@ -333,6 +329,10 @@ function DeclineBanner({ decline, event }: { decline: Decline; event: Date }): R
         {/*
           The money position first, in the heading, because it is the question
           the customer is actually asking — `40-states.md` §1.
+
+          The hold is stated as it stands, not with an end date. Its end is an
+          instant (`paymentDeadline`), and a bare day names more time than a
+          customer west of UTC has; a card that declines here has not moved it.
         */}
         <p className="mb-1 text-[13.5px] font-semibold text-stone-900">
           Your card was declined — you haven&apos;t been charged
@@ -340,15 +340,9 @@ function DeclineBanner({ decline, event }: { decline: Decline; event: Date }): R
         <p className="text-[12.5px] leading-relaxed text-stone-700">
           {decline.message} Try the same card again, use another card, or call your bank.{' '}
           <strong className="font-semibold">
-            {SHORT_DAY.format(event)} stays held for you for 24 hours.
+            {SHORT_DAY.format(event)} is still held for you.
           </strong>
         </p>
-        {decline.attempts >= 2 ? (
-          <p className="mt-2 text-[12.5px] leading-relaxed text-stone-600">
-            It has declined twice — don&apos;t try a third time, because repeated attempts can
-            extend the hold. Message the vendor and they can extend the date instead.
-          </p>
-        ) : null}
       </div>
     </div>
   );

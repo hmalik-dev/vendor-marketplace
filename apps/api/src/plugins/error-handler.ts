@@ -58,7 +58,7 @@ export interface ErrorHandlerOptions {
   reporter?: ErrorReporter;
   /**
    * Route patterns that move money. A failure on one is reported as a payment
-   * error, which is what the operator's alert rule pages on.
+   * error, which is what the admin's alert rule pages on.
    */
   paymentRoutes?: ReadonlySet<string>;
 }

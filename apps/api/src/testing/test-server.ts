@@ -5,6 +5,7 @@ import {
   CURRENT_TERMS_VERSION,
   CURRENT_VENDOR_AGREEMENT_VERSION,
   legalDocumentSha256,
+  type TaxIdState,
 } from '@vendor-marketplace/shared';
 import { users } from '@vendor-marketplace/db/schema';
 import { createTestDatabase, type TestDatabase } from '@vendor-marketplace/db/testing';
@@ -37,7 +38,9 @@ import type {
   StripeAccountStatus,
   StripeConnectGateway,
   StripeDisputeSnapshot,
+  StripeEarlyFraudWarningSnapshot,
   StripeEventNotification,
+  StripePayoutSnapshot,
 } from '../lib/stripe.js';
 import {
   findAcceptanceOfVersion,
@@ -50,7 +53,7 @@ import { buildServer } from '../server.js';
 import { StepUpStore } from '../lib/step-up.js';
 import type { Clock } from '../plugins/clock.js';
 
-/** A store that treats every operator as freshly confirmed; see `enforceStepUp`. */
+/** A store that treats every admin as freshly confirmed; see `enforceStepUp`. */
 class AlwaysFreshStepUpStore extends StepUpStore {
   override async isFresh(): Promise<boolean> {
     return true;
@@ -122,8 +125,8 @@ export const TEST_ENV: ApiEnv = {
   RESEND_WEBHOOK_SECRET: ['whsec', 'not', 'used', 'by', 'the', 'suites'].join('_'),
   EMAIL_FROM: 'noreply@test.invalid',
   SUPPORT_EMAIL_TO: 'support@test.invalid',
-  OPERATOR_ALERT_EMAIL: 'operator@test.invalid',
-  OPERATOR_TIMEZONE: 'America/New_York',
+  ADMIN_ALERT_EMAIL: 'admin@test.invalid',
+  ADMIN_TIMEZONE: 'America/New_York',
 };
 
 /**
@@ -169,6 +172,8 @@ export interface TestHarnessOptions<TDatabase extends HarnessDatabase = TestData
   requestTimeoutMs?: number;
   /** A short stream heartbeat, for the suites that watch a ban end an open stream. */
   streamHeartbeatMs?: number;
+  /** A short re-read interval, for the suites that watch that interval bound a ban. */
+  streamSubjectRecheckMs?: number;
   /** Sees every route the server registers, for the suite that walks the route table. */
   onRoute?: (route: RouteOptions) => void;
   /**
@@ -181,7 +186,7 @@ export interface TestHarnessOptions<TDatabase extends HarnessDatabase = TestData
   /**
    * The real step-up store (VEN-500), for the suites whose subject is the
    * control itself. Every other suite is about what an admin route does once an
-   * operator is confirmed, so it gets a store that is always fresh; the
+   * admin is confirmed, so it gets a store that is always fresh; the
    * production wiring never can be, because `buildServer` builds the real one.
    */
   enforceStepUp?: boolean;
@@ -453,6 +458,16 @@ export interface FakeStripe extends StripeConnectGateway {
    * transfer" would put invented copy in twenty tests that never read it.
    */
   accountStatuses: Map<string, FakeAccountStatus>;
+  /**
+   * The accounts that carry the 1099-K capability (VEN-723): those onboarding or
+   * the backfill has requested it on, plus any a suite adds to stand for one that
+   * already had it.
+   */
+  taxCapabilityAccounts: Set<string>;
+  /** Where each account's tax ID stands; absent means `missing`. */
+  taxIdStates: Map<string, TaxIdState>;
+  /** Makes requesting the 1099-K capability fail, as Stripe would refuse it. */
+  refuseTaxCapability: boolean;
   /** Signatures the fake verifier accepts; anything else is rejected. */
   validSignatures: Set<string>;
   /**
@@ -496,7 +511,7 @@ export interface FakeStripe extends StripeConnectGateway {
    */
   intentsByKey: Map<string, string>;
   /** Refunds asked for, in order, so a suite can assert exact cent amounts. */
-  /** `reason` is absent on an operator-driven refund — see `CreateRefundInput`. */
+  /** `reason` is absent on an admin-driven refund — see `CreateRefundInput`. */
   refunds: {
     paymentIntentId: string;
     amountCents: number;
@@ -537,6 +552,8 @@ export interface FakeStripe extends StripeConnectGateway {
     idempotencyKey: string;
     /** Cents already reversed, so an over-reversal is refused as Stripe does. */
     reversedCents: number;
+    /** The withholding stamped on the transfer (VEN-723). */
+    backupWithheldCents?: number | undefined;
   }[];
   /** Reversals asked for, in order, with the transfer each one applied to. */
   reversals: {
@@ -580,6 +597,10 @@ export interface FakeStripe extends StripeConnectGateway {
    * the same two steps Stripe takes.
    */
   disputes: Map<string, StripeDisputeSnapshot>;
+  /** Bank payouts on connected accounts, by payout id (VEN-645). */
+  payouts: Map<string, StripePayoutSnapshot>;
+  /** Radar early fraud warnings, by id (VEN-645). */
+  fraudWarnings: Map<string, StripeEarlyFraudWarningSnapshot>;
   /** Moves an intent to `succeeded`, as confirming the card would. */
   succeed: (paymentIntentId: string) => PaymentIntentSnapshot;
   /** Moves an intent to `canceled`, as Stripe does once it can never be paid. */
@@ -596,6 +617,8 @@ function createFakeStripe(deployEnv: string): FakeStripe {
   const recipientAccountKeys: FakeStripe['recipientAccountKeys'] = [];
   const accountsByKey = new Map<string, string>();
   const accountStatuses = new Map<string, FakeAccountStatus>();
+  const taxCapabilityAccounts = new Set<string>();
+  const taxIdStates = new Map<string, TaxIdState>();
   const validSignatures = new Set<string>(['valid-signature']);
   const paymentIntents = new Map<string, PaymentIntentSnapshot>();
   /** What each refund request carried; absent for a refund made outside the platform. */
@@ -625,6 +648,8 @@ function createFakeStripe(deployEnv: string): FakeStripe {
   /** Idempotency keys whose result was a failure, replayed as Stripe does. */
   const failedTransferKeys = new Map<string, string>();
   const disputes = new Map<string, StripeDisputeSnapshot>();
+  const payouts = new Map<string, StripePayoutSnapshot>();
+  const fraudWarnings = new Map<string, StripeEarlyFraudWarningSnapshot>();
   const cancelRequests: string[] = [];
   const paymentIntentKeys: string[] = [];
 
@@ -636,6 +661,9 @@ function createFakeStripe(deployEnv: string): FakeStripe {
     recipientAccountKeys,
     createdLinks,
     accountStatuses,
+    taxCapabilityAccounts,
+    taxIdStates,
+    refuseTaxCapability: false,
     validSignatures,
     paymentIntents,
     intentsByKey,
@@ -662,6 +690,8 @@ function createFakeStripe(deployEnv: string): FakeStripe {
     reversalsToRefuse,
     failedTransferKeys,
     disputes,
+    payouts,
+    fraudWarnings,
     nextEvent: { type: 'v2.core.account.updated', accountId: null, objectId: null },
 
     cancel: (paymentIntentId) => {
@@ -721,10 +751,30 @@ function createFakeStripe(deployEnv: string): FakeStripe {
       return { accountId };
     },
 
+    ensureTaxReportingCapability: async (accountId) => {
+      if (fake.refuseTaxCapability) {
+        throw new Error('This capability cannot be requested for this account');
+      }
+
+      if (taxCapabilityAccounts.has(accountId)) {
+        return 'already';
+      }
+
+      taxCapabilityAccounts.add(accountId);
+
+      return 'requested';
+    },
+
+    readTaxIdState: async (accountId) => taxIdStates.get(accountId) ?? 'missing',
+
     createOnboardingLink: async (input) => {
       createdLinks.push(input);
       return { url: `https://connect.stripe.test/setup/${input.accountId}/${createdLinks.length}` };
     },
+
+    createDashboardLink: async (accountId) => ({
+      url: `https://connect.stripe.com/express/test/${accountId}`,
+    }),
 
     readAccountStatus: async (accountId) => {
       const status = accountStatuses.get(accountId);
@@ -897,6 +947,7 @@ function createFakeStripe(deployEnv: string): FakeStripe {
         transferGroup: input.transferGroup,
         idempotencyKey,
         reversedCents: 0,
+        backupWithheldCents: input.backupWithheldCents,
       });
 
       return { transferId, amountCents: input.amountCents };
@@ -914,6 +965,9 @@ function createFakeStripe(deployEnv: string): FakeStripe {
             transferId: transfer.transferId,
             amountCents: transfer.amountCents,
             reversedCents: transfer.reversedCents,
+            ...(transfer.backupWithheldCents
+              ? { backupWithheldCents: transfer.backupWithheldCents }
+              : {}),
           }
         : null;
     },
@@ -1049,6 +1103,40 @@ function createFakeStripe(deployEnv: string): FakeStripe {
         paymentIntentId: refund.paymentIntentId,
         amountCents: refund.amountCents,
       };
+    },
+
+    retrieveTransfer: async (transferId) => {
+      const transfer = transfers.find((candidate) => candidate.transferId === transferId);
+
+      if (!transfer) {
+        throw new Error(`No fake transfer ${transferId}`);
+      }
+
+      return {
+        transferId,
+        amountCents: transfer.amountCents,
+        reversedCents: transfer.reversedCents,
+      };
+    },
+
+    retrieveConnectedPayout: async (payoutId) => {
+      const payout = payouts.get(payoutId);
+
+      if (!payout) {
+        throw new Error(`No fake payout ${payoutId}`);
+      }
+
+      return payout;
+    },
+
+    retrieveEarlyFraudWarning: async (warningId) => {
+      const warning = fraudWarnings.get(warningId);
+
+      if (!warning) {
+        throw new Error(`No fake early fraud warning ${warningId}`);
+      }
+
+      return warning;
     },
 
     retrieveChargeIntent: async (chargeId) =>
@@ -1215,17 +1303,20 @@ export async function createTestHarness(
     emailRetryIntervalMs: 0,
     // Nor the upload sweep: suites call `sweepOrphanedUploads` with a pinned clock.
     uploadSweepIntervalMs: 0,
-    // The digest likewise: suites call `runOperatorDigest` with a pinned clock.
-    operatorDigestIntervalMs: 0,
+    // The digest likewise: suites call `runAdminDigest` with a pinned clock.
+    adminDigestIntervalMs: 0,
     // And the balance reconciliation: suites call `reconcilePlatformBalance`.
     platformBalanceIntervalMs: 0,
     // Alert send retries do not wait on a real timer in a suite.
-    operatorAlertWait: async () => undefined,
+    adminAlertWait: async () => undefined,
     ...(options.enforceStepUp ? {} : { stepUp: new AlwaysFreshStepUpStore(database.db) }),
     ...(options.loggerStream ? { loggerStream: options.loggerStream } : {}),
     ...(options.clock ? { clock: options.clock } : {}),
     ...(options.requestTimeoutMs ? { requestTimeoutMs: options.requestTimeoutMs } : {}),
     ...(options.streamHeartbeatMs ? { streamHeartbeatMs: options.streamHeartbeatMs } : {}),
+    ...(options.streamSubjectRecheckMs
+      ? { streamSubjectRecheckMs: options.streamSubjectRecheckMs }
+      : {}),
     ...(options.onRoute ? { onRoute: options.onRoute } : {}),
     ...(options.errorReporter ? { errorReporter: options.errorReporter } : {}),
     auth: {
@@ -1398,7 +1489,7 @@ export function bearer(authUserId: string): Record<string, string> {
  *
  * `promoteToAdmin` is a second step and cannot be a first one: `normalizeRole`
  * refuses `admin` from auth metadata **by design**, precisely so the role can
- * only be granted by an operator with database access. Every admin-facing suite
+ * only be granted by an admin with database access. Every admin-facing suite
  * therefore signs in and then promotes, and three of them had written that out
  * by hand before this lived here.
  */

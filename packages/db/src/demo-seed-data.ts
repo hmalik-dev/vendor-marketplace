@@ -505,7 +505,7 @@ export const DEMO_VENDORS: readonly DemoVendorSeed[] = [
     firstName: 'Ravi',
     lastName: 'Menon',
     tagline: 'Documentary films, no staged reshoots',
-    bio: 'Two-operator documentary coverage cut to a seven-minute film. Audio is recorded on three sources, because that is what ruins most wedding films.',
+    bio: 'Two-shooter documentary coverage cut to a seven-minute film. Audio is recorded on three sources, because that is what ruins most wedding films.',
     city: 'Miami',
     state: 'FL',
     yearsInBusiness: 7,
@@ -514,11 +514,11 @@ export const DEMO_VENDORS: readonly DemoVendorSeed[] = [
     packages: [
       pkg('feature', 'Feature Film', 'Full-day coverage cut to a seven-minute film.', 425000, {
         durationHours: '10.0',
-        inclusions: ['Two operators', 'Seven-minute film', 'Three audio sources', 'Raw footage'],
+        inclusions: ['Two shooters', 'Seven-minute film', 'Three audio sources', 'Raw footage'],
       }),
       pkg('highlight', 'Highlight Reel', 'Six hours cut to a three-minute reel.', 265000, {
         durationHours: '6.0',
-        inclusions: ['Two operators', 'Three-minute reel', 'Licensed music'],
+        inclusions: ['Two shooters', 'Three-minute reel', 'Licensed music'],
       }),
       pkg('ceremony-only', 'Ceremony Only', 'Single-camera ceremony record.', 118000, {
         durationHours: '2.0',

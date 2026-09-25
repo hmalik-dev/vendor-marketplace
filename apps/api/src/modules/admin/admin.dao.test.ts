@@ -8,7 +8,7 @@ import { addDays, toDateString } from '@vendor-marketplace/shared';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createTestHarness, type TestHarness } from '../../testing/test-server.js';
-import { declineOpenRequests } from './admin.dao.js';
+import { declineOpenRequests, setBanned } from './admin.dao.js';
 
 /**
  * VEN-621 — an unwind's `declineOpenRequests` must give the vendor's calendar
@@ -110,5 +110,61 @@ describe('declineOpenRequests releasing the date behind an accepted request', ()
 
     expect(await heldDateStatus(vendorId, DATE_A)).toBeNull();
     expect(await heldDateStatus(vendorId, DATE_B)).toBe('booked');
+  });
+});
+
+/** VEN-636 — a ban or unban only claims an account that is not already in the target state. */
+describe('setBanned on an account already in the target state', () => {
+  let harness: TestHarness;
+  let userId: string;
+  const BANNED_AT = new Date('2026-09-15T12:00:00Z');
+
+  async function row() {
+    const [found] = await harness.database.db
+      .select({ isBanned: users.isBanned, bannedAt: users.bannedAt, updatedAt: users.updatedAt })
+      .from(users)
+      .where(eq(users.id, userId));
+    return found!;
+  }
+
+  beforeAll(async () => {
+    harness = await createTestHarness();
+    const [created] = await harness.database.db
+      .insert(users)
+      .values({
+        authUserId: 'user_set_banned_target',
+        email: 'set-banned-target@example.com',
+        role: 'customer',
+        firstName: 'Test',
+        lastName: 'User',
+      })
+      .returning({ id: users.id });
+    userId = created!.id;
+  });
+
+  afterAll(async () => {
+    await harness.close();
+  });
+
+  it('returns null for an unban of an account that is not banned', async () => {
+    const before = await row();
+
+    expect(await setBanned(harness.database.db, userId, null, false, new Date())).toBeNull();
+    expect(await row()).toEqual(before);
+  });
+
+  it('bans once, then returns null and keeps the first bannedAt', async () => {
+    expect(await setBanned(harness.database.db, userId, null, true, BANNED_AT)).toEqual({
+      profileUnpublished: false,
+    });
+
+    const banned = await row();
+
+    expect(banned.isBanned).toBe(true);
+    expect(banned.bannedAt).toEqual(BANNED_AT);
+    expect(
+      await setBanned(harness.database.db, userId, null, true, new Date('2026-09-16T00:00:00Z')),
+    ).toBeNull();
+    expect(await row()).toEqual(banned);
   });
 });

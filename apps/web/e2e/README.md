@@ -148,7 +148,10 @@ reason — see the follow-up ticket rather than assuming they were forgotten.
 ## On CI
 
 `ci.yml`'s `End-to-end journeys` job (VEN-411) boots this whole stack after
-`verify` — seeded by [the contract](#the-seeding-contract), `next start`, `stripe listen` — and runs every suite with
+`verify` — seeded by [the contract](#the-seeding-contract), `next start`, `stripe listen` — and runs the specs the
+diff can affect (VEN-593: `scripts/e2e-ci.mjs select`; the full suite for a shared or unmapped path, a push to
+`staging`/`production`, a pull request into `production`, or a diff it cannot read; none, still green, when
+nothing is affected) with
 **one retry, reported**: a test that passed only on its retry is named in the
 job summary by `scripts/e2e-ci.mjs`. It skips with a warning until the
 repository has its `E2E_*` secrets (VEN-377); set the variable `E2E_GATE=required`

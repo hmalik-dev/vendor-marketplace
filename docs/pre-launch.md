@@ -12,7 +12,7 @@ configured, and prints one line per item: `PASS`, `FAIL` or `MANUAL` (no provide
 non-zero while anything is `FAIL`. It is read-only — every provider call is a
 `GET`, the database session is `READ ONLY` — and it prints no secret beyond its
 prefix and last four characters. It needs production credentials, so it is run
-by the operator before a release and never in CI.
+by the admin before a release and never in CI.
 
 Launch readiness is a run with no `FAIL`, every `MANUAL` line confirmed by hand,
 and every item below done.
@@ -25,29 +25,29 @@ on both today — correctly.
 
 ## What `launch:check` covers
 
-| Group       | Check                                                    | Passes when                                                                                                                                                                                                                                                                                                                               |
-| ----------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Neon Auth   | `neon auth endpoint`                                     | `NEON_AUTH_BASE_URL` serves a JWKS with at least one signing key                                                                                                                                                                                                                                                                          |
-| Neon Auth   | `neon auth identity store`                               | `NEON_AUTH_DATABASE_URL` names the same database host as `DATABASE_URL` — a source on another branch answers empty and the reconcile pass refuses to run                                                                                                                                                                                  |
-| Stripe      | `stripe key`                                             | `STRIPE_SECRET_KEY` is `sk_live_`                                                                                                                                                                                                                                                                                                         |
-| Stripe      | `stripe publishable key`                                 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` is `pk_live_` — checkout confirms an intent made with the secret key, and keys from different modes fail with "No such payment_intent"                                                                                                                                                               |
-| Stripe      | `stripe webhook endpoint`                                | one enabled endpoint at `API_URL/webhooks/stripe` per configured signing secret (`STRIPE_WEBHOOK_SECRET`, plus `STRIPE_CONNECT_WEBHOOK_SECRET` for the connected-account endpoint) subscribes, between them, to every type in `HANDLED_STRIPE_EVENT_TYPES` (`apps/api/src/modules/webhooks/stripe.routes.ts`); the missing ones are named |
-| Stripe      | `stripe connected-account events`                        | `PASS` once `STRIPE_CONNECT_WEBHOOK_SECRET` is set and the second endpoint exists; otherwise `MANUAL`: the endpoint list does not say which endpoint listens to connected accounts, and vendor `account.updated` arrives only there                                                                                                       |
-| Stripe      | `charges_enabled`, `payouts_enabled`                     | both `true` on the platform account                                                                                                                                                                                                                                                                                                       |
-| Stripe      | `stripe statement descriptor`                            | set, at least 5 characters, not a placeholder — nothing in `apps/api` sets one, so it is configured in the Dashboard                                                                                                                                                                                                                      |
-| Stripe      | `stripe business name`                                   | equals `BRAND_NAME`                                                                                                                                                                                                                                                                                                                       |
-| Stripe      | `stripe payout schedule`                                 | the platform account's `settings.payouts.schedule.interval` is `manual` — customers' payments wait in its balance until the vendor's share is transferred after the event, so an automatic payout spends vendors' money; commission goes out by hand (`docs/runbook-platform-balance.md`)                                                 |
-| Resend      | `resend sending domain`                                  | the domain of `EMAIL_FROM` is `verified` (`MANUAL` when a sending-only key cannot list domains)                                                                                                                                                                                                                                           |
-| Storage     | `STORAGE_PUBLIC_URL`                                     | a Neon Object Storage bucket URL, not a local address                                                                                                                                                                                                                                                                                     |
-| Database    | `database branch`                                        | `DATABASE_URL` is a Neon endpoint and `NEON_BRANCH` is `production`                                                                                                                                                                                                                                                                       |
-| Database    | `seeded rows`                                            | zero rows carry the marketing, demo or E2E seed markers — fabricated vendors and reviews on a public production site are misrepresentation                                                                                                                                                                                                |
-| Database    | `migrations`                                             | every migration in the repository journal is applied                                                                                                                                                                                                                                                                                      |
-| Environment | `SENTRY_DSN`, `OPERATOR_ALERT_EMAIL`, `SUPPORT_EMAIL_TO` | set, not the registry placeholder, and matching the production shape                                                                                                                                                                                                                                                                      |
-| Environment | `RATE_LIMIT_MAX`                                         | between 30 and 1000 requests per minute per IP                                                                                                                                                                                                                                                                                            |
-| App         | `api /ready`                                             | `API_URL/ready` answers 200 (database and storage both up)                                                                                                                                                                                                                                                                                |
-| App         | `web security headers`                                   | a real response from `WEB_URL` carries HSTS, an enforcing CSP, `X-Content-Type-Options`, `X-Frame-Options` and `Referrer-Policy`                                                                                                                                                                                                          |
-| Database    | `platform_settings.maxBookingCents`                      | set — a closed beta caps what one booking can charge (VEN-404, set in `/admin/settings`)                                                                                                                                                                                                                                                  |
-| Database    | `platform_settings.vendorInviteOnly`                     | `true` — vendors join by invitation, so the initial vendors are curated (VEN-406, set in `/admin/settings`); `FAIL` while it is off or the settings row was never written                                                                                                                                                                 |
+| Group       | Check                                                 | Passes when                                                                                                                                                                                                                                                                                                                               |
+| ----------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Neon Auth   | `neon auth endpoint`                                  | `NEON_AUTH_BASE_URL` serves a JWKS with at least one signing key                                                                                                                                                                                                                                                                          |
+| Neon Auth   | `neon auth identity store`                            | `NEON_AUTH_DATABASE_URL` names the same database host as `DATABASE_URL` — a source on another branch answers empty and the reconcile pass refuses to run                                                                                                                                                                                  |
+| Stripe      | `stripe key`                                          | `STRIPE_SECRET_KEY` is `sk_live_`                                                                                                                                                                                                                                                                                                         |
+| Stripe      | `stripe publishable key`                              | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` is `pk_live_` — checkout confirms an intent made with the secret key, and keys from different modes fail with "No such payment_intent"                                                                                                                                                               |
+| Stripe      | `stripe webhook endpoint`                             | one enabled endpoint at `API_URL/webhooks/stripe` per configured signing secret (`STRIPE_WEBHOOK_SECRET`, plus `STRIPE_CONNECT_WEBHOOK_SECRET` for the connected-account endpoint) subscribes, between them, to every type in `HANDLED_STRIPE_EVENT_TYPES` (`apps/api/src/modules/webhooks/stripe.routes.ts`); the missing ones are named |
+| Stripe      | `stripe connected-account events`                     | `PASS` once `STRIPE_CONNECT_WEBHOOK_SECRET` is set and the second endpoint exists; otherwise `MANUAL`: the endpoint list does not say which endpoint listens to connected accounts, and vendor `account.updated` arrives only there                                                                                                       |
+| Stripe      | `charges_enabled`, `payouts_enabled`                  | both `true` on the platform account                                                                                                                                                                                                                                                                                                       |
+| Stripe      | `stripe statement descriptor`                         | set, at least 5 characters, not a placeholder — nothing in `apps/api` sets one, so it is configured in the Dashboard                                                                                                                                                                                                                      |
+| Stripe      | `stripe business name`                                | equals `BRAND_NAME`                                                                                                                                                                                                                                                                                                                       |
+| Stripe      | `stripe payout schedule`                              | the platform account's `settings.payouts.schedule.interval` is `manual` — customers' payments wait in its balance until the vendor's share is transferred after the event, so an automatic payout spends vendors' money; commission goes out by hand (`docs/runbook-platform-balance.md`)                                                 |
+| Resend      | `resend sending domain`                               | the domain of `EMAIL_FROM` is `verified` (`MANUAL` when a sending-only key cannot list domains)                                                                                                                                                                                                                                           |
+| Storage     | `STORAGE_PUBLIC_URL`                                  | a Neon Object Storage bucket URL, not a local address                                                                                                                                                                                                                                                                                     |
+| Database    | `database branch`                                     | `DATABASE_URL` is a Neon endpoint and `NEON_BRANCH` is `production`                                                                                                                                                                                                                                                                       |
+| Database    | `seeded rows`                                         | zero rows carry the marketing, demo or E2E seed markers — fabricated vendors and reviews on a public production site are misrepresentation                                                                                                                                                                                                |
+| Database    | `migrations`                                          | every migration in the repository journal is applied                                                                                                                                                                                                                                                                                      |
+| Environment | `SENTRY_DSN`, `ADMIN_ALERT_EMAIL`, `SUPPORT_EMAIL_TO` | set, not the registry placeholder, and matching the production shape                                                                                                                                                                                                                                                                      |
+| Environment | `RATE_LIMIT_MAX`                                      | between 30 and 1000 requests per minute per IP                                                                                                                                                                                                                                                                                            |
+| App         | `api /ready`                                          | `API_URL/ready` answers 200 (database and storage both up)                                                                                                                                                                                                                                                                                |
+| App         | `web security headers`                                | a real response from `WEB_URL` carries HSTS, an enforcing CSP, `X-Content-Type-Options`, `X-Frame-Options` and `Referrer-Policy`                                                                                                                                                                                                          |
+| Database    | `platform_settings.maxBookingCents`                   | set — a closed beta caps what one booking can charge (VEN-404, set in `/admin/settings`)                                                                                                                                                                                                                                                  |
+| Database    | `platform_settings.vendorInviteOnly`                  | `true` — vendors join by invitation, so the initial vendors are curated (VEN-406, set in `/admin/settings`); `FAIL` while it is off or the settings row was never written                                                                                                                                                                 |
 
 ---
 
@@ -133,7 +133,7 @@ first. Both branches were empty of user rows and both held 0000–0009.
       the upgrade: protect the `production` branch and widen its history
       retention.
 - [ ] **Production admin account** (VEN-502): sign up on production, then grant
-      the role with the transaction under _First operator grant_ below. A plain
+      the role with the transaction under _First admin grant_ below. A plain
       `UPDATE users SET role` is refused by the database (VEN-533).
 - [ ] **Image licensing.** Confirm the licence of every shipped marketing image
       and the landing-page category photography.
@@ -150,7 +150,7 @@ first. Both branches were empty of user rows and both held 0000–0009.
       host's previous image before the first real release.
 - [ ] **Rotate every credential touched during setup**.
 
-### First operator grant
+### First admin grant
 
 Once, from a `psql` session on the owner URL (`DATABASE_URL_UNPOOLED`, read from
 your env, never pasted), after the account has signed up. Run exactly this, with
@@ -158,20 +158,20 @@ the sign-up address:
 
 ```sql
 BEGIN;
-SET LOCAL app.operator_role_grant = 'on';
+SET LOCAL app.admin_role_grant = 'on';
 UPDATE users SET role = 'admin' WHERE email = '<the address you signed up with>' AND deleted_at IS NULL;
 COMMIT;
 ```
 
 It must report `UPDATE 1`; roll back on anything else. The setting is
-transaction-local and reserved for this step and the in-app operator grant
+transaction-local and reserved for this step and the in-app admin grant
 (VEN-506): nothing else sets it, and the fixture seeds never do.
 
-**This is the single pre-launch exception, not a routine.** Every later operator
-is granted and revoked in the console at `/admin/operators` (step-up, audit row,
-never the last live operator). An operator created by the transaction above has
+**This is the single pre-launch exception, not a routine.** Every later admin
+is granted and revoked in the console at `/admin/admins` (step-up, audit row,
+never the last live admin). An admin created by the transaction above has
 no recorded earlier role, so the console will not revoke them: that is
-deliberate, and it is why the first operator is the founder who keeps the
+deliberate, and it is why the first admin is the founder who keeps the
 account.
 
 ## Scheduled-job monitors (VEN-671)
@@ -214,10 +214,11 @@ storage is reported in the body but does not gate readiness.
 `deploy.numReplicas: 1`, and `apps/api/src/config/railway.test.ts` fails if it
 does not). Above one, these break, because each keeps its state in one process:
 
-- **Stream tickets** (`apps/api/src/lib/stream-tickets.ts`) are issued and
-  redeemed in memory, so a ticket minted by one replica is unknown to the other
-  and the live stream refuses it.
 - **Rate-limit counters** are per process (see below).
+
+Stream tickets are not on this list: since VEN-650 they live in Postgres
+(`apps/api/src/plugins/events.ts`), so a ticket issued by one instance is spent
+by any other.
 
 The payout and expiry timers also run in every process. Their row locks keep an
 overlap correct, and the in-process guard only stops ticks piling up, so a second

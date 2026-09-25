@@ -34,11 +34,24 @@ accident:
 `closeFor(users.id)` after the `sessions_invalidated_at` bump (auth id → row id
 via `RETURNING`, sound; web-tier-key-gated, so only the account's own sign-out
 or reset can force a close — no third-party DoS). The gap: `stream_tickets` are
-not cleared by the bump, and neither admission nor the heartbeat reads
-`sessionsInvalidatedAt`, so a stolen session's up-to-10 pre-minted tickets
-(60s each) open streams _after_ the close that never end. Fix: delete the
-user's tickets in the bump and have the heartbeat refuse a stream opened
-before `sessions_invalidated_at`.
+not cleared by the bump. Since fixed: the bump calls `streamTickets.revokeFor`,
+and `resolveStreamSubject(db, id, openedAt)` refuses a stream opened before
+`sessions_invalidated_at`.
+
+**VEN-611 (audited 2026-09-24, accepted):** the re-read moved from every 30s
+beat to every 5 min (checked on a beat, so the real bound is about 5m30s). Every
+in-app revocation also calls `closeFor` on the instance it runs on: ban and
+closure through `unwindAccountBookings`, the session bump directly. So only
+another instance's write waits for the re-read, and `EventHub` is in-process, so
+multi-instance delivery is already unsupported (VEN-462). Reopen if a ban or
+delete path skips the unwind, or when VEN-462 adds replicas.
+
+**Stream budget (VEN-706, 2026-09-24):** `useEventStream` opens one `EventSource`
+per _hook call_ despite its "one for the whole app" doc; `MAX_STREAMS_PER_USER`
+is 5 and the sixth gets a 429 the client backs off from, then gives up after
+six attempts. Bell + `MessagesLink` + messages screen = 3 per tab on
+`/messages`, 2 elsewhere, so the 3rd tab loses live updates. Count hook callers
+whenever a diff adds one.
 
 **Why:** a reviewer scanning for route guards, or a refactor that "restores
 consistency" by adding `requireAuth`, breaks live updates outright and looks

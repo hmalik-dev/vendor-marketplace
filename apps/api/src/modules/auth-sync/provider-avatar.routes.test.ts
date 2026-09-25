@@ -85,7 +85,7 @@ describe('a stored provider avatar the write schema would refuse', () => {
     const response = await read('/v1/conversations', 'avatar-vendor');
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()[0].otherPartyAvatarUrl).toBe(BAD_AVATAR);
+    expect(response.json().items[0].otherPartyAvatarUrl).toBe(BAD_AVATAR);
   });
 
   it('still answers GET /booking-requests/:id for both parties', async () => {

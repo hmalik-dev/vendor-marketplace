@@ -24,6 +24,7 @@ import {
   type OwedPayoutTotalRow,
 } from './dashboard.dao.js';
 import { findUserById } from '../users/users.dao.js';
+import { findVendorDebtTotals, type VendorDebtTotals } from '../payments/payouts.dao.js';
 import { holdsCurrentAgreement } from './legal-agreement.service.js';
 import { isCompleteName, publishBlockers, requireOwnVendorProfile } from './vendors.service.js';
 
@@ -133,6 +134,7 @@ export async function getVendorDashboard(
     calendar,
     nextPendingPayout,
     owedPayoutTotals,
+    debtTotals,
     categoryIds,
     activePackageCount,
     holdsAgreement,
@@ -151,6 +153,7 @@ export async function getVendorDashboard(
     findCalendarBetween(db, vendor.id, windowDays[0] ?? today, windowEnd),
     findNextPendingPayout(db, vendor.id),
     findOwedPayoutTotals(db, vendor.id),
+    findVendorDebtTotals(db, vendor.id),
     findCategoryIds(db, vendor.id),
     countActivePackages(db, vendor.id),
     holdsCurrentAgreement(db, vendor.userId),
@@ -189,7 +192,13 @@ export async function getVendorDashboard(
       date,
       status: byDate.get(date) ?? ('available' as AvailabilityStatus),
     })),
-    payouts: toPayoutSummary(owedPayoutTotals, nextPendingPayout, now),
+    payouts: toPayoutSummary(
+      owedPayoutTotals,
+      nextPendingPayout,
+      debtTotals,
+      now,
+      vendor.backupWithholdingReason !== null,
+    ),
   };
 }
 
@@ -225,9 +234,19 @@ export async function getVendorDashboard(
 function toPayoutSummary(
   rows: OwedPayoutTotalRow[],
   soonest: NextPendingPayoutRow | null,
+  debt: VendorDebtTotals,
   now: Date,
+  backupWithholding: boolean,
 ): VendorDashboard['payouts'] {
-  const summary = { pendingCents: 0, pendingCount: 0, heldCents: 0, heldCount: 0 };
+  const summary = {
+    pendingCents: 0,
+    pendingCount: 0,
+    heldCents: 0,
+    heldCount: 0,
+    debtOutstandingCents: debt.outstandingCents,
+    debtRecoveredCents: debt.recoveredCents,
+    backupWithholding,
+  };
 
   for (const row of rows) {
     const state = payoutStatusOf({

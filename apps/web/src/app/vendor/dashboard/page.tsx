@@ -213,8 +213,8 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
           The publish gate, above the payout one — frames `20` and
           `27 Vendor dashboard — empty · 1024` draw it at the top of the pane and
           the app had nothing here. It names the blockers the gate is holding and
-          renders nothing once there are none, so a published vendor never sees
-          it. Payouts keep their own banner below, where frame `08` puts them and
+          renders nothing once there are none. A published vendor sees it only
+          for a missing name (VEN-652). Payouts keep their own banner below, where frame `08` puts them and
           where #360 ruled they belong — they are not a publish blocker.
         */}
         {dashboard.moderationHold ? (
@@ -253,7 +253,7 @@ export default async function VendorDashboardPage(): Promise<React.ReactElement>
         */}
         {dashboard.stripeOnboarded ? null : (
           <Banner status="pending" title="Payouts not connected" className="mb-4">
-            You can&apos;t take payment until payouts are connected. It takes about five minutes.{' '}
+            You can&apos;t take payment until payouts are connected.{' '}
             <Link
               href={VENDOR_PAYMENTS_PATH}
               className="font-semibold text-clay-500 hover:underline"

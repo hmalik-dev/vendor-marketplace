@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   check,
+  date,
   decimal,
   index,
   integer,
@@ -13,7 +14,7 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
-import { usStateEnum } from './enums.js';
+import { backupWithholdingReasonEnum, usStateEnum } from './enums.js';
 import { users } from './users.js';
 
 export const vendorProfiles = pgTable(
@@ -84,14 +85,14 @@ export const vendorProfiles = pgTable(
      * the rest of `status_details[].code`. Null while both capabilities are
      * active, and null for a vendor who has never started onboarding.
      *
-     * `stripeOnboarded` is a boolean and a boolean cannot answer the operator's
+     * `stripeOnboarded` is a boolean and a boolean cannot answer the admin's
      * actual question. A vendor who never connected an account and a vendor
      * Stripe restricted this morning both read `false`, and the console's
      * `No payouts yet` filter listed them together with nothing to separate
      * them (#432). The reason is what separates them, and it is Stripe's own
      * word for it rather than one this codebase invents.
      *
-     * **Derived, never operator-written**, exactly like `stripeOnboarded`: the
+     * **Derived, never admin-written**, exactly like `stripeOnboarded`: the
      * account webhook re-reads the account and writes all three together. D29's
      * constraint makes the flag entail an account id; this column is only ever
      * as true as the last capability read.
@@ -110,12 +111,12 @@ export const vendorProfiles = pgTable(
     /** Vendor-controlled public visibility. */
     isPublished: boolean('is_published').notNull().default(false),
     /**
-     * An operator took this storefront down and only an operator may put it
+     * An admin took this storefront down and only an admin may put it
      * back (#457).
      *
      * `is_published` is written by two parties — the console's moderation lever
      * and the vendor's own editor — so before this column existed the second
-     * one silently undid the first: an operator unpublished a storefront for a
+     * one silently undid the first: an admin unpublished a storefront for a
      * policy breach and the vendor republished it from their dashboard seconds
      * later, with no refusal and no notification. The lever was advisory, and a
      * ban was the only thing that actually held.
@@ -126,9 +127,9 @@ export const vendorProfiles = pgTable(
      * consequence, not a decision about the storefront.
      *
      * **The rows that predate it are not backfilled, and that is a decision
-     * rather than an omission.** A storefront an operator unpublished before
+     * rather than an omission.** A storefront an admin unpublished before
      * this column existed arrives `false`, so it is liftable exactly as it was.
-     * `admin_actions` cannot say otherwise: it records every operator
+     * `admin_actions` cannot say otherwise: it records every admin
      * unpublish, but a vendor republishing writes no row at all, so the most
      * recent `vendor_unpublished` does not mean the takedown still stands — and
      * a backfill from it would hold storefronts whose owners had already put
@@ -139,14 +140,24 @@ export const vendorProfiles = pgTable(
      */
     moderationHold: boolean('moderation_hold').notNull().default(false),
     /**
-     * An operator is holding this vendor's automatic payouts (VEN-404).
+     * An admin is holding this vendor's automatic payouts (VEN-404).
      *
      * The scheduled sweep skips the vendor's due payouts while it is set, and
      * they stay due: clearing it releases them on the next sweep. The
-     * operator's per-booking retry still releases one by hand. Set and cleared
+     * admin's per-booking retry still releases one by hand. Set and cleared
      * by `PUT /admin/vendors/:vendorId/payout-hold` alone.
      */
     payoutHold: boolean('payout_hold').notNull().default(false),
+    /**
+     * Why an admin switched backup withholding on for this vendor (VEN-723,
+     * D49), or `null` when it is off. The sweep withholds
+     * `BACKUP_WITHHOLDING_RATE_BPS` of each share while it is set. Set together
+     * with `backup_withholding_notice_date`, and cleared with it, by
+     * `PUT /admin/vendors/:vendorId/backup-withholding` alone.
+     */
+    backupWithholdingReason: backupWithholdingReasonEnum('backup_withholding_reason'),
+    /** The IRS notice date (or the day the missing TIN was noticed) behind the reason. */
+    backupWithholdingNoticeDate: date('backup_withholding_notice_date'),
     /** Soft delete — preserves booking history integrity. */
     isDeleted: boolean('is_deleted').notNull().default(false),
     /** Derived from reviews; never written directly by an endpoint. */
@@ -204,6 +215,10 @@ export const vendorProfiles = pgTable(
     check(
       'vendor_profiles_stripe_onboarded_requires_account',
       sql`${table.stripeOnboarded} = false OR ${table.stripeAccountId} IS NOT NULL`,
+    ),
+    check(
+      'vendor_profiles_backup_withholding_pair',
+      sql`(${table.backupWithholdingReason} IS NULL) = (${table.backupWithholdingNoticeDate} IS NULL)`,
     ),
   ],
 ).enableRLS();

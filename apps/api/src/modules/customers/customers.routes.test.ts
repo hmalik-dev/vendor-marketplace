@@ -11,10 +11,13 @@ import {
 } from '@vendor-marketplace/db/schema';
 import {
   addDays,
+  BOOKING_REQUEST_STATUSES,
   CURRENT_VENDOR_AGREEMENT_VERSION,
+  disclosesCustomerContact,
   toDateString,
 } from '@vendor-marketplace/shared';
 import { eq } from 'drizzle-orm';
+import { readFileSync } from 'node:fs';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 
@@ -229,6 +232,40 @@ describe('/customers', () => {
       expect(full.email).toBe('alan@example.com');
       expect(full).toHaveProperty('phone');
       expect(full).toHaveProperty('avatarUrl');
+    });
+
+    /*
+     * The tier follows the one shared policy list (VEN-689): the expectation is
+     * built from `disclosesCustomerContact`, so a status added there without the
+     * DAO following fails here for that status.
+     */
+    it.each(BOOKING_REQUEST_STATUSES)(
+      'a %s request gives the tier the shared disclosure policy names',
+      async (status) => {
+        const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+        const requestId = await request(vendorId, packageId);
+        await harness.database.db
+          .update(bookingRequests)
+          .set({ status })
+          .where(eq(bookingRequests.id, requestId));
+
+        const response = await readProfile(VENDOR, await idOf(CUSTOMER));
+
+        expect(response.statusCode).toBe(200);
+        expect((response.json() as ProfileBody).visibility).toBe(
+          disclosesCustomerContact(status) ? 'full' : 'limited',
+        );
+      },
+    );
+
+    it('declares no request-status list of its own in the DAO', () => {
+      const source = readFileSync(new URL('./customers.dao.ts', import.meta.url), 'utf8');
+
+      expect(source).toContain('disclosesCustomerContact');
+      expect(source).not.toMatch(/ACCEPTED_REQUEST_STATUSES/);
+      expect(source).not.toMatch(
+        new RegExp(`=\\s*\\[\\s*'(?:${BOOKING_REQUEST_STATUSES.join('|')})'`),
+      );
     });
 
     it('gives a vendor with no booking relationship neither tier', async () => {

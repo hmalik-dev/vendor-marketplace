@@ -35,7 +35,50 @@ export interface ConversationListRow {
 }
 
 /**
- * Every conversation this user is in, newest activity first.
+ * The predicate for the conversations this user is in, with the vendor's
+ * profile ids resolved first for the reason `findConversationsFor` gives.
+ */
+async function ownedConversations(db: AppDatabase, userId: string): Promise<SQL | undefined> {
+  const owned = await db
+    .select({ id: vendorProfiles.id })
+    .from(vendorProfiles)
+    .where(eq(vendorProfiles.userId, userId));
+
+  const ownedIds = owned.map((row) => row.id);
+
+  return ownedIds.length === 0
+    ? eq(conversations.customerId, userId)
+    : or(eq(conversations.customerId, userId), inArray(conversations.vendorId, ownedIds));
+}
+
+/**
+ * Whether any message in any of this user's conversations is unread — the
+ * sidebar's dot, which the paged list cannot answer from its first page alone.
+ */
+export async function hasUnreadMessages(db: AppDatabase, userId: string): Promise<boolean> {
+  const own = await ownedConversations(db, userId);
+  const rows = await db
+    .select({ one: sql<number>`1` })
+    .from(messages)
+    .innerJoin(conversations, eq(messages.conversationId, conversations.id))
+    .where(and(own, ne(messages.senderId, userId), isNull(messages.readAt)))
+    .limit(1);
+
+  return rows.length > 0;
+}
+
+/**
+ * The list's sort key: when a thread last had a message. A thread nobody has
+ * written in yet takes its creation time a century back, which sorts it after
+ * every used thread (see `NULLS LAST` below), keeps the unused ones newest
+ * first among themselves, and still gives a keyset cursor a value to name.
+ */
+const conversationActivity = sql`coalesce(${conversations.lastMessageAt}, ${conversations.createdAt} - interval '100 years')`;
+
+/**
+ * One page of the conversations this user is in, newest activity first, by
+ * cursor (VEN-611): the list grows with every customer who ever messaged a
+ * vendor, so it is read `limit` rows at a time.
  *
  * The vendor side is reached through `vendor_profiles.user_id` rather than a
  * second column on the conversation: the thread belongs to the *business*, and
@@ -44,7 +87,9 @@ export interface ConversationListRow {
 export async function findConversationsFor(
   db: AppDatabase,
   userId: string,
-): Promise<ConversationListRow[]> {
+  limit: number,
+  before: KeysetCursor | undefined,
+): Promise<CursorPage<ConversationListRow>> {
   /*
    * Resolved first, and as literal values, deliberately (#402).
    *
@@ -64,16 +109,11 @@ export async function findConversationsFor(
    * indexes. The extra round trip is a sub-millisecond lookup on
    * `vendor_profiles_user_idx`.
    */
-  const owned = await db
-    .select({ id: vendorProfiles.id })
-    .from(vendorProfiles)
-    .where(eq(vendorProfiles.userId, userId));
+  const own = await ownedConversations(db, userId);
 
-  const ownedIds = owned.map((row) => row.id);
-
-  return (
-    db
-      .select({
+  const fetched = await db
+    .select({
+      row: {
         id: conversations.id,
         customerId: conversations.customerId,
         vendorUserId: vendorProfiles.userId,
@@ -86,30 +126,33 @@ export async function findConversationsFor(
         lastMessageAt: conversations.lastMessageAt,
         requestEventDate: bookingRequests.eventDate,
         requestEventType: bookingRequests.eventType,
-      })
-      .from(conversations)
-      .innerJoin(vendorProfiles, eq(conversations.vendorId, vendorProfiles.id))
-      .innerJoin(users, eq(conversations.customerId, users.id))
-      .leftJoin(bookingRequests, eq(conversations.bookingRequestId, bookingRequests.id))
-      // The join stays only to carry the columns the list renders.
-      .where(
-        ownedIds.length === 0
-          ? eq(conversations.customerId, userId)
-          : or(eq(conversations.customerId, userId), inArray(conversations.vendorId, ownedIds)),
-      )
-      /*
-       * `NULLS LAST` is load-bearing, not tidiness. `ensureConversation` opens a
-       * thread with **every** booking request and leaves `last_message_at` null
-       * until somebody writes, and Postgres sorts nulls *first* under `DESC` — so
-       * the default ordering led with every thread that had never been used.
-       *
-       * On `/messages` that was merely wrong-looking, because the whole list
-       * renders. Frame `07`'s bookings rail draws only the first three, so it
-       * turned into lost data: three rows reading "No messages yet." above a reply
-       * that arrived an hour ago (#302).
-       */
-      .orderBy(sql`${conversations.lastMessageAt} DESC NULLS LAST`, desc(conversations.createdAt))
-  );
+      },
+      cursor: cursorOf(conversationActivity, conversations.id),
+    })
+    .from(conversations)
+    .innerJoin(vendorProfiles, eq(conversations.vendorId, vendorProfiles.id))
+    .innerJoin(users, eq(conversations.customerId, users.id))
+    .leftJoin(bookingRequests, eq(conversations.bookingRequestId, bookingRequests.id))
+    // The join stays only to carry the columns the list renders.
+    .where(before ? and(own, olderThan(conversationActivity, conversations.id, before)) : own)
+    /*
+     * `NULLS LAST` is load-bearing, not tidiness. `ensureConversation` opens a
+     * thread with **every** booking request and leaves `last_message_at` null
+     * until somebody writes, and Postgres sorts nulls *first* under `DESC` — so
+     * the default ordering led with every thread that had never been used.
+     *
+     * The epoch stand-in for null gets that ordering under a cursor, where
+     * `NULLS LAST` cannot be compared against.
+     *
+     * On `/messages` that was merely wrong-looking, because the whole list
+     * renders. Frame `07`'s bookings rail draws only the first three, so it
+     * turned into lost data: three rows reading "No messages yet." above a reply
+     * that arrived an hour ago (#302).
+     */
+    .orderBy(desc(conversationActivity), desc(conversations.id))
+    .limit(limit + 1);
+
+  return pageOf(fetched, limit);
 }
 
 /**
@@ -259,13 +302,13 @@ export async function countUnreadPerConversation(
 }
 
 /**
- * How many messages from the other party were sent *before* `sent` and are still
- * unread, "before" being `created_at` and then `id` — the same total order the
- * thread is paged in. Ordered, not merely "any other": two messages that commit
- * together each see the other, and a symmetric check makes both skip their
- * notification. With an order, only the earliest of a run can see nothing ahead.
+ * How many messages from the other party, besides `sentId`, are still unread.
+ * Only meaningful inside the transaction that holds the conversation's row lock
+ * (`insertMessageReportingBacklog`): the lock is what makes "another message is
+ * waiting" true for exactly one of two sends that race, where any ordering by
+ * `created_at` is not (it is the transaction's start, not its commit).
  */
-export async function countEarlierUnreadInConversation(
+async function countOtherUnreadInConversation(
   db: AppDatabase,
   conversationId: string,
   readerId: string,
@@ -279,13 +322,7 @@ export async function countEarlierUnreadInConversation(
         eq(messages.conversationId, conversationId),
         ne(messages.senderId, readerId),
         isNull(messages.readAt),
-        /*
-         * Against the stored row, not a `Date` read back from it: `created_at` is
-         * microseconds and a JS `Date` truncates to milliseconds, so a bound taken
-         * from one sits below its own row and hides an earlier message sent in the
-         * same millisecond.
-         */
-        sql`(${messages.createdAt}, ${messages.id}) < (select ${messages.createdAt}, ${messages.id} from ${messages} where ${messages.id} = ${sentId})`,
+        ne(messages.id, sentId),
       ),
     );
 
@@ -589,4 +626,42 @@ export async function markAllNotificationsRead(db: AppDatabase, userId: string):
     .update(notifications)
     .set({ readAt: sql`now()` })
     .where(and(eq(notifications.userId, userId), isNull(notifications.readAt)));
+}
+
+export interface StoredMessage {
+  message: MessageRow;
+  /** Unread messages from the sender that were already there when this one committed. */
+  othersUnread: number;
+}
+
+/**
+ * Stores a message and counts what is already waiting for its recipient, under
+ * one lock on the conversation row (VEN-726). Two sends that race used to commit
+ * together and each count the other's uncommitted message as absent, or count by
+ * `created_at`, which is the transaction's start and not its commit. Either way
+ * both saw nothing ahead and both raised a notification. Holding the row until
+ * commit makes the second send see the first, so exactly one sees zero.
+ */
+export async function insertMessageReportingBacklog(
+  db: AppDatabase,
+  values: NewMessageRow,
+  recipientId: string,
+): Promise<StoredMessage> {
+  return db.transaction(async (tx) => {
+    await tx
+      .select({ id: conversations.id })
+      .from(conversations)
+      .where(eq(conversations.id, values.conversationId))
+      .for('update');
+
+    const message = await insertMessage(tx, values);
+    const othersUnread = await countOtherUnreadInConversation(
+      tx,
+      message.conversationId,
+      recipientId,
+      message.id,
+    );
+
+    return { message, othersUnread };
+  });
 }

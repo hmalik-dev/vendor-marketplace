@@ -1,6 +1,7 @@
 import type { SignUpRole } from '@vendor-marketplace/shared';
 import { reportSwallowedError } from '@/lib/report-error';
 import { clearSessionToken } from './client';
+import { announceSessionEnded } from './session-ended';
 
 /**
  * The browser's calls to the same-origin Neon Auth proxy (`/api/auth/*`, Better
@@ -9,7 +10,7 @@ import { clearSessionToken } from './client';
  * `no-raw-upstream-message.test.ts`), so nothing here returns one.
  */
 export type AuthOutcome =
-  'ok' | 'unverified' | 'rejected' | 'throttled' | 'codeInvalid' | 'unreachable';
+  'ok' | 'unverified' | 'rejected' | 'throttled' | 'mailPaced' | 'codeInvalid' | 'unreachable';
 
 async function post(path: string, body: Record<string, string> | null): Promise<Response | null> {
   try {
@@ -166,7 +167,24 @@ export async function resendVerificationCode(email: string): Promise<AuthOutcome
  * caller-level refusal (`throttled`, the per-caller 429) are ever different.
  */
 export async function requestPasswordReset(email: string): Promise<AuthOutcome> {
-  return outcomeOf(await post('/email-otp/request-password-reset', { email }));
+  const response = await post('/email-otp/request-password-reset', { email });
+
+  // Too many mails for this address this minute (VEN-719): a shorter wait than the other 429s.
+  if (response?.status === 429) {
+    const body = (await response
+      .clone()
+      .json()
+      .catch((error: unknown) => {
+        reportSwallowedError('auth-requests: could not read a 429 body', error);
+        return null;
+      })) as { code?: unknown } | null;
+
+    if (body?.code === 'RESET_MAIL_PACED') {
+      return 'mailPaced';
+    }
+  }
+
+  return outcomeOf(response);
 }
 
 /** `rejected` covers a wrong, used or expired code, and a password Neon refuses. */
@@ -201,6 +219,8 @@ export async function signOut(): Promise<void> {
   }
 
   clearSessionToken();
+  // After the request, never before: a failed sign-out must not sign anyone else out.
+  announceSessionEnded();
 }
 
 export type ChangePasswordOutcome = 'ok' | 'rejected' | 'signedOut' | 'throttled' | 'unreachable';
@@ -235,4 +255,77 @@ export async function changePassword(input: {
   return outcome === 'ok' || outcome === 'throttled' || outcome === 'unreachable'
     ? outcome
     : 'rejected';
+}
+
+/** One device the account is signed in on, as the proxy shapes it (VEN-681): no token, ever. */
+export interface DeviceSession {
+  id: string;
+  userAgent: string | null;
+  lastActiveAt: string | null;
+  current: boolean;
+}
+
+export type SessionsOutcome = 'signedOut' | 'throttled' | 'unreachable';
+
+function isDeviceSession(value: unknown): value is DeviceSession {
+  const row = value as Partial<DeviceSession> | null;
+  return typeof row?.id === 'string' && typeof row.current === 'boolean';
+}
+
+/** The account's devices, this one first, or the reason they could not be read. */
+export async function listSessions(): Promise<DeviceSession[] | SessionsOutcome> {
+  let response: Response;
+
+  try {
+    response = await fetch('/api/auth/list-sessions', {
+      cache: 'no-store',
+      credentials: 'same-origin',
+    });
+  } catch {
+    return 'unreachable';
+  }
+
+  if (response.status === 401) {
+    return 'signedOut';
+  }
+
+  if (response.status === 429) {
+    return 'throttled';
+  }
+
+  const body = response.ok
+    ? ((await response.json().catch((error: unknown) => {
+        // The screen says the devices could not be loaded; the console says why.
+        reportSwallowedError('auth-requests: could not read the devices list', error);
+        return null;
+      })) as { sessions?: unknown } | null)
+    : null;
+
+  return Array.isArray(body?.sessions) ? body.sessions.filter(isDeviceSession) : 'unreachable';
+}
+
+/**
+ * Ends the sessions the proxy is asked to: one other device by its id, or
+ * every other device when no id is given. This device stays signed in, but the
+ * API's bound on older tokens applies to it too, so its cached token is
+ * dropped for the next read to mint anew.
+ */
+export async function endSessions(id?: string): Promise<'ok' | SessionsOutcome> {
+  const response =
+    id === undefined
+      ? await post('/revoke-other-sessions', null)
+      : await post('/revoke-session', { id });
+
+  if (response?.status === 401) {
+    return 'signedOut';
+  }
+
+  // A 404 is a device that ended in the meantime: nothing left to end.
+  const outcome = response?.status === 404 ? 'ok' : await outcomeOf(response);
+
+  if (outcome === 'ok') {
+    clearSessionToken();
+  }
+
+  return outcome === 'ok' || outcome === 'throttled' ? outcome : 'unreachable';
 }

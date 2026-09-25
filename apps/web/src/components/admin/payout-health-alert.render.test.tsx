@@ -11,7 +11,7 @@ describe('the payout health alert', () => {
    * Silence is the healthy state.
    *
    * A permanent line reading zero beside four metric cards is a sentence about
-   * nothing, and it would teach an operator to stop reading the one banner that
+   * nothing, and it would teach an admin to stop reading the one banner that
    * only ever appears when money is stuck.
    */
   it('renders nothing at all when no transfer is failing', () => {

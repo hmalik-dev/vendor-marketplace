@@ -55,13 +55,13 @@ function nothingPays(filterCount: number): string {
  *
  * Drawn by Pattern A of the admin delta, and it closes #443's sixth finding —
  * *"the filtered empty state offers no way out where every other console empty
- * state does"*. The counted routes are the whole point: an operator picks the
+ * state does"*. The counted routes are the whole point: an admin picks the
  * widening that **pays** instead of clearing everything and rebuilding the
  * query from scratch.
  *
  * Four requirements, and each one is a line below rather than a paragraph here:
  *
- * 1. The heading recites the active filters in the operator's own words.
+ * 1. The heading recites the active filters in the admin's own words.
  * 2. One line saying how many filters are narrowing the view.
  * 3. One button per filter, each dropping exactly that filter and carrying the
  *    count it would reveal. Highest count is primary.
@@ -70,7 +70,7 @@ function nothingPays(filterCount: number): string {
  *
  * **This is not the true-empty state and must not be used as one.** A list that
  * is empty because the platform has no rows gets `EmptyState` with no button:
- * nothing an operator does creates a case or an activity row, so a control
+ * nothing an admin does creates a case or an activity row, so a control
  * there would offer an action that cannot help, and the copy's whole job is to
  * say where rows come from so the silence reads as calm rather than broken.
  */
@@ -134,7 +134,7 @@ export function FilteredEmpty({
           ))}
           {/*
             Last, and a ghost link rather than a button: it is the escape, not
-            the suggestion. An operator who clears everything has thrown away
+            the suggestion. An admin who clears everything has thrown away
             the query they built, which is the outcome the counted routes exist
             to save them from — so it is offered without being recommended.
           */}

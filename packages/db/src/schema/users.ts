@@ -94,12 +94,12 @@ export const users = pgTable(
      * set `pending_email` always means *currently* diverged rather than *once
      * diverged*.
      *
-     * `/admin/customers?flag=email-stale` is the operator's read of them, the
+     * `/admin/customers?flag=email-stale` is the admin's read of them, the
      * same shape `refund-stuck` gives the bookings that need a person.
      *
      * No unique index covers `pending_email`, deliberately: two accounts can be
      * waiting on the same contested address at once, and refusing the second
-     * record would hide exactly the case that most needs an operator.
+     * record would hide exactly the case that most needs an admin.
      */
     pendingEmail: varchar('pending_email', { length: 255 }),
     emailSyncFailedAt: timestamp('email_sync_failed_at', { withTimezone: true }),

@@ -339,7 +339,7 @@ describe('the payout sweep', () => {
         { name: 'clock' },
       ),
     );
-    await app.register(fp(async () => undefined, { name: 'operator-alerts' }));
+    await app.register(fp(async () => undefined, { name: 'admin-alerts' }));
     // No database decorated, so the sweep's first query throws.
     await app.register(payoutReleasePlugin, {
       intervalMs: 5,

@@ -41,6 +41,7 @@ describe('two payment intents succeeding for one request, on real connections', 
   const PRICE_CENTS = 145_000;
   const PLATFORM_FEE_RATE = 0.12;
   const LOCK_WAIT_ATTEMPTS = 500;
+  const RACE_ROUNDS = 40;
 
   const START = new Date('2026-06-01T12:00:00Z');
 
@@ -147,6 +148,24 @@ describe('two payment intents succeeding for one request, on real connections', 
     }
 
     throw new Error('No connection ever waited on the winner’s insert');
+  }
+
+  /** Holds until both deliveries are parked on an advisory lock in this database. */
+  async function untilDeliveriesWaitOnTheRequestLock(): Promise<void> {
+    for (let attempt = 0; attempt < LOCK_WAIT_ATTEMPTS; attempt += 1) {
+      const result = await harness!.database.db.execute(
+        sql`select count(*)::int as waiting from pg_stat_activity
+            where wait_event = 'advisory' and datname = current_database()`,
+      );
+      const rows = result as unknown as { waiting: number }[];
+
+      if ((rows[0]?.waiting ?? 0) >= 2) {
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
+    throw new Error('Both deliveries never waited on the request lock');
   }
 
   beforeAll(async () => {
@@ -386,35 +405,110 @@ describe('two payment intents succeeding for one request, on real connections', 
     expect(dispatch).toHaveBeenCalledTimes(1);
   });
 
-  it('books one intent and refunds the other when both events arrive together', async () => {
+  /*
+   * VEN-727: two intents for one request only meet in `bookings_confirmed_date_key`
+   * when both pass the `ON CONFLICT (request_id)` pre-check before either row
+   * exists, a window inside one statement that cannot be held open from outside
+   * (one run in a hundred reached it). `confirmBooking` closes it by serialising
+   * deliveries per request, and this test pins that directly: while another
+   * connection holds the request's lock, both deliveries must be parked on it and
+   * nothing may be booked. Deleting the lock fails it on every run.
+   */
+  it('parks both deliveries for one request behind a single lock until it is released', async () => {
     const { requestId, firstIntentId } = await checkedOutRequest();
     const secondIntentId = await secondIntent(requestId);
     const first = harness!.stripe.succeed(firstIntentId);
     const second = harness!.stripe.succeed(secondIntentId);
     harness!.stripe.refunds.length = 0;
-    dispatch.mockClear();
 
-    const results = await Promise.all([
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let locked!: () => void;
+    const lockTaken = new Promise<void>((resolve) => {
+      locked = resolve;
+    });
+    const holder = harness!.database.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${requestId}, 0))`);
+      locked();
+      await held;
+    });
+    await lockTaken;
+
+    const deliveries = Promise.allSettled([
       recordSuccessfulPayment(context(), first),
       recordSuccessfulPayment(context(), second),
     ]);
+    try {
+      await untilDeliveriesWaitOnTheRequestLock();
+      expect(await bookingsFor(requestId)).toEqual([]);
+    } finally {
+      release();
+    }
+    await holder;
+    const settled = await deliveries;
 
-    const rows = await bookingsFor(requestId);
-    expect(rows).toHaveLength(1);
-    const kept = rows[0]!.stripePaymentIntentId;
-    const refundedIntent = kept === first.id ? second.id : first.id;
-    expect(results.map((result) => result.outcome).sort()).toEqual(['already-booked', 'booked']);
-    expect(harness!.stripe.refunds).toHaveLength(1);
-    expect(harness!.stripe.refunds[0]?.paymentIntentId).toBe(refundedIntent);
-    expect(dispatch).toHaveBeenCalledTimes(1);
-
-    /* The winner's event arrives again afterwards: nothing changes, nothing is refunded. */
-    const winnerSnapshot = kept === first.id ? first : second;
-    const redelivered = await recordSuccessfulPayment(context(), winnerSnapshot);
-
-    expect(redelivered.outcome).toBe('already-booked');
-    expect(harness!.stripe.refunds).toHaveLength(1);
-    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(settled.map((result) => result.status)).toEqual(['fulfilled', 'fulfilled']);
     expect(await bookingsFor(requestId)).toHaveLength(1);
+    expect(harness!.stripe.refunds).toHaveLength(1);
   });
+
+  /* The end-to-end race, on fresh requests, in both delivery orders. */
+  it.each([
+    ['first then second', false],
+    ['second then first', true],
+  ])(
+    'books one intent and refunds the other when both events arrive together, %s',
+    async (_order, reversed) => {
+      for (let round = 0; round < RACE_ROUNDS; round += 1) {
+        const { requestId, firstIntentId } = await checkedOutRequest();
+        const secondIntentId = await secondIntent(requestId);
+        const first = harness!.stripe.succeed(firstIntentId);
+        const second = harness!.stripe.succeed(secondIntentId);
+        harness!.stripe.refunds.length = 0;
+        dispatch.mockClear();
+
+        const deliveries = reversed ? [second, first] : [first, second];
+        const results = await Promise.all(
+          deliveries.map((intent) => recordSuccessfulPayment(context(), intent)),
+        );
+
+        const rows = await bookingsFor(requestId);
+        expect(rows).toHaveLength(1);
+        const kept = rows[0]!.stripePaymentIntentId;
+        const refundedIntent = kept === first.id ? second.id : first.id;
+        expect(results.map((result) => result.outcome).sort()).toEqual([
+          'already-booked',
+          'booked',
+        ]);
+        expect(harness!.stripe.refunds).toHaveLength(1);
+        expect(harness!.stripe.refunds[0]).toMatchObject({
+          paymentIntentId: refundedIntent,
+          amountCents: PRICE_CENTS,
+        });
+        expect(harness!.stripe.refunds[0]?.idempotencyKey).toMatch(
+          new RegExp(`^${refundedIntent}_duplicate_intent_\\d+$`),
+        );
+        expect(dispatch).toHaveBeenCalledTimes(1);
+
+        /* Both events arrive again afterwards: nothing changes, nothing more is refunded. */
+        const redelivered = await Promise.all([
+          recordSuccessfulPayment(context(), first),
+          recordSuccessfulPayment(context(), second),
+        ]);
+
+        expect(redelivered.map((result) => result.outcome)).toEqual([
+          'already-booked',
+          'already-booked',
+        ]);
+        expect(harness!.stripe.refunds).toHaveLength(1);
+        /* The refused intent's redelivery repeats its alert; the subject dedupes it downstream. */
+        expect(new Set(dispatch.mock.calls.map((call) => call[0].subjectId))).toEqual(
+          new Set([`${requestId}:refunded`]),
+        );
+        expect(await bookingsFor(requestId)).toHaveLength(1);
+      }
+    },
+  );
 });

@@ -36,7 +36,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * The waitlist's terminal screen (VEN-512): nothing to do here until the
- * operator invites this address. No form, no button, no progress indicator —
+ * admin invites this address. No form, no button, no progress indicator —
  * only a way back that also signs the person out, so nobody sits signed in to
  * an app they cannot use.
  */

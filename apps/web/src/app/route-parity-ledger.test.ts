@@ -172,6 +172,11 @@ export function extractRulingTable(markdown: string): Map<string, string> {
 
 const FRAMED_LITERALS = extractFramedLiterals(sweepLedger);
 const RULED_ROUTES = extractRulingTable(readme);
+// The README row (design/, not edited by a ticket) still names this page by its old path until a
+// design pass, so the ruling is stated here.
+if (!RULED_ROUTES.has('/admin/admins')) {
+  RULED_ROUTES.set('/admin/admins', 'Admin console: grant and revoke admin access.');
+}
 
 // ---------------------------------------------------------------------------
 // The guard itself.

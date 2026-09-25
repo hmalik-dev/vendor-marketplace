@@ -63,9 +63,14 @@ each has its own secrets and variables.
    database.
 5. **API**: `railway up` with the environment's token. Railway's own branch
    auto-deploy must stay **off**, since it cannot be ordered after a GitHub job
-   and would ship code before its migration.
+   and would ship code before its migration. The release sets the service
+   variable `RELEASE_COMMIT` first, which the Dockerfile bakes into the image,
+   and `/ready` names that baked commit, not a variable (VEN-634).
+   `SENTRY_RELEASE` is only the error tracker's release.
 6. **Web**: a prebuilt Vercel deploy: production as a production deployment,
-   staging as a preview deployment aliased to `WEB_URL`'s host. Staging's Vercel
+   promoted to the domain explicitly (so an earlier `vercel rollback`, which turns
+   auto-assign off, cannot strand it), staging as a preview deployment aliased to
+   `WEB_URL`'s host. Staging's Vercel
    variables are scoped to the Preview `staging` branch, and the release pulls
    them by branch (`--git-branch=staging`). `WEB_TIER_KEY` and
    `NEON_AUTH_COOKIE_SECRET` are Secret-type Vercel variables, which `vercel
@@ -77,7 +82,13 @@ build` alone (VEN-575). Preflight fails by name when either is missing. When
    rotating either, rotate it in all three places: Vercel, Railway (for
    `WEB_TIER_KEY`) and the GitHub environment secret.
 7. **Ready**: `/ready` on the API must name the pushed commit within ten
-   minutes, or the run fails.
+   minutes, or the run fails; then the web's `/api/ready` must name it too and
+   report its runtime variables, and the web must serve auth, sign-in and the
+   home page.
+
+A release can also be started by hand to redeploy an environment's tip
+(Actions > Deploy > Run workflow), and one that stops after the API leaves the
+tiers on different commits; `runbook-rollback.md` covers both, and rolling back.
 
 Every step runs only if the one before it succeeded, so a failed migration
 stops the release before either service moves. Migrations therefore run against
@@ -134,7 +145,7 @@ Names below are the keys in `packages/shared/src/env/registry.ts`; run
 | `SENTRY_DSN`                                                                               | a Node project per environment; required to boot a deployment                                                                                             |
 | `RESEND_WEBHOOK_SECRET`                                                                    | signing secret of that environment's Resend webhook endpoint at `<api host>/webhooks/resend`; required to boot a deployment                               |
 | `WEB_TIER_KEY`                                                                             | `openssl rand -hex 32`, the same value on the API and web of one environment and a different one per environment (VEN-649); required to boot a deployment |
-| `OPERATOR_ALERT_EMAIL`, `SUPPORT_EMAIL_TO`                                                 | real inboxes for production, your own test inbox elsewhere                                                                                                |
+| `ADMIN_ALERT_EMAIL`, `SUPPORT_EMAIL_TO`                                                    | real inboxes for production, your own test inbox elsewhere                                                                                                |
 
 Never reuse a value across environments: not the database URLs, the storage
 credentials, either webhook secret, the Resend key or the Sentry DSN. Stripe
@@ -155,21 +166,22 @@ secret keys may match while both use the same sandbox account.
 Each of staging and production has two endpoints at
 `https://<api host>/webhooks/stripe`, each with its own signing secret:
 
-- **Your account**: the Charge, Payment intent and Refund event groups. The API
-  handles `payment_intent.succeeded`, `charge.refunded`, `charge.dispute.created`,
-  `charge.dispute.closed`, `charge.dispute.funds_reinstated`, `refund.failed`,
-  `refund.updated` and `charge.refund.updated`, and answers `200` to the rest.
-- **Connected accounts** (not Accounts v2): `account.updated` and
-  `capability.updated`.
+- **Your account**: the Charge, Payment intent, Refund, Transfer and Radar event
+  groups. The API handles `payment_intent.succeeded`, `charge.refunded`,
+  `charge.dispute.created`, `charge.dispute.closed`,
+  `charge.dispute.funds_reinstated`, `refund.failed`, `refund.updated`,
+  `charge.refund.updated`, `transfer.reversed` and
+  `radar.early_fraud_warning.created`, and answers `200` to the rest.
+- **Connected accounts** (not Accounts v2): `account.updated`,
+  `capability.updated` and `payout.failed`.
 
 ## Regions and replicas
 
 Neon (database, Neon Auth and storage) is in `us-east-2` (AWS Ohio), so run the
 API in **US East** on Railway, and the Vercel web functions in `iad1`. An API in
 another region pays the round trip on every query. Both Railway services run
-**one replica**: stream tickets, the sign-in throttle and the per-process rate
-limiter are per instance, so a second replica breaks streams and multiplies
-limits (VEN-462 lifts this). Multi-region replicas need the Pro plan and are not
+**one replica**: the sign-in throttle and the per-process rate limiter are per
+instance, so a second replica multiplies limits (VEN-462 lifts this). Multi-region replicas need the Pro plan and are not
 wanted here.
 
 ## Rules

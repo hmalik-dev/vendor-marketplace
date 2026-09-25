@@ -6,7 +6,7 @@ import { BRAND_NAME } from './brand.js';
  *
  * The screen is a form that sends **one email** and says so. It is still not a
  * helpdesk: no threads, no in-app replies, no ticket status the sender can poll,
- * no attachments. What #431 added is on the **operator's** side of the wall — a
+ * no attachments. What #431 added is on the **admin's** side of the wall — a
  * case row in `/admin/cases`, because a report that freezes a vendor's payout
  * has to be findable by the person who has to unfreeze it. Nothing about the
  * sender's experience changed, and the reference is still the only handle they
@@ -20,29 +20,39 @@ import { BRAND_NAME } from './brand.js';
 export const SUPPORT_PATH = '/support';
 
 /**
- * Five topics, exactly — the routing key in the email subject.
+ * The routing key in the email subject, six entries.
  *
  * It earns its place because a human reads it, not because it feeds a queue,
- * which is why there is no sixth "other, but specific" option: a longer list
- * asks the visitor to do triage they cannot do.
+ * which is why there is no "other, but specific" option: a longer list asks the
+ * visitor to do triage they cannot do. `feature-request` is the one entry that
+ * is not a problem, and is the only topic that never opens a case.
  */
 export const SUPPORT_TOPICS = [
   'something-broke',
   'booking-or-payment',
   'vendor-profile',
   'trust-and-safety',
+  'feature-request',
   'something-else',
 ] as const;
 export type SupportTopic = (typeof SUPPORT_TOPICS)[number];
 
-/** The literal strings frame `29` draws, in the order it draws them. */
+/** The strings frame `29` draws, in its order, plus the feature request that VEN-704 added. */
 export const SUPPORT_TOPIC_LABELS: Record<SupportTopic, string> = {
   'something-broke': 'Something broke',
   'booking-or-payment': 'A booking or payment',
   'vendor-profile': 'My vendor profile',
   'trust-and-safety': 'Trust & safety',
+  'feature-request': 'A feature request',
   'something-else': 'Something else',
 };
+
+/**
+ * An idea, not a problem: it is sent to the inbox and nothing else. No case
+ * row, and no payout hold even when a booking is attached, so it can never
+ * appear in the admin queue as work that needs a ruling.
+ */
+export const SUPPORT_TOPIC_FEATURE_REQUEST: SupportTopic = 'feature-request';
 
 /**
  * Preselected when an error reference is attached, and only then.
@@ -56,7 +66,7 @@ export const SUPPORT_TOPIC_WITH_REFERENCE: SupportTopic = 'something-broke';
  * Preselected when a **booking** is attached, and only then (#425).
  *
  * Not `SUPPORT_TOPIC_WITH_REFERENCE`. A customer who followed `Report a
- * problem` off their own booking has already said which of the five this is,
+ * problem` off their own booking has already said which topic this is,
  * and `Something broke` would be the wrong one twice over: it reads as a bug
  * report, and it is the topic a human triages away from the money.
  */
@@ -117,9 +127,9 @@ export const SUPPORT_REFERENCE_PATTERN = new RegExp(
  *
  * **One inbox, three doors.** A report a customer typed, a chargeback a card
  * network opened and a report raised from inside the product are the same
- * object to the operator working them — each needs a ruling, and the first two
+ * object to the admin working them — each needs a ruling, and the first two
  * freeze a payout — so the origin is a column rather than a second table. The
- * alternative was three queues, and an operator working three queues works
+ * alternative was three queues, and an admin working three queues works
  * none of them.
  *
  * `user_report` is #436's door and it is the one that moves no money. A report
@@ -128,8 +138,17 @@ export const SUPPORT_REFERENCE_PATTERN = new RegExp(
  * to announce to the vendor — which is the asymmetry #431 closed between the
  * other two, kept closed here by not opening a third way to freeze money
  * silently. Money still moves through `POST /support/messages` alone.
+ *
+ * `fraud_warning` (VEN-645) is a card issuer's early fraud warning: no money has
+ * moved yet and nothing is frozen, so it is a case for a person to rule on, not
+ * a hold.
  */
-export const SUPPORT_CASE_ORIGINS = ['support_message', 'chargeback', 'user_report'] as const;
+export const SUPPORT_CASE_ORIGINS = [
+  'support_message',
+  'chargeback',
+  'user_report',
+  'fraud_warning',
+] as const;
 export type SupportCaseOrigin = (typeof SUPPORT_CASE_ORIGINS)[number];
 
 /**
@@ -139,7 +158,7 @@ export type SupportCaseOrigin = (typeof SUPPORT_CASE_ORIGINS)[number];
  * outcome — Stripe's `won`, `lost`, `warning_closed` — and folding those in here
  * would make one column answer two different questions: what the card network
  * decided, and what we decided to do about it. They routinely disagree, and the
- * reconciliation between them is the operator's job, so the network's answer
+ * reconciliation between them is the admin's job, so the network's answer
  * lives in its own nullable column and this one stays the console's.
  */
 export const SUPPORT_CASE_STATUSES = ['open', 'resolved'] as const;
@@ -175,7 +194,7 @@ export const REPORT_SUBJECTS = [
 ] as const;
 export type ReportSubject = (typeof REPORT_SUBJECTS)[number];
 
-/** What the operator reads in the queue, and what the reporter picked. */
+/** What the admin reads in the queue, and what the reporter picked. */
 export const REPORT_SUBJECT_LABELS: Record<ReportSubject, string> = {
   vendor_profile: 'Vendor profile',
   review: 'Review',
@@ -186,7 +205,7 @@ export const REPORT_SUBJECT_LABELS: Record<ReportSubject, string> = {
 /**
  * Why, from a short list.
  *
- * Short for the reason `SUPPORT_TOPICS` is five: the list is a routing key a
+ * Short for the reason `SUPPORT_TOPICS` is short: the list is a routing key a
  * human reads, and a longer one asks the reporter to do triage they cannot do.
  * `off-platform-payment` earns its own member rather than folding into
  * `something-else` because it is the single complaint the marketplace most
@@ -231,7 +250,7 @@ export const MAX_REPORT_DETAIL_LENGTH = 1_000;
  * Six an hour, per account — deliberately the same allowance as the support
  * form and for the same reason.
  *
- * A report makes this process send mail and writes a row an operator has to
+ * A report makes this process send mail and writes a row an admin has to
  * work, so an unbounded control is a way to flood a human queue from one
  * account. Six is above anything a real person does in an hour and orders of
  * magnitude below anything worth automating.
@@ -247,7 +266,7 @@ export const REPORT_RATE_LIMIT = { max: 6, timeWindow: '1 hour' } as const;
  *
  * Every report is trust and safety by construction — that is what the four
  * subjects have in common — so the case carries the member that already exists
- * rather than a parallel vocabulary. An operator filtering the queue for
+ * rather than a parallel vocabulary. An admin filtering the queue for
  * `trust-and-safety` sees the typed complaints and the in-product reports
  * together, which is the point of one queue.
  */

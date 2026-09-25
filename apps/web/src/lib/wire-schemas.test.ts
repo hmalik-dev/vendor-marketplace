@@ -6,7 +6,9 @@ import {
   wireCategoryListSchema,
   wireTagListSchema,
   wireUserSchema,
+  wireAdminTaxYearsSchema,
   wireVendorProfileSchema,
+  wireVendorTaxYearsSchema,
 } from './wire-schemas';
 
 const UUID = '11111111-1111-4111-8111-111111111111';
@@ -260,5 +262,30 @@ describe('wireBookingRequestSchema settlement carries the payout release as a Da
 
   it('keeps null for a payout the platform still holds', () => {
     expect(settlement.parse({ ...SETTLEMENT, paidOutAt: null }).paidOutAt).toBeNull();
+  });
+});
+
+/**
+ * `GET /vendor/tax/years` answers `years` alone (tax-reporting.routes.test.ts
+ * pins the body). The vendor schema once aliased the admin one, so the field
+ * VEN-723 added to the admin list made every connected vendor's Payments page
+ * throw a Server Components error, with each suite green.
+ */
+describe('wireVendorTaxYearsSchema', () => {
+  it('parses the body the vendor route sends, which has no backupWithheld', () => {
+    expect(wireVendorTaxYearsSchema.parse({ years: [2027, 2026] })).toEqual({
+      years: [2027, 2026],
+    });
+    expect(wireVendorTaxYearsSchema.parse({ years: [] })).toEqual({ years: [] });
+  });
+
+  it('is not the admin schema, which still requires backupWithheld', () => {
+    expect(wireAdminTaxYearsSchema.safeParse({ years: [2026] }).success).toBe(false);
+    expect(
+      wireAdminTaxYearsSchema.parse({
+        years: [2026],
+        backupWithheld: [{ year: 2026, cents: 2400 }],
+      }).backupWithheld,
+    ).toEqual([{ year: 2026, cents: 2400 }]);
   });
 });

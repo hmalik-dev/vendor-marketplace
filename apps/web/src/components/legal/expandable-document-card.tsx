@@ -27,7 +27,7 @@ export interface ExpandableDocumentCardProps {
   document: LegalDocument;
   /** The card's own heading — `Full agreement`, or the document's title. */
   heading: string;
-  /** The line opposite it: `11 sections · v1.0 · 4 Jun 2026`. */
+  /** The line opposite it: `11 sections · v1.0 · 06/04/2026`. */
   meta: React.ReactNode;
   /** Distinct per instance, because two cards could share a document. */
   bodyId: string;

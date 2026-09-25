@@ -57,6 +57,9 @@ function detail(overrides: Partial<Record<keyof WireAdminVendorDetail, unknown>>
       isPublished: true,
       moderationHold: false,
       payoutHold: true,
+      backupWithholding: null,
+      taxIdState: 'provided',
+      debtOutstandingCents: 0,
     },
     packages: [
       {
@@ -204,7 +207,89 @@ describe('AdminVendorDetailPage', () => {
     const stripe = cardTitled(container, 'Stripe');
     expect(within(stripe).getByText('acct_1PqR3xKz9LmN4dTv').dataset.kind).toBe('mono');
     expect(within(stripe).getByText('company.verification.document')).toBeDefined();
-    expect(within(stripe).getByText('Held by an operator')).toBeDefined();
+    expect(within(stripe).getByText('Held by an admin')).toBeDefined();
+  });
+
+  /* VEN-723: Stripe's own words for the tax ID, and never a number. */
+  it.each([
+    ['verified', 'Verified'],
+    ['provided', 'Provided'],
+    ['mismatch', 'Mismatch'],
+    ['missing', 'Missing'],
+  ] as const)('reads a %s tax ID as %s', async (state, label) => {
+    const data = detail();
+    data.vendor.taxIdState = state;
+    const { container } = await renderPage(data);
+
+    const stripe = cardTitled(container, 'Stripe');
+    const line = [...stripe.querySelectorAll('dt')].find((dt) => dt.textContent === 'Tax ID');
+
+    expect(line?.nextElementSibling?.textContent).toBe(label);
+  });
+
+  it('says the tax ID could not be read, or that there is no account, instead of guessing', async () => {
+    const unread = detail();
+    unread.vendor.taxIdState = null;
+    const { container } = await renderPage(unread);
+    const line = (root: ParentNode) =>
+      [...root.querySelectorAll('dt')].find((dt) => dt.textContent === 'Tax ID')?.nextElementSibling
+        ?.textContent;
+
+    expect(line(container)).toBe('Could not be read');
+
+    cleanup();
+    const none = detail();
+    none.vendor.taxIdState = null;
+    none.vendor.stripeAccountId = null;
+
+    expect(line((await renderPage(none)).container)).toBe('No account');
+  });
+
+  it('renders no tax ID digits, whatever state it is in', async () => {
+    for (const state of ['verified', 'provided', 'mismatch', 'missing'] as const) {
+      const data = detail();
+      data.vendor.taxIdState = state;
+      const { container } = await renderPage(data);
+
+      // No nine-digit number, no SSN or EIN shape, and no "last four" wording or digits.
+      expect(container.innerHTML).not.toMatch(/\b\d{9}\b|\b\d{3}-\d{2}-\d{4}\b|\b\d{2}-\d{7}\b/);
+      expect(container.textContent).not.toMatch(/last (4|four)|ssn|\*{2,}\s?\d{4}/i);
+      cleanup();
+    }
+  });
+
+  it('shows backup withholding off, and on with its reason and notice date', async () => {
+    const off = await renderPage(detail());
+    const line = (root: ParentNode) =>
+      [...root.querySelectorAll('dt')].find((dt) => dt.textContent === 'Backup withholding')
+        ?.nextElementSibling?.textContent;
+
+    expect(line(off.container)).toBe('Off');
+
+    cleanup();
+    const data = detail();
+    data.vendor.backupWithholding = { reason: 'irs_notice', noticeDate: '2027-01-20' };
+    const on = await renderPage(data);
+
+    expect(line(on.container)).toContain('On · IRS notice, ');
+    expect(line(on.container)).toContain('2027');
+  });
+
+  it('shows what the vendor still owes for a lost chargeback, and nothing when they owe nothing (VEN-658)', async () => {
+    const owing = detail();
+    owing.vendor.debtOutstandingCents = 107_100;
+    const { container } = await renderPage(owing);
+    const owed = [...container.querySelectorAll('dt')].find(
+      (label) => label.textContent === 'Owed to the platform',
+    );
+
+    expect(owed?.nextElementSibling?.textContent).toBe('$1,071');
+
+    cleanup();
+    const clear = await renderPage(detail());
+    expect(
+      [...clear.container.querySelectorAll('dt')].map((label) => label.textContent),
+    ).not.toContain('Owed to the platform');
   });
 
   it('lists packages with a lever each and portfolio photos with Remove', async () => {

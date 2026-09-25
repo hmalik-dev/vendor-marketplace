@@ -380,11 +380,11 @@ describe('servesOverTls', () => {
 
   /*
    * `httpsOrigin` only *prepends* a scheme to a bare host, so an explicit
-   * `http://` announced origin survives it. An operator who declares a
+   * `http://` announced origin survives it. An admin who declares a
    * plaintext origin is believed: a proxy-terminated deployment's public origin
    * is `https://`, and declaring it is how it says so.
    */
-  it('believes an operator who announces a plaintext origin', () => {
+  it('believes an admin who announces a plaintext origin', () => {
     expect(servesOverTls(env({ DEPLOYMENT_ORIGIN: 'http://orla.example' }))).toBe(false);
   });
 

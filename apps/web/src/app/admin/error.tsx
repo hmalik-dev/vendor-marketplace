@@ -10,7 +10,7 @@ import { boundaryCaptureContext } from '@/config/error-reporting';
  *
  * Without this a failed admin read fell to the root `error.tsx`, whose screen
  * takes the site chrome down and offers the marketplace as the way out — an
- * operator mid-moderation lost the rail and the header they were working in.
+ * admin mid-moderation lost the rail and the header they were working in.
  * Rendered inside `layout.tsx`, the failure keeps them, and `reset()`
  * re-renders only the failed screen.
  *

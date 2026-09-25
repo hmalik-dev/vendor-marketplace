@@ -115,7 +115,7 @@ describe('applyAccountStatusChange under interleaved handlers', () => {
     expect(row.stripeDisabledReason).toBeNull();
     expect(row.stripeRequirementsDue).toEqual([]);
     /*
-     * Not `not-onboarded`: the route pages the operator on that word, and the
+     * Not `not-onboarded`: the route pages the admin on that word, and the
      * vendor is onboarded. The loser re-reads Stripe and finds nothing to do.
      */
     expect(outcome).toBe('unchanged');

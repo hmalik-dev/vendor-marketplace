@@ -25,8 +25,8 @@ import { withoutComments } from '@/testing/source-scan';
  *
  * So this file is **narrowed, never deleted**: without it the glyph creeps back
  * across all fourteen, which is the thing that has already happened twice. The
- * exemption is one named file, and `EXEMPT` below is asserted to *be* one file
- * so that widening it is an edit somebody has to make on purpose. The exempt
+ * exemption is two named files, and `EXEMPT` below is asserted to *be* two
+ * files so that widening it is an edit somebody has to make on purpose. The exempt
  * file is checked from the other side too — it must really draw both glyphs,
  * and only inside an `aria-hidden` span.
  *
@@ -51,13 +51,19 @@ import { withoutComments } from '@/testing/source-scan';
 const CARETS = ['▾', '▴'] as const;
 
 /**
- * The one file #426 lets draw them: the vendor-type picker, which the landing
- * hero and `/search` both mount.
+ * The files allowed to draw them. First, #426's vendor-type picker, which the
+ * landing hero and `/search` both mount. Second, VEN-710's date-picker month
+ * title, `▾` only, authorised by the account holder.
  *
- * A list of one, on purpose. The count is asserted below, so widening this is a
- * deliberate edit to a test rather than a class of drift.
+ * A list of two, on purpose. The count is asserted below, so widening this is
+ * a deliberate edit to a test rather than a class of drift.
  */
-const EXEMPT = [join('src', 'components', 'search', 'category-select.tsx')];
+const EXEMPT = [
+  join('src', 'components', 'search', 'category-select.tsx'),
+  // VEN-710: the date picker's month title, `▾` only, authorised by the account
+  // holder because nothing else says the title opens a month and year picker.
+  join('src', 'components', 'ui', 'dropdown-date.tsx'),
+];
 
 /** Every non-test source file under `src`, as `[repo-relative path, contents]`. */
 function sourceFiles(): [string, string][] {
@@ -123,8 +129,8 @@ describe('only the vendor-type trigger draws the unicode disclosure caret (D25, 
    * 3. It really draws both glyphs. #426's deliverable is a caret that *flips*;
    *    a file exempted for a caret it no longer renders is a stale hole.
    */
-  it('exempts exactly one file, and that file is really in the scanned tree', () => {
-    expect(EXEMPT).toHaveLength(1);
+  it('exempts exactly two files, and both are really in the scanned tree', () => {
+    expect(EXEMPT).toHaveLength(2);
 
     for (const exempt of EXEMPT) {
       expect(files.map(([file]) => file)).toContain(exempt);
@@ -132,7 +138,7 @@ describe('only the vendor-type trigger draws the unicode disclosure caret (D25, 
   });
 
   it('draws both glyphs on the vendor-type trigger, and only inside an aria-hidden span', () => {
-    const [picker] = EXEMPT as [string];
+    const picker = EXEMPT[0] as string;
     const code = withoutComments(files.find(([file]) => file === picker)?.[1] as string);
 
     for (const caret of CARETS) {
@@ -165,6 +171,21 @@ describe('only the vendor-type trigger draws the unicode disclosure caret (D25, 
       expect(withoutDeclaration, `${picker} should draw ${caret} only via CARETS`).not.toContain(
         caret,
       );
+    }
+  });
+
+  it('draws only the closed glyph on the date picker title, via one named constant', () => {
+    const picker = EXEMPT[1] as string;
+    const code = withoutComments(files.find(([file]) => file === picker)?.[1] as string);
+    const declaration = /const TITLE_CARET\s*=[^;]*;/.exec(code);
+
+    expect(declaration, 'the glyph should live in one named declaration').not.toBeNull();
+    expect((declaration as RegExpExecArray)[0]).toContain(CARETS[0]);
+
+    const withoutDeclaration = code.replace((declaration as RegExpExecArray)[0], '');
+
+    for (const caret of CARETS) {
+      expect(withoutDeclaration).not.toContain(caret);
     }
   });
 

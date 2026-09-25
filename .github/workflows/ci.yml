@@ -41,8 +41,105 @@ env:
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_ci000000000000000000
 
 jobs:
-  verify:
-    name: Typecheck, lint, build, test
+  # The static half of the required check: everything that reads the tree and
+  # nothing that runs a suite. The suites are sharded across `test` and
+  # `contention` below so the required check's wall time is the slowest shard,
+  # not their sum (VEN-716).
+  static:
+    name: Static checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: ./.github/actions/setup
+
+      # Next's own compiler cache, so an unchanged page is not compiled again.
+      # Turbo restores the build outputs; this is the cache it deliberately
+      # leaves out (`!.next/cache/**`).
+      - name: Cache the Next build
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: apps/web/.next/cache
+          key: next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+
+      # First, and on its own: a pre-commit hook can be skipped with
+      # `--no-verify`, so the same scan runs here over every tracked file. This
+      # is the copy that cannot be bypassed.
+      - name: Scan for committed credentials
+        run: pnpm secrets:scan:all
+
+      # A destructive statement in a migration added after launch (VEN-463).
+      - name: Check migrations for destructive statements
+        run: pnpm migrations:check
+
+      # Production dependencies only, and only what is high or worse (VEN-397).
+      # A finding with no upstream fix is pinned past in `pnpm.overrides`, never
+      # ignored, so this step cannot go quiet about a new advisory.
+      - name: Audit production dependencies
+        run: pnpm audit --audit-level high --prod
+
+      - run: pnpm format:check
+
+      - run: pnpm typecheck
+
+      - run: pnpm lint
+
+      - run: pnpm build
+
+      # The orchestration machinery under .claude/ (the hunt-bugs workflow, the
+      # schema-migration guard, the workflow pin guard) has its own tests. They
+      # are plain node scripts, so `turbo run test` — which only fans out across
+      # packages — never saw them. Without this step a regression in a hook or a
+      # workflow ships green.
+      - name: Test agent workflows and hooks
+        run: pnpm test:agents
+
+  # `pnpm test`, split. Most suites boot an in-process Postgres (PGlite) and need
+  # no server, so a shard is only a runner, an install and a slice of files.
+  # Vitest deals the test files across `--shard=i/n` by a stable hash of the path,
+  # so every file runs in exactly one shard and the union is the whole suite.
+  # Tests import the workspace packages' built output — the preflight suite reads
+  # the API's sources, which import `db`'s — so every package is built first, and
+  # no app is (the apps' own builds are `static`'s).
+  test:
+    name: Test ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: web 1/4, pkg: '@vendor-marketplace/web', shard: 1/4 }
+          - { name: web 2/4, pkg: '@vendor-marketplace/web', shard: 2/4 }
+          - { name: web 3/4, pkg: '@vendor-marketplace/web', shard: 3/4 }
+          - { name: web 4/4, pkg: '@vendor-marketplace/web', shard: 4/4 }
+          - { name: api 1/4, pkg: '@vendor-marketplace/api', shard: 1/4 }
+          - { name: api 2/4, pkg: '@vendor-marketplace/api', shard: 2/4 }
+          - { name: api 3/4, pkg: '@vendor-marketplace/api', shard: 3/4 }
+          - { name: api 4/4, pkg: '@vendor-marketplace/api', shard: 4/4 }
+          - { name: db 1/2, pkg: '@vendor-marketplace/db', shard: 1/2 }
+          - { name: db 2/2, pkg: '@vendor-marketplace/db', shard: 2/2 }
+          - { name: preflight, pkg: '@vendor-marketplace/preflight', shard: 1/1 }
+          - { name: shared, pkg: '@vendor-marketplace/shared', shard: 1/1 }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: ./.github/actions/setup
+
+      - name: Build the workspace packages
+        run: pnpm turbo run build --filter='./packages/*'
+
+      - name: Run the suite shard
+        run: pnpm --filter '${{ matrix.pkg }}' exec vitest run --shard=${{ matrix.shard }}
+
+  # Two connections to one database, which PGlite cannot be. Kept out of the
+  # sharded suites so those stay runnable with nothing but Node; here a server is
+  # guaranteed, so failing to reach one is a real failure (#399).
+  contention:
+    name: Test contention
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -72,59 +169,30 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: ./.github/actions/setup
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-
-      - name: Cache turbo build outputs
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: .turbo
-          key: turbo-${{ runner.os }}-${{ github.sha }}
-          restore-keys: turbo-${{ runner.os }}-
-
-      - run: pnpm install --frozen-lockfile
-
-      # First, and on its own: a pre-commit hook can be skipped with
-      # `--no-verify`, so the same scan runs here over every tracked file. This
-      # is the copy that cannot be bypassed.
-      - name: Scan for committed credentials
-        run: pnpm secrets:scan:all
-
-      # A destructive statement in a migration added after launch (VEN-463).
-      - name: Check migrations for destructive statements
-        run: pnpm migrations:check
-
-      # Production dependencies only, and only what is high or worse (VEN-397).
-      # A finding with no upstream fix is pinned past in `pnpm.overrides`, never
-      # ignored, so this step cannot go quiet about a new advisory.
-      - name: Audit production dependencies
-        run: pnpm audit --audit-level high --prod
-
-      - run: pnpm format:check
-
-      - run: pnpm typecheck
-
-      - run: pnpm lint
-
-      - run: pnpm build
-
-      - run: pnpm test
-
-      # Two connections to one database, which PGlite cannot be. Kept out of
-      # `pnpm test` so that task stays runnable with nothing but Node; here a
-      # server is guaranteed, so failing to reach one is a real failure (#399).
       - run: pnpm test:contention
 
-      # The orchestration machinery under .claude/ (the hunt-bugs workflow, the
-      # schema-migration guard) has its own tests. They are plain node scripts,
-      # so `turbo run test` — which only fans out across packages — never saw
-      # them. Without this step a regression in a hook or a workflow ships green.
-      - name: Test agent workflows and hooks
-        run: pnpm test:agents
+  # The required check. Its name is what branch protection names, so it stays
+  # exactly what it was when this was one serial job; it is now the verdict of the
+  # jobs above, and fails when any of them did not succeed (skipped and cancelled
+  # included: a skipped required check reads as passing). `if: always()` is what
+  # makes it run to say so.
+  verify:
+    name: Typecheck, lint, build, test
+    needs: [static, test, contention]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every job succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for result in $RESULTS; do
+            [ "$result" = success ] || { echo "::error::a required job finished as '$result'"; exit 1; }
+          done
 
   # gitleaks over every commit in the history, on every push and pull request
   # this workflow sees (VEN-397). `pnpm secrets:scan:all` above reads the tree
@@ -186,6 +254,8 @@ jobs:
     # This job holds the Stripe and auth secrets, so its token reads and nothing more.
     permissions:
       contents: read
+      # Read-only: the journey selection asks for `main`'s last successful run.
+      actions: read
     # One run per branch. The workflow-level group already cancels a superseded
     # push; this also keeps two runs of one branch off the shared E2E accounts
     # and the pinned Stripe connected account at once.
@@ -244,10 +314,56 @@ jobs:
       E2E_NEWCOMER_PASSWORD: ${{ secrets.E2E_NEWCOMER_PASSWORD }}
 
     steps:
+      # Two commits deep: the change under test and its parent. On a pull request
+      # that is the merge commit and the base tip; on a push, the commit and what
+      # it landed on.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 2
 
+      # Which journeys this diff can affect (VEN-593; the decision is
+      # `selectSpecs` in `scripts/e2e-ci.mjs`). Every way of not knowing the diff
+      # writes a path no table entry matches, which that function answers with the
+      # full suite: a pull request into `production` is a release, and a push whose
+      # previous commit cannot be fetched (a force-push, a first push) has no diff.
+      # The job and its name never change, so a scoped or empty selection is still a
+      # green `End-to-end journeys`, never a skipped required check.
+      - name: Select the journeys this change can affect
+        id: select
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          changed="$RUNNER_TEMP/changed-files.txt"
+          if [ "$EVENT_NAME" = pull_request ] && [ "$BASE_REF" = production ]; then
+            echo '<pull request into production>' > "$changed"
+          elif [ "$EVENT_NAME" = pull_request ]; then
+            git diff --name-only --no-renames HEAD^1 HEAD > "$changed" \
+              || echo '<diff unavailable>' > "$changed"
+          else
+            # A push is diffed against the last `main` run of this workflow that
+            # succeeded, not against `github.event.before`: a run superseded by the
+            # next merge is cancelled, and diffing only the last push would leave its
+            # changes unchecked on `main` for good. The compare API must call the
+            # result `ahead` (an ancestor, not a rerun of an older commit) and list
+            # fewer than the 300 files it truncates at; else the full suite.
+            last=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=1" \
+              --jq '.workflow_runs[0].head_sha // empty') \
+              && [ -n "$last" ] \
+              && gh api "repos/$REPO/compare/$last...$GITHUB_SHA" \
+                --jq 'if .status == "ahead" and (.files | length) < 300 then .files[] | (.filename, (.previous_filename // empty)) else "<diff unavailable>" end' > "$changed" \
+              || echo '<diff unavailable>' > "$changed"
+          fi
+          node scripts/e2e-ci.mjs select "$changed"
+
+      # Skipped when nothing is affected, and with it every step below that reads
+      # `steps.secrets.outputs.run`: the job ends green on the summary line
+      # `select` wrote.
       - name: Check the E2E secrets are configured
         id: secrets
+        if: steps.select.outputs.suite != 'none'
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         run: node scripts/e2e-ci.mjs secrets
@@ -391,9 +507,24 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+      # Only an explicit `scoped` narrows the run; anything else is the full suite.
+      # A scoped list can name a spec the diff deleted or one the config ignores
+      # (`*.staging.spec.ts`), which matches nothing: that is no journey to run,
+      # not a failure, so the scoped run alone passes with no tests.
       - name: Run the journeys
         if: steps.secrets.outputs.run == 'true'
-        run: pnpm --filter @vendor-marketplace/web test:e2e
+        env:
+          SUITE: ${{ steps.select.outputs.suite }}
+          SPECS: ${{ steps.select.outputs.specs }}
+        run: |
+          if [ "$SUITE" = scoped ] && [ -n "$SPECS" ]; then
+            files=()
+            IFS=, read -ra names <<< "$SPECS"
+            for name in "${names[@]}"; do files+=("e2e/$name"); done
+            pnpm --filter @vendor-marketplace/web exec playwright test --pass-with-no-tests "${files[@]}"
+          else
+            pnpm --filter @vendor-marketplace/web test:e2e
+          fi
 
       - name: Report retries and timing
         if: always() && steps.secrets.outputs.run == 'true' && hashFiles('apps/web/playwright-results.json') != ''
@@ -439,7 +570,7 @@ jobs:
             || echo "::warning::could not delete $STORAGE_BRANCH; it expires on its own within a day"
 
 # Migrations are not CI's job. `deploy.yml` runs them after this workflow
-# succeeds on main, over DATABASE_URL_UNPOOLED, before either service deploys
+# succeeds on a push to `staging` or `production`, over DATABASE_URL_UNPOOLED, before either service deploys
 # (VEN-397). Before that they ran in Railway's `preDeployCommand`, over the
 # runtime's pooled URL; that path was removed with it, so there is one route to
 # production DDL. The migrate-staging and migrate-production jobs that once

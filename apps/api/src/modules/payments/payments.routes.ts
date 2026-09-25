@@ -5,10 +5,15 @@ import {
   cancelledBookingSchema,
   checkoutIntentSchema,
   uuidSchema,
+  vendorCancelBookingSchema,
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { authenticated, requireAuthBeforeValidation } from '../../lib/guards.js';
+import {
+  authenticated,
+  requireAuthBeforeValidation,
+  requireRoleBeforeValidation,
+} from '../../lib/guards.js';
 import { notFound } from '../../lib/errors.js';
 import {
   bookingContextFor,
@@ -46,7 +51,7 @@ export const paymentRoutes: FastifyPluginAsyncZod<PaymentRoutesOptions> = async 
   app.post(
     '/customer/booking-requests/:requestId/checkout',
     {
-      onRequest: requireAuthBeforeValidation,
+      onRequest: requireRoleBeforeValidation('customer'),
       schema: { params: requestParamsSchema, response: { 200: checkoutIntentSchema } },
     },
     async (request) =>
@@ -144,6 +149,29 @@ export const paymentRoutes: FastifyPluginAsyncZod<PaymentRoutesOptions> = async 
         request.body.reason,
         app.clock(),
         request.body.expectedRefundCents,
+      ),
+  );
+
+  /** The refund is always the whole payment, so the body carries no amount to confirm. */
+  app.put(
+    '/vendor/bookings/:bookingId/cancel',
+    {
+      onRequest: requireAuthBeforeValidation,
+      schema: {
+        params: bookingParamsSchema,
+        body: vendorCancelBookingSchema,
+        response: { 200: cancelledBookingSchema },
+      },
+    },
+    async (request) =>
+      cancelBooking(
+        contextFor(request.log),
+        authenticated(request.auth),
+        request.params.bookingId,
+        request.body.reason,
+        app.clock(),
+        undefined,
+        'vendor',
       ),
   );
 };

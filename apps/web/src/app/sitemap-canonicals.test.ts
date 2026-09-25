@@ -18,6 +18,7 @@ import { siteOrigin } from '@/config/env';
 const VENDOR_SLUG = 'june-harlow';
 
 vi.mock('@/lib/api-client', () => ({
+  setRefusedTokenHandler: () => {},
   apiRequest: () =>
     Promise.resolve({
       items: [{ slug: VENDOR_SLUG }],
@@ -47,7 +48,7 @@ interface PageModule {
 /** The page module that answers a sitemap path. An unmapped path fails the test. */
 function pageFor(pathname: string): Promise<PageModule> {
   if (pathname.startsWith('/vendors/')) {
-    return import('./vendors/[slug]/page');
+    return import('./vendors/[slug]/(profile)/page');
   }
 
   const pages: Record<string, () => Promise<PageModule>> = {

@@ -51,6 +51,8 @@ function supportCase(overrides: Partial<WireAdminCaseDetail> = {}): WireAdminCas
       totalAmountCents: 260_000,
       platformFeeCents: 28_600,
       vendorPayoutCents: 231_400,
+      vendorOwedCents: 0,
+      vendorOwedRecoveredCents: 0,
       refundAmountCents: null,
       paidAt: new Date('2026-08-20T16:41:00Z'),
       payoutReleasedAt: null,
@@ -247,6 +249,37 @@ describe('AdminCasePage', () => {
       supportCase({ booking: { ...supportCase().booking!, status: 'completed' } }),
     );
     expect(cardTitled(settled.container, '3 · Resolve').textContent).not.toContain('Moves money');
+  });
+
+  it('shows what the vendor owes after a lost chargeback, and nothing when they owe nothing (VEN-645)', async () => {
+    const owing = supportCase();
+    owing.booking = { ...owing.booking!, vendorOwedCents: 105_600 };
+    const withDebt = await renderCase(owing);
+    const debt = cardTitled(withDebt.container, '2 · The booking it froze');
+
+    const owed = [...debt.querySelectorAll('dt')].find(
+      (label) => label.textContent === 'Owed by vendor',
+    );
+    expect(owed?.nextElementSibling?.textContent).toBe('$1,056');
+    cleanup();
+
+    const partly = supportCase();
+    partly.booking = {
+      ...partly.booking!,
+      vendorOwedCents: 105_600,
+      vendorOwedRecoveredCents: 40_000,
+    };
+    const recovering = await renderCase(partly);
+    const partlyOwed = [...recovering.container.querySelectorAll('dt')].find(
+      (label) => label.textContent === 'Owed by vendor',
+    );
+    expect(partlyOwed?.nextElementSibling?.textContent).toBe('$1,056 ($400 recovered)');
+    cleanup();
+
+    const clear = await renderCase(supportCase());
+    expect(
+      [...clear.container.querySelectorAll('dt')].map((label) => label.textContent),
+    ).not.toContain('Owed by vendor');
   });
 
   it('renders identifiers, dates and money as mono values beside a label', async () => {

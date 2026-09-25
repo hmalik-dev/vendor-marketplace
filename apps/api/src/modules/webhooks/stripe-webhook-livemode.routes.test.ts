@@ -1,4 +1,4 @@
-import { operatorAlerts } from '@vendor-marketplace/db/schema';
+import { adminAlerts } from '@vendor-marketplace/db/schema';
 import { Writable } from 'node:stream';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createTestHarness, TEST_ENV, type TestHarness } from '../../testing/test-server.js';
@@ -34,7 +34,7 @@ describe.each([
   afterEach(async () => {
     lines.length = 0;
     harness.email.sent.length = 0;
-    await harness.database.db.delete(operatorAlerts);
+    await harness.database.db.delete(adminAlerts);
   });
 
   afterAll(async () => {
@@ -73,11 +73,9 @@ describe.each([
       keyMode,
     });
 
-    // Only the direction that drops real money pages the operator.
+    // Only the direction that drops real money pages the admin.
     await harness.flushEmail();
-    const paged = harness.email.sent.filter(
-      (message) => message.to === TEST_ENV.OPERATOR_ALERT_EMAIL,
-    );
+    const paged = harness.email.sent.filter((message) => message.to === TEST_ENV.ADMIN_ALERT_EMAIL);
     expect(paged).toHaveLength(eventLivemode ? 1 : 0);
     if (eventLivemode) {
       expect(paged[0]!.subject).toContain('Live Stripe events are being ignored');

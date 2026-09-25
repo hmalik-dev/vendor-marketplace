@@ -39,8 +39,27 @@ export const AUTH_COPY = {
   changeSameAsCurrent: 'Choose a new password that is different from your current one.',
   changeTooShort: 'Your new password needs at least 10 characters.',
   changeTooLong: 'Your new password can be at most 128 characters.',
+  changeDone:
+    'Your password is changed. You are still signed in here, and signed out everywhere else.',
   changeMismatch: 'The two new passwords do not match.',
+  sessionsTitle: "Where you're signed in",
+  sessionsRowValue: 'See your devices and sign out the others',
+  thisDevice: 'This device',
+  unknownDevice: 'Unknown device',
+  lastActive: 'Last active',
+  signOutDevice: 'Sign out',
+  signOutOthers: 'Sign out all other devices',
+  sessionsLoading: 'Loading your devices…',
+  sessionsNoOthers: 'No other devices are signed in.',
+  sessionsLoadFailed: 'We could not load your devices. Try again in a moment.',
+  sessionEnded: 'That device is signed out.',
+  sessionsEnded: 'Every other device is signed out.',
+  sessionEndFailed: 'We could not sign that device out. Try again in a moment.',
   throttled: "This isn't going through right now. Wait a few minutes and try again.",
+  resetMailPaced:
+    'Too many reset codes were requested for this address just now. Wait a minute, then try again.',
+  signInThrottled:
+    'Too many sign-in attempts from this device. Wait a few minutes and try again, or reset your password.',
   unreachable: 'We could not reach the sign-in service. Try again in a moment.',
 } as const;
 
@@ -56,6 +75,10 @@ export function failureCopy(outcome: Exclude<AuthOutcome, 'ok'>, fallback: strin
 
   if (outcome === 'throttled') {
     return AUTH_COPY.throttled;
+  }
+
+  if (outcome === 'mailPaced') {
+    return AUTH_COPY.resetMailPaced;
   }
 
   return fallback;

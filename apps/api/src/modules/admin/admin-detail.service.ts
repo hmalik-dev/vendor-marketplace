@@ -18,9 +18,11 @@ import {
   type AdminRequestQuery,
   type AdminVendorDetail,
   type BookingRequestStatus,
+  type TaxIdState,
 } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 import { notFound } from '../../lib/errors.js';
+import type { StripeConnectGateway } from '../../lib/stripe.js';
 import { availabilityWindow } from '../availability/availability.service.js';
 import {
   countAdminRequests,
@@ -48,6 +50,7 @@ import {
   type LockRequestRow,
   type StoredLockRow,
 } from './admin-detail.dao.js';
+import { findVendorDebtTotals } from '../payments/payouts.dao.js';
 import { fullName, toVendorRow } from './admin.service.js';
 
 /**
@@ -89,7 +92,7 @@ function groupByDate<T extends { eventDate: string }>(rows: readonly T[]): Map<s
  * A held date lists what stands on it — bookings for `booked`, live requests
  * for a stored `pending` (`lockHeldDate` writes one) — and **an empty list is
  * the finding**: the calendar refuses the date while nothing holds it, which is
- * the stale lock an operator arrives asking about.
+ * the stale lock an admin arrives asking about.
  */
 export function composeLocks(
   stored: readonly StoredLockRow[],
@@ -173,11 +176,40 @@ function withoutRecipient(read: Awaited<ReturnType<typeof readNotifications>>): 
   return { ...read, items: read.items.map(({ userId: _userId, ...item }) => item) };
 }
 
+/** What the detail needs from Stripe: the tax-ID state, which is read live and never stored. */
+export interface VendorDetailStripe {
+  stripe: Pick<StripeConnectGateway, 'readTaxIdState'>;
+  log: { warn: (details: Record<string, unknown>, message: string) => void };
+}
+
+/**
+ * Stripe's word for where the vendor's tax ID stands. A read that fails is
+ * `null`, never a guess: the page still renders and says it could not tell.
+ */
+async function readTaxIdState(
+  deps: VendorDetailStripe,
+  vendorId: string,
+  stripeAccountId: string | null,
+): Promise<TaxIdState | null> {
+  if (!stripeAccountId) {
+    return null;
+  }
+
+  try {
+    return await deps.stripe.readTaxIdState(stripeAccountId);
+  } catch (error) {
+    deps.log.warn({ vendorId, err: error }, 'Could not read the vendor tax ID state from Stripe');
+
+    return null;
+  }
+}
+
 /** `GET /admin/vendors/:vendorId`. */
 export async function readVendorDetail(
   db: AppDatabase,
   vendorId: string,
   now: Date,
+  deps: VendorDetailStripe,
 ): Promise<AdminVendorDetail> {
   const vendor = await findAdminVendorDetail(db, vendorId);
 
@@ -186,14 +218,17 @@ export async function readVendorDetail(
   }
 
   const range = lockRange(now);
-  const [packages, portfolio, stored, requests, heldBookings, notifications] = await Promise.all([
-    findVendorPackagesForAdmin(db, vendorId),
-    findVendorPortfolioForAdmin(db, vendorId),
-    findStoredCalendarRows(db, vendorId, range),
-    findLiveRequestsHoldingDates(db, vendorId, range, now),
-    findBookingsHoldingDates(db, vendorId, range),
-    readNotifications(db, notificationsSentTo(vendor.userId)),
-  ]);
+  const [packages, portfolio, stored, requests, heldBookings, notifications, debt, taxIdState] =
+    await Promise.all([
+      findVendorPackagesForAdmin(db, vendorId),
+      findVendorPortfolioForAdmin(db, vendorId),
+      findStoredCalendarRows(db, vendorId, range),
+      findLiveRequestsHoldingDates(db, vendorId, range, now),
+      findBookingsHoldingDates(db, vendorId, range),
+      readNotifications(db, notificationsSentTo(vendor.userId)),
+      findVendorDebtTotals(db, vendorId),
+      readTaxIdState(deps, vendorId, vendor.stripeAccountId),
+    ]);
 
   return {
     vendor: {
@@ -206,6 +241,15 @@ export async function readVendorDetail(
       isPublished: vendor.isPublished,
       moderationHold: vendor.moderationHold,
       payoutHold: vendor.payoutHold,
+      backupWithholding:
+        vendor.backupWithholdingReason && vendor.backupWithholdingNoticeDate
+          ? {
+              reason: vendor.backupWithholdingReason,
+              noticeDate: vendor.backupWithholdingNoticeDate,
+            }
+          : null,
+      taxIdState,
+      debtOutstandingCents: debt.outstandingCents,
     },
     packages,
     portfolio,
@@ -317,7 +361,7 @@ function resolvedAt(row: AdminRequestListRow, status: BookingRequestStatus): Dat
  *
  * **A read, and only a read.** The participant's read ages a lapsed row as it
  * returns it; this one reports the same answer from the same predicate and
- * writes nothing, so an operator browsing the funnel never sends a customer
+ * writes nothing, so an admin browsing the funnel never sends a customer
  * a `request_expired` notification.
  */
 export async function listRequests(
