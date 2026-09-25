@@ -1516,6 +1516,118 @@ describe('sessions the browser never keeps (VEN-714)', () => {
   });
 });
 
+describe('verifying an address marks the role recorded at sign-up (VEN-756)', () => {
+  const KEY = 'k'.repeat(40);
+  const EMAIL = 'fresh@example.com';
+  const VERIFY = 'email-otp/verify-email';
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  const marks = () =>
+    fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/internal/sign-up-role/verified'));
+
+  function answerVerify(answer: Response): void {
+    upstreamPost
+      .mockReset()
+      .mockImplementation(async (_request, context) =>
+        (await context.params).path.join('/') === VERIFY
+          ? answer.clone()
+          : Response.json({ success: true }),
+      );
+  }
+
+  function stubApi(markStatus = 200): void {
+    fetchMock = vi.fn((url: string) =>
+      Promise.resolve(
+        url.endsWith('/internal/throttle')
+          ? Response.json({ throttled: false })
+          : Response.json({ verified: true }, { status: markStatus }),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+  }
+
+  beforeEach(() => {
+    vi.stubEnv('WEB_TIER_KEY', KEY);
+    resetThrottle();
+    captureMessage.mockReset();
+    captureException.mockReset();
+    stubApi();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it('marks the id the verification answer names, with the web tier key', async () => {
+    answerVerify(Response.json({ status: true, token: null, user: { id: 'auth-7' } }));
+
+    const response = await call(VERIFY, { email: EMAIL, otp: '123456' });
+
+    expect(response.status).toBe(200);
+    expect(marks()).toEqual([
+      [
+        expect.stringMatching(/\/v1\/internal\/sign-up-role\/verified$/),
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({ 'x-web-tier-key': KEY }),
+          body: JSON.stringify({ authUserId: 'auth-7' }),
+        }),
+      ],
+    ]);
+  });
+
+  it('marks nothing when the code is refused', async () => {
+    answerVerify(Response.json({ code: 'INVALID_OTP' }, { status: 400 }));
+
+    const response = await call(VERIFY, { email: EMAIL, otp: '000000' });
+
+    expect(response.status).toBe(400);
+    expect(marks()).toEqual([]);
+  });
+
+  it('marks nothing on a sign-in or a code send', async () => {
+    upstreamPost
+      .mockReset()
+      .mockImplementation(async () =>
+        Response.json({ token: 't', user: { id: 'auth-7', emailVerified: true } }),
+      );
+
+    await call('sign-in/email', { email: EMAIL, password: 'correct horse' });
+    await call('email-otp/send-verification-otp', { email: EMAIL, type: 'email-verification' });
+
+    expect(upstreamPost).toHaveBeenCalledTimes(2);
+    expect(marks()).toEqual([]);
+  });
+
+  it('reports an answer that names no account and still answers that the address is verified', async () => {
+    answerVerify(Response.json({ status: true }));
+
+    const response = await call(VERIFY, { email: EMAIL, otp: '123456' });
+
+    expect(response.status).toBe(200);
+    expect(marks()).toEqual([]);
+    expect(captureMessage).toHaveBeenCalledWith(
+      'A verification answer named no account id, so its role stays unverified',
+      { level: 'warning' },
+    );
+  });
+
+  it('reports a refused mark and still answers that the address is verified', async () => {
+    answerVerify(Response.json({ status: true, token: null, user: { id: 'auth-7' } }));
+    stubApi(500);
+
+    const response = await call(VERIFY, { email: EMAIL, otp: '123456' });
+
+    expect(response.status).toBe(200);
+    expect(marks()).toHaveLength(1);
+    expect(captureMessage).toHaveBeenCalledWith('Could not mark the sign-up role as verified', {
+      level: 'error',
+      extra: { status: 500, authUserId: 'auth-7' },
+    });
+  });
+});
+
 describe('the devices an account is signed in on, through the auth proxy (VEN-681)', () => {
   const REVOKE_ONE = 'revoke-session';
   const REVOKE_OTHERS = 'revoke-other-sessions';

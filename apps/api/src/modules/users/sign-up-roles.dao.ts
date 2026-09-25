@@ -1,4 +1,4 @@
-import { and, eq, gt, lte } from 'drizzle-orm';
+import { and, eq, gt, isNull, lte } from 'drizzle-orm';
 import { signUpRoles } from '@vendor-marketplace/db/schema';
 import type { SignUpRole } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
@@ -41,10 +41,37 @@ export async function findSignUpRole(
   return row?.role === 'customer' || row?.role === 'vendor' ? row.role : null;
 }
 
-/**
- * Spent once the account row exists (the role now lives on `users.role`), and
- * forgotten when the identity's password is reset (VEN-663).
- */
+/** Spent once the account row exists: the role now lives on `users.role`. */
 export async function deleteSignUpRole(db: AppDatabase, authUserId: string): Promise<void> {
   await db.delete(signUpRoles).where(eq(signUpRoles.authUserId, authUserId));
+}
+
+/**
+ * Marks the identity's record as chosen by whoever holds the address (VEN-756):
+ * its sign-up code was just accepted. The first mark stands; an unknown id is
+ * a no-op.
+ */
+export async function markSignUpRoleVerified(
+  db: AppDatabase,
+  authUserId: string,
+  now: Date = new Date(),
+): Promise<void> {
+  await db
+    .update(signUpRoles)
+    .set({ verifiedAt: now })
+    .where(and(eq(signUpRoles.authUserId, authUserId), isNull(signUpRoles.verifiedAt)));
+}
+
+/**
+ * Forgets the record of an identity whose password was just reset (VEN-663),
+ * unless the address verified it first (VEN-756): a squatter never holds the
+ * code, so only an unverified choice may be someone else's.
+ */
+export async function forgetUnverifiedSignUpRole(
+  db: AppDatabase,
+  authUserId: string,
+): Promise<void> {
+  await db
+    .delete(signUpRoles)
+    .where(and(eq(signUpRoles.authUserId, authUserId), isNull(signUpRoles.verifiedAt)));
 }

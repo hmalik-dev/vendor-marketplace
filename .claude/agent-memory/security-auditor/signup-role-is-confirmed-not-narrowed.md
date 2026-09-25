@@ -42,6 +42,19 @@ existing address is 422 or a synthetic id. **Finding raised:** with no record,
 every pre-Terms reset, legitimate or squatted, is locked out of onboarding,
 though `acceptTerms` already falls back to the body role. Caller decides.
 
+**VEN-756 (audited 2026-09-25, PASS):** `sign_up_roles.verified_at` is set by
+`POST /internal/sign-up-role/verified` (same key/bodyLimit/rateLimit-off as its
+siblings), called by the proxy after a 2xx `email-otp/verify-email` with the id
+from the provider's answer; the reset DELETE now spares verified rows. Safe only
+because the victim cannot reach the code step for the squatter's identity: sign-up
+answers 422 (form shows failure) and sign-in's 403 `unverified` comes after the
+password check. **Re-open if** the provider ever answers an existing-address
+sign-up with a synthetic 200 (enumeration protection): the form then opens the
+code step, "Send a new code" mails the victim, and verify-email (keyed by email)
+returns the squatter's id, so the victim verifies the squatter's role. Same if
+`change-email` is ever reachable (proxy or direct at Neon): verify own address,
+then move the identity onto the victim's.
+
 **VEN-678 (audited 2026-09-23, PASS):** `signUpWithEmail` reads the relayed
 sign-up body only to derive `codeSent = token === null` and keeps nothing else.
 The proxy already hands the provider's body to the browser unchanged, so that

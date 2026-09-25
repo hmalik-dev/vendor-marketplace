@@ -270,9 +270,10 @@ async function invalidateSessionsAtApi(userId: string | undefined): Promise<void
 /**
  * Forgets the role recorded at sign-up for an identity whose password was just
  * reset (VEN-663). Whoever signed the address up first chose that role, and
- * the reset is the holder's first proof of the address, so `/accept-terms`
- * must not state the earlier choice as theirs. The reset has already
- * succeeded, so a failure is reported, never turned into a failed reset.
+ * unless the address verified it (VEN-756, kept by the API) the reset is the
+ * holder's first proof of the address, so `/accept-terms` must not state the
+ * earlier choice as theirs. The reset has already succeeded, so a failure is
+ * reported, never turned into a failed reset.
  */
 async function forgetSignUpRole(userId: string | undefined): Promise<void> {
   const key = process.env.WEB_TIER_KEY;
@@ -291,6 +292,49 @@ async function forgetSignUpRole(userId: string | undefined): Promise<void> {
 
     if (!response.ok) {
       Sentry.captureMessage('Could not forget the sign-up role after a password reset', {
+        level: 'error',
+        extra: { status: response.status, authUserId: userId },
+      });
+    }
+  } catch (error) {
+    Sentry.captureException(error);
+  }
+}
+
+/**
+ * Tells the API the address just verified the role recorded at sign-up
+ * (VEN-756), so a later password reset keeps it: only the inbox's reader holds
+ * the code, and a squatter never does. The address is verified either way, so
+ * a failure is reported, never turned into a failed verification; the reset
+ * then forgets the role as it did before.
+ */
+async function markSignUpRoleVerified(userId: string | undefined): Promise<void> {
+  const key = process.env.WEB_TIER_KEY;
+
+  if (!key) {
+    return;
+  }
+
+  if (userId === undefined) {
+    Sentry.captureMessage(
+      'A verification answer named no account id, so its role stays unverified',
+      {
+        level: 'warning',
+      },
+    );
+    return;
+  }
+
+  try {
+    const response = await fetch(`${apiBaseUrl()}/internal/sign-up-role/verified`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', [WEB_TIER_KEY_HEADER]: key },
+      body: JSON.stringify({ authUserId: userId }),
+      signal: AbortSignal.timeout(SIGN_UP_ROLE_TIMEOUT_MS),
+    });
+
+    if (!response.ok) {
+      Sentry.captureMessage('Could not mark the sign-up role as verified', {
         level: 'error',
         extra: { status: response.status, authUserId: userId },
       });
@@ -437,6 +481,10 @@ async function forwardBudgeted(
     // The browser is told the sign-up failed and keeps no cookie, so the session it opened is ended too.
     await endMintedSession(request, response);
     return NextResponse.json({ code: 'SIGN_UP_UNRECORDED' }, { status: 503 });
+  }
+
+  if (path.join('/') === VERIFY_EMAIL && response.ok) {
+    await markSignUpRoleVerified(await userIdIn(response));
   }
 
   if (mintsSession) {

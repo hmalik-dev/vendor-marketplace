@@ -15,6 +15,11 @@ import { userRoleEnum } from './enums.js';
  * would let anyone pre-seed a role for an address they do not own. It holds
  * nothing else about the person — no email, no name, no IP.
  *
+ * `verified_at` is set when the identity that chose the role proves the
+ * address with its sign-up code (VEN-756). Only an unverified row is forgotten
+ * by a password reset (VEN-663): a squatter never holds the code, so a row the
+ * address verified was chosen by whoever reads that inbox.
+ *
  * Rows past `expires_at` read as absent and are deleted as the next one is
  * written; there is no sweep.
  */
@@ -25,6 +30,7 @@ export const signUpRoles = pgTable(
     role: userRoleEnum('role').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    verifiedAt: timestamp('verified_at', { withTimezone: true }),
   },
   (table) => [
     // `admin` is granted by an admin, never chosen at sign-up.
