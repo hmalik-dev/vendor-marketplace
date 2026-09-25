@@ -128,6 +128,20 @@ migrate it, run the reference seed and re-create its Neon Auth identities
 `pnpm lane:down <id> && pnpm lane:up <id>`. Never run `pnpm db:seed:demo` or
 `pnpm db:seed:e2e` against production.
 
+**Reading an admin step-up code in a lane (VEN-641).** Do not set
+`EMAIL_SINK_ADDRESS` for this: the sink delivers through Resend, whose only
+working sender (`onboarding@resend.dev`) reaches the account owner's own address
+and never a test inbox, and a lane's `EMAIL_DAILY_SEND_CAP` is 0 so it sends
+nothing anyway. A lane needs no inbox. The local API keeps the last messages it
+was asked to send, log-only ones included, and serves the newest at
+`GET /__lane/mailbox/latest[?to=<address>]` (`{ to, subject, text }`), so a
+browser pass presses "Email me a code", reads the six digits from `text` and
+enters them; `apps/web/e2e/step-up.ts` does exactly this. The route exists only
+when `DEPLOY_ENV` is `local` on a process that is not a deployed runtime
+(`apps/api/src/plugins/email.test.ts` pins both absences), so no credential,
+inbox address or code is configured, logged or reachable on staging or
+production.
+
 **Neon Auth mail is outside the sink.** Neon Auth sends its own OTP and
 verification mail from each branch's Auth instance, not through the API's
 gateway, so `EMAIL_SINK_ADDRESS` cannot redirect it: a sign-up on the dev or
