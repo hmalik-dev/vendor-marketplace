@@ -76,7 +76,6 @@ export function PortfolioPane({ items, businessName }: PortfolioPaneProps): Reac
    * columns and remounts the tiles, which would leave an element ref detached.
    */
   const opener = useRef<number | null>(null);
-  const grid = useRef<HTMLDivElement>(null);
 
   const close = useCallback(() => setOpenIndex(null), []);
   const step = useCallback(
@@ -180,9 +179,7 @@ export function PortfolioPane({ items, businessName }: PortfolioPaneProps): Reac
       document.body.style.overflow = previousOverflow;
       // Back to the thumbnail, so a keyboard user resumes where they were
       // instead of being dropped at the top of the page.
-      grid.current
-        ?.querySelector<HTMLElement>(`[data-portfolio-index="${opener.current}"]`)
-        ?.focus();
+      document.querySelector<HTMLElement>(`[data-portfolio-index="${opener.current}"]`)?.focus();
     };
   }, [isOpen, close, step]);
 
@@ -207,7 +204,7 @@ export function PortfolioPane({ items, businessName }: PortfolioPaneProps): Reac
         #322 corrects elsewhere, except here there was no wider frame for it to
         have come from.
       */}
-      <div ref={grid} className="flex items-start gap-3">
+      <div className="flex items-start gap-3">
         {dealColumns(items, columnCount).map((column, columnIndex) => (
           <ul
             key={columnIndex}
