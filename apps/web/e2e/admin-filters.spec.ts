@@ -107,6 +107,23 @@ async function listing(page: Page): Promise<Listing> {
   });
 }
 
+/**
+ * A URL's path and query with empty parameters dropped (VEN-752).
+ *
+ * The GET form submits every named field, so `Apply filters` on a bar with a
+ * search box sends `q=` when the box is empty, and no markup can stop a
+ * scriptless browser doing that. The page reads `q=` as no search, so
+ * `?type=…&q=` is the filtered view; a non-empty parameter still has to match.
+ */
+function withoutEmptyParams(url: string): string {
+  const parsed = new URL(url, 'http://localhost');
+  const kept = new URLSearchParams(
+    [...parsed.searchParams].filter(([, value]) => value !== ''),
+  ).toString();
+
+  return `${parsed.pathname}${kept ? `?${kept}` : ''}`;
+}
+
 /** Tab until the submit holds focus, the way a keyboard user reaches it. */
 async function tabToSubmit(page: Page): Promise<void> {
   for (let stop = 0; stop < 40; stop += 1) {
@@ -129,9 +146,13 @@ async function tabToSubmit(page: Page): Promise<void> {
  *
  * Waited for, not inferred: the page is already on `?type=…` when the key is
  * pressed, so a URL assertion alone would pass against a submit that sent
- * nothing at all.
+ * nothing at all. The page is then waited onto that exact URL, so nothing
+ * below reads the document the submit is replacing.
  */
-async function submitAndAwaitDocument(page: Page): Promise<string> {
+async function submitAndAwaitDocument(
+  page: Page,
+  activate: () => Promise<void> = () => page.keyboard.press('Enter'),
+): Promise<string> {
   const [response] = await Promise.all([
     page.waitForResponse(
       (candidate) =>
@@ -139,10 +160,11 @@ async function submitAndAwaitDocument(page: Page): Promise<string> {
         candidate.request().method() === 'GET' &&
         new URL(candidate.url()).pathname === PATH,
     ),
-    page.keyboard.press('Enter'),
+    activate(),
   ]);
 
   expect(response.status()).toBe(200);
+  await expect(page).toHaveURL(response.url());
   await page.waitForLoadState('domcontentloaded');
 
   const landed = new URL(response.url());
@@ -151,8 +173,7 @@ async function submitAndAwaitDocument(page: Page): Promise<string> {
 }
 
 async function expectSubmitKeepsTheFilter(page: Page, before: Listing): Promise<void> {
-  expect(await submitAndAwaitDocument(page)).toBe(FILTERED);
-  await expect(page).toHaveURL(FILTERED);
+  expect(withoutEmptyParams(await submitAndAwaitDocument(page))).toBe(FILTERED);
 
   const after = await listing(page);
   expect(after.total).toBe(before.total);
@@ -249,6 +270,7 @@ test.describe('the console Refine bar', () => {
     }
 
     await adminPage.keyboard.press('Enter');
+    // Exact: a choice builds its URL with `adminQueryString`, which drops the empty `q`.
     await expect(adminPage).toHaveURL(FILTERED);
     await expect(adminPage.getByRole('button', { name: DIRECTION.option })).toBeVisible();
 
@@ -299,8 +321,10 @@ test.describe('the console Refine bar', () => {
     expect(await elementAtOwnCentre(adminPage, 'active')).toBe('itself');
 
     // Unforced: Playwright refuses a click on a point another element owns.
-    await adminPage.getByRole('button', { name: 'Apply filters' }).click();
-    await expect(adminPage).toHaveURL(FILTERED);
+    const landed = await submitAndAwaitDocument(adminPage, () =>
+      adminPage.getByRole('button', { name: 'Apply filters' }).click(),
+    );
+    expect(withoutEmptyParams(landed)).toBe(FILTERED);
   });
 });
 

@@ -65,4 +65,20 @@ describe('the activity page search', () => {
     expect(screen.queryByText(/Ignored/)).toBeNull();
     expect(screen.getByText('No console activity yet')).toBeDefined();
   });
+
+  // A JavaScript-off `Apply filters` submits the empty field too (VEN-752).
+  it('treats an empty q as no search, in the API query and the CSV export', async () => {
+    getAdminActivity.mockResolvedValue({ ...EMPTY, widenings: [] });
+    getAdminActivityActors.mockResolvedValue({ actors: [] });
+
+    render(await AdminActivityPage({ searchParams: Promise.resolve({ range: '7d', q: '' }) }));
+
+    expect(getAdminActivity).toHaveBeenCalledWith('?range=7d&page=1');
+    expect(screen.getByRole('link', { name: /Export CSV/ }).getAttribute('href')).toBe(
+      '/admin/activity/export?range=7d',
+    );
+    expect(screen.queryByText(/^Search:/)).toBeNull();
+    expect(screen.queryByText(/No console activity matches "/)).toBeNull();
+    expect(screen.getByText(/^One filter is narrowing this\./)).toBeDefined();
+  });
 });

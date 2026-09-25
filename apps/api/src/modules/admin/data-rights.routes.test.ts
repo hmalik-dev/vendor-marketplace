@@ -447,8 +447,9 @@ describe('data rights', () => {
 
       expect(response.statusCode).toBe(409);
       const body = response.json();
-      expect(body.message).toContain('1 upcoming confirmed booking');
-      expect(body.message).toContain('cancelled through the booking screens');
+      expect(body.message).toBe(
+        'This account holds 1 upcoming confirmed booking. Cancel it from the booking screens first. That prices the refund; closing the account does not.',
+      );
       expect(body.details.bookings).toEqual([
         { bookingId, eventDate: '2099-06-01', counterpartyName: 'Sunlit Studio' },
       ]);

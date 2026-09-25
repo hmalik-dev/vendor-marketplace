@@ -95,13 +95,13 @@ export interface VendorInviteMailDeps {
 }
 
 const ACCOUNT_EXISTS_MESSAGE =
-  'That address already has an account, and an account cannot become a vendor. Use a different email address to apply.';
+  'That address already has an account. Use a different email address to apply as a vendor.';
 
 export function vendorNotInvited(): AppError {
   return new AppError(
     403,
     ERROR_CODES.VENDOR_NOT_INVITED,
-    "Vendor accounts are by invitation for now. No account was created, but you're on the waitlist — tell us about your business and we'll invite you.",
+    "Vendor accounts are invite-only for now. No account was created. You're on the waitlist: tell us about your business and we'll invite you.",
   );
 }
 
@@ -410,18 +410,17 @@ export function renderVendorInviteEmail(
   // The sign-up sentence quotes the address; its html variant just bolds the
   // same quoted text, so both are built from the one template below.
   function signUpHow(emailMarkup: string): string {
-    return `Sign up with this email address — ${emailMarkup} — and you'll land in your new vendor account.`;
+    return `Sign up with ${emailMarkup} to open your vendor account.`;
   }
   const how = hasApplication
-    ? "Sign in with the email address and password you already made, and you'll land in your new vendor account."
+    ? 'Sign in with the email and password you already made to open your vendor account.'
     : signUpHow(email);
   const howHtml = hasApplication ? escapeHtml(how) : signUpHow(emphasis(email));
-  const next =
-    'The first thing to do there is set your prices, put up your work and open the dates you want to be booked on.';
+  const next = 'Then set your prices, add your work and open the dates you want booked.';
   const buttonLabel = hasApplication ? `Sign in to ${BRAND_NAME}` : 'Sign up as a vendor';
   const footer = hasApplication
-    ? `You're getting this because you asked to join ${BRAND_NAME} as a vendor. If that wasn't you, ignore this email and nothing happens.`
-    : `You're getting this because your business was put forward to join ${BRAND_NAME}. If you'd rather not, ignore this email and nothing happens.`;
+    ? `You asked to join ${BRAND_NAME} as a vendor. If that wasn't you, ignore this email.`
+    : `Your business was put forward to join ${BRAND_NAME}. If you'd rather not, ignore this email.`;
 
   return {
     subject: `You're invited to join ${BRAND_NAME} as a vendor`,
@@ -452,7 +451,7 @@ export function renderVendorApplicationConfirmationEmail(details: {
   email: string;
 }): { subject: string; text: string; html: string } {
   const intro =
-    "We've saved your details. We'll email you when you're invited, and you'll sign in with this same address. There's nothing else you need to do.";
+    "We saved your details. We'll email you when you're invited. Then sign in with this same address.";
   const where = details.state ? `${details.city}, ${US_STATE_NAMES[details.state]}` : details.city;
   const facts: Array<[string, string]> = [
     ['Business', details.businessName],
@@ -461,7 +460,7 @@ export function renderVendorApplicationConfirmationEmail(details: {
     ['Email', details.email],
   ];
   const correction = "If any of that is wrong, reply to this email and we'll fix it.";
-  const footer = `You're getting this because you signed up to join ${BRAND_NAME} as a vendor.`;
+  const footer = `You signed up to join ${BRAND_NAME} as a vendor.`;
 
   return {
     subject: `You're on the ${BRAND_NAME} waitlist`,
@@ -866,7 +865,7 @@ export async function decideVendorApplication(
       throw conflict(
         decision === 'invite'
           ? 'That applicant is already invited'
-          : 'That applicant is already invited; revoke the invite instead',
+          : 'That applicant is already invited. Revoke the invite instead.',
       );
     }
 
@@ -877,7 +876,7 @@ export async function decideVendorApplication(
 
       // An invite sent by address still admits them; declining would only hide it.
       if (await lockInviteByEmail(tx, row.email)) {
-        throw conflict('That address is already invited; revoke the invite instead');
+        throw conflict('That address is already invited. Revoke the invite instead.');
       }
 
       await setApplicationStatus(tx, { id: row.id }, 'declined');
@@ -894,7 +893,7 @@ export async function decideVendorApplication(
 
     if (!isVendorApplicationComplete(row)) {
       throw conflict(
-        'This applicant has not given a business name, category and city yet — invite by email instead, or wait for them to finish the form.',
+        'This applicant has not given a business name, category and city yet. Invite by email instead, or wait for them to finish the form.',
       );
     }
 

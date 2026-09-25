@@ -333,9 +333,9 @@ describe('admin grant and revoke', () => {
    */
   describe('an account with something live', () => {
     const STOREFRONT_REFUSAL =
-      'That account owns a published storefront, which an admin cannot operate. Unpublish the storefront first, then grant access';
+      'That account owns a published storefront. Unpublish it first, then grant access.';
     const BOOKINGS_REFUSAL =
-      'That account has open booking requests or bookings, which an admin cannot manage. Let them finish or cancel them first, then grant access';
+      'That account has open booking requests or bookings. Let them finish or cancel them first, then grant access.';
 
     async function storefrontFor(
       ownerAuthId: string,

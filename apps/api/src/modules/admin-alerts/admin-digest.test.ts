@@ -238,7 +238,7 @@ describe('the admin digest (VEN-405)', () => {
     expect(harness.email.sent[0]!.text.split('\n')).toEqual([
       'Daily digest for 2026-09-14',
       '',
-      'Nothing to report: the digest ran and the last day was quiet',
+      'Nothing to report. The last 24 hours were quiet.',
       'Last 24 hours',
       'New sign-ups: none',
       'Booking requests: 0',
@@ -249,7 +249,7 @@ describe('the admin digest (VEN-405)', () => {
       'Open cases',
       'Under 1 day: 0; 1–3 days: 0; over 3 days: 0',
       'Accepted but unpaid, event today or in the next 2 days: 0',
-      'Payouts overdue (due more than one sweep interval ago, still unreleased): 0',
+      'Payouts overdue by more than one sweep: 0',
       `Open: ${TEST_ENV.WEB_URL}/admin`,
     ]);
 
@@ -314,10 +314,8 @@ describe('the admin digest (VEN-405)', () => {
     expect(await runAdminDigest(deps({ clock: () => atMidnight }), atMidnight)).toBe('sent');
 
     const lines = harness.email.sent[0]!.text.split('\n');
-    expect(lines).toContain(
-      'Payouts overdue (due more than one sweep interval ago, still unreleased): 2',
-    );
-    expect(lines).not.toContain('Nothing to report: the digest ran and the last day was quiet');
+    expect(lines).toContain('Payouts overdue by more than one sweep: 2');
+    expect(lines).not.toContain('Nothing to report. The last 24 hours were quiet.');
   });
 
   it('sends one digest whose totals equal the seeded rows', async () => {
@@ -345,7 +343,7 @@ describe('the admin digest (VEN-405)', () => {
       'Accepted but unpaid, event today or in the next 2 days: 2',
       `  Request ${expectedUnpaidId}, event 2026-09-15`,
       `  Request ${lastDayId}, event 2026-09-16`,
-      'Payouts overdue (due more than one sweep interval ago, still unreleased): 0',
+      'Payouts overdue by more than one sweep: 0',
       `Open: ${TEST_ENV.WEB_URL}/admin`,
     ]);
   });

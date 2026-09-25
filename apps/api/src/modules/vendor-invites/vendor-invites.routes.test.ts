@@ -794,7 +794,7 @@ describe('the vendor gate', () => {
 
       expect(response.statusCode).toBe(409);
       expect(response.json().message).toBe(
-        'That address already has an account, and an account cannot become a vendor. Use a different email address to apply.',
+        'That address already has an account. Use a different email address to apply as a vendor.',
       );
       expect(await harness.database.db.select().from(vendorApplications)).toHaveLength(0);
     });
@@ -884,7 +884,7 @@ describe('the vendor gate', () => {
 
     it('tells a refused vendor they are on the waitlist', () => {
       expect(vendorNotInvited().message).toBe(
-        "Vendor accounts are by invitation for now. No account was created, but you're on the waitlist — tell us about your business and we'll invite you.",
+        "Vendor accounts are invite-only for now. No account was created. You're on the waitlist: tell us about your business and we'll invite you.",
       );
     });
 
@@ -933,7 +933,7 @@ describe('the vendor gate', () => {
         );
 
         expect(mail.text).toContain(
-          'set your prices, put up your work and open the dates you want to be booked on',
+          'Then set your prices, add your work and open the dates you want booked.',
         );
         for (const pattern of NO_URGENCY_COPY) {
           expect(mail.text).not.toMatch(pattern);

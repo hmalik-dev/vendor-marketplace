@@ -137,7 +137,7 @@ export const uploadRoutes: FastifyPluginAsyncZod<UploadRoutesOptions> = async (a
       } catch (error) {
         if (isFileTooLarge(error)) {
           throw validationFailed(
-            `Image is larger than the ${Math.floor(MAX_UPLOAD_BYTES / (1024 * 1024))}MB limit.`,
+            `Image is larger than the ${Math.floor(MAX_UPLOAD_BYTES / (1024 * 1024))} MB limit.`,
           );
         }
         if (

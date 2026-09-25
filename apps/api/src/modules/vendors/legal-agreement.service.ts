@@ -95,7 +95,7 @@ export async function acceptVendorAgreement(
 ): Promise<VendorAgreementStatus> {
   if (version !== CURRENT_VENDOR_AGREEMENT_VERSION) {
     throw conflict(
-      `That is not the current agreement — ${CURRENT_VENDOR_AGREEMENT_VERSION} is. Reload and read it before accepting.`,
+      `The current agreement is ${CURRENT_VENDOR_AGREEMENT_VERSION}. Reload and read it before accepting.`,
     );
   }
 
