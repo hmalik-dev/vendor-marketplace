@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { escapeRegExp } from '@/testing/source-scan';
 
 vi.mock('@/config/env', () => ({ siteOrigin: () => 'https://orla.example.com' }));
 
@@ -9,15 +10,6 @@ const { default: robots } = await import('./robots');
 afterEach(() => vi.unstubAllEnvs());
 
 const APP_ROOT = join(process.cwd(), 'src/app');
-
-/**
- * Noindex routes a visitor reaches without an account, so disallowing them
- * would not save the crawl budget this file is about.
- */
-const PUBLICLY_REACHABLE_NOINDEX = [
-  // The request form hangs off a public profile; its own noindex keeps it out.
-  '/vendors/[slug]/request',
-];
 
 /** The URL of every page or layout under `src/app` whose metadata says `index: false`. */
 function noindexRoutes(directory = APP_ROOT): string[] {
@@ -43,6 +35,13 @@ function disallowedPaths(): string[] {
   const rules = robots().rules;
   const disallow = (Array.isArray(rules) ? rules[0]?.disallow : rules.disallow) ?? [];
   return Array.isArray(disallow) ? disallow : [disallow];
+}
+
+/** Whether a crawler reads `path` as disallowed: a prefix match where `*` is any run (RFC 9309). */
+function isDisallowed(path: string): boolean {
+  return disallowedPaths().some((rule) =>
+    new RegExp(`^${rule.split('*').map(escapeRegExp).join('.*')}`).test(path),
+  );
 }
 
 /*
@@ -88,10 +87,7 @@ describe('robots in production', () => {
    * marks itself `index: false` cannot be forgotten.
    */
   it('disallows every route that marks itself noindex', () => {
-    const disallowed = disallowedPaths();
-    const uncovered = noindexRoutes()
-      .filter((route) => !PUBLICLY_REACHABLE_NOINDEX.includes(route))
-      .filter((route) => !disallowed.some((prefix) => route.startsWith(prefix)));
+    const uncovered = noindexRoutes().filter((route) => !isDisallowed(route));
 
     expect(uncovered).toEqual([]);
   });
@@ -118,6 +114,10 @@ describe('robots in production', () => {
     // One trailing character separates the growth surface from the private one.
     expect(paths).not.toContain('/vendors/');
     expect(paths).not.toContain('/search');
+    // `/vendors/*/request` sits under the public profile, so check the URLs themselves.
+    for (const url of ['/', '/vendors/acme-events', '/search?city=austin']) {
+      expect(isDisallowed(url), url).toBe(false);
+    }
   });
 
   it('points at an absolute sitemap on this origin', () => {

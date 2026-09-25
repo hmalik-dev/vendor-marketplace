@@ -49,7 +49,9 @@ const SILENT_CATCH =
   /\.catch\(\s*(\(\s*\)\s*=>\s*(\{\s*\}|undefined|null)|function\s*\(\s*\)\s*\{\s*\})\s*\)/;
 
 function swallowsSilently(source: string): boolean {
-  return SILENT_CATCH.test(withoutComments(source));
+  // Raw text too: the stripper reads a `/*` or `//` inside a string as a comment
+  // and would blank the real code after it.
+  return SILENT_CATCH.test(source) || SILENT_CATCH.test(withoutComments(source));
 }
 
 function relative(path: string): string {
