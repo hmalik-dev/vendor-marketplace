@@ -199,8 +199,8 @@ function Deactivate({
           <strong className="font-semibold">
             {category.vendorCount} {category.vendorCount === 1 ? 'vendor' : 'vendors'}
           </strong>
-          . Deactivating removes it from the home page, the search filters and the category picker,
-          but it is not removed from the profiles that already have it.
+          . Hiding it removes it from the home page, the search filters and the category picker.
+          Profiles that already have it keep it.
         </>
       }
       confirmLabel="Hide category"

@@ -225,8 +225,8 @@ function ToggleActive({ tag }: { tag: WireAdminTagRow }): React.ReactElement {
           <strong className="font-semibold">
             {tag.vendorCount} {tag.vendorCount === 1 ? 'vendor' : 'vendors'}
           </strong>
-          . Deactivating hides it from the tag picker and from search filters, but it is not removed
-          from the profiles that already have it.
+          . Hiding it removes it from the tag picker and the search filters. Profiles that already
+          have it keep it.
         </>
       }
       confirmLabel="Hide tag"

@@ -103,7 +103,7 @@ describe('TaxYearDownloads', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '1099-K figures, 2026' }));
 
-    expect(await screen.findByText(/confirm it is you first/)).toBeTruthy();
+    expect(await screen.findByText(/Confirm it's you first\./)).toBeTruthy();
     expect(URL.createObjectURL).not.toHaveBeenCalled();
   });
 

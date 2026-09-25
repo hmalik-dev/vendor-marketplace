@@ -127,7 +127,7 @@ export function TaxYearDownloads({
       ) : null}
       {stepUpYear !== null ? (
         <StepUpPanel
-          lead="This downloads every vendor's tax figures, so confirm it is you first."
+          lead="This downloads every vendor's tax figures. Confirm it's you first."
           onVerified={() => download(stepUpYear)}
           onCancel={() => setStepUpYear(null)}
         />

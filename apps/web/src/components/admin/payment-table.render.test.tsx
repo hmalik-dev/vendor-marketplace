@@ -314,7 +314,7 @@ describe('retryNotice', () => {
 
     expect(notice.status).toBe('pending');
     expect(notice.message).toBe(
-      "A problem was reported on Sunlit Studio's booking, so the payout is on hold.",
+      "A problem was reported on Sunlit Studio's booking. The payout is on hold.",
     );
   });
 
@@ -330,7 +330,7 @@ describe('retryNotice', () => {
 
     expect(notice.status).toBe('failed');
     expect(notice.message).toBe(
-      "Stripe refused Sunlit Studio's transfer again: Stripe refused the transfer. That is attempt 4.",
+      "Stripe refused Sunlit Studio's transfer again: Stripe refused the transfer. Attempt 4.",
     );
   });
 

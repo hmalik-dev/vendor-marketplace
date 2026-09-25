@@ -235,7 +235,7 @@ function SuggestionCard({
                 </Button>
               }
               title={`Approve “${suggestion.suggestedName}”?`}
-              description="It becomes a real tag, is added to the suggesting vendor's profile, and starts appearing as a search filter. If the same name already exists, it is merged into that tag instead."
+              description="It becomes a tag on the suggesting vendor's profile and a search filter. If the name already exists, it merges into that tag."
               confirmLabel="Approve tag"
               onConfirm={() => resolve({ action: 'approve', ...(note ? { adminNote: note } : {}) })}
             />
@@ -266,7 +266,7 @@ function SuggestionCard({
                 </Button>
               }
               title={`Reject “${suggestion.suggestedName}”?`}
-              description="The note is kept on the queue as the record of why. The vendor is not notified — telling somebody their idea was turned down is how a product stops receiving suggestions."
+              description="The note stays on the queue. The vendor is not notified."
               confirmLabel="Reject suggestion"
               onConfirm={() => resolve({ action: 'reject', adminNote: note })}
             />

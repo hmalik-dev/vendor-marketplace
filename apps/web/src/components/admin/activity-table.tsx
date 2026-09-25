@@ -55,14 +55,14 @@ export const ACTION_LABELS: Record<AdminAction, string> = {
   dispute_resolved: 'Resolved a report',
   support_case_resolved: 'Closed a case',
   payout_retried: 'Retried a payout',
-  user_data_exported: 'Exported an account record',
+  user_data_exported: "Exported an account's data",
   admin_exported: 'Exported a CSV',
   tax_report_exported: 'Exported 1099-K figures',
   admin_data_read: 'Read customer data',
   user_closed: 'Closed an account',
   admin_account_closed: 'Closed an admin account',
-  admin_granted: 'Admin granted',
-  admin_revoked: 'Admin revoked',
+  admin_granted: 'Granted admin access',
+  admin_revoked: 'Revoked admin access',
   /*
    * Graduated moderation (#435). Written in the same register as the seven above
    * — what the admin did, past tense — and deliberately **not** using the
