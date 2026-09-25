@@ -241,6 +241,37 @@ describe('data rights', () => {
   });
 
   describe('export', () => {
+    /* The customer's own words to a vendor (VEN-765), like `customDetails`. */
+    it("carries a customer's decline reason", async () => {
+      await signIn(ADMIN, true);
+      await signIn(VENDOR);
+      const customerId = await signIn(CUSTOMER);
+      const vendor = await createVendorProfile();
+
+      await harness.database.db.insert(bookingRequests).values({
+        customerId,
+        vendorId: vendor.profileId,
+        eventDate: '2020-07-01',
+        status: 'declined',
+        quotedPriceCents: 90_000,
+        declineReason: 'We found someone closer to the venue.',
+      });
+
+      const response = await harness.app.inject({
+        method: 'POST',
+        url: `/v1/admin/users/${customerId}/export`,
+        headers: bearer(ADMIN),
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().bookingRequests).toEqual([
+        expect.objectContaining({
+          status: 'declined',
+          declineReason: 'We found someone closer to the venue.',
+        }),
+      ]);
+    });
+
     it('produces every category the policy names, and says what it withheld', async () => {
       await signIn(ADMIN, true);
       await signIn(VENDOR);

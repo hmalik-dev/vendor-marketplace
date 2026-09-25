@@ -986,10 +986,6 @@ interface TransitionOptions {
 }
 
 /**
- * The state machine. Every legal edge is in `BOOKING_REQUEST_TRANSITIONS`;
- * this adds who may walk it and what else has to be true when they do.
- */
-/**
  * The thread this request is negotiated in, for either party — what the
  * customer's `Message about this request` opens (VEN-765).
  */
@@ -1015,6 +1011,10 @@ export async function getRequestConversation(
   return { id };
 }
 
+/**
+ * The state machine. Every legal edge is in `BOOKING_REQUEST_TRANSITIONS`;
+ * this adds who may walk it and what else has to be true when they do.
+ */
 export async function transitionRequest(
   db: AppDatabase,
   requestId: string,

@@ -290,6 +290,7 @@ export async function exportUserData(
       eventLocation: row.eventLocation,
       guestCount: row.guestCount,
       customDetails: row.customDetails,
+      declineReason: row.declineReason,
       status: row.status,
       quotedPriceCents: row.quotedPriceCents,
       finalPriceCents: row.finalPriceCents,

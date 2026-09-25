@@ -401,7 +401,18 @@ function DeclineQuote({ requestId, vendorName, disabled }: DeclineQuoteProps): R
       </AlertDialog.Trigger>
       <AlertDialog.Portal>
         <AlertDialog.Overlay className="fixed inset-0 z-50 bg-stone-900/35" />
-        <AlertDialog.Content className="fixed top-1/2 left-1/2 z-50 w-[min(26.25rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-stone-0 px-6 py-5.5 shadow-[0_18px_50px_rgba(35,32,28,.25)]">
+        <AlertDialog.Content
+          /*
+            Not while the decline is in flight: closing then would drop its
+            answer, and a failure would land in a dialog nobody can see.
+          */
+          onEscapeKeyDown={(event) => {
+            if (busy) {
+              event.preventDefault();
+            }
+          }}
+          className="fixed top-1/2 left-1/2 z-50 w-[min(26.25rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-stone-0 px-6 py-5.5 shadow-[0_18px_50px_rgba(35,32,28,.25)]"
+        >
           <AlertDialog.Title className="font-display text-[21px] font-normal text-stone-900">
             Decline this quote?
           </AlertDialog.Title>

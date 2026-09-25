@@ -45,7 +45,7 @@
 - [The public vendor card is the widest anonymous projection](public-vendor-card-is-the-widest-anonymous-projection.md) — the DAO's literal decides
 - [The public price filter is a pricing oracle](search-price-filter-is-a-pricing-oracle.md) — any-package EXISTS was binary-searchable
 - [`/places` replaced an inventory oracle](places-endpoint-replaced-an-inventory-oracle.md) — no `ESCAPE` is correct on Postgres
-- [The data-rights export is hand-enumerated](data-rights-export-is-hand-enumerated.md) — a new `users` PII column misses the DSAR file
+- [The data-rights export is hand-enumerated](data-rights-export-is-hand-enumerated.md) — a new `users` PII column misses the DSAR file; VEN-765 `decline_reason` too
 - [Response schemas are a second write boundary](response-schemas-are-a-second-write-boundary.md) — widen a write schema alone and a reader 500s
 - [`'use client'` publishes a pane's props](client-component-props-are-public-html.md) — RSC payload is public
 - [JSON-LD is the only raw-HTML sink in web](json-ld-is-the-only-raw-html-sink.md) — `serialiseJsonLd` mandatory
@@ -86,6 +86,7 @@
 - [The acceptance record is undeletable PII](legal-acceptance-record-is-undeletable-pii.md) — soft delete never fires the trigger
 - [The support form is a public route that moves money](support-report-is-a-public-route-that-moves-money.md) — anonymous `bookingId` freezes a payout
 - [A public endpoint mails the caller's own text anywhere](public-mail-endpoint-echoes-to-any-address.md) — echo gated on `signedIn`
+- [User text in notification bodies](user-text-in-notification-bodies.md) — VEN-765 decline reason is the first; escaped, spoofing Low
 - [`support_cases` is the first durable copy of a complaint](support-cases-is-the-first-durable-copy-of-a-complaint.md) — refund gate is a deny-list on `dispute.status`
 - [The staff read of a private thread is one `support_cases` row](conversation-read-grant-is-an-open-case-row.md) — nothing constrains `subject_type`
 - [The admin action log is trigger-immutable](admin-action-log-is-trigger-immutable.md) — cascade exception needs a hard delete

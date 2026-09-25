@@ -4135,6 +4135,7 @@ export const adminExportBookingRequestSchema = z.object({
   eventLocation: z.string().nullable(),
   guestCount: z.int().nullable(),
   customDetails: z.string().nullable(),
+  declineReason: z.string().nullable(),
   status: z.string(),
   quotedPriceCents: z.int().nullable(),
   finalPriceCents: z.int().nullable(),
