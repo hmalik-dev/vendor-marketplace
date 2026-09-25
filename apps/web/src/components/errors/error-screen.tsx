@@ -239,7 +239,7 @@ export function ErrorScreen({
           `31-content-voice.md`.
         */}
         <p className="mt-3 max-w-[460px] text-cta leading-[1.65] text-stone-700">
-          This wasn&apos;t anything you did. We&apos;ve been notified and we&apos;re looking at it.
+          We&apos;ve been alerted and we&apos;re looking into it.
         </p>
 
         {/*

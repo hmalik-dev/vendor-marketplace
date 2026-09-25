@@ -24,7 +24,10 @@ describe('NotFound', () => {
     await renderNotFound();
 
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe("This page isn't here");
-    expect(screen.getByText(/Nothing is wrong with your account/)).toBeDefined();
+    expect(
+      screen.getByText('The link may be old, or a vendor took their listing down.'),
+    ).toBeDefined();
+    expect(screen.queryByText(/Nothing is wrong with your account/)).toBeNull();
   });
 
   /*

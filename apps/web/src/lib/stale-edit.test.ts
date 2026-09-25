@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { ApiClientError } from '@/lib/api-client';
-import { currentFromStaleEdit } from '@/lib/stale-edit';
+import { STALE_EDIT_NOTICE, currentFromStaleEdit } from '@/lib/stale-edit';
 
 const schema = z.object({ name: z.string() });
 
@@ -27,5 +27,13 @@ describe('currentFromStaleEdit', () => {
 
     expect(currentFromStaleEdit(notFound, schema)).toBeNull();
     expect(currentFromStaleEdit(new Error('offline'), schema)).toBeNull();
+  });
+});
+
+describe('STALE_EDIT_NOTICE', () => {
+  it('says what happened, then what to do', () => {
+    expect(STALE_EDIT_NOTICE).toBe(
+      'This changed since you opened it. Save again to replace it with your edits.',
+    );
   });
 });
