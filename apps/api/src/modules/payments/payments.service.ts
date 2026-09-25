@@ -908,7 +908,7 @@ async function announceBooking(
           'booking_confirmed',
           {
             title: 'A booking is confirmed',
-            body: 'The date is paid for and held. Payment reaches you after the event.',
+            body: 'The date is paid and held. Payment reaches you after the event.',
             bookingId: booking.id,
           },
           // The vendor reads this on their own side; `/bookings` refuses them.
@@ -1034,7 +1034,7 @@ const EVENT_PASSED_CANCEL_MESSAGE =
   'If something went wrong, report a problem with the booking and we will look into it.';
 
 const PAID_OUT_CANCEL_MESSAGE =
-  'This booking has already been paid out, so it cannot be cancelled. ' +
+  'This booking has already been paid out, so it cannot be canceled. ' +
   'Contact support and we will look into it.';
 
 /**
@@ -1046,8 +1046,8 @@ const PAID_OUT_CANCEL_MESSAGE =
  * silently described as cancelled when it is not.
  */
 const NOT_CANCELLABLE: Record<Exclude<BookingStatus, 'confirmed'>, string> = {
-  completed: 'That event already happened, so it cannot be cancelled',
-  cancelled: 'That booking is already cancelled',
+  completed: 'That event already happened, so it cannot be canceled',
+  cancelled: 'That booking is already canceled',
   /*
    * The complaint is the live conversation about this booking, and cancelling
    * underneath it would settle the money on the tier the calendar happens to
@@ -1059,13 +1059,13 @@ const NOT_CANCELLABLE: Record<Exclude<BookingStatus, 'confirmed'>, string> = {
 
 const NOT_COMPLETABLE: Record<Exclude<BookingStatus, 'confirmed'>, string> = {
   completed: 'That booking is already marked complete',
-  cancelled: 'That booking was cancelled and cannot be completed',
+  cancelled: 'That booking was canceled and cannot be completed',
   disputed:
     'The customer has raised a problem with this booking, so it is on hold until that is resolved',
 };
 
 const NOT_DISPUTABLE: Record<Exclude<BookingStatus, 'confirmed' | 'completed'>, string> = {
-  cancelled: 'That booking was cancelled, so there is nothing to report',
+  cancelled: 'That booking was canceled, so there is nothing to report',
   disputed: 'You have already reported a problem with this booking',
 };
 
@@ -1187,7 +1187,7 @@ export async function completeBooking(
   await bestEffortNotice(context, { bookingId: completed.id }, () =>
     notify(context, completed.customerId, 'booking_completed', {
       title: 'Your event is wrapped up',
-      body: 'The vendor marked it complete. Leave them a review when you have a moment.',
+      body: 'The vendor marked it complete. Leave a review.',
       bookingId: completed.id,
     }),
   );
@@ -1712,7 +1712,7 @@ export async function cancelBooking(
 
   if (!settled) {
     alertRefundUnrecorded();
-    throw conflict('That booking changed while you were cancelling it');
+    throw conflict('That booking changed while you were canceling it');
   }
 
   if (cancelled) {
@@ -1721,8 +1721,8 @@ export async function cancelBooking(
 
       if (byVendor) {
         await notify(context, cancelled.customerId, 'booking_cancelled', {
-          title: 'Your booking was cancelled by the vendor',
-          body: `The vendor cancelled this booking and your payment of ${formatPrice(refund.amountCents)} is refunded in full. Their reason: ${reason ?? ''}`,
+          title: 'Your booking was canceled by the vendor',
+          body: `The vendor canceled this booking. Your payment of ${formatPrice(refund.amountCents)} is refunded in full. Their reason: ${reason ?? ''}`,
           bookingId: cancelled.id,
         });
       }
@@ -1733,9 +1733,9 @@ export async function cancelBooking(
           vendorUserId,
           'booking_cancelled',
           {
-            title: byVendor ? 'You cancelled a booking' : 'A booking was cancelled',
+            title: byVendor ? 'You canceled a booking' : 'A booking was canceled',
             body: byVendor
-              ? `The date is free again on your calendar and the customer is refunded in full. ${unwindSentence(refund.transferReversed)}`
+              ? `The date is free again on your calendar. The customer is refunded in full. ${unwindSentence(refund.transferReversed)}`
               : `The date is free again on your calendar. ${unwindSentence(refund.transferReversed)}`,
             bookingId: cancelled.id,
           },
@@ -2076,11 +2076,11 @@ export async function announceDisputeHold(
         ...(origin === 'network'
           ? {
               title: 'A chargeback was opened',
-              body: "The customer's bank opened a chargeback on this booking. Your payout for it is on hold until the case is resolved.",
+              body: "The customer's bank opened a chargeback. Your payout for this booking is on hold until it is resolved.",
             }
           : {
               title: 'A customer reported a problem',
-              body: 'Your payout for this booking is on hold until we have looked into it.',
+              body: 'Your payout for this booking is on hold while we review it.',
             }),
         bookingId,
       },
@@ -2183,7 +2183,7 @@ export async function resolveDispute(
         title: chargeback ? 'We have reviewed the chargeback' : 'We have reviewed your report',
         body: chargeback
           ? 'The booking stands and the vendor will be paid. Contact support to discuss it.'
-          : 'We were not able to uphold it, so the booking stands. Contact support to discuss it.',
+          : 'We could not uphold it. The booking stands. Contact support to discuss it.',
         bookingId: restored.id,
       }),
     );
@@ -2305,7 +2305,7 @@ export async function resolveDispute(
   await bestEffortNotice(context, { bookingId: cancelled.id }, async () => {
     await notify(context, cancelled.customerId, 'booking_cancelled', {
       title: 'Your report was upheld',
-      body: 'The booking is cancelled and your payment has been refunded in full.',
+      body: 'The booking is canceled. Your payment is refunded in full.',
       bookingId: cancelled.id,
     });
 
@@ -2502,8 +2502,8 @@ export async function settleLostChargeback(
           vendorUserId,
           'booking_cancelled',
           {
-            title: 'A booking was cancelled after a chargeback',
-            body: "The customer's bank took the payment back and the card network upheld it, so this booking is cancelled and its payout will not be sent.",
+            title: 'A booking was canceled after a chargeback',
+            body: "The customer's bank took the payment back and the card network upheld it. This booking is canceled and its payout will not be sent.",
             bookingId,
           },
           'vendor',

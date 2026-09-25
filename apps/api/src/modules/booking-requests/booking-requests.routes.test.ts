@@ -1198,6 +1198,9 @@ describe('/v1/booking-requests', () => {
 
       expect(harness.email.sent).toHaveLength(1);
       expect(harness.email.sent[0]?.subject).toBe('Your request expired');
+      expect(harness.email.sent[0]?.text).toContain(
+        'The vendor did not reply. Send it again or find another vendor.',
+      );
     });
 
     describe('an accepted request nobody pays for (VEN-433)', () => {
@@ -1315,6 +1318,13 @@ describe('/v1/booking-requests', () => {
           'A booking was not paid in time',
           'Your booking was not paid in time',
         ]);
+        const bodies = harness.email.sent.map((mail) => mail.text ?? '').join('\n');
+        expect(bodies).toContain(
+          'The payment window closed. The date was released. Send a new request to book it.',
+        );
+        expect(bodies).toContain(
+          'The customer did not pay in time. The date is open on your calendar again.',
+        );
       });
 
       it('lets a payment that lands as the sweep expires the request win', async () => {

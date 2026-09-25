@@ -1821,13 +1821,13 @@ describe('data rights', () => {
     /* VEN-477: "in full" only when the amount returned is the whole charge. */
     it('states the amount returned unless it is the whole charge', () => {
       expect(refundedBody(SUSPENSION_UNWIND, 'customer', 50_000, 50_000)).toBe(
-        "The other party's account was suspended. Your payment has been refunded in full.",
+        "The other party's account was suspended. Your payment is refunded in full.",
       );
       expect(refundedBody(SUSPENSION_UNWIND, 'customer', 1_000, 50_000)).toBe(
-        "The other party's account was suspended. $10 of your $500 payment has been refunded.",
+        "The other party's account was suspended. $10 of your $500 payment is refunded.",
       );
       expect(refundedBody(CLOSURE_UNWIND, 'vendor', 1_000, 50_000)).toBe(
-        "The customer's account was closed and the booking was cancelled. $10 of their $500 payment has been refunded from the platform balance, and no payout will be made to you for this booking.",
+        "The customer's account was closed. The booking was canceled. $10 of their $500 payment is refunded from the platform balance. You will not receive a payout for this booking.",
       );
     });
 

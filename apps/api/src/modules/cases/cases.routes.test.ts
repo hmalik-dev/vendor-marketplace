@@ -1004,8 +1004,11 @@ describe('the operations case queue (#431)', () => {
       expect(titles).toContain('We have reviewed the chargeback');
       expect(titles).not.toContain('A customer reported a problem');
       expect(titles).not.toContain('We have reviewed your report');
-      expect(rows.find((row) => row.title === 'A chargeback was opened')?.body).toContain(
-        "customer's bank",
+      expect(rows.find((row) => row.title === 'A chargeback was opened')?.body).toBe(
+        "The customer's bank opened a chargeback. Your payout for this booking is on hold until it is resolved.",
+      );
+      expect(rows.find((row) => row.title === 'We have reviewed the chargeback')?.body).toBe(
+        'The booking stands and the vendor will be paid. Contact support to discuss it.',
       );
     });
 
@@ -1014,12 +1017,17 @@ describe('the operations case queue (#431)', () => {
       expect((await report({ bookingId: fixture.bookingId })).statusCode).toBe(200);
       expect((await rule(fixture.bookingId, 'vendor')).statusCode).toBe(200);
 
-      const titles = (
-        await harness.database.db.select({ title: notifications.title }).from(notifications)
-      ).map((row) => row.title);
+      const rows = await harness.database.db
+        .select({ title: notifications.title, body: notifications.body })
+        .from(notifications);
+      const bodyOf = (title: string) => rows.find((row) => row.title === title)?.body;
 
-      expect(titles).toContain('A customer reported a problem');
-      expect(titles).toContain('We have reviewed your report');
+      expect(bodyOf('A customer reported a problem')).toBe(
+        'Your payout for this booking is on hold while we review it.',
+      );
+      expect(bodyOf('We have reviewed your report')).toBe(
+        'We could not uphold it. The booking stands. Contact support to discuss it.',
+      );
     });
 
     it('does not record a false refusal, and notifies once, when a retry finds its own hold', async () => {

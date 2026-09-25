@@ -406,8 +406,8 @@ export async function ageIfExpired(
        * for it to drift.
        */
       body: wasAccepted
-        ? 'The payment window closed, so the date was released. Send a new request if you still want it.'
-        : 'It closed without a reply. Send it again, or find another vendor for the date.',
+        ? 'The payment window closed. The date was released. Send a new request to book it.'
+        : 'The vendor did not reply. Send it again or find another vendor.',
     });
 
     /*
@@ -417,7 +417,7 @@ export async function ageIfExpired(
     if (wasAccepted) {
       await record('vendor', {
         title: 'A booking was not paid in time',
-        body: 'The customer did not pay inside the window, so the date is open on your calendar again.',
+        body: 'The customer did not pay in time. The date is open on your calendar again.',
       });
     }
 
@@ -1392,7 +1392,7 @@ async function announce(
             'request_declined',
             {
               title: `${businessName} declined`,
-              body: 'The date is free again — try another vendor for it.',
+              body: 'The date is free again. Try another vendor.',
             },
             hub,
             mail,
@@ -1406,7 +1406,7 @@ async function announce(
         'request_cancelled',
         {
           title: 'A request was withdrawn',
-          body: `The customer cancelled their request for ${readableDate(row.eventDate)}.`,
+          body: `The customer canceled their request for ${readableDate(row.eventDate)}.`,
         },
         hub,
         mail,
