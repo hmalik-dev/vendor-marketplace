@@ -167,6 +167,38 @@ describe('the rail', () => {
     expect(badged).toEqual(['Cases23', 'Reviews6', 'Applications12']);
   });
 
+  /**
+   * Frames 42–64 draw Applications' count as a plain `11.5px #6B6459` figure and
+   * only Cases and Reviews as the white-on-clay pill.
+   */
+  it('draws the Applications count muted and the queue counts as clay pills', () => {
+    render(<AdminNav reviewCount={6} caseCount={23} waitingApplications={12} />);
+
+    const classesOf = (text: string) => screen.getByText(text).className.split(/\s+/);
+
+    expect(classesOf('12')).toEqual(
+      expect.arrayContaining(['text-helper', 'font-normal', 'text-stone-600']),
+    );
+    expect(classesOf('12')).not.toContain('bg-clay-400');
+    expect(classesOf('23')).toEqual(
+      expect.arrayContaining(['bg-clay-400', 'font-bold', 'text-stone-0']),
+    );
+    expect(classesOf('6')).toEqual(
+      expect.arrayContaining(['bg-clay-400', 'font-bold', 'text-stone-0']),
+    );
+  });
+
+  /** The frames' `.lbl`: 600 10.5px, 0.05em, `#6B6459` — muted text, never `stone-500`. */
+  it('styles the Platform label as the frames’ micro-label', () => {
+    render(<AdminNav reviewCount={0} caseCount={0} waitingApplications={0} />);
+
+    const classes = screen.getByText('Platform').className.split(/\s+/);
+    expect(classes).toEqual(
+      expect.arrayContaining(['text-label', 'font-semibold', 'tracking-label', 'text-stone-600']),
+    );
+    expect(classes).not.toContain('text-stone-500');
+  });
+
   /** `/admin/requests` is a tab of Bookings, not a row (VEN-399). */
   it('gives /admin/requests no row', () => {
     render(<AdminNav reviewCount={6} caseCount={23} waitingApplications={12} />);

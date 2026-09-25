@@ -142,8 +142,19 @@ export function AdminNav({
           )}
         >
           {item.label}
+          {/*
+            Cases and Reviews are queues that need the admin, so their count is
+            the clay pill; Applications' count is a plain muted figure, as every
+            frame 42–64 draws it.
+          */}
           {badge > 0 ? (
-            <span className="ml-auto rounded-full bg-clay-400 px-1.75 py-px text-xs font-bold text-stone-0">
+            <span
+              className={
+                item.label === 'Applications'
+                  ? 'ml-auto text-helper font-normal text-stone-600'
+                  : 'ml-auto rounded-full bg-clay-400 px-1.75 py-px text-xs font-bold text-stone-0'
+              }
+            >
               {badge}
             </span>
           ) : null}
@@ -174,7 +185,7 @@ export function AdminNav({
         */}
         <li
           aria-hidden
-          className="hidden px-3 pt-4 pb-1.5 text-xs font-semibold tracking-[0.08em] text-stone-500 uppercase lg:block"
+          className="hidden px-3 pt-4 pb-1.5 text-label font-semibold tracking-label text-stone-600 uppercase lg:block"
         >
           Platform
         </li>
