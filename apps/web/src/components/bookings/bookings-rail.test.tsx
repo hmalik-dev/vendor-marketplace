@@ -1,8 +1,12 @@
-import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { cleanup, render, screen, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BookingsRail } from './bookings-rail';
-import type { BookingEntry } from '@/lib/booking-entries';
+import { needsYouItems, type BookingEntry } from '@/lib/booking-entries';
 import type { WireConversation } from '@/lib/wire-schemas';
+
+// A quote's `Decline` is a client control; its behaviour is `needs-you-decline.test.tsx`'s.
+vi.mock('@/lib/use-api', () => ({ useApi: () => vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 afterEach(cleanup);
 
@@ -112,11 +116,98 @@ describe('BookingsRail', () => {
     });
 
     it('still leads with Needs you when a quote is waiting', () => {
-      render(<BookingsRail needsYou={[entry()]} hasBookings conversations={[conversation()]} />);
+      render(
+        <BookingsRail
+          needsYou={needsYouItems([entry()])}
+          hasBookings
+          conversations={[conversation()]}
+        />,
+      );
 
       expect(screen.getByText('Needs you')).toBeDefined();
       expect(screen.getByText('Casa Verde sent a quote')).toBeDefined();
       expect(screen.getByText('Recent messages')).toBeDefined();
+    });
+  });
+
+  /*
+   * VEN-746. Frame `07` opens the rail with `Needs you` for every customer with
+   * bookings. It was drawn only while a quote waited, so most of the time the
+   * rail started at `Recent messages` and the panel read as missing, and an
+   * accepted request waiting on payment surfaced nowhere.
+   */
+  describe('the Needs you panel', () => {
+    it('is drawn with nothing waiting, and says so above Recent messages', () => {
+      render(<BookingsRail needsYou={[]} hasBookings conversations={[conversation()]} />);
+
+      const headings = screen.getAllByRole('heading').map((heading) => heading.textContent);
+      expect(headings).toEqual(['Needs you', 'Recent messages']);
+      expect(screen.getByText('Nothing is waiting on you.')).toBeDefined();
+    });
+
+    it('draws a quote with its subline, Review quote and Decline', () => {
+      render(<BookingsRail needsYou={needsYouItems([entry()])} hasBookings conversations={[]} />);
+
+      const panel = screen.getByText('Casa Verde sent a quote').closest('li') as HTMLElement;
+      expect(panel.className.split(' ')).toContain('bg-clay-100');
+      expect(within(panel).getByText('$3,840 quoted · expires in 3d')).toBeDefined();
+      expect(within(panel).getByRole('link', { name: 'Review quote' }).getAttribute('href')).toBe(
+        '/bookings/e1',
+      );
+      expect(within(panel).getByRole('button', { name: 'Decline' })).toBeDefined();
+      expect(screen.queryByText('Nothing is waiting on you.')).toBeNull();
+    });
+
+    it('draws an accepted request with Pay now into checkout and no Decline', () => {
+      render(
+        <BookingsRail
+          needsYou={needsYouItems([
+            entry({
+              id: 'r9',
+              requestId: 'r9',
+              status: 'accepted',
+              subline: '$1,450 · Barr Mansion',
+            }),
+          ])}
+          hasBookings
+          conversations={[]}
+        />,
+      );
+
+      const panel = screen
+        .getByText('Casa Verde accepted your request')
+        .closest('li') as HTMLElement;
+      expect(panel.className.split(' ')).toContain('bg-clay-100');
+      expect(within(panel).getByText('$1,450 · Barr Mansion')).toBeDefined();
+      expect(within(panel).getByRole('link', { name: 'Pay now' }).getAttribute('href')).toBe(
+        '/bookings/r9/checkout',
+      );
+      expect(within(panel).queryByRole('button', { name: 'Decline' })).toBeNull();
+    });
+
+    it('draws two quotes and an accepted request as three panels, quotes first', () => {
+      render(
+        <BookingsRail
+          needsYou={needsYouItems([
+            entry({ id: 'a1', requestId: 'a1', vendorName: 'Bloom & Co.', status: 'accepted' }),
+            entry({ id: 'q1', requestId: 'q1', vendorName: 'Casa Verde' }),
+            entry({ id: 'q2', requestId: 'q2', vendorName: 'Kessler & Co.' }),
+          ])}
+          hasBookings
+          conversations={[]}
+        />,
+      );
+
+      const list = screen.getByRole('list', { name: 'Needs you' });
+      expect(
+        within(list)
+          .getAllByRole('listitem')
+          .map((item) => item.querySelector('p')?.textContent),
+      ).toEqual([
+        'Casa Verde sent a quote',
+        'Kessler & Co. sent a quote',
+        'Bloom & Co. accepted your request',
+      ]);
     });
   });
 
@@ -149,18 +240,17 @@ describe('BookingsRail', () => {
    * third shape, which is why this is three cases and not two.
    */
   describe('the label follows the content', () => {
-    it('names the attention section when quotes are waiting', () => {
-      render(<BookingsRail needsYou={[entry()]} hasBookings conversations={[conversation()]} />);
+    /*
+     * VEN-746: with bookings the rail always opens on `Needs you`, whether or
+     * not anything is waiting, so that is the heading it is named for.
+     */
+    it('names the Needs you panel it leads with, whether or not anything waits', () => {
+      for (const needsYou of [needsYouItems([entry()]), []]) {
+        cleanup();
+        render(<BookingsRail needsYou={needsYou} hasBookings conversations={[conversation()]} />);
 
-      expect(screen.getByRole('complementary').getAttribute('aria-label')).toBe(
-        'What needs your attention',
-      );
-    });
-
-    it('names the threads when that is what it draws', () => {
-      render(<BookingsRail needsYou={[]} hasBookings conversations={[conversation()]} />);
-
-      expect(screen.getByRole('complementary').getAttribute('aria-label')).toBe('Recent messages');
+        expect(screen.getByRole('complementary').getAttribute('aria-label')).toBe('Needs you');
+      }
     });
 
     it('names the promises for a customer with nothing booked', () => {

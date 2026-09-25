@@ -19,8 +19,10 @@ import {
   type BookingEntry,
   type BookingSort,
   type BookingTab,
+  type NeedsYouItem,
 } from '@/lib/booking-entries';
 import { BookingsRefineChips } from './bookings-refine-chips';
+import { NeedsYouDecline } from './needs-you-decline';
 import { cn } from '@/lib/utils';
 
 export const BOOKING_TABS: readonly BookingTab[] = ['upcoming', 'history', 'all'];
@@ -188,8 +190,8 @@ export interface BookingsHubProps {
   today: string;
   /** Pre-fills the "book another" search; the customer's own city, if set. */
   city: string | null;
-  /** Entries waiting on the customer, for the widths where the rail is hidden. */
-  needsYou: readonly BookingEntry[];
+  /** What waits on the customer (`needsYouItems`), for the widths where the rail is hidden. */
+  needsYou: readonly NeedsYouItem[];
   /** The Refine chips' state, read from the URL by the page. */
   category: string | null;
   sort: BookingSort;
@@ -279,35 +281,39 @@ export function BookingsHub({
       </p>
 
       {/*
-        The rail is hidden below `xl` for width, and a quote waiting on the
-        customer is the one thing that must not disappear with it — so it moves
-        into the column instead of being dropped.
+        The rail is hidden below `xl` for width, and what waits on the customer
+        — a quote to answer, a request to pay for — is the one thing that must
+        not disappear with it, so it moves into the column instead of being
+        dropped. The same items as the rail (VEN-746), not quotes alone.
       */}
       {needsYou.length > 0 ? (
-        <ul className="mb-3.5 flex flex-col gap-2 xl:hidden">
-          {needsYou.map((entry) => (
+        <ul aria-label="Needs you" className="mb-3.5 flex flex-col gap-2 xl:hidden">
+          {needsYou.map((item) => (
             <li
-              key={entry.id}
+              key={item.entry.id}
               className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl bg-clay-100 px-3.5 py-2.5"
             >
               <span aria-hidden="true" className="size-1.75 shrink-0 rounded-full bg-clay-400" />
-              <span className="text-base font-semibold text-stone-900">
-                {entry.vendorName} sent a quote
-              </span>
-              <span className="text-sm text-stone-700">{entry.subline}</span>
+              <span className="text-base font-semibold text-stone-900">{item.title}</span>
+              <span className="text-sm text-stone-700">{item.entry.subline}</span>
               {/*
-                The request, not the storefront. This pointed at
+                The request or its checkout, not the storefront. This pointed at
                 `/vendors/<slug>` — a page whose only controls are `Request
                 booking` and `Send a message`, so the customer arrived at a
                 marketing page with no way to accept the quote they came to
                 accept.
               */}
-              <Link
-                href={`/bookings/${entry.id}`}
-                className="ml-auto text-sm font-semibold text-clay-500 hover:underline"
-              >
-                Review quote
-              </Link>
+              <span className="ml-auto flex flex-wrap items-center gap-x-2">
+                <Link
+                  href={item.action.href}
+                  className="text-sm font-semibold text-clay-500 hover:underline"
+                >
+                  {item.action.label}
+                </Link>
+                {item.kind === 'quote' ? (
+                  <NeedsYouDecline requestId={item.entry.requestId} />
+                ) : null}
+              </span>
             </li>
           ))}
         </ul>

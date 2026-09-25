@@ -1,8 +1,11 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BookingsHub } from './bookings-hub';
-import type { BookingEntry } from '@/lib/booking-entries';
+import { needsYouItems, type BookingEntry } from '@/lib/booking-entries';
 import { FALLBACK_TONES } from '@/components/ui/avatar';
+
+// A quote's `Decline` is a client control; its behaviour is `needs-you-decline.test.tsx`'s.
+vi.mock('@/lib/use-api', () => ({ useApi: () => vi.fn() }));
 
 /*
  * The Refine chips push URL state, so the hub now reaches `useRouter`. The push
@@ -658,5 +661,71 @@ describe('BookingsHub vendor image failure', () => {
     );
     /* Not the cover tone block: an avatar is ruled differently (D24). */
     expect(container.querySelector('[data-slot="image-fallback"]')).toBeNull();
+  });
+});
+
+/*
+ * VEN-746. Below `xl` the rail is hidden and its `Needs you` items move into the
+ * list column. Only quotes did, so an accepted request waiting on payment
+ * vanished at 1024. jsdom does no layout, so the breakpoint is asserted as the
+ * class that carries it; the rendered result is the browser pass's.
+ */
+describe('BookingsHub Needs you mirror below xl', () => {
+  it('draws the same quote and pay items as the rail, hidden from xl up', () => {
+    const quote = entry({
+      id: 'q1',
+      vendorName: 'Casa Verde',
+      status: 'quoted',
+      subline: '$3,840 quoted',
+    });
+    const accepted = entry({
+      id: 'a1',
+      vendorName: 'Bloom & Co.',
+      status: 'accepted',
+      subline: '$900',
+    });
+
+    render(
+      <BookingsHub
+        entries={[quote, accepted]}
+        tab="upcoming"
+        today={TODAY}
+        city="Austin"
+        needsYou={needsYouItems([accepted, quote])}
+        category={null}
+        sort="soonest"
+      />,
+    );
+
+    const list = screen.getByRole('list', { name: 'Needs you' });
+    expect(list.className.split(' ')).toContain('xl:hidden');
+
+    const [first, second] = within(list).getAllByRole('listitem');
+    expect(within(first!).getByText('Casa Verde sent a quote')).toBeDefined();
+    expect(within(first!).getByRole('link', { name: 'Review quote' }).getAttribute('href')).toBe(
+      '/bookings/q1',
+    );
+    expect(within(first!).getByRole('button', { name: 'Decline' })).toBeDefined();
+    expect(within(second!).getByText('Bloom & Co. accepted your request')).toBeDefined();
+    expect(within(second!).getByRole('link', { name: 'Pay now' }).getAttribute('href')).toBe(
+      '/bookings/a1/checkout',
+    );
+    expect(within(second!).queryByRole('button', { name: 'Decline' })).toBeNull();
+  });
+
+  it('draws no mirror when nothing waits', () => {
+    render(
+      <BookingsHub
+        entries={[entry()]}
+        tab="upcoming"
+        today={TODAY}
+        city="Austin"
+        needsYou={[]}
+        category={null}
+        sort="soonest"
+      />,
+    );
+
+    expect(screen.queryByRole('list', { name: 'Needs you' })).toBeNull();
   });
 });
