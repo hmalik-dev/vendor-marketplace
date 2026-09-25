@@ -480,4 +480,17 @@ describe('the facts in the copy', () => {
       revokeMarkerLifetime: '20 minutes',
     });
   });
+
+  it('names a New York corporation and ends on a short support line (VEN-730)', () => {
+    const terms = legalDocumentText(legalDocument('terms'));
+    const privacy = legalDocumentText(legalDocument('privacy'));
+
+    expect(terms).toContain(`${BRAND_NAME} Technologies, Inc., a New York corporation.`);
+    expect(terms).not.toContain('Delaware');
+    expect(terms).toContain('Questions? Contact support.');
+    expect(terms).not.toContain('rather than a queue');
+    expect(privacy).toContain('Questions? Contact support.');
+    expect(privacy).not.toContain('which reaches a person');
+    expect(privacy).toContain('Requests go through Contact support.');
+  });
 });

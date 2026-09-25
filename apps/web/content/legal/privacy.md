@@ -8,7 +8,7 @@ Short version: we hold the booking. Your card is held by Stripe, your sign-in is
 
 ## Where your data actually lives
 
-Three companies hold something tied to your account, and it is worth knowing which holds what. Nothing in this table is a plan — it is the stack this product actually runs on today. Separately, Vercel receives anonymous page-view counts through Vercel Web Analytics, which are not tied to your account — see the analytics note further down.
+Three companies hold something tied to your account. Separately, Vercel receives anonymous page-view counts through Vercel Web Analytics, which are not tied to your account — see the analytics note further down.
 
 | What                 | Held by             | Why                                                        |
 | -------------------- | ------------------- | ---------------------------------------------------------- |
@@ -22,7 +22,7 @@ Three companies hold something tied to your account, and it is worth knowing whi
 
 The account details you type in, the profile a vendor publishes, the requests and bookings you make, and the messages you send through the thread. Nothing else beyond the aggregate page views our analytics tool records — there is no tracking pixel building a profile of you, and it does not follow you between sites.
 
-One exception, and it is worth naming: when you accept a legal document — these Terms when you first sign in, and the vendor agreement if you are a vendor — we record the moment, the person, the business where there is one, the version accepted, a fingerprint of the exact text you were shown, **the IP address the acceptance came from and the browser that sent it**. That is the record of an agreement rather than a profile of a person, and it is the one thing here we cannot later edit or remove — see _Your rights_.
+One exception: when you accept a legal document — these Terms when you first sign in, and the vendor agreement if you are a vendor — we record the moment, the person, the business where there is one, the version accepted, a fingerprint of the exact text you were shown, **the IP address the acceptance came from and the browser that sent it**. It is the one thing here we cannot later edit or remove — see _Your rights_.
 
 ## Why we are allowed to hold it
 
@@ -32,7 +32,7 @@ Because you asked us to run a booking for you, and a booking cannot be run witho
 
 A vendor sees the requests and bookings addressed to them, and the messages you send them. A customer sees the profile a vendor published. Nobody sees anybody else's. Our processors — Stripe and Neon (which also runs sign-in and stores uploads) — see what the table above says they hold, and are contractually barred from doing anything else with it. Vercel receives anonymous page-view counts only, not tied to your account — see the analytics note further down.
 
-**One exception, and it is the reason reporting works at all: when a message thread is reported, the people who operate the platform can read it.** They can read that thread, and only that thread, and only while the report is open — a closed report stops being a key to the conversation. Every such read is written to an internal log naming the admin, the thread and the report it was read under. Staff never write into a thread: an admin reads and then acts, and nothing you see in a conversation is from us. We do not otherwise read your messages, and there is no way in the product for anybody to browse conversations they have no report about.
+**One exception: when a message thread is reported, the people who operate the platform can read it.** They can read that thread, and only that thread, and only while the report is open — a closed report stops being a key to the conversation. Every such read is written to an internal log naming the admin, the thread and the report it was read under. Staff never write into a thread: an admin reads and then acts, and nothing you see in a conversation is from us. We do not otherwise read your messages, and there is no way in the product for anybody to browse conversations they have no report about.
 
 ## How long we keep it
 
@@ -40,19 +40,19 @@ Messages and bookings outlive a closed account, because the other party's copy o
 
 ## Your rights
 
-Ask us for a copy of what we hold, ask us to correct it, or ask us to close your account. Requests go through Contact support and a person answers them. The copy is the whole record: your account, your bookings and the requests behind them, the messages in your threads, the reviews you wrote and the ones written about you, your notifications, your legal acceptances, and your payment records with the Stripe references that identify them. The other party's email address and phone number are left out, and the copy says so — those are their details, not yours.
+Ask us for a copy of what we hold, ask us to correct it, or ask us to close your account. Requests go through Contact support. The copy is the whole record: your account, your bookings and the requests behind them, the messages in your threads, the reviews you wrote and the ones written about you, your notifications, your legal acceptances, and your payment records with the Stripe references that identify them. The other party's email address and phone number are left out, and the copy says so — those are their details, not yours.
 
-**Closing is refused while you hold an upcoming confirmed booking of your own.** Cancel those first from your bookings, where the refund is priced the way every other cancellation on this platform is priced; closing an account never prices your own cancellation for you. If you are a vendor, the upcoming bookings your customers hold with you are a different matter: closing cancels them and refunds those customers in full, and you are paid nothing for them. You walked away and they did not. Once nothing is outstanding, closing retires your account, takes any storefront off the marketplace immediately, and declines the requests still open against you.
+**Closing is refused while you hold an upcoming confirmed booking of your own.** Cancel those first from your bookings, where the refund is priced the way every other cancellation on this platform is priced; closing an account never prices your own cancellation for you. If you are a vendor, the upcoming bookings your customers hold with you are a different matter: closing cancels them and refunds those customers in full, and you are paid nothing for them. Once nothing is outstanding, closing retires your account, takes any storefront off the marketplace immediately, and declines the requests still open against you.
 
-Two things survive it, and we would rather say so than pretend otherwise: the payment and booking records the law and the other party's own copy make us keep, and your record of having accepted a legal document. That record is deliberately not editable and not removable, because an agreement either side can change afterwards is worth nothing to either side — and **closing your account does not remove it**, including the address and browser it names.
+Two things survive it: the payment and booking records the law and the other party's own copy make us keep, and your record of having accepted a legal document. That record is not editable and not removable, and **closing your account does not remove it**, including the address and browser it names.
 
 ## Security
 
-Traffic is encrypted, card details never touch our servers, and access to the database is limited to the people who operate the platform. If something goes wrong with your data we will tell you, rather than wait to be asked.
+Traffic is encrypted, card details never touch our servers, and access to the database is limited to the people who operate the platform. If something goes wrong with your data we will tell you.
 
 ## Changes and contact
 
-The date at the top of this page is the date of the version you are reading. Questions go through Contact support, which reaches a person.
+The date at the top of this page is the date of the version you are reading. Questions? Contact support.
 
 :::note
 We measure page views with Vercel Web Analytics, which sets no cookies and does not follow you across sites. There are still no advertising networks and no data brokers.

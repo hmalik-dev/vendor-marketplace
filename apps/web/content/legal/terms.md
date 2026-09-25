@@ -6,7 +6,7 @@ note: Effective for bookings made on or after that date
 
 ## Who we are
 
-{{brand}} is operated by {{brand}} Technologies, Inc., a Delaware corporation. Where these terms say "we" or "{{brand}}", they mean that company. Where they say "you", they mean whoever is reading them — a customer booking a vendor, or a vendor taking bookings.
+{{brand}} is operated by {{brand}} Technologies, Inc., a New York corporation. Where these terms say "we" or "{{brand}}", they mean that company. Where they say "you", they mean whoever is reading them — a customer booking a vendor, or a vendor taking bookings.
 
 ## What {{brand}} does
 
@@ -32,7 +32,7 @@ Your payment is **held by {{brand}}** until the event has happened. It is releas
 
 ## Cancellations and refunds
 
-Because the payment is held rather than paid out, a cancellation before the event is a refund rather than a claw-back. The schedule that applies to your booking is shown to you at checkout, before you pay, resolved into that booking's own dates and amounts. It is not restated here, because two copies of a schedule drift apart.
+Because the payment is held rather than paid out, a cancellation before the event is a refund rather than a claw-back. The schedule that applies to your booking is shown to you at checkout, before you pay, resolved into that booking's own dates and amounts.
 
 If the **vendor** cancels, you are refunded in full regardless of timing and no commission is retained. If something goes wrong at the event itself, open the booking and use Contact support — a dispute pauses the release while we look at it, and once the release has already run, putting it right means the vendor returns their share and {{brand}} returns its commission.
 
@@ -48,7 +48,7 @@ A customer can review a vendor after a booking has been completed. Reviews are t
 
 ## Files you upload
 
-You keep ownership of the photographs and files you upload. You give us the licence we need to store them and to display them on your profile and in search results, and nothing wider than that. Take a file down and the licence ends with it.
+You keep ownership of the photographs and files you upload. You give us the license we need to store them and to display them on your profile and in search results, and nothing wider than that. Take a file down and the license ends with it.
 
 ## Liability
 
@@ -60,4 +60,4 @@ We will change these terms from time to time. The date at the top of this page i
 
 ## Contact
 
-Questions about these terms go through Contact support, which reaches a person rather than a queue.
+Questions? Contact support.

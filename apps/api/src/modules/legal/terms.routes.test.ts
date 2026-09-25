@@ -321,7 +321,7 @@ describe('the Terms of Service acceptance gate', () => {
      * makes acceptances 5 and 6 mean anything — without it the gate only ever
      * fires on "no row at all" and a version bump would re-gate nobody.
      */
-    it('re-asks an account that accepted v1.0 once v1.1 is in force, and accepting v1.1 clears it', async () => {
+    it('re-asks an account that accepted v1.0 once v1.2 is in force, and accepting v1.2 clears it', async () => {
       await harness.database.db.insert(legalAcceptances).values({
         vendorId: null,
         document: 'terms_of_service',
@@ -337,7 +337,7 @@ describe('the Terms of Service acceptance gate', () => {
       const read = () =>
         harness.app.inject({ method: 'GET', url: '/v1/users/me', headers: bearer(CUSTOMER) });
 
-      expect(CURRENT_TERMS_VERSION).toBe('v1.1');
+      expect(CURRENT_TERMS_VERSION).toBe('v1.2');
       expect((await read()).json().error).toBe('TERMS_REQUIRED');
 
       await accept(CUSTOMER);

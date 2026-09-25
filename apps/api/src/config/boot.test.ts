@@ -76,7 +76,7 @@ describe('the boot guard list', () => {
 
   it('runs every guard and reports each refusal', () => {
     expect(BOOT_GUARDS.map((guard) => guard.name)).toEqual([
-      'Stripe key has a recognised mode',
+      'Stripe key has a recognized mode',
       GUARD,
       'live Stripe key requires DEPLOY_ENV=production',
       'a hosted platform cannot declare DEPLOY_ENV=local',
@@ -159,7 +159,7 @@ describe('the DEPLOY_ENV guards', () => {
 });
 
 describe('the Stripe key mode guard', () => {
-  const guard = BOOT_GUARDS.find((entry) => entry.name === 'Stripe key has a recognised mode')!;
+  const guard = BOOT_GUARDS.find((entry) => entry.name === 'Stripe key has a recognized mode')!;
   const secret = 'FAKEabcdefghijklmn9004';
   const withKey = (key: string) => ({ STRIPE_SECRET_KEY: key }) as never;
 
@@ -172,7 +172,7 @@ describe('the Stripe key mode guard', () => {
     expect(guard.check(withKey(fake(kind, mode, secret)), {})).toBeNull();
   });
 
-  it('refuses a key of no recognised mode, naming its prefix and not the rest', () => {
+  it('refuses a key of no recognized mode, naming its prefix and not the rest', () => {
     const reason = guard.check(withKey(fake('pk', 'live', secret)), {});
 
     expect(reason).toBe(
@@ -181,9 +181,9 @@ describe('the Stripe key mode guard', () => {
     expect(reason).not.toContain(secret);
   });
 
-  it('refuses to start, through the guard runner, on a key of no recognised mode', () => {
+  it('refuses to start, through the guard runner, on a key of no recognized mode', () => {
     expect(() => runBootGuards(withKey(fake('pk', 'live', secret)), {})).toThrow(
-      /Stripe key has a recognised mode: STRIPE_SECRET_KEY starts "pk_live_"/,
+      /Stripe key has a recognized mode: STRIPE_SECRET_KEY starts "pk_live_"/,
     );
   });
 });

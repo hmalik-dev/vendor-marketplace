@@ -19,17 +19,17 @@ The customer pays {{brand}} at checkout, and {{brand}} holds the money until the
 
 {{brand}} retains {{commission}} of each booking, deducted at the moment the payout is released. Nothing is charged monthly and nothing is charged for listing. {{brand}} adds no fee on top of your published price, so the customer pays exactly what you published.
 
-## If a booking is cancelled
+## If a booking is canceled
 
 If the customer cancels, what they get back is decided by the schedule shown to them at checkout, and whatever is not refunded is released to you on the ordinary schedule. If **you** cancel a confirmed booking, the customer is refunded in full and no commission is retained.
 
 ## If something is disputed
 
-A customer who reports a problem pauses the release while it is looked at. If a booking has to be put right after the payout has already run, you return your share and {{brand}} returns its commission — a full unwind rather than a partial one.
+A customer who reports a problem pauses the release while it is looked at. If a booking has to be put right after the payout has already run, you return your share and {{brand}} returns its commission.
 
 ## Your prices and your taxes
 
-You set your prices and you keep them accurate. You are responsible for your own taxes on what you earn, and for any licence or insurance your trade requires. {{brand}} is not your employer and this agreement does not make you one.
+You set your prices and you keep them accurate. You are responsible for your own taxes on what you earn, and for any license or insurance your trade requires. {{brand}} is not your employer and this agreement does not make you one.
 
 ## Payouts and Stripe
 
@@ -37,7 +37,7 @@ Payouts run through Stripe Connect. Stripe collects your bank details and enough
 
 ## Files you upload
 
-You keep ownership of your photographs and files. You give {{brand}} the licence needed to store them and to show them on your profile and in search results, and nothing wider. Take a file down and the licence ends with it.
+You keep ownership of your photographs and files. You give {{brand}} the license needed to store them and to show them on your profile and in search results, and nothing wider. Take a file down and the license ends with it.
 
 ## Ending this agreement
 
@@ -47,4 +47,4 @@ You can unpublish your listing at any time. Bookings already accepted stand: the
 
 A new version does not replace what you accepted. It adds a version, and you are asked to accept it before you take further bookings — your record shows which version you agreed to and when.
 
-That record also holds the IP address your acceptance came from and the browser that sent it, so it stands up if either of us later disputes what was agreed. It is not editable and not removable while your account exists; the Privacy Policy says the same thing in the same words.
+That record also holds the IP address your acceptance came from and the browser that sent it. It is not editable and not removable while your account exists.

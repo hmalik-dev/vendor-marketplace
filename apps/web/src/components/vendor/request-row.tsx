@@ -285,7 +285,7 @@ export function RequestRow({ request, isFirst }: RequestRowProps): React.ReactEl
       */}
       {isPackage ? (
         <p id={`quote-locked-${request.id}`} className="mt-2.5 text-xs text-stone-600">
-          Priced by its package, so the amount is fixed. Decline if you cannot honour it.
+          Priced by its package, so the amount is fixed. Decline if you cannot honor it.
         </p>
       ) : null}
 

@@ -35,11 +35,11 @@ export function TierMarker({
     return null;
   }
 
-  const colours = tone === 'dark' ? 'bg-stone-0 text-stone-900' : 'bg-stone-900 text-stone-50';
+  const colors = tone === 'dark' ? 'bg-stone-0 text-stone-900' : 'bg-stone-900 text-stone-50';
   return (
     <span
       data-testid="tier-marker"
-      className={`ml-1 inline-flex flex-none items-center gap-1.5 rounded-[5px] px-2 py-1 font-mono text-[11px] leading-[normal] font-semibold tracking-[0.06em] uppercase ${colours}`}
+      className={`ml-1 inline-flex flex-none items-center gap-1.5 rounded-[5px] px-2 py-1 font-mono text-[11px] leading-[normal] font-semibold tracking-[0.06em] uppercase ${colors}`}
     >
       <span aria-hidden="true" className="size-1.5 flex-none rounded-full bg-[#E0A83C]" />
       {label}
