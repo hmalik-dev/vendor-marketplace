@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Orla — Frames 40–41 · Customer welcome + name</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#E9E6DF;font-family:'Instrument Sans',system-ui,sans-serif}
+a{color:#A34A28}a:hover{color:#8E3F20}
+.sc{padding:0 48px 58px}
+.sc-h{display:flex;align-items:baseline;gap:12px;margin:0 0 14px;flex-wrap:wrap}
+.sc-n{font:500 10.5px 'JetBrains Mono',monospace;letter-spacing:.1em;padding:4px 8px;background:#23201C;color:#F8F5EF;border-radius:4px}
+.sc-t{font:600 14px/1.2 'Instrument Sans',sans-serif;color:#23201C}
+.sc-d{font:400 12.5px/1.4 'Instrument Sans',sans-serif;color:#6B6459;max-width:820px}
+.sc-mvp{font:700 9.5px 'Instrument Sans',sans-serif;letter-spacing:.09em;text-transform:uppercase;padding:3px 7px;border-radius:4px;background:#EDF0E9;color:#4B5940}
+.sc-rev{font:700 9.5px 'Instrument Sans',sans-serif;letter-spacing:.09em;text-transform:uppercase;padding:3px 7px;border-radius:4px;background:#F7E7E0;color:#8E3F20}
+.sc-post{font:700 9.5px 'Instrument Sans',sans-serif;letter-spacing:.09em;text-transform:uppercase;padding:3px 7px;border-radius:4px;background:#F5EEDC;color:#7A5A12}
+.fr{width:1440px;height:900px;background:#F8F5EF;border:1px solid rgba(35,32,28,.12);border-radius:12px;overflow:hidden;box-shadow:0 6px 28px rgba(35,32,28,.13);display:flex;flex-direction:column}
+.hd{height:64px;flex:none;background:#FFFDF9;border-bottom:1px solid #E4DDD1;display:flex;align-items:center;justify-content:space-between;padding:0 32px}
+.ph{background:repeating-linear-gradient(135deg,#E6DFD3 0 9px,#EFE9DF 9px 18px);display:flex;align-items:flex-end;padding:10px}
+.phl{font:400 9px 'JetBrains Mono',monospace;color:#6B6459}
+.lbl{font:600 10.5px 'Instrument Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#6B6459}
+.inp{background:#F1ECE4;border:1px solid #E4DDD1;border-radius:10px;padding:10px 13px;font-size:13.5px;color:#23201C}
+.side{width:240px;flex:none;background:#FFFDF9;border-right:1px solid #E4DDD1;display:flex;flex-direction:column;padding:16px 12px}
+.nav{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;font-size:13.5px;font-weight:500;color:#4A443C}
+.navA{background:#F7E7E0;color:#8E3F20;font-weight:600;box-shadow:inset 3px 0 0 #B4552F}
+.dot{width:7px;height:7px;border-radius:50%;flex:none}
+.btnP{font-size:13.5px;font-weight:600;color:#FFFDF9;background:#B4552F;padding:11px 20px;border-radius:10px;display:inline-block}
+.btnS{font-size:13.5px;font-weight:600;color:#23201C;background:#FFFDF9;border:1px solid #E4DDD1;padding:10px 20px;border-radius:10px;display:inline-block}
+.pill{font:700 10px 'Instrument Sans',sans-serif;letter-spacing:.07em;text-transform:uppercase;padding:5px 10px;border-radius:999px}
+.card{background:#FFFDF9;border-radius:16px;box-shadow:0 2px 10px rgba(35,32,28,.06);overflow:hidden}
+.h2{font-family:'Instrument Serif',serif;font-size:26px;color:#23201C;letter-spacing:-.01em}
+.sh{font-family:'Instrument Serif',serif;font-size:21px;color:#23201C}
+.sk{background:linear-gradient(90deg,#EFE9E0 0%,#F4F0E8 50%,#EFE9E0 100%);background-size:200% 100%;animation:shim 1.5s linear infinite;border-radius:4px}
+@keyframes shim{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.spin{border:2px solid rgba(180,85,47,.28);border-top-color:#B4552F;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.pls{animation:pls 2s ease-in-out infinite}
+.ldg{position:relative;width:52px;height:30px}
+.ldg i{position:absolute;top:0;width:30px;height:30px;border-radius:50%;box-sizing:border-box}
+.ldg i:first-child{left:0;background:#B4552F;animation:ldgL 1.9s cubic-bezier(.45,0,.55,1) infinite}
+.ldg i:last-child{left:22px;border:2px solid #23201C;animation:ldgR 1.9s cubic-bezier(.45,0,.55,1) infinite}
+@keyframes ldgL{0%,100%{transform:translateX(-9px)}46%,54%{transform:translateX(7px)}}
+@keyframes ldgR{0%,100%{transform:translateX(9px)}46%,54%{transform:translateX(-7px)}}
+@keyframes pls{0%,100%{opacity:.4}50%{opacity:1}}
+.tile{background:#FFFDF9;border-radius:14px;border:1px solid #E4DDD1;padding:16px}
+.tl{font:600 10.5px 'Instrument Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#6B6459;margin-bottom:12px}
+.tn{font:400 11.5px/1.5 'Instrument Sans',sans-serif;color:#6B6459;margin-top:10px}
+.bp{font:500 9.5px 'JetBrains Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:#4A443C;background:#DFDACF;border-radius:4px;padding:4px 8px;display:inline-block;margin-bottom:8px}
+
+/* frame 34 — self-scoped so it can't collide with deck .card/.h2 */
+.f34-eyebrow{font:600 11px 'Instrument Sans',sans-serif;letter-spacing:.11em;text-transform:uppercase;color:#8E3F20}
+.f34-lede{font:400 14.5px/1.75 'Instrument Sans',sans-serif;color:#4A443C;max-width:620px;text-wrap:pretty}
+.f34-mono{font-family:'JetBrains Mono',monospace}
+.f34-cfg{font:500 10px 'JetBrains Mono',monospace;letter-spacing:.05em;color:#7A5A12;background:#F5EEDC;border-radius:4px;padding:2px 6px;white-space:nowrap}
+.f34-card{background:#FFFDF9;border:1px solid #E4DDD1;border-radius:14px}
+.f34-h2{font-family:'Instrument Serif',serif;font-size:34px;line-height:1.14;color:#23201C;letter-spacing:-.01em}
+.f34-sec{padding:64px 40px}
+
+.sc{padding:48px}
+</style></head><body>
+<div class="sc" id="40a">
+<div class="sc-h"><span class="sc-n">40</span><span class="sc-t">Welcome &mdash; customer accepts terms</span><span class="sc-mvp">MVP</span><span class="sc-d">First screen after email verification for a customer. Confirms the role and takes terms consent with one button. Continue goes to <strong style="font-weight:600;color:#4A443C">41</strong>. No fields, no skip.</span></div>
+<div style="display:flex;gap:26px;align-items:flex-start;flex-wrap:wrap">
+<div style="flex:none">
+<div class="bp">1440 &middot; desktop <span style="opacity:.6">&mdash; /sign-up/accept-terms</span></div>
+<div class="fr" data-screen-label="40 Welcome customer">
+<div style="flex:1;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;background:#F8F5EF;padding:0 40px">
+<div style="position:absolute;left:-150px;bottom:-170px;width:460px;height:460px;border-radius:50%;background:rgba(35,32,28,.03)"></div>
+<div style="position:absolute;right:-130px;top:-160px;width:400px;height:400px;border-radius:50%;background:rgba(180,85,47,.045)"></div>
+<div style="width:100%;max-width:700px;position:relative">
+<div style="display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:34px"><div style="position:relative;width:26px;height:19px"><div style="position:absolute;left:0;top:0;width:19px;height:19px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:8px;top:0;width:19px;height:19px;border-radius:50%;border:1.4px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:29px;color:#23201C">Orla</span></div>
+<div style="text-align:center">
+<div style="font-family:'Instrument Serif',serif;font-size:38px;line-height:1.14;color:#23201C;letter-spacing:-.01em">Welcome to Orla</div>
+<div style="font-size:14.5px;line-height:1.65;color:#4A443C;margin:10px auto 0;max-width:460px">You're joining as a customer.</div>
+</div>
+<div style="max-width:460px;margin:30px auto 0;display:flex;flex-direction:column;gap:14px">
+<div style="text-align:center;padding:13px 0;border-radius:10px;background:#B4552F;color:#FFFDF9;font-size:13.5px;font-weight:600">Continue</div>
+<div style="text-align:center;font-size:12.5px;line-height:1.6;color:#6B6459">By continuing you agree to the <span style="color:#A34A28;font-weight:600;text-decoration:underline;text-underline-offset:2px">Terms</span> and <span style="color:#A34A28;font-weight:600;text-decoration:underline;text-underline-offset:2px">Privacy Policy</span>.</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div style="flex:1;min-width:320px;display:flex;flex-direction:column;gap:14px">
+<div class="tile"><div class="tl">One button is the consent</div><div class="tn" style="margin-top:0">No checkbox. The line under Continue says what pressing it means; the timestamp and terms version are saved on press.</div></div>
+<div class="tile"><div class="tl">Links open in a new tab</div><div class="tn" style="margin-top:0">Terms and Privacy Policy open the legal pages without losing this screen.</div></div>
+<div class="tile"><div class="tl">Same shell as 41</div><div class="tn" style="margin-top:0">Centred 700px column, same logo, heading size and button, so the two screens read as one flow.</div></div>
+</div>
+</div>
+</div>
+
+<div class="sc" id="41a">
+<div class="sc-h"><span class="sc-n">41</span><span class="sc-t">What should we call you? &mdash; customer name</span><span class="sc-mvp">MVP</span><span class="sc-d">VEN-642. The customer-side sibling of <strong style="font-weight:600;color:#4A443C">36</strong>: reached once, right after the welcome screen (<strong style="font-weight:600;color:#4A443C">40</strong>) on first sign-up, before any dashboard. A <strong style="font-weight:600;color:#4A443C">hard gate</strong> &mdash; two fields, one button, no skip. Same centred column and heading rhythm as <strong style="font-weight:600;color:#4A443C">40</strong>, so the two read as one flow. Not the profile editor: no bio, city, budget, avatar or phone.</span></div>
+<div style="display:flex;gap:26px;align-items:flex-start;flex-wrap:wrap">
+<div style="flex:none">
+<div class="bp">1440 &middot; desktop <span style="opacity:.6">&mdash; /sign-up/name</span></div>
+<div class="fr" data-screen-label="41 Customer name">
+<div style="flex:1;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;background:#F8F5EF;padding:0 40px">
+<div style="position:absolute;left:-150px;bottom:-170px;width:460px;height:460px;border-radius:50%;background:rgba(35,32,28,.03)"></div>
+<div style="position:absolute;right:-130px;top:-160px;width:400px;height:400px;border-radius:50%;background:rgba(180,85,47,.045)"></div>
+<div style="width:100%;max-width:700px;position:relative">
+<div style="display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:34px"><div style="position:relative;width:26px;height:19px"><div style="position:absolute;left:0;top:0;width:19px;height:19px;border-radius:50%;background:#B4552F"></div><div style="position:absolute;left:8px;top:0;width:19px;height:19px;border-radius:50%;border:1.4px solid #23201C"></div></div><span style="font-family:'Instrument Serif',serif;font-size:29px;color:#23201C">Orla</span></div>
+<div style="text-align:center">
+<div style="font-family:'Instrument Serif',serif;font-size:38px;line-height:1.14;color:#23201C;letter-spacing:-.01em">What should we call you?</div>
+<div style="font-size:14.5px;line-height:1.65;color:#4A443C;margin:10px auto 0;max-width:460px;text-wrap:pretty">Vendors see this name once you request a booking.</div>
+</div>
+<div style="max-width:460px;margin:30px auto 0;display:flex;flex-direction:column;gap:16px">
+<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px">
+<div><div class="lbl" style="margin-bottom:6px">First name</div><div class="inp" style="background:#FFFDF9;color:#23201C;border-color:#B4552F;box-shadow:0 0 0 3px rgba(180,85,47,.16)">Ana</div></div>
+<div><div class="lbl" style="margin-bottom:6px">Last name</div><div class="inp" style="background:#FFFDF9;color:#23201C">Nandakumar</div></div>
+</div>
+<div style="text-align:center;padding:13px 0;border-radius:10px;background:#B4552F;color:#FFFDF9;font-size:13.5px;font-weight:600">Continue</div>
+<div style="text-align:center;font-size:13px;font-weight:600;color:#A34A28">Sign out</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div style="flex:1;min-width:320px;display:flex;flex-direction:column;gap:14px">
+<div class="tile"><div class="tl">Why it's a gate</div><div class="tn" style="margin-top:0">A booking request without a name reaches a vendor as an email address. Collecting it here, once, means no later screen has to handle a nameless customer &mdash; so there is no skip, and no &ldquo;later&rdquo; link.</div></div>
+<div class="tile"><div class="tl">No photo panel</div><div class="tn" style="margin-top:0">Like <strong style="font-weight:600;color:#4A443C">37</strong>, the sell is over &mdash; this person has an account. The column becomes the whole frame so it reads as the tail of accept-terms, not a new part of the product.</div></div>
+<div class="tile"><div class="tl">Sign out is the only exit</div><div class="tn" style="margin-top:0">Same text link as <strong style="font-weight:600;color:#4A443C">36</strong>. It isn't a skip: signing back in returns here until both fields are saved.</div></div>
+<div class="tile"><div class="tl">Two fields, one answer</div><div class="tn" style="margin-top:0">Side by side because they're read together. First field autofocused. Trimmed; any characters allowed; 1&ndash;50 each. Autocomplete <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">given-name</span> / <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px">family-name</span>.</div></div>
+</div>
+</div>
+</div>
+
+<div class="sc" id="41b">
+<div class="sc-h"><span class="sc-n">41b</span><span class="sc-t">Name &mdash; error, saving, failed save</span><span class="sc-mvp">MVP</span><span class="sc-d">Same rules as <strong style="font-weight:600;color:#4A443C">36b</strong>: inline red on blur or submit, spinner in the button while saving, and a failed save that says plainly nothing was lost.</span></div>
+<div style="display:flex;gap:20px;flex-wrap:wrap">
+<div>
+<div class="bp">Error &middot; last name empty</div>
+<div style="width:520px;height:360px;background:#F8F5EF;border:1px solid rgba(35,32,28,.12);border-radius:12px;box-shadow:0 6px 28px rgba(35,32,28,.13);overflow:hidden;display:flex;align-items:center;justify-content:center;padding:0 30px">
+<div style="width:100%;max-width:460px;display:flex;flex-direction:column;gap:16px">
+<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start">
+<div><div class="lbl" style="margin-bottom:6px">First name</div><div class="inp" style="background:#FFFDF9;color:#23201C">Ana</div></div>
+<div><div class="lbl" style="margin-bottom:6px">Last name</div><div style="background:#FFFDF9;border:1.5px solid #B23A30;box-shadow:0 0 0 3px rgba(178,58,48,.18);border-radius:10px;padding:10.5px 13px;font-size:13.5px;color:#9A9184">Last name</div><div style="font:400 11.5px/1.5 'Instrument Sans',sans-serif;color:#B23A30;margin-top:6px">We need your last name too.</div></div>
+</div>
+<div style="text-align:center;padding:13px 0;border-radius:10px;background:#B4552F;color:#FFFDF9;font-size:13.5px;font-weight:600">Continue</div>
+</div>
+</div>
+</div>
+<div>
+<div class="bp">Loading &middot; saving</div>
+<div style="width:520px;height:360px;background:#F8F5EF;border:1px solid rgba(35,32,28,.12);border-radius:12px;box-shadow:0 6px 28px rgba(35,32,28,.13);overflow:hidden;display:flex;align-items:center;justify-content:center;padding:0 30px">
+<div style="width:100%;max-width:460px;display:flex;flex-direction:column;gap:16px">
+<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px">
+<div><div class="lbl" style="margin-bottom:6px">First name</div><div class="inp" style="background:#F4F0E8;color:#6B6459">Ana</div></div>
+<div><div class="lbl" style="margin-bottom:6px">Last name</div><div class="inp" style="background:#F4F0E8;color:#6B6459">Nandakumar</div></div>
+</div>
+<div style="display:flex;align-items:center;justify-content:center;gap:10px;padding:13px 0;border-radius:10px;background:#9E4A29;color:#FFFDF9;font-size:13.5px;font-weight:600"><span class="spin" style="width:14px;height:14px;border-color:rgba(255,253,249,.35);border-top-color:#FFFDF9;flex:none"></span>Saving</div>
+</div>
+</div>
+</div>
+<div>
+<div class="bp">Failed save &middot; nothing lost</div>
+<div style="width:520px;height:360px;background:#F8F5EF;border:1px solid rgba(35,32,28,.12);border-radius:12px;box-shadow:0 6px 28px rgba(35,32,28,.13);overflow:hidden;display:flex;align-items:center;justify-content:center;padding:0 30px">
+<div style="width:100%;max-width:460px;display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:flex-start;gap:11px;background:#FBEEEC;border:1px solid #EFCEC9;border-radius:12px;padding:13px 15px"><div style="width:16px;height:16px;border-radius:50%;background:#B23A30;flex:none;margin-top:1px"></div><div><div style="font:600 13px 'Instrument Sans',sans-serif;color:#23201C">We couldn't save your name</div><div style="font:400 12.5px/1.55 'Instrument Sans',sans-serif;color:#4A443C;margin-top:3px">What you typed is still here. Try again.</div></div></div>
+<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px">
+<div><div class="lbl" style="margin-bottom:6px">First name</div><div class="inp" style="background:#FFFDF9;color:#23201C">Ana</div></div>
+<div><div class="lbl" style="margin-bottom:6px">Last name</div><div class="inp" style="background:#FFFDF9;color:#23201C">Nandakumar</div></div>
+</div>
+<div style="text-align:center;padding:13px 0;border-radius:10px;background:#B4552F;color:#FFFDF9;font-size:13.5px;font-weight:600">Try again</div>
+</div>
+</div>
+</div>
+</div>
+
+</body></html>

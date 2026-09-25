@@ -12,6 +12,7 @@ import {
 } from '@vendor-marketplace/shared';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
+import { FirstRunShell } from '@/components/first-run-shell';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
 import { ContinueNotice } from '@/components/legal/continue-notice';
@@ -35,11 +36,12 @@ import { useApi } from '@/lib/use-api';
  * send nothing: no role is ever defaulted here. There is **no checkbox**: "By continuing you agree to the
  * Terms and Privacy Policy" sits under the submit, and the row is recorded as a
  * `continue_notice`, never as a ticked box. An account that already exists shows
- * its stored role read-only: nothing here can change it.
+ * its stored role read-only: nothing here can change it. This screen is frame
+ * `40`, drawn in `FirstRunShell` (VEN-744).
  *
  * **A new Terms version (`explicitTickRequired`) is the one tick.** An account
  * that accepted an earlier version is asked again with an unticked box, and that
- * is clickwrap:
+ * is clickwrap. It is a different screen and keeps its own layout:
  *
  * - **The box starts unticked.** A pre-ticked box is not an affirmative act.
  *   `useState` is seeded `false` and nothing else writes it.
@@ -61,6 +63,9 @@ const ROLE_LABELS: Record<UserRole, string> = {
   vendor: 'a vendor',
   admin: 'an admin',
 };
+
+/** Frame `40`'s primary: full width, 13px vertical padding, 10px radius. */
+const CONTINUE_CLASS = 'w-full rounded-[10px] py-[13px]';
 
 export function AcceptTermsScreen({
   status,
@@ -191,33 +196,88 @@ export function AcceptTermsScreen({
 
   if (landedAs !== null) {
     return (
-      <div className="mx-auto max-w-[700px] px-6 py-13">
-        <h1 className="display-heading text-display-md text-stone-900">{`Welcome to ${BRAND_NAME}`}</h1>
-        <p className="mt-6 text-base leading-prose text-stone-800" data-testid="landed-role">
-          You&apos;re joining as {ROLE_LABELS[landedAs]}.
-        </p>
-        <Button variant="primary" size="lg" className="mt-6" onClick={continueOn}>
+      <FirstRunShell
+        heading={`Welcome to ${BRAND_NAME}`}
+        sub={<>You&apos;re joining as {ROLE_LABELS[landedAs]}.</>}
+        subTestId="landed-role"
+      >
+        <Button variant="primary" className={CONTINUE_CLASS} onClick={continueOn}>
           Continue
         </Button>
-      </div>
+      </FirstRunShell>
+    );
+  }
+
+  const failedBanner = failed ? (
+    <Banner status="failed" title="That did not save">
+      {failed}
+    </Banner>
+  ) : null;
+
+  if (!tickMode) {
+    return (
+      <FirstRunShell
+        heading={`Welcome to ${BRAND_NAME}`}
+        sub={knownRole !== null ? <>You&apos;re joining as {ROLE_LABELS[knownRole]}.</> : undefined}
+        subTestId="stored-role"
+      >
+        <div className="flex flex-col gap-3.5">
+          {failedBanner}
+          {knownRole === null ? (
+            /*
+              No recorded role: it expired, or the sign-up could not store it. Signing
+              up again would meet "already exists", so the way on is support, never a
+              picker and never a default.
+            */
+            <Banner status="failed" title="We couldn't find how you're joining">
+              The choice you made at sign-up wasn&apos;t saved with this account, so it can&apos;t
+              be set up from here.{' '}
+              <a
+                href={SUPPORT_PATH}
+                className="font-semibold text-clay-600 underline underline-offset-4"
+              >
+                Contact support
+              </a>{' '}
+              and we&apos;ll finish it for you.
+            </Banner>
+          ) : null}
+
+          {/*
+            `noValidate`, because this form owns its own submit: the browser's
+            constraint validation runs first and cancels the submit event, so
+            `accept` would never fire. #388, and the guard that keeps it true.
+          */}
+          <form onSubmit={accept} noValidate className="flex flex-col gap-3.5">
+            {/*
+              `40-states.md`: a primary blocked by something takes the `clay-300`
+              disabled fill and stays visible, rather than the primitive's opacity
+              wash — the same override the agreement step makes.
+            */}
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={!ready || saving}
+              loading={saving}
+              className={`${CONTINUE_CLASS} disabled:bg-clay-300 disabled:opacity-100`}
+            >
+              {saving ? 'Recording…' : 'Continue'}
+            </Button>
+            <ContinueNotice className="text-sm leading-[1.6] text-stone-600" />
+          </form>
+        </div>
+      </FirstRunShell>
     );
   }
 
   return (
     <div className="mx-auto max-w-[700px] px-6 py-13">
-      {tickMode ? (
-        <>
-          <p className="text-label font-semibold tracking-label text-stone-600 uppercase">Legal</p>
-          <h1 className="display-heading mt-2 text-display-md text-stone-900">
-            The Terms have changed
-          </h1>
-          <p className="mt-2 text-sm leading-prose text-stone-600">
-            Please accept the current Terms to keep using {BRAND_NAME}.
-          </p>
-        </>
-      ) : (
-        <h1 className="display-heading text-display-md text-stone-900">{`Welcome to ${BRAND_NAME}`}</h1>
-      )}
+      <p className="text-label font-semibold tracking-label text-stone-600 uppercase">Legal</p>
+      <h1 className="display-heading mt-2 text-display-md text-stone-900">
+        The Terms have changed
+      </h1>
+      <p className="mt-2 text-sm leading-prose text-stone-600">
+        Please accept the current Terms to keep using {BRAND_NAME}.
+      </p>
 
       {failed ? (
         <Banner status="failed" title="That did not save" className="mt-5">
@@ -225,86 +285,49 @@ export function AcceptTermsScreen({
         </Banner>
       ) : null}
 
-      {tickMode ? null : knownRole !== null ? (
-        <p className="mt-6 text-base leading-prose text-stone-800" data-testid="stored-role">
-          You&apos;re joining as {ROLE_LABELS[knownRole]}.
-        </p>
-      ) : (
-        /*
-          No recorded role: it expired, or the sign-up could not store it. Signing
-          up again would meet "already exists", so the way on is support, never a
-          picker and never a default.
-        */
-        <Banner status="failed" title="We couldn't find how you're joining" className="mt-6">
-          The choice you made at sign-up wasn&apos;t saved with this account, so it can&apos;t be
-          set up from here.{' '}
-          <a
-            href={SUPPORT_PATH}
-            className="font-semibold text-clay-600 underline underline-offset-4"
-          >
-            Contact support
-          </a>{' '}
-          and we&apos;ll finish it for you.
-        </Banner>
-      )}
-
-      {tickMode ? (
-        /*
-          The document, clipped and expanded **in place**. Not a navigation and
-          not a modal: a reader who opens the Terms must not lose the tick they
-          have already made, and must not be dropped somewhere the gate then
-          bounces them back from.
-        */
-        <ExpandableDocumentCard
-          document={terms}
-          heading={terms.title}
-          headingId="terms-heading"
-          bodyId="terms-body"
-          meta={
-            <>
-              {terms.sections.length} sections &middot; {status.current}
-            </>
-          }
-          collapseLabel="Collapse the Terms"
-          helper="Opens here — you don't lose your place."
-        />
-      ) : null}
-
       {/*
-        `noValidate`, because this form owns its own submit: the browser's
-        constraint validation runs first and cancels the submit event, so
-        `accept` would never fire. #388, and the guard that keeps it true.
+        The document, clipped and expanded **in place**. Not a navigation and
+        not a modal: a reader who opens the Terms must not lose the tick they
+        have already made, and must not be dropped somewhere the gate then
+        bounces them back from.
       */}
+      <ExpandableDocumentCard
+        document={terms}
+        heading={terms.title}
+        headingId="terms-heading"
+        bodyId="terms-body"
+        meta={
+          <>
+            {terms.sections.length} sections &middot; {status.current}
+          </>
+        }
+        collapseLabel="Collapse the Terms"
+        helper="Opens here — you don't lose your place."
+      />
+
       <form onSubmit={accept} noValidate className="mt-6">
-        {tickMode ? (
-          <label className="flex cursor-pointer items-start gap-3">
-            <input
-              type="checkbox"
-              checked={agreed}
-              onChange={(event) => setAgreed(event.currentTarget.checked)}
-              className="mt-1 size-4 flex-none appearance-none rounded-[4px] border-[1.3px] border-stone-560 bg-stone-0 checked:border-clay-400 checked:bg-clay-400 checked:after:block checked:after:text-center checked:after:text-[10px] checked:after:leading-[14px] checked:after:text-stone-0 checked:after:content-['✓']"
-            />
-            <span className="text-base leading-prose text-stone-800">
-              I have read and I accept the{' '}
-              <a
-                href={LEGAL_PATHS.terms}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-semibold text-clay-500 underline underline-offset-4"
-              >
-                Terms of Service
-              </a>{' '}
-              {status.current}.
-            </span>
-          </label>
-        ) : null}
+        <label className="flex cursor-pointer items-start gap-3">
+          <input
+            type="checkbox"
+            checked={agreed}
+            onChange={(event) => setAgreed(event.currentTarget.checked)}
+            className="mt-1 size-4 flex-none appearance-none rounded-[4px] border-[1.3px] border-stone-560 bg-stone-0 checked:border-clay-400 checked:bg-clay-400 checked:after:block checked:after:text-center checked:after:text-[10px] checked:after:leading-[14px] checked:after:text-stone-0 checked:after:content-['✓']"
+          />
+          <span className="text-base leading-prose text-stone-800">
+            I have read and I accept the{' '}
+            <a
+              href={LEGAL_PATHS.terms}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-clay-500 underline underline-offset-4"
+            >
+              Terms of Service
+            </a>{' '}
+            {status.current}.
+          </span>
+        </label>
 
         <div className="mt-5">
-          {/*
-            `40-states.md`: a primary blocked by something takes the `clay-300`
-            disabled fill and stays visible, rather than the primitive's opacity
-            wash — the same override the agreement step makes.
-          */}
           <Button
             type="submit"
             variant="primary"
@@ -313,15 +336,11 @@ export function AcceptTermsScreen({
             loading={saving}
             className="disabled:bg-clay-300 disabled:opacity-100"
           >
-            {saving ? 'Recording…' : tickMode ? 'Accept and continue' : 'Continue'}
+            {saving ? 'Recording…' : 'Accept and continue'}
           </Button>
-          {tickMode ? (
-            <p className="mt-2 text-helper text-stone-600">
-              We save the version and time you accept.
-            </p>
-          ) : (
-            <ContinueNotice className="mt-3 text-left" />
-          )}
+          <p className="mt-2 text-helper text-stone-600">
+            We save the version and time you accept.
+          </p>
         </div>
       </form>
     </div>

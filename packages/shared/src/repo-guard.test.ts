@@ -29,6 +29,8 @@ const ROOT = resolve(import.meta.dirname, '../../..');
  */
 const IDP_ALLOWED_PREFIXES: readonly string[] = ['packages/db/drizzle/'];
 const IDP_ALLOWED_FILES: Readonly<Record<string, string>> = {
+  'design/delta-customer-name-collection/CUSTOMER-NAME-PROMPT.md':
+    'the account holder’s frame prompt, merged byte for byte (VEN-744); the ticket, not the file, corrects its save target',
   'packages/db/src/auth-provider-migration.test.ts':
     'runs migrations 0055 and 0056, which backfill the removed enum value',
   'packages/db/src/auth-user-id-migration.test.ts':
