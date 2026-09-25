@@ -39,7 +39,7 @@ export function BookingsSidebar({
       aria-label="Your account"
       className="hidden w-60 shrink-0 flex-col border-r border-stone-300 bg-stone-0 px-3 py-4 lg:flex"
     >
-      <ul className="flex flex-col gap-0.5">
+      <ul className="flex flex-col">
         {ITEMS.map((item) => {
           const isCurrent = item.key === current;
 
@@ -57,7 +57,9 @@ export function BookingsSidebar({
               >
                 {item.label}
                 {item.key === 'bookings' && bookingCount !== null ? (
-                  <span className="ml-auto text-xs text-stone-600">{bookingCount}</span>
+                  <span className="ml-auto text-helper font-semibold text-stone-600">
+                    {bookingCount}
+                  </span>
                 ) : null}
                 {item.key === 'messages' ? <MessagesUnreadDot /> : null}
               </Link>
@@ -71,7 +73,7 @@ export function BookingsSidebar({
         the sentence and `12px` on `Find a vendor →`, where both read `text-xs`'s
         11. The title above is already the frame's 12.5px/600.
       */}
-      <div className="mt-auto rounded-xl bg-stone-150 p-3">
+      <div className="mt-auto rounded-panel bg-stone-150 p-3">
         <p className="mb-1 text-sm font-semibold text-stone-900">Booking for something new?</p>
         <p className="mb-2.25 text-helper leading-normal text-stone-700">
           Search by vendor type, city and date — availability is live.

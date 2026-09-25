@@ -90,7 +90,7 @@ function BookingCard({ entry }: BookingCardProps): React.ReactElement {
         <StatusPill tone={entry.statusTone}>{entry.statusLabel}</StatusPill>
       </div>
       <p className="mt-2.5 truncate font-display text-[17px] text-stone-900">{entry.vendorName}</p>
-      <p className="mt-0.5 truncate text-xs text-stone-600">
+      <p className="mt-0.5 truncate text-meta text-stone-600">
         {[entry.categoryName, entry.occasion].filter(Boolean).join(' · ') || ' '}
       </p>
       <p className="mt-2.25 font-display text-[21px] text-stone-900">

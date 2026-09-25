@@ -308,6 +308,14 @@ because the `Browse by category` cards sit directly below and repeat it. The
 footer's category links stay. A parity pass reading the missing row is reading
 this ruling; the frames are corrected by a design pass, not by a ticket.
 
+**Frame `07`'s customer sidebar draws four rows; the app builds two (VEN-745,
+ruled 2026-09-24).** `Saved vendors` has no feature and `My profile` stays in
+the account menu, so a parity pass reading them as missing is reading this
+ruling. Two more readings of the same frame are decisions, not drift: the
+header date prints US order (`Thursday, September 24`) where the frame draws
+`Sunday, 26 April`, and the frame's 265/381 shell widths are its content-box
+arithmetic on the plan's 240px sidebar and 340px rail.
+
 **Helper and reassurance lines that add no fact are gone (VEN-707, ruled
 2026-09-23).** Frame `29 Contact support` draws the message helper ("What you
 were doing, and what you expected instead.") and "One email, no ticket to

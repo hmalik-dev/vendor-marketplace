@@ -74,6 +74,25 @@ describe('BookingsSidebar', () => {
     expect(screen.queryByText('unread')).toBeNull();
   });
 
+  /*
+   * Frame `07`'s measurements, pinned as class-level facts (jsdom paints
+   * nothing, so the rendered result is verified in the browser pass): rows are
+   * adjacent, the count is 11.5px/600, and the card is `rounded-panel` (12px).
+   */
+  it("keeps the frame's row spacing, count type and card radius", () => {
+    render(<BookingsSidebar bookingCount={2} current="bookings" />);
+
+    const list = within(nav()).getByRole('list');
+    const count = within(nav()).getByText('2');
+    const card = within(nav()).getByText('Booking for something new?').parentElement;
+
+    expect(list.className.split(' ').some((name) => name.startsWith('gap-'))).toBe(false);
+    expect(count.className.split(' ')).toEqual(
+      expect.arrayContaining(['text-helper', 'font-semibold']),
+    );
+    expect(card?.className.split(' ')).toContain('rounded-panel');
+  });
+
   it('is hidden below lg, where the header links remain', () => {
     render(<BookingsSidebar bookingCount={1} current="bookings" />);
 
