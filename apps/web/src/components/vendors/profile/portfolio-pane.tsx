@@ -66,13 +66,17 @@ export function PortfolioPane({ items, businessName }: PortfolioPaneProps): Reac
   const columnCount = useColumnCount();
   const dialog = useRef<HTMLDivElement>(null);
   /*
-   * The thumbnail that opened the lightbox, so focus can go back to it.
+   * The index of the thumbnail that opened the lightbox, so focus can go back
+   * to it.
    *
    * A ref rather than `document.activeElement` read at close time: by then the
    * dialog holds focus, and closing on Escape from the last thumbnail in the
    * list is exactly the case where "wherever focus is now" is the wrong answer.
+   * An index rather than the element: a viewport crossing 768px re-deals the
+   * columns and remounts the tiles, which would leave an element ref detached.
    */
-  const opener = useRef<HTMLButtonElement | null>(null);
+  const opener = useRef<number | null>(null);
+  const grid = useRef<HTMLDivElement>(null);
 
   const close = useCallback(() => setOpenIndex(null), []);
   const step = useCallback(
@@ -176,7 +180,9 @@ export function PortfolioPane({ items, businessName }: PortfolioPaneProps): Reac
       document.body.style.overflow = previousOverflow;
       // Back to the thumbnail, so a keyboard user resumes where they were
       // instead of being dropped at the top of the page.
-      opener.current?.focus();
+      grid.current
+        ?.querySelector<HTMLElement>(`[data-portfolio-index="${opener.current}"]`)
+        ?.focus();
     };
   }, [isOpen, close, step]);
 
@@ -201,7 +207,7 @@ export function PortfolioPane({ items, businessName }: PortfolioPaneProps): Reac
         #322 corrects elsewhere, except here there was no wider frame for it to
         have come from.
       */}
-      <div className="flex items-start gap-3">
+      <div ref={grid} className="flex items-start gap-3">
         {dealColumns(items, columnCount).map((column, columnIndex) => (
           <ul
             key={columnIndex}
@@ -212,8 +218,9 @@ export function PortfolioPane({ items, businessName }: PortfolioPaneProps): Reac
               <li key={item.id}>
                 <button
                   type="button"
-                  onClick={(event) => {
-                    opener.current = event.currentTarget;
+                  data-portfolio-index={index}
+                  onClick={() => {
+                    opener.current = index;
                     setOpenIndex(index);
                   }}
                   className="block w-full cursor-zoom-in overflow-hidden rounded-xl"

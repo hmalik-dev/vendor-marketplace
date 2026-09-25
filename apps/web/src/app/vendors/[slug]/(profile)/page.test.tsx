@@ -481,8 +481,8 @@ describe('who the storefront offers a report control to', () => {
 /**
  * #458's narrowing, pinned end to end through the real panes.
  *
- * The About and Portfolio controls report the vendor's own record, so the
- * owner is not offered them. The Reviews control reports a **customer's**
+ * The About control reports the vendor's own record, so the owner is not
+ * offered it. The Reviews control reports a **customer's**
  * writing about the vendor, so the owner keeps it — it is their only route to
  * object to a defamatory review, because nothing under `app/vendor/` shows
  * them their reviews at all.

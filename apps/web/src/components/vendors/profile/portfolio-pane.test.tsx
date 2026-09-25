@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WirePortfolioItem } from '@/lib/wire-schemas';
@@ -228,15 +228,17 @@ describe('PortfolioPane — no report control', () => {
     expect(screen.queryByRole('link', { name: /report/i })).toBeNull();
   });
 
-  it('draws none for a signed-in customer or for the owner', async () => {
+  // The pane takes no viewer props now, so a customer and the owning vendor
+  // render exactly this; the lightbox is the other place a control could sit.
+  it('draws none in the lightbox either', async () => {
     const user = userEvent.setup();
     render(<PortfolioPane items={items(3)} businessName="Kessler & Co." />);
 
-    expect(screen.getAllByRole('button', { name: /Photograph/ })).toHaveLength(3);
-    expect(screen.queryByRole('button', { name: /report/i })).toBeNull();
-
     await user.click(screen.getByRole('button', { name: 'Photograph 1' }));
+
+    expect(lightbox()).toBeTruthy();
     expect(screen.queryByText(/report/i)).toBeNull();
+    expect(screen.queryByRole('button', { name: /report/i })).toBeNull();
   });
 });
 
@@ -248,16 +250,25 @@ describe('PortfolioPane — no report control', () => {
  * asserts the DOM structure that guarantees it; the rendered offsets are
  * measured in a browser.
  */
-function stubViewport(wide: boolean): void {
+/** Stubs `matchMedia`; the returned function moves the viewport across 768px. */
+function stubViewport(initiallyWide: boolean): (wide: boolean) => void {
+  let wide = initiallyWide;
+  const listeners = new Set<() => void>();
   vi.spyOn(window, 'matchMedia').mockImplementation(
     (query) =>
       ({
-        matches: wide,
+        get matches() {
+          return wide;
+        },
         media: query,
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
+        addEventListener: (_type: string, listener: () => void) => listeners.add(listener),
+        removeEventListener: (_type: string, listener: () => void) => listeners.delete(listener),
       }) as unknown as MediaQueryList,
   );
+  return (next) => {
+    wide = next;
+    act(() => listeners.forEach((listener) => listener()));
+  };
 }
 
 describe('PortfolioPane — three columns', () => {
@@ -270,6 +281,23 @@ describe('PortfolioPane — three columns', () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+  });
+
+  it('returns focus to the opening photo when the viewport crosses 768px while it is open', async () => {
+    const user = userEvent.setup();
+    const setWide = stubViewport(false);
+    render(<PortfolioPane items={items(7)} businessName="Kessler & Co." />);
+
+    // Photograph 3 is in the first column of two and the third of three, so
+    // the crossing remounts its button.
+    const before = screen.getByRole('button', { name: 'Photograph 3' });
+    await user.click(before);
+    setWide(true);
+    await user.keyboard('{Escape}');
+
+    const after = screen.getByRole('button', { name: 'Photograph 3' });
+    expect(after).not.toBe(before);
+    expect(document.activeElement).toBe(after);
   });
 
   it('keeps two columns below 768px', () => {
