@@ -94,6 +94,7 @@ async function expectCustomerSeesPaid(
 
 test.describe('paid booking', () => {
   test('a customer requests, the vendor accepts, and a 4242 card pays through the webhook', async ({
+    browser,
     customerPage,
     vendorPage,
   }) => {
@@ -145,7 +146,7 @@ test.describe('paid booking', () => {
     ).toBeVisible();
 
     await openCheckout(customerPage, sent.id, priceLabel);
-    const { amountCents } = await checkoutIntent(customerPage, sent.id);
+    const { amountCents, paymentIntentId } = await checkoutIntent(customerPage, sent.id);
     expect(amountCents).toBe(finalPriceCents);
 
     /*
@@ -180,6 +181,23 @@ test.describe('paid booking', () => {
     const booking = await bookingFor(customerPage, sent.id);
     expect(booking?.status).toBe('confirmed');
     expect(booking?.totalAmountCents).toBe(finalPriceCents);
+
+    // VEN-601: the admin's booking detail links this payment out to the test-mode Dashboard.
+    const adminContext = await browser.newContext({
+      storageState: storageStatePath('admin'),
+      viewport: { width: 1440, height: 900 },
+    });
+    const adminPage = await adminContext.newPage();
+    await adminPage.goto(`/admin/bookings/${booking!.id}`);
+    await expectSignedIn(adminPage);
+    const stripeCard = adminPage.locator('[data-admin-card]').filter({
+      has: adminPage.getByRole('heading', { name: 'Stripe', exact: true }),
+    });
+    await expect(
+      stripeCard.getByRole('link', { name: 'Open the payment in the Stripe Dashboard' }),
+    ).toHaveAttribute('href', `https://dashboard.stripe.com/test/payments/${paymentIntentId}`);
+    await expect(stripeCard).toContainText('Nothing else made there shows up here.');
+    await adminContext.close();
   });
 
   test('a 3-D Secure card pays once the challenge is completed', async ({
