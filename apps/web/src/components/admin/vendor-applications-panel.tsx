@@ -11,6 +11,7 @@ import {
   type VendorApplicationStatus,
 } from '@vendor-marketplace/shared';
 import { z } from 'zod';
+import { ClampedReason } from '@/components/admin/clamped-reason';
 import { ConfirmAction } from '@/components/admin/confirm-action';
 import { DataTable } from '@/components/admin/data-table';
 import { Pager, type PagerProps } from '@/components/admin/pager';
@@ -467,8 +468,11 @@ export function VendorApplicationsPanel({
               header: 'Email',
               cell: (invite) =>
                 invite.emailStatus === 'failed' ? (
-                  <span title={invite.emailFailureReason ?? undefined}>
+                  <span className="flex flex-col items-start gap-1">
                     <StatusPill tone="failed">Email failed</StatusPill>
+                    {invite.emailFailureReason ? (
+                      <ClampedReason>{invite.emailFailureReason}</ClampedReason>
+                    ) : null}
                   </span>
                 ) : invite.emailStatus === 'sent' ? (
                   <StatusPill tone="inert">Sent</StatusPill>

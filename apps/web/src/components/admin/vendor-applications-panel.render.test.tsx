@@ -202,9 +202,7 @@ describe('VendorApplicationsPanel', () => {
     );
 
     expect(screen.getByText('Email failed')).toBeDefined();
-    expect(screen.getByText('Email failed').closest('[title]')?.getAttribute('title')).toBe(
-      'Resend refused the send (500)',
-    );
+    expect(screen.getByText('Resend refused the send (500)')).toBeDefined();
     expect(screen.getAllByRole('button', { name: /^Resend the invite email/ })).toHaveLength(1);
 
     await act(async () => {
