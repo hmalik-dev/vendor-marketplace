@@ -191,7 +191,7 @@ export default async function VendorProfilePage({
    * Whether the reader is this storefront's own vendor (#458).
    *
    * A vendor previewing their own profile was offered *Report this profile*
-   * and *Report this photo* over their own record, and filing one succeeded —
+   * over their own record, and filing one succeeded —
    * `POST /reports` accepts any signed-in caller for a public subject,
    * deliberately, because restricting that would only stop the passer-by who
    * noticed. The cost was a real case in the operations queue naming a vendor
@@ -199,7 +199,7 @@ export default async function VendorProfilePage({
    * the API: answering 403 to the owner alone would turn the endpoint into an
    * oracle for who owns a storefront.
    *
-   * It reaches the About and Portfolio panes only. The Reviews pane keeps its
+   * It reaches the About pane only. The Reviews pane keeps its
    * control for the owner — see the note at its call site below.
    *
    * A second wave rather than a fourth entry in the one above (#390): the role
@@ -327,12 +327,7 @@ export default async function VendorProfilePage({
               <PackagesPane packages={vendor.packages} businessName={vendor.businessName} />
             ),
             portfolio: (
-              <PortfolioPane
-                items={vendor.portfolio}
-                businessName={vendor.businessName}
-                signedIn={viewerRole !== null}
-                viewerOwnsProfile={viewerOwnsProfile}
-              />
+              <PortfolioPane items={vendor.portfolio} businessName={vendor.businessName} />
             ),
             reviews: (
               <ReviewsPane

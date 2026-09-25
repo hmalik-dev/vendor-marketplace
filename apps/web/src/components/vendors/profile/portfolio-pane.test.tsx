@@ -1,6 +1,6 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WirePortfolioItem } from '@/lib/wire-schemas';
 import { PortfolioPane } from './portfolio-pane';
 
@@ -31,14 +31,7 @@ function items(count: number): WirePortfolioItem[] {
 }
 
 function pane(count = 3): void {
-  render(
-    <PortfolioPane
-      items={items(count)}
-      businessName="Kessler & Co."
-      signedIn
-      viewerOwnsProfile={false}
-    />,
-  );
+  render(<PortfolioPane items={items(count)} businessName="Kessler & Co." />);
 }
 
 /** The dialog, once open. */
@@ -184,14 +177,7 @@ describe('PortfolioPane image failure', () => {
   });
 
   it('replaces a tile whose photograph 404s with a tone block that has extent', () => {
-    const { container } = render(
-      <PortfolioPane
-        items={items(3)}
-        businessName="Kessler & Co."
-        signedIn
-        viewerOwnsProfile={false}
-      />,
-    );
+    const { container } = render(<PortfolioPane items={items(3)} businessName="Kessler & Co." />);
 
     fireEvent.error(container.querySelector('img[src*="1-thumb.jpg"]')!);
 
@@ -207,14 +193,7 @@ describe('PortfolioPane image failure', () => {
   });
 
   it('replaces a lightbox photograph that fails with a block of stated extent', async () => {
-    render(
-      <PortfolioPane
-        items={items(1)}
-        businessName="Kessler & Co."
-        signedIn
-        viewerOwnsProfile={false}
-      />,
-    );
+    render(<PortfolioPane items={items(1)} businessName="Kessler & Co." />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Photograph 1' }));
 
@@ -230,32 +209,154 @@ describe('PortfolioPane image failure', () => {
   });
 });
 
-/**
- * #458 — the vendor whose portfolio this is gets no control to report their
- * own photographs. Each case renders the same three tiles and asserts they
- * are there, so an absent control is distinguishable from an absent pane.
+/*
+ * VEN-729 — the report control is gone from the portfolio, for every reader.
+ * Each case asserts the tiles are there, so an absent control is
+ * distinguishable from an absent pane. Reporting a photo goes through Contact
+ * Support.
  */
-describe('PortfolioPane — the report control', () => {
-  it('offers one per photo to a reader who does not own them', () => {
-    render(
-      <PortfolioPane
-        items={items(3)}
-        businessName="Kessler & Co."
-        signedIn
-        viewerOwnsProfile={false}
-      />,
-    );
-
-    expect(screen.getAllByRole('button', { name: /Photograph/ })).toHaveLength(3);
-    expect(screen.getAllByRole('button', { name: 'Report this photo' })).toHaveLength(3);
+describe('PortfolioPane — no report control', () => {
+  afterEach(() => {
+    cleanup();
   });
 
-  it('offers none to the vendor who owns them', () => {
-    render(
-      <PortfolioPane items={items(3)} businessName="Kessler & Co." signedIn viewerOwnsProfile />,
-    );
+  it('draws none for a signed-out reader', () => {
+    render(<PortfolioPane items={items(3)} businessName="Kessler & Co." />);
 
     expect(screen.getAllByRole('button', { name: /Photograph/ })).toHaveLength(3);
-    expect(screen.queryByText(/report this photo/i)).toBeNull();
+    expect(screen.queryByText(/report/i)).toBeNull();
+    expect(screen.queryByRole('link', { name: /report/i })).toBeNull();
+  });
+
+  // The pane takes no viewer props now, so a customer and the owning vendor
+  // render exactly this; the lightbox is the other place a control could sit.
+  it('draws none in the lightbox either', async () => {
+    const user = userEvent.setup();
+    render(<PortfolioPane items={items(3)} businessName="Kessler & Co." />);
+
+    await user.click(screen.getByRole('button', { name: 'Photograph 1' }));
+
+    expect(lightbox()).toBeTruthy();
+    expect(screen.queryByText(/report/i)).toBeNull();
+    expect(screen.queryByRole('button', { name: /report/i })).toBeNull();
+  });
+});
+
+/*
+ * VEN-729 — three columns, always. CSS `columns: 3` balanced unbreakable tiles
+ * by the smallest height that fits them, which for a few photos of mixed shapes
+ * is reached with two columns, leaving the third empty. The photos are dealt
+ * round-robin into three explicit columns instead. jsdom has no layout, so this
+ * asserts the DOM structure that guarantees it; the rendered offsets are
+ * measured in a browser.
+ */
+/** Stubs `matchMedia`; the returned function moves the viewport across 768px. */
+function stubViewport(initiallyWide: boolean): (wide: boolean) => void {
+  let wide = initiallyWide;
+  const listeners = new Set<() => void>();
+  vi.spyOn(window, 'matchMedia').mockImplementation(
+    (query) =>
+      ({
+        get matches() {
+          return wide;
+        },
+        media: query,
+        addEventListener: (_type: string, listener: () => void) => listeners.add(listener),
+        removeEventListener: (_type: string, listener: () => void) => listeners.delete(listener),
+      }) as unknown as MediaQueryList,
+  );
+  return (next) => {
+    wide = next;
+    act(() => listeners.forEach((listener) => listener()));
+  };
+}
+
+describe('PortfolioPane — three columns', () => {
+  // The suite's `matchMedia` stub answers "no match" (a small viewport); the
+  // three-column layout is the one from 768px up.
+  beforeEach(() => {
+    stubViewport(true);
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it('returns focus to the opening photo when the viewport crosses 768px while it is open', async () => {
+    const user = userEvent.setup();
+    const setWide = stubViewport(false);
+    render(<PortfolioPane items={items(7)} businessName="Kessler & Co." />);
+
+    // Photograph 3 is in the first column of two and the third of three, so
+    // the crossing remounts its button.
+    const before = screen.getByRole('button', { name: 'Photograph 3' });
+    await user.click(before);
+    setWide(true);
+    await user.keyboard('{Escape}');
+
+    const after = screen.getByRole('button', { name: 'Photograph 3' });
+    expect(after).not.toBe(before);
+    expect(document.activeElement).toBe(after);
+  });
+
+  it('keeps two columns below 768px', () => {
+    stubViewport(false);
+    const { container } = render(<PortfolioPane items={items(5)} businessName="Kessler & Co." />);
+
+    expect(container.querySelectorAll('[data-portfolio-column]')).toHaveLength(2);
+  });
+
+  it.each([4, 5, 6, 7, 9])('deals %i photos into three balanced columns', (count) => {
+    const { container } = render(
+      <PortfolioPane items={items(count)} businessName="Kessler & Co." />,
+    );
+
+    const columns = Array.from(container.querySelectorAll('[data-portfolio-column]'));
+    const sizes = columns.map((column) => column.querySelectorAll('button').length);
+
+    expect(columns).toHaveLength(3);
+    expect(Math.min(...sizes)).toBeGreaterThanOrEqual(1);
+    expect(Math.max(...sizes) - Math.min(...sizes)).toBeLessThanOrEqual(1);
+    expect(sizes.reduce((sum, size) => sum + size, 0)).toBe(count);
+  });
+
+  it('deals round-robin, so the first row reads left to right', () => {
+    const { container } = render(<PortfolioPane items={items(7)} businessName="Kessler & Co." />);
+
+    const names = Array.from(container.querySelectorAll('[data-portfolio-column]')).map((column) =>
+      Array.from(column.querySelectorAll('button')).map((button) =>
+        button.getAttribute('aria-label'),
+      ),
+    );
+
+    expect(names).toEqual([
+      ['Photograph 1', 'Photograph 4', 'Photograph 7'],
+      ['Photograph 2', 'Photograph 5'],
+      ['Photograph 3', 'Photograph 6'],
+    ]);
+  });
+
+  it('steps the lightbox in the original photo order, not column order', async () => {
+    const user = userEvent.setup();
+    render(<PortfolioPane items={items(7)} businessName="Kessler & Co." />);
+
+    await user.click(screen.getByRole('button', { name: 'Photograph 3' }));
+    const seen = [lightbox().getAttribute('aria-label')];
+    for (let step = 0; step < 4; step += 1) {
+      await user.keyboard('{ArrowRight}');
+      seen.push(lightbox().getAttribute('aria-label'));
+    }
+    await user.keyboard('{ArrowLeft}');
+    seen.push(lightbox().getAttribute('aria-label'));
+
+    expect(seen).toEqual([
+      'Photograph 3',
+      'Photograph 4',
+      'Photograph 5',
+      'Photograph 6',
+      'Photograph 7',
+      'Photograph 6',
+    ]);
   });
 });

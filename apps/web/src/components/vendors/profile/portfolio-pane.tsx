@@ -2,10 +2,9 @@
 
 import type { WirePortfolioItem } from '@/lib/wire-schemas';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FallbackImage } from '@/components/ui/fallback-image';
-import { ReportDialog } from '@/components/reports/report-dialog';
 
 export interface PortfolioPaneProps {
   /*
@@ -15,44 +14,68 @@ export interface PortfolioPaneProps {
    */
   items: readonly WirePortfolioItem[];
   businessName: string;
-  /** Reporting is authenticated, so a signed-out reader is sent to sign-in. */
-  signedIn: boolean;
-  /**
-   * The reader is the vendor whose photographs these are (#458).
-   *
-   * Same rule as the About pane's profile control, applied per tile: a vendor
-   * is not offered a way to report their own work. `POST /reports` is
-   * unchanged and still accepts them — the refusal is the viewer's, because a
-   * server-side one would make the endpoint an oracle for who owns a
-   * storefront.
-   */
-  viewerOwnsProfile: boolean;
+}
+
+/** The design's widest portfolio grid, drawn by frames 03 and 27. */
+const WIDE_COLUMNS = 3;
+/** Below `md` (768px) the portfolio stays at two columns. */
+const NARROW_COLUMNS = 2;
+const WIDE_QUERY = '(min-width: 768px)';
+
+function subscribeWide(onChange: () => void): () => void {
+  const query = window.matchMedia(WIDE_QUERY);
+  query.addEventListener('change', onChange);
+  return () => query.removeEventListener('change', onChange);
+}
+
+/** The server draws the wide layout; a browser with no `matchMedia` does too. */
+function useColumnCount(): number {
+  const wide = useSyncExternalStore(
+    subscribeWide,
+    () => window.matchMedia?.(WIDE_QUERY).matches ?? true,
+    () => true,
+  );
+  return wide ? WIDE_COLUMNS : NARROW_COLUMNS;
+}
+
+interface DealtItem {
+  item: WirePortfolioItem;
+  /** Position in the original order, which the lightbox steps through. */
+  index: number;
+}
+
+/** Deals the photographs round-robin, keeping each one's index in the original order. */
+function dealColumns(items: readonly WirePortfolioItem[], count: number): DealtItem[][] {
+  const columns: DealtItem[][] = Array.from({ length: count }, () => []);
+  items.forEach((item, index) => columns[index % count]?.push({ item, index }));
+  return columns;
 }
 
 /**
- * The Portfolio tab: a CSS-columns masonry that keeps each photograph's own
- * aspect ratio — a fixed grid would crop work the vendor framed deliberately.
+ * The Portfolio tab: photographs dealt round-robin into explicit columns, each
+ * keeping its own aspect ratio — a fixed grid would crop work the vendor framed
+ * deliberately. CSS `columns` balanced unbreakable tiles by height and left the
+ * third column empty for a few photographs of mixed shapes (VEN-729).
  *
  * The lightbox is keyboard-complete: arrows step, Escape closes, and focus is
  * returned to the thumbnail that opened it so a keyboard user is not dropped at
  * the top of the page.
  */
-export function PortfolioPane({
-  items,
-  businessName,
-  signedIn,
-  viewerOwnsProfile,
-}: PortfolioPaneProps): React.ReactElement {
+export function PortfolioPane({ items, businessName }: PortfolioPaneProps): React.ReactElement {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const columnCount = useColumnCount();
   const dialog = useRef<HTMLDivElement>(null);
   /*
-   * The thumbnail that opened the lightbox, so focus can go back to it.
+   * The index of the thumbnail that opened the lightbox, so focus can go back
+   * to it.
    *
    * A ref rather than `document.activeElement` read at close time: by then the
    * dialog holds focus, and closing on Escape from the last thumbnail in the
    * list is exactly the case where "wherever focus is now" is the wrong answer.
+   * An index rather than the element: a viewport crossing 768px re-deals the
+   * columns and remounts the tiles, which would leave an element ref detached.
    */
-  const opener = useRef<HTMLButtonElement | null>(null);
+  const opener = useRef<number | null>(null);
 
   const close = useCallback(() => setOpenIndex(null), []);
   const step = useCallback(
@@ -156,7 +179,7 @@ export function PortfolioPane({
       document.body.style.overflow = previousOverflow;
       // Back to the thumbnail, so a keyboard user resumes where they were
       // instead of being dropped at the top of the page.
-      opener.current?.focus();
+      document.querySelector<HTMLElement>(`[data-portfolio-index="${opener.current}"]`)?.focus();
     };
   }, [isOpen, close, step]);
 
@@ -181,57 +204,49 @@ export function PortfolioPane({
         #322 corrects elsewhere, except here there was no wider frame for it to
         have come from.
       */}
-      <ul className="columns-2 gap-3 md:columns-3 [&>li]:mb-3 [&>li]:break-inside-avoid">
-        {items.map((item, index) => (
-          <li key={item.id}>
-            <button
-              type="button"
-              onClick={(event) => {
-                opener.current = event.currentTarget;
-                setOpenIndex(index);
-              }}
-              className="block w-full cursor-zoom-in overflow-hidden rounded-xl"
-              aria-label={item.caption ?? `Open image ${index + 1} of ${items.length}`}
-            >
-              {/*
-                A masonry tile takes its height from the photograph's own
-                ratio, so a fallback that only said `w-full` would be a
-                zero-height box — the failure `web-design-parity.md` names
-                outright. The block therefore states 4:3, the ratio the
-                vendor's own portfolio manager draws its tiles at; the
-                photograph keeps its natural one.
-              */}
-              <FallbackImage
-                src={item.thumbnailUrl ?? item.imageUrl}
-                alt={item.caption ?? ''}
-                width={320}
-                className="w-full transition-transform duration-(--duration-base) motion-safe:hover:scale-[1.02]"
-                /* `bg-stone-200` is the *photograph's* ground while it loads;
-                   the block has its own, ruled at `stone-250`. */
-                imageClassName="bg-stone-200 object-cover"
-                fallbackClassName="aspect-[4/3]"
-              />
-            </button>
-            {/*
-              Under the tile rather than inside the lightbox (#436). The
-              lightbox runs its own focus trap and its own Escape handler, and
-              a second modal opened inside it would have two components
-              fighting over both — a report control that closed the photograph
-              it was reporting.
-            */}
-            {viewerOwnsProfile ? null : (
-              <div className="mt-1.5">
-                <ReportDialog
-                  subjectType="portfolio_item"
-                  subjectId={item.id}
-                  subjectNoun="this photo"
-                  signedIn={signedIn}
-                />
-              </div>
-            )}
-          </li>
+      <div className="flex items-start gap-3">
+        {dealColumns(items, columnCount).map((column, columnIndex) => (
+          <ul
+            key={columnIndex}
+            data-portfolio-column=""
+            className="flex min-w-0 flex-1 flex-col gap-3"
+          >
+            {column.map(({ item, index }) => (
+              <li key={item.id}>
+                <button
+                  type="button"
+                  data-portfolio-index={index}
+                  onClick={() => {
+                    opener.current = index;
+                    setOpenIndex(index);
+                  }}
+                  className="block w-full cursor-zoom-in overflow-hidden rounded-xl"
+                  aria-label={item.caption ?? `Open image ${index + 1} of ${items.length}`}
+                >
+                  {/*
+                    A masonry tile takes its height from the photograph's own
+                    ratio, so a fallback that only said `w-full` would be a
+                    zero-height box — the failure `web-design-parity.md` names
+                    outright. The block therefore states 4:3, the ratio the
+                    vendor's own portfolio manager draws its tiles at; the
+                    photograph keeps its natural one.
+                  */}
+                  <FallbackImage
+                    src={item.thumbnailUrl ?? item.imageUrl}
+                    alt={item.caption ?? ''}
+                    width={320}
+                    className="w-full transition-transform duration-(--duration-base) motion-safe:hover:scale-[1.02]"
+                    /* `bg-stone-200` is the *photograph's* ground while it loads;
+                       the block has its own, ruled at `stone-250`. */
+                    imageClassName="bg-stone-200 object-cover"
+                    fallbackClassName="aspect-[4/3]"
+                  />
+                </button>
+              </li>
+            ))}
+          </ul>
         ))}
-      </ul>
+      </div>
 
       {open ? (
         <div
