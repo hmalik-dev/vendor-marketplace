@@ -55,6 +55,18 @@ export function recordExchanges(page: Page, now: () => number = Date.now): strin
       note(`← ${response.status()} ${request.method()} ${withoutQuery(response.url())}`);
     }
   });
+  /*
+   * The end of the body, which for an RSC response is not the `←` line: Next
+   * streams it, so a page still waiting on its payload shows a `←` and no `✓`.
+   */
+  page.on('requestfinished', (request) => {
+    if (LOGGED_RESOURCES.has(request.resourceType())) {
+      note(`✓ ${request.method()} ${withoutQuery(request.url())}`);
+    }
+  });
+  page.on('pageerror', (error) => {
+    note(`page error: ${error.name}: ${error.message.split('\n')[0]?.slice(0, 200)}`);
+  });
   page.on('requestfailed', (request) => {
     if (LOGGED_RESOURCES.has(request.resourceType())) {
       note(

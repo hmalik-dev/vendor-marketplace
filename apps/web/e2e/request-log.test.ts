@@ -55,13 +55,17 @@ describe('recordExchanges', () => {
     emit('request', refresh);
     clock = 1_007;
     emit('response', { status: () => 200, request: () => refresh, url: () => refresh.url() });
+    emit('requestfinished', refresh);
     emit('framenavigated', 'main');
+    emit('pageerror', new TypeError('boom\nat stack'));
     emit('requestfailed', refresh);
 
     expect(log).toEqual([
       '+0ms → GET http://localhost:3000/bookings/7 (RSC)',
       '+7ms ← 200 GET http://localhost:3000/bookings/7',
+      '+7ms ✓ GET http://localhost:3000/bookings/7',
       '+7ms URL http://localhost:3000/bookings/7',
+      '+7ms page error: TypeError: boom',
       '+7ms ✗ GET http://localhost:3000/bookings/7 net::ERR_ABORTED',
     ]);
   });
@@ -74,6 +78,7 @@ describe('recordExchanges', () => {
     emit('request', script);
     emit('response', { status: () => 200, request: () => script, url: () => script.url() });
     emit('requestfailed', script);
+    emit('requestfinished', script);
     emit('framenavigated', { url: () => 'https://js.stripe.com/v3/elements' });
     emit(
       'request',
