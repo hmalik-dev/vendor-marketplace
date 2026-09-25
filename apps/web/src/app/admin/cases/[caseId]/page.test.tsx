@@ -126,7 +126,7 @@ describe('AdminCasePage', () => {
       'Reported threadCase-scoped read',
     );
     expect(screen.getByRole('button', { name: 'Read the reported thread' })).toBeDefined();
-    expect(thread.textContent).toContain('scoped to the dates the case is about');
+    expect(thread.textContent).toContain('Only messages from the dates the case is about.');
   });
 
   /** A card that goes missing reads as a loading bug, so the thread card stays when there is no thread. */
@@ -136,7 +136,7 @@ describe('AdminCasePage', () => {
     );
 
     expect(cardTitled(container, 'Reported thread').textContent).toContain(
-      'This case names no conversation, so there is no thread to read.',
+      'This case names no conversation.',
     );
     expect(screen.queryByRole('button', { name: 'Read the reported thread' })).toBeNull();
   });
@@ -157,9 +157,7 @@ describe('AdminCasePage', () => {
       expect.arrayContaining(['bg-stone-50', 'border-stone-200', 'rounded-lg']),
     );
     // Counted in code points: the em dash is one character, not three bytes.
-    expect(complaint.textContent).toContain(
-      'Message shown in full — case bodies are never clamped. 60 characters.',
-    );
+    expect(complaint.textContent).toContain('Message shown in full. 60 characters.');
   });
 
   it('names the card network as the sender of a chargeback', async () => {
@@ -215,7 +213,7 @@ describe('AdminCasePage', () => {
     expect(
       [...complaint.querySelectorAll('[role="alert"]')].map((alert) => alert.textContent),
     ).toEqual([
-      'This report never reached the support inbox — the mail service refused it on Sep 4, 2026, 09:13 UTC. The payout is still on hold — the withdrawal did not go through, so rule on it below. Answer the sender from here.',
+      'This report never reached the support inbox. The mail service refused it on Sep 4, 2026, 09:13 UTC. The payout is still on hold. The withdrawal did not go through. Rule on it below. Answer the sender from here.',
       'The payout could not be put on hold: The payout was already released.',
     ]);
   });

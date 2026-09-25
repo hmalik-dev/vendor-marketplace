@@ -217,7 +217,7 @@ export function ActivityTable({
             headline={filtered ? 'Nothing matches that filter' : 'No console activity yet'}
             description={
               filtered
-                ? 'Clear the filter to see everything the console has done.'
+                ? 'Clear the filter to see all activity.'
                 : 'Every suspension, deletion and ruling an admin makes is recorded here.'
             }
           />

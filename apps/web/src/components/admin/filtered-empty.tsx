@@ -47,7 +47,7 @@ export interface FilteredEmptyProps {
 function nothingPays(filterCount: number): string {
   return filterCount === 1
     ? 'Widening it still finds nothing.'
-    : 'Widening any single one of them still finds nothing.';
+    : 'Widening any one of them still finds nothing.';
 }
 
 /**

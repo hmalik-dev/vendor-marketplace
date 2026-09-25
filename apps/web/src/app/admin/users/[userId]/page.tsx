@@ -43,7 +43,7 @@ const ACCEPTED = new Intl.DateTimeFormat('en-US', {
  * side is broken and that the repair is on the other row.
  */
 const ADDRESS_HELD_BY_ANOTHER_ACCOUNT =
-  'The identity provider has a new address for this account, and another account already holds it — so it could not be written and every notification still goes to the old one. Freeing the address on the other account lets the next profile change through.';
+  'The identity provider has a new address for this account, but another account already holds it. Free the address on the other account to let the next profile change through.';
 
 const RETAINED_LABELS: Record<string, string> = {
   bookingRequests: 'Booking requests',
@@ -154,7 +154,7 @@ export default async function AdminUserDataRightsPage({
             */}
             {rights.pendingEmail === null ? null : (
               <Banner status="failed" title="This address is out of date">
-                {ADDRESS_HELD_BY_ANOTHER_ACCOUNT} Mail goes to {rights.email}; the identity provider
+                {ADDRESS_HELD_BY_ANOTHER_ACCOUNT} Mail goes to {rights.email}. The identity provider
                 holds {rights.pendingEmail}
                 {rights.emailSyncFailedAt === null
                   ? ''
@@ -167,9 +167,7 @@ export default async function AdminUserDataRightsPage({
               readOnly
               title="What is still held"
               note={
-                <span className="text-stone-600">
-                  Exactly what the export enumerates · kept after closure
-                </span>
+                <span className="text-stone-600">What the export lists · kept after closure</span>
               }
             >
               <div
@@ -224,8 +222,8 @@ export default async function AdminUserDataRightsPage({
               */}
               {rights.legalAcceptances.length === 0 ? (
                 <p className="px-4 py-3 text-sm text-stone-600">
-                  No acceptances recorded. A row is written when the person accepts a document;
-                  accounts that predate the record have none.
+                  No acceptances recorded. A row is added when the person accepts a document.
+                  Accounts older than the record have none.
                 </p>
               ) : (
                 rights.legalAcceptances.map((row, index) => (

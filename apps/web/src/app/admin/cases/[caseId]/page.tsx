@@ -120,8 +120,7 @@ export default async function AdminCasePage({
   ) : null;
   const chargebackNote = supportCase.stripeDisputeId ? (
     <p className="border-t border-stone-150 px-4 py-2.5 text-helper leading-prose text-stone-600">
-      The network&apos;s answer does not resolve the case. Rule in region 3 once you have decided
-      what the platform is doing about it.
+      The network&apos;s answer does not resolve the case. Rule on it in region 3.
     </p>
   ) : null;
 
@@ -198,8 +197,8 @@ export default async function AdminCasePage({
               {supportCase.message}
             </p>
             <p className="mt-2.5 text-helper text-stone-600">
-              Message shown in full — case bodies are never clamped.{' '}
-              {[...supportCase.message].length.toLocaleString('en-US')} characters.
+              Message shown in full. {[...supportCase.message].length.toLocaleString('en-US')}{' '}
+              characters.
             </p>
 
             {supportCase.emailFailedAt ? (
@@ -212,8 +211,8 @@ export default async function AdminCasePage({
                   is the notice.
                 */}
                 {supportCase.origin === 'user_report'
-                  ? 'This report is filed, but the notice telling us to look at it was refused by the mail service on '
-                  : 'This report never reached the support inbox — the mail service refused it on '}
+                  ? 'This report is filed, but the mail service refused its notice on '
+                  : 'This report never reached the support inbox. The mail service refused it on '}
                 {FILED.format(supportCase.emailFailedAt)} UTC.{' '}
                 {/*
                   Three states, derived rather than asserted: most cases name no
@@ -222,12 +221,12 @@ export default async function AdminCasePage({
                   claim about money the code cannot make.
                 */}
                 {!booking
-                  ? 'No booking was named, so no payout was ever held.'
+                  ? 'No booking was named. No payout was held.'
                   : booking.payoutStatus === 'held'
-                    ? 'The payout is still on hold — the withdrawal did not go through, so rule on it below.'
-                    : 'The payout hold was withdrawn, so nothing is frozen.'}{' '}
+                    ? 'The payout is still on hold. The withdrawal did not go through. Rule on it below.'
+                    : 'The payout hold was withdrawn. Nothing is frozen.'}{' '}
                 {supportCase.origin === 'user_report'
-                  ? 'Work it from here as usual.'
+                  ? 'Work it from here.'
                   : 'Answer the sender from here.'}
               </p>
             ) : null}
@@ -353,9 +352,7 @@ export default async function AdminCasePage({
               className="flex flex-col"
             >
               <div className="px-4 py-3">
-                <p className="text-sm text-stone-600">
-                  This case names no conversation, so there is no thread to read.
-                </p>
+                <p className="text-sm text-stone-600">This case names no conversation.</p>
                 <p className="mt-3 border-t border-stone-150 pt-2.5 text-helper leading-prose text-stone-600">
                   {THREAD_SCOPE}
                 </p>
