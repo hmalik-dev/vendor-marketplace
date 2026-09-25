@@ -2,7 +2,7 @@ import { signUpRoles } from '@vendor-marketplace/db/schema';
 import { WEB_TIER_KEY_HEADER } from '@vendor-marketplace/shared';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
-import { findSignUpRole, recordSignUpRole } from './sign-up-roles.dao.js';
+import { findSignUpRole, markSignUpRoleVerified, recordSignUpRole } from './sign-up-roles.dao.js';
 
 const KEY = 'k'.repeat(40);
 
@@ -44,6 +44,7 @@ describe('POST /internal/sign-up-role (VEN-662)', () => {
       'createdAt',
       'expiresAt',
       'role',
+      'verifiedAt',
     ]);
   });
 
@@ -118,6 +119,78 @@ describe('POST /internal/sign-up-role (VEN-662)', () => {
   });
 });
 
+describe('POST /internal/sign-up-role/verified (VEN-756)', () => {
+  let harness: TestHarness;
+
+  beforeAll(async () => {
+    harness = await createTestHarness({ env: { WEB_TIER_KEY: KEY } });
+  });
+
+  afterEach(async () => {
+    await harness.database.db.delete(signUpRoles);
+  });
+
+  afterAll(async () => {
+    await harness.close();
+  });
+
+  function mark(payload: Record<string, unknown>, key: string | null = KEY) {
+    return harness.app.inject({
+      method: 'POST',
+      url: '/v1/internal/sign-up-role/verified',
+      headers: key ? { [WEB_TIER_KEY_HEADER]: key } : {},
+      payload,
+    });
+  }
+
+  async function verifiedAt(): Promise<Record<string, Date | null>> {
+    const rows = await harness.database.db.select().from(signUpRoles);
+    return Object.fromEntries(rows.map((row) => [row.authUserId, row.verifiedAt]));
+  }
+
+  it('marks that identity’s record and no other, keeping its role', async () => {
+    await recordSignUpRole(harness.database.db, 'auth-a', 'vendor');
+    await recordSignUpRole(harness.database.db, 'auth-b', 'customer');
+
+    const response = await mark({ authUserId: 'auth-a' });
+
+    expect([response.statusCode, response.json()]).toEqual([200, { verified: true }]);
+    const marked = await verifiedAt();
+    expect(marked['auth-a']).toBeInstanceOf(Date);
+    expect(marked['auth-b']).toBeNull();
+    expect(await findSignUpRole(harness.database.db, 'auth-a')).toBe('vendor');
+  });
+
+  it('keeps the first mark', async () => {
+    const first = new Date('2026-09-20T10:00:00.000Z');
+    await recordSignUpRole(harness.database.db, 'auth-a', 'vendor', first);
+    await markSignUpRoleVerified(harness.database.db, 'auth-a', first);
+
+    expect((await mark({ authUserId: 'auth-a' })).statusCode).toBe(200);
+
+    expect((await verifiedAt())['auth-a']).toEqual(first);
+  });
+
+  it('answers the same for an unknown identity and stores nothing', async () => {
+    const response = await mark({ authUserId: 'auth-unknown' });
+
+    expect([response.statusCode, response.json()]).toEqual([200, { verified: true }]);
+    expect(await verifiedAt()).toEqual({});
+  });
+
+  it('answers 401 without the web tier key and to a wrong one, and marks nothing', async () => {
+    await recordSignUpRole(harness.database.db, 'auth-a', 'vendor');
+
+    expect((await mark({ authUserId: 'auth-a' }, null)).statusCode).toBe(401);
+    expect((await mark({ authUserId: 'auth-a' }, 'w'.repeat(40))).statusCode).toBe(401);
+    expect(await verifiedAt()).toEqual({ 'auth-a': null });
+  });
+
+  it('refuses an empty identity with a 400', async () => {
+    expect((await mark({ authUserId: '' })).statusCode).toBe(400);
+  });
+});
+
 describe('DELETE /internal/sign-up-role (VEN-663)', () => {
   let harness: TestHarness;
 
@@ -165,6 +238,22 @@ describe('DELETE /internal/sign-up-role (VEN-663)', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ forgotten: true });
     expect(await recordedIds()).toEqual(['auth-other']);
+  });
+
+  it('keeps a record the address verified before the reset, and the Terms read still states it', async () => {
+    await recordSignUpRole(harness.database.db, SQUATTED, 'vendor');
+    await markSignUpRoleVerified(harness.database.db, SQUATTED);
+
+    const response = await forget({ authUserId: SQUATTED });
+
+    expect([response.statusCode, response.json()]).toEqual([200, { forgotten: true }]);
+    expect(await recordedIds()).toEqual([SQUATTED]);
+    const status = await harness.app.inject({
+      method: 'GET',
+      url: '/v1/legal/terms',
+      headers: bearer(SQUATTED),
+    });
+    expect(status.json()).toMatchObject({ account: { exists: false }, signUpRole: 'vendor' });
   });
 
   it('answers the same for an unknown identity and changes nothing', async () => {
