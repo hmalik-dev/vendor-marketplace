@@ -692,7 +692,7 @@ export const createVendorProfileSchema = z.object({
   firstName: freeText().min(1, 'Enter your first name').max(MAX_NAME_LENGTH).optional(),
   lastName: freeText().min(1, 'Enter your last name').max(MAX_NAME_LENGTH).optional(),
   tagline: freeText()
-    .max(MAX_TAGLINE_LENGTH, `Keep it to ${MAX_TAGLINE_LENGTH} characters — it is one line`)
+    .max(MAX_TAGLINE_LENGTH, `Keep it to ${MAX_TAGLINE_LENGTH} characters`)
     .optional(),
   yearsInBusiness: z
     .int()

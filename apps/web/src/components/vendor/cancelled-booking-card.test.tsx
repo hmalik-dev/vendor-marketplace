@@ -79,14 +79,14 @@ describe('CancelledBookingCard', () => {
 
     expect(screen.getByText('Priya')).toBeDefined();
     expect(screen.getByText(/Saturday, February 13, 2027/)).toBeDefined();
-    expect(screen.getByText('Cancelled')).toBeDefined();
+    expect(screen.getByText('Canceled')).toBeDefined();
   });
 
   it('says the customer cancelled it, and when', () => {
     render(<CancelledBookingCard request={cancelled()} />);
 
     expect(
-      screen.getByText('The customer cancelled this booking on January 4, 2027.'),
+      screen.getByText('The customer canceled this booking on January 4, 2027.'),
     ).toBeDefined();
   });
 
@@ -111,10 +111,10 @@ describe('CancelledBookingCard', () => {
 
     expect(
       screen.getByText(
-        `${BRAND_NAME} cancelled this booking on January 4, 2027, because an account involved is no longer active.`,
+        `${BRAND_NAME} canceled this booking on January 4, 2027. An account involved is no longer active.`,
       ),
     ).toBeDefined();
-    expect(screen.queryByText(/the customer cancelled/i)).toBeNull();
+    expect(screen.queryByText(/the customer canceled/i)).toBeNull();
   });
 
   /*

@@ -94,9 +94,7 @@ export function composeDigestLines(figures: DigestFigures): string[] {
   const unlisted = figures.unpaidSoon.length - unpaid.length;
 
   return [
-    ...(isDigestEmpty(figures)
-      ? ['Nothing to report: the digest ran and the last day was quiet']
-      : []),
+    ...(isDigestEmpty(figures) ? ['Nothing to report. The last 24 hours were quiet.'] : []),
     'Last 24 hours',
     `New sign-ups: ${signups}`,
     `Booking requests: ${figures.requests}`,
@@ -109,7 +107,7 @@ export function composeDigestLines(figures: DigestFigures): string[] {
     `Accepted but unpaid, event today or in the next ${LOOKAHEAD_DAYS} days: ${figures.unpaidSoon.length}`,
     ...unpaid,
     ...(unlisted > 0 ? [`  …and ${unlisted} more`] : []),
-    `Payouts overdue (due more than one sweep interval ago, still unreleased): ${figures.overduePayouts}`,
+    `Payouts overdue by more than one sweep: ${figures.overduePayouts}`,
   ];
 }
 

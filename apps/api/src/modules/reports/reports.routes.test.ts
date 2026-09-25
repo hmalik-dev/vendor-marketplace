@@ -677,7 +677,9 @@ describe('reporting and message visibility (#436)', () => {
     const response = await readThread(fixture.conversationId);
 
     expect(response.statusCode).toBe(403);
-    expect(response.json().message).toContain('No open case');
+    expect(response.json().message).toBe(
+      'No open case with this id names this conversation. A thread is readable only while its case is open.',
+    );
   });
 
   it('refuses a conversation whose case has been resolved', async () => {

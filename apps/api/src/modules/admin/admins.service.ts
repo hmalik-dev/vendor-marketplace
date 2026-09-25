@@ -37,22 +37,18 @@ export async function grantAdmin(
     case 'not-found':
       throw notFound('No active account has that address');
     case 'ambiguous':
-      throw conflict(
-        'More than one active account holds that address, so it cannot be granted here',
-      );
+      throw conflict('More than one active account holds that address.');
     case 'banned':
-      throw conflict('That account is suspended, so it cannot be made an admin');
+      throw conflict('A suspended account cannot be made an admin.');
     case 'unverified':
-      throw conflict(
-        'That account has an address change the sign-in provider has not confirmed, so it cannot be made an admin yet',
-      );
+      throw conflict("The sign-in provider has not confirmed this account's new address yet.");
     case 'live-storefront':
       throw conflict(
-        'That account owns a published storefront, which an admin cannot operate. Unpublish the storefront first, then grant access',
+        'That account owns a published storefront. Unpublish it first, then grant access.',
       );
     case 'open-bookings':
       throw conflict(
-        'That account has open booking requests or bookings, which an admin cannot manage. Let them finish or cancel them first, then grant access',
+        'That account has open booking requests or bookings. Let them finish or cancel them first, then grant access.',
       );
     default:
       return { userId: userId!, changed: result === 'changed' };

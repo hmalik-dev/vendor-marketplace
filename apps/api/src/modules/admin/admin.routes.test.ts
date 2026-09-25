@@ -2242,7 +2242,9 @@ describe('admin routes', () => {
         });
 
         expect(response.statusCode).toBe(409);
-        expect(response.json().message).toContain('“Soy Free” is a deactivated tag');
+        expect(response.json().message).toBe(
+          '“Soy Free” is deactivated. Reactivate or rename it on the Tags page first.',
+        );
         expect(await heldBy(profileId)).toEqual([]);
 
         const rows = await harness.database.db

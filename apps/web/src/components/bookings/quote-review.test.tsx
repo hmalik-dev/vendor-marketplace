@@ -300,7 +300,7 @@ describe('QuoteReview', () => {
     it('names what was paid and what came back on a booking the customer cancelled', () => {
       render(<QuoteReview request={cancelledBooking()} />);
 
-      expect(screen.getByText('You cancelled this booking on June 1, 2026.')).toBeDefined();
+      expect(screen.getByText('You canceled this booking on June 1, 2026.')).toBeDefined();
       expect(
         screen.getByText(
           'You paid $1,450, and all of it was refunded to your original payment method.',
@@ -327,10 +327,10 @@ describe('QuoteReview', () => {
 
       expect(
         screen.getByText(
-          `${BRAND_NAME} cancelled this booking on June 1, 2026, because an account involved is no longer active.`,
+          `${BRAND_NAME} canceled this booking on June 1, 2026. An account involved is no longer active.`,
         ),
       ).toBeDefined();
-      expect(screen.queryByText(/you cancelled/i)).toBeNull();
+      expect(screen.queryByText(/you canceled/i)).toBeNull();
     });
 
     /**
@@ -340,9 +340,9 @@ describe('QuoteReview', () => {
     it('names no actor on a row that does not record one', () => {
       render(<QuoteReview request={cancelledBooking({ cancelledBy: null })} />);
 
-      expect(screen.getByText('This booking was cancelled on June 1, 2026.')).toBeDefined();
-      expect(screen.queryByText(/you cancelled/i)).toBeNull();
-      expect(screen.queryByText(new RegExp(`${BRAND_NAME} cancelled`, 'i'))).toBeNull();
+      expect(screen.getByText('This booking was canceled on June 1, 2026.')).toBeDefined();
+      expect(screen.queryByText(/you canceled/i)).toBeNull();
+      expect(screen.queryByText(new RegExp(`${BRAND_NAME} canceled`, 'i'))).toBeNull();
     });
 
     it('does not claim a refund on a booking that has none on record', () => {
