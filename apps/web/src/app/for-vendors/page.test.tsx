@@ -232,4 +232,16 @@ describe('/for-vendors', () => {
       screen.getByRole('link', { name: 'Read the vendor agreement' }).getAttribute('href'),
     ).toBe(LEGAL_PATHS['vendor-agreement']);
   });
+
+  it('reads short: no quote-chasing tail and no justifying clause on the fee (VEN-732)', async () => {
+    await renderPage();
+
+    const page = document.body.textContent ?? '';
+    expect(page).toContain(
+      'Customers book those days at those prices. No quotes by phone, no invoices to chase.',
+    );
+    expect(page).toContain(`exactly your price. ${BRAND_NAME} adds nothing on top.`);
+    expect(page).not.toContain('afterwards');
+    expect(page).not.toContain('the expensive way to book yourself');
+  });
 });

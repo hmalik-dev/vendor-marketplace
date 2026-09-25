@@ -643,7 +643,7 @@ describe('SearchShell against a hostile URL', () => {
     await user.click(screen.getByRole('button', { name: '$1–2k' }));
     await user.click(screen.getByRole('button', { name: 'Apply' }));
 
-    expect(screen.queryByText(/isn't one we can use/)).toBeNull();
+    expect(screen.queryByText(/isn't valid/)).toBeNull();
   });
 
   it('says nothing about cleared params when the URL was entirely usable', async () => {
@@ -651,7 +651,7 @@ describe('SearchShell against a hostile URL', () => {
 
     render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
-    expect(screen.queryByText(/so it was cleared/)).toBeNull();
+    expect(screen.queryByText(/so we cleared it/)).toBeNull();
   });
 
   /*
@@ -667,7 +667,7 @@ describe('SearchShell against a hostile URL', () => {
     await waitFor(() =>
       expect(
         screen.getByText(
-          'Wed, Jan 1 has already passed, so the date was cleared — pick a new one to check availability.',
+          'Wed, Jan 1 has passed, so we cleared it. Pick a new date to check availability.',
         ),
       ).toBeDefined(),
     );
@@ -729,9 +729,7 @@ describe('SearchShell against a hostile URL', () => {
     await waitFor(() => expect(apiRequest).toHaveBeenCalled());
 
     const status = await screen.findByRole('status');
-    expect(status.textContent).toContain(
-      "That maximum price isn't one we can use, so it was cleared",
-    );
+    expect(status.textContent).toContain("That maximum price isn't valid, so we cleared it");
     expect(status.textContent).not.toContain('price range');
     // The surviving floor is still the filter it says the rest of the search
     // still applies — so it is still in the request.
@@ -746,9 +744,7 @@ describe('SearchShell against a hostile URL', () => {
     render(<SearchShell categories={CATEGORIES} tags={[]} />);
 
     const status = await screen.findByRole('status');
-    expect(status.textContent).toContain(
-      "That price range isn't one we can use, so it was cleared",
-    );
+    expect(status.textContent).toContain("That price range isn't valid, so we cleared it");
   });
 });
 
@@ -957,7 +953,7 @@ describe('a tag filter the searched category cannot answer', () => {
     await waitFor(() =>
       expect(
         screen.getByText(
-          "Dietary filters don't apply to photographers, so they were cleared — the rest of your search still applies.",
+          "Dietary filters don't apply to photographers, so we cleared them. The rest of your search still applies.",
         ),
       ).toBeDefined(),
     );

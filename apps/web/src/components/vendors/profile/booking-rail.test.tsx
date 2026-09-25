@@ -1,6 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { BRAND_NAME, ERROR_CODES, type ServicePackage } from '@vendor-marketplace/shared';
+import {
+  BRAND_NAME,
+  ERROR_CODES,
+  FULL_REFUND_CUTOFF_HOURS,
+  type ServicePackage,
+} from '@vendor-marketplace/shared';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -275,7 +280,7 @@ describe('BookingRail', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Send a message' }));
 
       const alert = await screen.findByRole('alert');
-      expect(alert.textContent).toBe('Only a customer account can start a thread with a vendor.');
+      expect(alert.textContent).toBe('Only a customer account can message a vendor.');
       expect(pushMock).not.toHaveBeenCalled();
     });
 
@@ -387,6 +392,26 @@ describe('BookingRail', () => {
 
     expect(screen.getByText('Every review comes from a completed booking')).toBeDefined();
     expect(screen.queryByText(/0 reviews/)).toBeNull();
+  });
+
+  it('states the refund window in US English, from the shared cutoff (VEN-732)', () => {
+    render(
+      <BookingRail
+        businessName="Kessler & Co."
+        slug="kessler-and-co"
+        startingPriceCents={175_000}
+        packages={[servicePackage()]}
+        reviewCount={0}
+        serverToday={viewerOn('2026-01-01')}
+        calendar={{}}
+        canBook
+      />,
+    );
+
+    expect(
+      screen.getByText(`Full refund if canceled ${FULL_REFUND_CUTOFF_HOURS}h+ ahead`),
+    ).toBeDefined();
+    expect(screen.queryByText(/cancelled/)).toBeNull();
   });
 
   describe('the free-on line (#112)', () => {

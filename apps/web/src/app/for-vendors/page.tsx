@@ -156,8 +156,7 @@ export default async function ForVendorsPage(): Promise<React.ReactElement> {
               List what you charge and the days you have free.
               <span className="max-lg:hidden">
                 {' '}
-                Customers book those days at those prices — no quotes by phone, no chasing an
-                invoice afterwards.
+                Customers book those days at those prices. No quotes by phone, no invoices to chase.
               </span>{' '}
               You are paid through Stripe after the event.
             </p>
@@ -224,8 +223,7 @@ export default async function ForVendorsPage(): Promise<React.ReactElement> {
             <p className="mt-3 border-t border-stone-150 pt-3 text-sm leading-[1.65] text-stone-600 max-lg:hidden">
               The customer pays{' '}
               <span className="font-mono text-meta">{formatPrice(fees.totalCents)}</span> — exactly
-              your price. {BRAND_NAME} adds nothing on top, so you are never the expensive way to
-              book yourself.
+              your price. {BRAND_NAME} adds nothing on top.
             </p>
           </div>
         </div>

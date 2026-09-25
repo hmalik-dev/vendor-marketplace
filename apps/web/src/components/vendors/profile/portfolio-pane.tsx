@@ -187,7 +187,7 @@ export function PortfolioPane({ items, businessName }: PortfolioPaneProps): Reac
     return (
       <EmptyState
         headline="No work published yet"
-        description={`${businessName} hasn't added photographs. Their packages and availability are still here.`}
+        description={`${businessName} hasn't added photos yet.`}
       />
     );
   }

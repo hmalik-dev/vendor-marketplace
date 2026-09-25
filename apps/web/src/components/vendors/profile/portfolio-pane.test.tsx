@@ -359,4 +359,12 @@ describe('PortfolioPane — three columns', () => {
       'Photograph 6',
     ]);
   });
+
+  it('says in one sentence that there is no work yet (VEN-732)', () => {
+    render(<PortfolioPane items={[]} businessName="Kessler & Co." />);
+
+    expect(screen.getByText('No work published yet')).toBeDefined();
+    expect(screen.getByText("Kessler & Co. hasn't added photos yet.")).toBeDefined();
+    expect(screen.queryByText(/still here/)).toBeNull();
+  });
 });

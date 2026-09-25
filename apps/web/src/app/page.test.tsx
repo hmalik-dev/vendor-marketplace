@@ -526,6 +526,29 @@ describe('HomePage', () => {
     }
   });
 
+  it('says each step and vendor mechanism in one short sentence (VEN-732)', async () => {
+    render(await HomePage());
+
+    const page = document.body.textContent ?? '';
+    expect(page).toContain('Every profile shows what they charge and which dates are open.');
+    expect(page).toContain(`What you charge, in the open. ${BRAND_NAME} adds nothing on top.`);
+    expect(page).toContain('Customers can only request a date you left open.');
+    expect(page).toContain(
+      'Publish your prices and open dates, and take bookings without the phone tag.',
+    );
+    expect(page).toContain('Every review comes from a real booking.');
+    expect(page).toContain('Vendors publish what they charge. Nothing is added at checkout.');
+    for (const retired of [
+      'still open',
+      'on top of it',
+      'actually left free',
+      'actually happened',
+      'no other way to leave one',
+    ]) {
+      expect(page, retired).not.toContain(retired);
+    }
+  });
+
   /*
    * The closing band is vendor-only now. The customer half was redundant — the
    * hero is a *live search bar*, so a button whose only job is to scroll you
