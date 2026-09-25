@@ -32,15 +32,13 @@ export interface AdminSurfaceProps {
    * would have held only until the first page that needed a pager. The count
    * line already says how many rows there are in total.
    *
-   * Beside the count line it costs **6px**, measured — not nothing, which is
-   * what this comment claimed until a browser pass measured it. The `nav` is
-   * 25px against the heading's 30px box, but it is `self-center` inside a
-   * baseline-aligned wrapper whose top is pinned by the count line, so the row
-   * grows from 30px to 36px. The pane goes from 5px short of fifteen rows to
-   * 11px short; all fifteen remain reachable because the body scrolls, so the
-   * acceptance criterion holds and this is a recorded composition delta rather
-   * than a defect. Left as-is deliberately: the alignment here has already been
-   * broken twice by fixes aimed at one pixel of baseline.
+   * The `nav` is an explicit 30px, the heading's own box, and carries `-my-3.5`
+   * so its margin box (2px) is smaller than the count line: it is
+   * `self-center` inside a wrapper whose top is pinned by the count line's
+   * baseline, so any margin box taller than that line grows the row. Measured
+   * in a browser: a plain 30px nav made the row 41px (25px nav: 36px); with the
+   * negative margin it is the heading's 30px, the same as a list with no pager,
+   * and the count line has not moved.
    */
   pager?: Omit<PagerProps, 'path'> & { path: string };
   /** The table, which fills the rest of the shell and scrolls inside itself. */
@@ -90,7 +88,7 @@ export function AdminSurface({
               contributes its *first item's* baseline, which sat 1px below the
               heading's and moved the whole pane down by one pixel.
             */}
-            {pager ? <Pager {...pager} className="self-center" /> : null}
+            {pager ? <Pager {...pager} className="-my-3.5 self-center" /> : null}
           </div>
         </div>
         {filters}
