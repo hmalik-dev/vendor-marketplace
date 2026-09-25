@@ -33,11 +33,12 @@ export function NeedsYouDecline({ requestId }: { requestId: string }): React.Rea
         schema: wireBookingRequestSchema,
         method: 'POST',
       });
+      // Still busy until the refresh removes the panel: a second press would
+      // decline a request that is already declined, and show its 403.
       router.refresh();
     } catch (failure) {
       setError(userFacingError(failure, REQUEST_DID_NOT_ARRIVE));
       setConfirming(false);
-    } finally {
       setBusy(false);
     }
   }

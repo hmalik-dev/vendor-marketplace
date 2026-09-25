@@ -57,6 +57,10 @@ describe('NeedsYouDecline', () => {
       expect.objectContaining({ method: 'POST' }),
     );
     expect(refreshMock).toHaveBeenCalledTimes(1);
+    // The panel leaves on the refresh; until then a second press cannot post again.
+    expect(
+      (screen.getByRole('button', { name: 'Confirm decline' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
   });
 
   it('shows the approved failure copy and does not refresh when the call fails', async () => {
