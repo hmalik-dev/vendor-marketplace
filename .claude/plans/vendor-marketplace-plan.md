@@ -841,6 +841,7 @@ vendor_payout = total_amount - platform_fee
 //   platform_fee = $60, stripe_fee ≈ $14.80, net platform revenue ≈ $45.20
 // This works as long as the booking amount is > ~$11 (break-even point).
 // Enforce minimum booking amount of $25 to maintain margin.
+// Stripe does not return its fee on a refund. Orla absorbs it; a 100% refund returns everything (D50).
 ```
 
 ---
@@ -1382,7 +1383,7 @@ All open decisions have been resolved. Full rationale in `.claude/plans/vendor-m
 
 | # | Decision | Resolution |
 |---|----------|-----------|
-| D1 | Stripe processing fee | Absorb from 12% commission. Customer sees one clean price. |
+| D1 | Stripe processing fee | Absorb from 12% commission. Customer sees one clean price. Absorbed on a refund too; a 100% refund returns everything (D50). |
 | D2 | Minimum booking amount | $25 minimum (`price_cents >= 2500`). |
 | D3 | Cancellation policy | Fixed: 100% refund >48h, 50% <48h. Not vendor-configurable. |
 | D4 | Vendor-as-customer dual role | Single role per account. Vendor creates second account to book. |

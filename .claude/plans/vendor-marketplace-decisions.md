@@ -27,6 +27,8 @@ Cross-reference document for the project plan at `.claude/plans/vendor-marketpla
 
 **Revisit if:** Average booking value drops below $50 consistently (net drops under $4.25, may need to raise commission rate or add customer fee).
 
+**On a refund:** Stripe keeps the fee, and Orla absorbs it. A 100% refund returns everything the customer paid (D50).
+
 ---
 
 ### D2: Minimum Booking Amount — $25
@@ -2440,7 +2442,7 @@ The account holder's rule: a vendor no-show loses money for neither Orla nor the
 The self-serve route for what went through support (VEN-659). Its two open rulings belong to VEN-646, which the account holder owns; both are taken by best practice for a high-trust marketplace (the customer is always made whole) and are each one function or one absent line, so either reverses in one place.
 
 1. **The customer is refunded 100% whatever the timing, through the existing refund path.** The tier is what a customer pays for changing their mind; a vendor changing theirs is not that. `vendorCancellationRefundCents` (`packages/shared/src/utils`) is the one place the policy lives, and D3's tiers are untouched for customer cancellations. Same refund, idempotency keys (D36) and guarded write as the customer path; `cancelled_by` gains `vendor` (migration 0101).
-2. **Question: who pays Stripe's non-refunded processing fee on a full refund? Chose: Orla absorbs it, and nothing is recovered from the vendor.** Rejected: netting it off the vendor's next payouts the way D47 nets the dispute fee. A vendor who cancels already loses the booking's payout, and a debt against a vendor with no further payouts needs the recovery machinery D47 built for a much larger loss. Recovering it later is one call to `raiseVendorOwed` after the refund.
+2. **Question: who pays Stripe's non-refunded processing fee on a full refund? Chose: Orla absorbs it, and nothing is recovered from the vendor.** Ruled platform-wide in D50. Rejected: netting it off the vendor's next payouts the way D47 nets the dispute fee. A vendor who cancels already loses the booking's payout, and a debt against a vendor with no further payouts needs the recovery machinery D47 built for a much larger loss. Recovering it later is one call to `raiseVendorOwed` after the refund.
 3. **Question: does a vendor cancellation inside N days of the event count against the vendor? Chose: no strike and no visible cancellation rate in this ticket.** Rejected: an automatic strike. It needs a threshold and an appeal path nobody has ruled on, and a wrong automatic penalty on a vendor is harder to undo than a missing one. `cancelled_by = vendor` and `cancelled_at` are recorded on every cancellation, so the rate is computable for whoever rules.
 4. **Refused after the event and once a payout is released**, as for the customer: a vendor who cannot deliver a past date goes to support, where a person decides. A customer's report (`disputed`) blocks it.
 5. **No status-history row.** VEN-647 has not landed a history table; the cancellation is on the booking row (`cancelled_by`, `cancelled_at`, `cancellation_reason`) and both sides get an in-app and an email notice.
@@ -2711,3 +2713,36 @@ A facilitator with physical presence "is generally required to register in that 
 **Not fetched, so not relied on:** mass.gov (403); the EUR-Lex DAC7 text; Texas's caterer text and its DJ question; Florida's catering, rental and commercial-rent repeal text (search snippets only); Pennsylvania §7213; whether Hawaii's 200-transaction test is still current; the Iowa and New Jersey nexus thresholds; any VAT source.
 
 **Tickets:** VEN-657 (the account holder: Stripe setup, home-state registration, the January filing) · VEN-722 (1099-K figures and the audit trail) · VEN-723 (tax ID gate and backup withholding) · VEN-724 (sales tax) · VEN-725 (the vendor's dashboard link and yearly statement) · VEN-378 (h) (tax wording and retention copy). VEN-595 is blocked by all five.
+
+### D50: A full refund stays full, and Orla absorbs Stripe's fee — *2026-09-25*
+
+**Question (VEN-646, ruling 1):** Stripe keeps its processing fee when a charge is refunded, so who pays it on a 100% refund? The account holder told the desk on 2026-09-25 to take each ticket's recommendation; this is VEN-646's.
+
+**Chose: Orla absorbs it, and the customer gets back every cent they paid.**
+
+1. **The fee is a cost of cancellation, not a line on the refund.** [S] "Stripe's processing fees from the original transaction aren't returned" (https://docs.stripe.com/refunds). A full refund therefore costs Orla the fee D1 already absorbs: about $14.80 on a $500 booking, or roughly 3% of cancelled volume. Early cancellations should be the minority of bookings, so the cost is small.
+2. **Never deducted silently.** A refund D3 calls 100% returns 100%. The 50% tier returns exactly half of what the customer paid, with nothing taken off for the fee either.
+3. **Passing it on requires disclosure first.** Orla may start charging a non-refundable processing or service fee only once checkout and the Terms both state it before the customer pays. Nothing in checkout or the Terms states one today, and adding it is a new ruling plus a VEN-378 wording change, not a code tweak.
+4. **A vendor-caused cancellation refunds the customer in full as well.** The vendor does not bear the fee (D48 item 2). Recovering it later would be one call to `raiseVendorOwed` through D47's netting.
+5. **Revisit** once the live cancellation rate is known. `cancelled_by` and `cancelled_at` are recorded on every cancellation, so the rate can be computed.
+
+**Rejected:**
+- **Keeping the fee out of a "100% refund".** That is an ~97% refund labeled as a full one, the same mislabeling D31 refused for the commission.
+- **Charging the vendor the fee on every refund.** On a customer cancellation the vendor did nothing wrong, and on a vendor cancellation D48 already rejected it.
+
+#### Ruling 2: how far ahead a booking's money can be held (evidence only, open)
+
+**Question:** Under separate charges and transfers (#423, D45), a customer's payment sits in the platform balance until the sweep transfers the vendor's share 72 hours after the event. Does Stripe accept that for an event many months out?
+
+**What Stripe's docs say, read 2026-09-25:**
+
+- [S] Separate charges and transfers let a platform "split funds between multiple connected accounts, or hold them when you don't know the specific user at the time of the charge. The charge on your platform account is decoupled from the transfers." The docs then list when to use the charge type: one-to-many, many-to-one, destination unknown at charge time, transfer before payment, and transfer larger than the charge (https://docs.stripe.com/connect/charges).
+- [S] "You must only use transfers in combination with the permitted use cases for charges" and "We recommend using separate charges and transfers only when you're responsible for negative balances of your connected accounts" (https://docs.stripe.com/connect/separate-charges-and-transfers).
+- [S] With a manual payout schedule, "we hold funds in the account holder's balance until you specify otherwise. You must pay out the funds within" a period that depends on the country: **United States, 2 years**; Thailand, 10 days; all other countries, 90 days (https://docs.stripe.com/connect/manual-payouts).
+- [S] Neither page sets a maximum time between a charge and the transfer that pays its vendor.
+
+**[J] Our reading:** Orla's platform account and its vendors are in the US, and the platform's schedule is manual (D45). A booking months out therefore sits inside the 2-year window. It is not certain that the window binds the platform's own balance as well as a connected account's, because the page is written about connected accounts. Holding a known vendor's money until the event is also not one of the listed use cases verbatim. Both points are what Stripe support has to confirm.
+
+**The product's own ceiling:** an event date may be at most `MAX_EVENT_DATE_MONTHS_AHEAD` (24 months) after the request, and the transfer goes out 72 hours after the event. At the very edge, money can therefore sit for 24 months plus 3 days, just past the 2-year figure. If Stripe says the window applies to the platform balance, the fix is to lower that constant, not to change the payment flow.
+
+**Open:** the confirmation from Stripe support belongs to the account holder, as a comment on VEN-646.
