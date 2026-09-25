@@ -522,6 +522,7 @@ function SearchScreen({ categories, tags }: SearchShellProps): React.ReactElemen
           tags={tags}
           facets={result?.facets.categories ?? []}
           onPriceApplied={setDiscardedPrice}
+          resultCount={result?.total ?? null}
           className="w-full max-lg:border-b-0 max-lg:px-0 max-lg:py-0"
         />
 

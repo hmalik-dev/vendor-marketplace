@@ -283,6 +283,8 @@ export interface RefineBarProps {
    * was subsequently accepted.
    */
   onPriceApplied?: (discarded: RangeDiscarded) => void;
+  /** The current search's result count, for the open panel's footer. */
+  resultCount?: number | null;
   className?: string;
 }
 
@@ -292,6 +294,7 @@ export function RefineBar({
   clearRefinements,
   tags,
   onPriceApplied,
+  resultCount = null,
   className,
 }: RefineBarProps): React.ReactElement {
   /*
@@ -347,10 +350,8 @@ export function RefineBar({
     return (
       <span key={tagCategory} className={chipWrapper(hasChosen ? 'active' : 'resting', open)}>
         {/*
-          Multi-select, and it **applies on Apply** rather than per tick. Three
-          of these chips filter the same grid; ticking three languages used to
-          re-query and re-sort three times, moving the list under the hand that
-          was still choosing.
+          Multi-select, and each tick applies (frame `28`, VEN-761). Rapid ticks
+          settle into one request, so ticking three languages re-queries once.
         */}
         <MultiSelectDropdown
           open={open}
@@ -359,6 +360,7 @@ export function RefineBar({
           density="compact"
           options={options.map((tag) => ({ value: tag.id, label: tag.name }))}
           value={chosen.map((tag) => tag.id)}
+          resultCount={resultCount}
           onApply={(next) =>
             setState({
               // Only this group's ids are replaced; the other two chips'
@@ -451,6 +453,7 @@ export function RefineBar({
             format={formatPrice}
             parse={typedAmountToCents}
             toEditable={centsToTypedAmount}
+            resultCount={resultCount}
             onApply={(next, { discarded }) => {
               setState({ minPriceCents: next.min, maxPriceCents: next.max });
               onPriceApplied?.(discarded);

@@ -332,6 +332,7 @@ describe('filter popovers are reachable and know when they are finished', () => 
         clearRefinements={vi.fn()}
         tags={TAGS as unknown as React.ComponentProps<typeof RefineBar>['tags']}
         facets={[]}
+        resultCount={18}
       />,
     );
 
@@ -377,68 +378,109 @@ describe('filter popovers are reachable and know when they are finished', () => 
   });
 
   /*
-   * **Multi-select does not auto-apply** (#167). It used to fire per tick, so
-   * ticking three languages re-queried and re-sorted the grid three times,
-   * moving the list under the hand that was still choosing. Now the ticks build
-   * a draft and Apply commits it — which is also what closes the panel.
+   * VEN-761, frame `28`: **no Apply.** A tick is a discrete commit, so it
+   * filters without anything else being pressed, and the footer reports the
+   * count the selection produced.
    */
-  it('holds a multi-select choice back until Apply', async () => {
+  it('applies a tick without pressing anything, and draws no Apply', async () => {
     const user = userEvent.setup();
     const setState = renderWithTags();
 
     await user.click(screen.getByRole('button', { name: /^Language/ }));
+    expect(screen.queryByRole('button', { name: 'Clear' })).toBeNull();
+
     await user.click(screen.getByRole('option', { name: 'English' }));
 
-    // Ticked, and still nothing has reached the results grid.
-    expect(screen.getByRole('option', { name: 'English' }).getAttribute('aria-selected')).toBe(
-      'true',
-    );
-    expect(setState).not.toHaveBeenCalled();
-
-    await user.click(screen.getByRole('button', { name: 'Apply · 1' }));
-
-    expect(setState).toHaveBeenCalledWith({ tags: [TAGS[0].id] });
+    await waitFor(() => expect(setState).toHaveBeenCalledWith({ tags: [TAGS[0].id] }));
+    expect(screen.queryByText(/Apply/)).toBeNull();
+    expect(screen.getByText('1 selected · 18 results')).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Clear' })).toBeDefined();
   });
 
-  /* Abandoning the panel discards the draft rather than leaking it. */
-  it('discards a multi-select draft when the panel is dismissed', async () => {
+  /* The ticket's decision: 250ms trailing, so quick ticks make one request. */
+  it('settles rapid ticks into one request', async () => {
     const user = userEvent.setup();
     const setState = renderWithTags();
 
     await user.click(screen.getByRole('button', { name: /^Language/ }));
     await user.click(screen.getByRole('option', { name: 'English' }));
+    await user.click(screen.getByRole('option', { name: 'Spanish' }));
+
+    await waitFor(() => expect(setState).toHaveBeenCalledTimes(1));
+    expect(setState).toHaveBeenCalledWith({ tags: [TAGS[0].id, TAGS[1].id] });
+  });
+
+  /* Space toggles and applies; Esc closes keeping it; focus returns to the chip. */
+  it('toggles with Space, keeps it through Esc, and returns focus to the trigger', async () => {
+    const user = userEvent.setup();
+    const setState = renderWithTags();
+    const trigger = screen.getByRole('button', { name: /^Language/ });
+
+    await user.click(trigger);
+    await user.keyboard(' ');
     await user.keyboard('{Escape}');
 
-    expect(setState).not.toHaveBeenCalled();
+    expect(setState).toHaveBeenCalledWith({ tags: [TAGS[0].id] });
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+  });
+
+  /* A typed letter moves through the list; it never reaches the results. */
+  it('never changes the results when a letter is typed in the list', async () => {
+    const user = userEvent.setup();
+    const setState = renderWithTags();
 
     await user.click(screen.getByRole('button', { name: /^Language/ }));
+    await user.keyboard('s');
+    await new Promise((resolve) => setTimeout(resolve, 300));
 
-    expect(screen.getByRole('option', { name: 'English' }).getAttribute('aria-selected')).toBe(
-      'false',
-    );
+    expect(setState).not.toHaveBeenCalled();
   });
 
   /*
    * The range is presets first, then typed bounds, then a slider that is only a
-   * readout — and it applies on Apply for the same reason the multi-select
-   * does: a range fired per keystroke re-sorts between the two digits of "18".
+   * readout. A preset commits on press; a typed bound commits when the field is
+   * left, never per keystroke — that would re-sort between the two digits of
+   * "18".
    */
-  it('offers presets and typed bounds, and applies neither until Apply', async () => {
+  it('applies a preset on press and reports the range it produced', async () => {
+    const user = userEvent.setup();
+    const setState = renderWithTags({ minPriceCents: 100_000, maxPriceCents: 200_000 });
+
+    await user.click(screen.getByRole('button', { name: /^\$1,000/ }));
+
+    expect(screen.getByRole('button', { name: 'Under $1k' })).toBeDefined();
+    expect(screen.getByText('$1,000–$2,000 · 18 results')).toBeDefined();
+
+    await user.click(screen.getByRole('button', { name: '$2–4k' }));
+
+    expect(setState).toHaveBeenCalledTimes(1);
+    expect(setState).toHaveBeenCalledWith({ minPriceCents: 200_000, maxPriceCents: 400_000 });
+    expect(screen.queryByText(/Apply/)).toBeNull();
+  });
+
+  it('commits a typed bound once, when the field is left', async () => {
     const user = userEvent.setup();
     const setState = renderWithTags();
 
     await user.click(screen.getByRole('button', { name: 'Price' }));
+    await user.type(screen.getByLabelText('Min'), '1200');
 
-    expect(screen.getByRole('button', { name: 'Under $1k' })).toBeDefined();
-    expect(screen.getByLabelText('Min')).toBeDefined();
-    expect(screen.getByLabelText('Max')).toBeDefined();
-
-    await user.click(screen.getByRole('button', { name: '$1–2k' }));
     expect(setState).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole('button', { name: 'Apply' }));
+    await user.tab();
 
-    expect(setState).toHaveBeenCalledWith({ minPriceCents: 100_000, maxPriceCents: 200_000 });
+    expect(setState).toHaveBeenCalledTimes(1);
+    expect(setState).toHaveBeenCalledWith({ minPriceCents: 120_000, maxPriceCents: null });
+  });
+
+  /* Frame `28` drops the "N more — scroll" note. */
+  it('draws no "more — scroll" note', async () => {
+    const user = userEvent.setup();
+    renderWithTags();
+
+    await user.click(screen.getByRole('button', { name: /^Language/ }));
+
+    expect(screen.queryByText(/more — scroll/)).toBeNull();
   });
 
   /*
@@ -460,7 +502,7 @@ describe('filter popovers are reachable and know when they are finished', () => 
 
     await user.click(screen.getByRole('button', { name: 'Price' }));
     await user.type(screen.getByLabelText('Min'), typed);
-    await user.click(screen.getByRole('button', { name: 'Apply' }));
+    await user.tab();
 
     expect(setState).toHaveBeenCalledWith({ minPriceCents: cents, maxPriceCents: null });
   });
@@ -490,7 +532,7 @@ describe('filter popovers are reachable and know when they are finished', () => 
 
     await user.click(screen.getByRole('button', { name: 'Price' }));
     await user.type(screen.getByLabelText('Min'), 'abc');
-    await user.click(screen.getByRole('button', { name: 'Apply' }));
+    await user.tab();
 
     expect(onPriceApplied).toHaveBeenCalledWith({ min: true, max: false });
   });
@@ -519,7 +561,7 @@ describe('filter popovers are reachable and know when they are finished', () => 
     await user.click(screen.getByRole('button', { name: 'Price' }));
     await user.type(screen.getByLabelText('Min'), '1200');
     await user.type(screen.getByLabelText('Max'), 'abc');
-    await user.click(screen.getByRole('button', { name: 'Apply' }));
+    await user.tab();
 
     expect(onPriceApplied).toHaveBeenCalledWith({ min: false, max: true });
   });
@@ -541,13 +583,13 @@ describe('filter popovers are reachable and know when they are finished', () => 
 
     await user.click(screen.getByRole('button', { name: 'Price' }));
     await user.type(screen.getByLabelText('Min'), '1200');
-    await user.click(screen.getByRole('button', { name: 'Apply' }));
+    await user.tab();
 
     expect(onPriceApplied).toHaveBeenCalledWith({ min: false, max: false });
   });
 
-  /* Clearing a bound is not discarding it — an empty field means "no bound". */
-  it('does not report an empty bound as discarded', async () => {
+  /* An empty field means "no bound": leaving it changes nothing and reports nothing. */
+  it('does not apply or report an empty bound', async () => {
     const user = userEvent.setup();
     const onPriceApplied = vi.fn();
 
@@ -563,9 +605,10 @@ describe('filter popovers are reachable and know when they are finished', () => 
     );
 
     await user.click(screen.getByRole('button', { name: 'Price' }));
-    await user.click(screen.getByRole('button', { name: 'Apply' }));
+    await user.click(screen.getByLabelText('Min'));
+    await user.tab();
 
-    expect(onPriceApplied).toHaveBeenCalledWith({ min: false, max: false });
+    expect(onPriceApplied).not.toHaveBeenCalled();
   });
 
   /*
@@ -757,7 +800,7 @@ describe('a refine draft made while the results are still landing', () => {
 
     expect((screen.getByLabelText('Min') as HTMLInputElement).value).toBe('1200');
 
-    await user.click(screen.getByRole('button', { name: 'Apply' }));
+    await user.tab();
     expect(setState).toHaveBeenCalledWith({ minPriceCents: 120_000, maxPriceCents: null });
   });
 
@@ -771,8 +814,7 @@ describe('a refine draft made while the results are still landing', () => {
 
     rerender(bar(setState));
 
-    await user.click(screen.getByRole('button', { name: /^Apply/ }));
-    expect(setState).toHaveBeenCalledWith({ tags: [LANGUAGE_TAGS[0].id] });
+    await waitFor(() => expect(setState).toHaveBeenCalledWith({ tags: [LANGUAGE_TAGS[0].id] }));
   });
 
   /*
@@ -780,7 +822,7 @@ describe('a refine draft made while the results are still landing', () => {
    * applied, which is the contract the re-seed exists for. Without it, keying
    * the effect on the values could have been written as deleting the effect.
    */
-  it('still discards a draft dismissed without Apply', async () => {
+  it('still discards a bound typed and dismissed before it was committed', async () => {
     const user = userEvent.setup();
     const { rerender } = render(bar());
 
