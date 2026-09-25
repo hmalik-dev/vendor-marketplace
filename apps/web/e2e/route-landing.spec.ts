@@ -439,11 +439,17 @@ async function landCell(
     if (persona.name === 'signed-out') {
       await expect(siteHeader.getByRole('link', { name: 'Sign in' })).toBeVisible();
     } else {
-      // A no-row session has no role to read, so the header falls back to the customer's word.
+      // A no-row session has no role to read, so the header falls back to the customer's chrome.
       const role = persona.name === 'no-row' ? 'customer' : persona.role;
-      await expect(
-        siteHeader.getByRole('link', { name: DASHBOARD_LABEL_BY_ROLE[role], exact: true }),
-      ).toHaveAttribute('href', '/dashboard');
+      // A customer's bar draws the `My bookings` pill in place of the dashboard link (VEN-760).
+      const [name, href] =
+        role === 'customer'
+          ? ['My bookings', '/bookings']
+          : [DASHBOARD_LABEL_BY_ROLE[role], '/dashboard'];
+      await expect(siteHeader.getByRole('link', { name, exact: true })).toHaveAttribute(
+        'href',
+        href,
+      );
     }
   } catch {
     const links = await siteHeader.getByRole('link').allInnerTexts();
