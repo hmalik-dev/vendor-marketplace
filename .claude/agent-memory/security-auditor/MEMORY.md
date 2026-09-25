@@ -33,6 +33,7 @@
 - [safeReturnPath is FIXED](validate-before-normalize-return-path.md) — parse-then-reserialise; VEN-653 exemption clean
 - [`x-orla-request-path` is forgeable only where nothing reads it](middleware-request-path-header-trust.md) — matcher skips dotted paths
 - [The role bounce loop is FIXED](role-bounce-self-loop-admin-bookings.md) — `roleCanReach` is a hint, never a gate
+- [Client drafts: the user-id key is the boundary, the sign-out sweep is extra](client-drafts-are-keyed-by-user-and-swept-on-sign-out.md) — VEN-617 PASS; residue after expiry accepted
 - [Every `FORBIDDEN` is read as a suspension](every-forbidden-is-read-as-a-suspension.md) — `useApi` keys on `ACCOUNT_SUSPENDED`; the server twin does not
 
 ## Vendor visibility, moderation and PII

@@ -30,6 +30,19 @@ const BOOKED_DATE = '2026-09-14';
 const SENT_DEADLINE = new Date(`${TODAY}T12:00:00Z`);
 SENT_DEADLINE.setUTCDate(SENT_DEADLINE.getUTCDate() + 3);
 
+const EMPTY_FORM = {
+  eventDate: '',
+  eventType: '',
+  eventStartTime: '',
+  guestCount: '',
+  eventLocation: '',
+  notes: '',
+};
+
+/** Two people who share one browser, one after the other (VEN-617). */
+const CUSTOMER_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const CUSTOMER_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+
 const CALENDAR: Record<string, AvailabilityStatus> = {
   [BLOCKED_DATE]: 'blocked',
   [BOOKED_DATE]: 'booked',
@@ -58,6 +71,7 @@ function renderScreen(
 ): void {
   render(
     <BookingRequestScreen
+      userId={CUSTOMER_A}
       vendorId="11111111-1111-4111-8111-111111111111"
       vendorSlug="kessler-and-co"
       vendor={{
@@ -451,6 +465,42 @@ describe('the request survives leaving the page', () => {
     expect(screen.queryByText(/We kept your draft/)).toBeNull();
   });
 
+  /*
+   * VEN-617: a shared computer. The next person to sign in opens the same
+   * vendor's form and must not see the last person's event.
+   */
+  it('keeps each signed-in person’s request to themselves', async () => {
+    renderScreen();
+    await typeVenue('For customer A');
+
+    cleanup();
+    renderScreen({ userId: CUSTOMER_B });
+
+    await waitFor(() =>
+      expect((screen.getByLabelText('Venue or location') as HTMLInputElement).value).toBe(''),
+    );
+    expect(screen.queryByText(/We kept your draft/)).toBeNull();
+  });
+
+  /* A draft written before VEN-617 names no one, so it is dropped, not guessed at. */
+  it('drops a draft stored under the vendor alone, and does not restore it', async () => {
+    const legacyKey = 'orla:booking-request:11111111-1111-4111-8111-111111111111';
+    window.localStorage.setItem(
+      legacyKey,
+      JSON.stringify({
+        version: 1,
+        savedAt: Date.now(),
+        value: { form: { ...EMPTY_FORM, eventLocation: 'Someone else’s barn' }, customDetails: '' },
+      }),
+    );
+
+    renderScreen();
+
+    await waitFor(() => expect(window.localStorage.getItem(legacyKey)).toBeNull());
+    expect((screen.getByLabelText('Venue or location') as HTMLInputElement).value).toBe('');
+    expect(screen.queryByText(/We kept your draft/)).toBeNull();
+  });
+
   /* A form that fills itself is unsettling; an untouched one has nothing to say. */
   it('says nothing when there was no draft', () => {
     renderScreen();
@@ -693,7 +743,7 @@ describe('the venue length (VEN-428)', () => {
 
 describe('the stored draft on mount (VEN-428)', () => {
   it('never removes a stored draft while the form is still being restored', async () => {
-    const key = 'orla:booking-request:11111111-1111-4111-8111-111111111111';
+    const key = `orla:booking-request:${CUSTOMER_A}:11111111-1111-4111-8111-111111111111`;
     window.localStorage.setItem(
       key,
       JSON.stringify({
@@ -721,7 +771,7 @@ describe('the stored draft on mount (VEN-428)', () => {
         'The Marfa barn',
       ),
     );
-    expect(removed).not.toHaveBeenCalled();
+    expect(removed).not.toHaveBeenCalledWith(key);
     expect(window.localStorage.getItem(key)).not.toBeNull();
     removed.mockRestore();
   });

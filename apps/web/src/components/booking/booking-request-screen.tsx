@@ -29,6 +29,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { formatEventDate } from '@/lib/booking-entries';
+import {
+  bookingRequestDraftKey,
+  forgetLegacyBookingRequestDraft,
+} from '@/lib/booking-request-draft';
 import { guestCountFromInput } from '@/lib/guest-count';
 import { userFacingError } from '@/lib/user-facing-error';
 import { wireBookingRequestSchema } from '@/lib/wire-schemas';
@@ -40,6 +44,8 @@ import { FIELD_FOCUS } from '@/lib/focus';
 import { cn } from '@/lib/utils';
 
 export interface BookingRequestScreenProps {
+  /** The signed-in customer: their draft is theirs alone on a shared computer (VEN-617). */
+  userId: string;
   vendorId: string;
   vendorSlug: string;
   vendor: RailVendor;
@@ -74,9 +80,6 @@ const FIELD_LABELS = {
   notes: 'Anything else they should know?',
   customDetails: 'Describe what you need',
 } as const;
-
-/** Namespaced so a draft cannot collide with anything else in storage. */
-const DRAFT_KEY_PREFIX = 'orla:booking-request:';
 
 export interface SavedRequestDraft {
   form: FormState;
@@ -259,6 +262,7 @@ export function requestDetails(notes: string, customDetails: string, hasPackage:
  * total are visible the whole way through.
  */
 export function BookingRequestScreen({
+  userId,
   vendorId,
   vendorSlug,
   vendor,
@@ -309,9 +313,17 @@ export function BookingRequestScreen({
   /*
    * Kept per vendor: a customer comparing two of them has a half-written
    * request to each, and one silently overwriting the other would be worse
-   * than not saving at all.
+   * than not saving at all. And per person (VEN-617): the next one to sign in
+   * on this computer must never be shown someone else's event.
    */
-  const draft = useSavedDraft<SavedRequestDraft>(`${DRAFT_KEY_PREFIX}${vendorId}`, isEmptyDraft);
+  const draft = useSavedDraft<SavedRequestDraft>(
+    bookingRequestDraftKey(userId, vendorId),
+    isEmptyDraft,
+  );
+
+  useEffect(() => {
+    forgetLegacyBookingRequestDraft(vendorId);
+  }, [vendorId]);
 
   /*
    * Read through refs so the merge sees the live form without the effect

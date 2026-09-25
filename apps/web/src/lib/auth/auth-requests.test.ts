@@ -38,6 +38,10 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+function storedKeys(): string[] {
+  return Object.keys(window.localStorage).sort();
+}
+
 describe('signUpWithEmail', () => {
   /*
    * The code request is the caller's (VEN-620): folded in here, a refused send
@@ -210,6 +214,51 @@ describe('signOut', () => {
     stubFetch(400);
 
     await expect(signOut()).resolves.toBeUndefined();
+  });
+
+  /*
+   * VEN-617: the next person to sign in on this computer must not find the
+   * last one's half-written booking requests. Only the drafts go: every other
+   * key belongs to something that is not anyone's event details.
+   */
+  describe('forgetting booking-request drafts', () => {
+    beforeEach(() => {
+      window.localStorage.setItem('orla:booking-request:user-a:vendor-1', '{"a":1}');
+      window.localStorage.setItem('orla:booking-request:user-a:vendor-2', '{"a":2}');
+      window.localStorage.setItem('orla:booking-request:vendor-1', '{"legacy":1}');
+      window.localStorage.setItem('orla:theme', 'dark');
+      window.localStorage.setItem('other:booking-request:vendor-1', 'kept');
+    });
+
+    afterEach(() => {
+      window.localStorage.clear();
+    });
+
+    it('removes every draft key and leaves the rest', async () => {
+      stubFetch(200);
+
+      await signOut();
+
+      expect(storedKeys()).toEqual(['orla:theme', 'other:booking-request:vendor-1']);
+    });
+
+    it('keeps the drafts when the sign-out failed, since the session is still live', async () => {
+      stubFetch(500);
+
+      await expect(signOut()).rejects.toThrow();
+
+      expect(storedKeys()).toHaveLength(5);
+    });
+
+    it('still signs out when storage cannot be reached', async () => {
+      stubFetch(200);
+      const keyAt = vi.spyOn(Storage.prototype, 'key').mockImplementation(() => {
+        throw new DOMException('blocked', 'SecurityError');
+      });
+
+      await expect(signOut()).resolves.toBeUndefined();
+      keyAt.mockRestore();
+    });
   });
 
   /*
