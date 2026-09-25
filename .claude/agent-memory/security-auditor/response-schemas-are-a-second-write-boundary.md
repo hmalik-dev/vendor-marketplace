@@ -45,4 +45,12 @@ feeder is `mirroredAuthName` (`apps/api/src/modules/users/users.service.ts:66`)
 grep the _column_ (not the field name) through the DAOs to find every response
 schema it reaches, and check each one. When a DAO _derives_ a string in SQL,
 add up the maximum length by hand and compare it to the schema's `.max()`.
+**Fourth variant: units (VEN-768, 2026-09-25).** `varchar(100)` counts code points,
+while zod `.max(100)` counts UTF-16 units. The customer's Neon Auth `name` reaches
+`users.last_name` through `splitAuthName` → `mirroredAuthName` with no length check
+in the API. So 51–100 astral characters (emoji) store fine and fail every
+`lastName`/`customerName: z.string().max(MAX_NAME_LENGTH)` response leaf. VEN-768's
+`vendorPayoutRowSchema.customerName` makes one customer able to 500 the vendor's
+whole `/vendor/payouts`. Fix: an unbounded `z.string()`, as the other `customerName`
+leaves use.
 Related: [[image-ref-scheme-allowlist-is-whitespace-bypassable]].

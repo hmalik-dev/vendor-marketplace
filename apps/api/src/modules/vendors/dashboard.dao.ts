@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, lt, not, notInArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, lt, not, notInArray, sql } from 'drizzle-orm';
 import {
   availability,
   bookingRequests,
@@ -10,6 +10,7 @@ import {
   HELD_PAYOUT_STATUSES,
   type AvailabilityStatus,
   type BookingStatus,
+  type EventType,
 } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
 import {
@@ -276,6 +277,7 @@ export async function findOwedPayoutTotals(
 }
 
 export interface NextPendingPayoutRow {
+  bookingId: string;
   eventDate: string;
   customerFirstName: string;
   vendorPayoutCents: number;
@@ -328,6 +330,7 @@ export async function findNextPendingPayout(
 ): Promise<NextPendingPayoutRow | null> {
   const rows = await db
     .select({
+      bookingId: bookings.id,
       eventDate: bookings.eventDate,
       customerFirstName: users.firstName,
       vendorPayoutCents: bookings.vendorPayoutCents,
@@ -345,6 +348,68 @@ export async function findNextPendingPayout(
     .limit(1);
 
   return rows[0] ?? null;
+}
+
+/** How many paid payouts the payments page lists beneath every owed one. */
+export const PAID_PAYOUT_ROWS_LIMIT = 50;
+
+export interface PayoutRow {
+  bookingId: string;
+  customerFirstName: string;
+  customerLastName: string;
+  eventType: EventType | null;
+  eventDate: string;
+  status: BookingStatus;
+  residualHeld: boolean;
+  vendorPayoutCents: number;
+  debtNettedCents: number;
+  backupWithheldCents: number;
+  payoutReleasedAt: Date | null;
+}
+
+/**
+ * The payments page's table (VEN-768): **every** owed payout — `owedPayout`'s
+ * rows, so the table and the summary above it cannot name different sets — and
+ * the most recent `PAID_PAYOUT_ROWS_LIMIT` released ones, newest event first.
+ *
+ * Owed rows are not capped: the next payout is always one of them, and a
+ * vendor's unreleased bookings are bounded by the booking horizon. Paid rows
+ * grow without bound, so they are.
+ */
+export async function findPayoutRows(db: AppDatabase, vendorId: string): Promise<PayoutRow[]> {
+  const columns = {
+    bookingId: bookings.id,
+    customerFirstName: users.firstName,
+    customerLastName: users.lastName,
+    eventType: bookingRequests.eventType,
+    eventDate: bookings.eventDate,
+    status: bookings.status,
+    residualHeld: payoutResidualHeld(),
+    vendorPayoutCents: bookings.vendorPayoutCents,
+    debtNettedCents: bookings.debtNettedCents,
+    backupWithheldCents: bookings.backupWithheldCents,
+    payoutReleasedAt: bookings.payoutReleasedAt,
+  };
+
+  const [owed, paid] = await Promise.all([
+    db
+      .select(columns)
+      .from(bookings)
+      .innerJoin(users, eq(bookings.customerId, users.id))
+      .innerJoin(bookingRequests, eq(bookings.requestId, bookingRequests.id))
+      .where(owedPayout(vendorId))
+      .orderBy(desc(bookings.eventDate), desc(bookings.createdAt)),
+    db
+      .select(columns)
+      .from(bookings)
+      .innerJoin(users, eq(bookings.customerId, users.id))
+      .innerJoin(bookingRequests, eq(bookings.requestId, bookingRequests.id))
+      .where(and(eq(bookings.vendorId, vendorId), isNotNull(bookings.payoutReleasedAt)))
+      .orderBy(desc(bookings.eventDate), desc(bookings.createdAt))
+      .limit(PAID_PAYOUT_ROWS_LIMIT),
+  ]);
+
+  return [...owed, ...paid].sort((a, b) => b.eventDate.localeCompare(a.eventDate));
 }
 
 export async function findCategoryIds(db: AppDatabase, vendorId: string): Promise<string[]> {

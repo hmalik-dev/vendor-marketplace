@@ -1,18 +1,18 @@
-import {
-  BRAND_NAME,
-  PAYOUT_RELEASE_HOURS,
-  pageTitle,
-  VENDOR_AGREEMENT_PATH,
-} from '@vendor-marketplace/shared';
+import { BRAND_NAME, pageTitle, VENDOR_AGREEMENT_PATH } from '@vendor-marketplace/shared';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { Banner } from '@/components/ui/banner';
 import { VendorSurface } from '@/components/vendor-surface';
 import { ConnectPayoutsForm } from '@/components/vendor/connect-payouts-form';
-import { StripeDashboardLink } from '@/components/vendor/stripe-dashboard-link';
+import { PayoutsOverview } from '@/components/vendor/payouts-overview';
 import { TaxStatementDownloads } from '@/components/vendor/tax-statement-downloads';
 import { requireRole } from '@/lib/current-user';
-import { getAgreementStatus, getPayoutStatus, getTaxStatementYears } from '@/lib/vendor-data';
+import {
+  getAgreementStatus,
+  getPayoutStatus,
+  getTaxStatementYears,
+  getVendorPayouts,
+} from '@/lib/vendor-data';
 
 export const metadata: Metadata = { title: pageTitle('Payments') };
 
@@ -67,65 +67,55 @@ export default async function VendorPaymentsPage({
   // "press it again": the link ran out, not the setup.
   const linkExpired = params.resume === '1';
 
+  // Frame `49`: the onboarded vendor sees their payouts, full width (VEN-768).
+  if (status.stripeOnboarded) {
+    const payouts = await getVendorPayouts();
+
+    return (
+      <VendorSurface
+        eyebrow="Payments"
+        heading="Payments"
+        description={`${BRAND_NAME} takes payment from the customer and passes it to you through Stripe.`}
+      >
+        <PayoutsOverview payouts={payouts} />
+        <TaxStatementDownloads years={statementYears} />
+      </VendorSurface>
+    );
+  }
+
   return (
     <VendorSurface
       eyebrow="Payments"
-      heading={status.stripeOnboarded ? 'Payouts connected' : 'Get paid for your bookings'}
-      description={
-        status.stripeOnboarded
-          ? `${BRAND_NAME} takes payment from the customer and passes it to you through Stripe.`
-          : `${BRAND_NAME} takes payment from the customer and passes it to you through Stripe. Connect your bank account to accept bookings.`
-      }
+      heading="Get paid for your bookings"
+      description={`${BRAND_NAME} takes payment from the customer and passes it to you through Stripe. Connect your bank account to accept bookings.`}
     >
       <div className="max-w-[620px]">
-        {status.stripeOnboarded ? (
-          <>
-            <Banner status="settled" title="Payouts connected">
-              {BRAND_NAME} holds each payment and pays it out to you {PAYOUT_RELEASE_HOURS} hours
-              after the event date.
-            </Banner>
-            {/*
-              Beside the banner, not inside it: `Banner` wraps its sentence in a
-              `<p>`, and the statement list is a `<div>`. A block inside a
-              paragraph is invalid HTML, so the browser closes the `<p>` early
-              while parsing the server markup and React refuses to hydrate it
-              (error 418).
-            */}
-            <div className="mt-3 flex flex-col items-start">
-              <StripeDashboardLink />
-              <TaxStatementDownloads years={statementYears} />
-            </div>
-          </>
+        {/*
+          One banner, which is the component's own contract — and on the
+          `?resume=1` path the expired link is the newer, more specific
+          thing to say, so it takes the slot rather than stacking above the
+          gate. Steel there because nothing failed and nothing is waiting on
+          the vendor except pressing the button again; gold otherwise,
+          because the setup is waiting on them. Never red: `40-states.md`.
+        */}
+        {linkExpired ? (
+          <Banner status="informational" title="That link had expired">
+            Stripe&apos;s setup links expire. Start again to pick up where you left off.
+          </Banner>
         ) : (
-          <>
-            {/*
-              One banner, which is the component's own contract — and on the
-              `?resume=1` path the expired link is the newer, more specific
-              thing to say, so it takes the slot rather than stacking above the
-              gate. Steel there because nothing failed and nothing is waiting on
-              the vendor except pressing the button again; gold otherwise,
-              because the setup is waiting on them. Never red: `40-states.md`.
-            */}
-            {linkExpired ? (
-              <Banner status="informational" title="That link had expired">
-                Stripe&apos;s setup links expire. Start again to pick up where you left off.
-              </Banner>
-            ) : (
-              <Banner status="pending" title="Payouts not connected">
-                You can&apos;t take payment until payouts are connected.
-              </Banner>
-            )}
-
-            <div className="mt-6">
-              <ConnectPayoutsForm isResuming={hasStarted} />
-            </div>
-
-            <p className="mt-3.5 text-sm leading-prose text-stone-600">
-              Stripe asks for your bank details and ID. {BRAND_NAME} never sees them.
-            </p>
-            <TaxStatementDownloads years={statementYears} />
-          </>
+          <Banner status="pending" title="Payouts not connected">
+            You can&apos;t take payment until payouts are connected.
+          </Banner>
         )}
+
+        <div className="mt-6">
+          <ConnectPayoutsForm isResuming={hasStarted} />
+        </div>
+
+        <p className="mt-3.5 text-sm leading-prose text-stone-600">
+          Stripe asks for your bank details and ID. {BRAND_NAME} never sees them.
+        </p>
+        <TaxStatementDownloads years={statementYears} />
       </div>
     </VendorSurface>
   );
