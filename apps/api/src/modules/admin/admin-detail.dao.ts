@@ -42,6 +42,7 @@ import {
   type PayoutModel,
 } from '@vendor-marketplace/shared';
 import type { AppDatabase } from '../../lib/database.js';
+import { containsInsensitive } from '../../lib/like-pattern.js';
 import { readsAs } from '../booking-requests/booking-requests.dao.js';
 import { unfinishedUnwindExpr, vendorUnpayableExpr } from '../payments/payouts.dao.js';
 import { adminVendorSelection, vendorOwner, type AdminVendorProjection } from './admin.dao.js';
@@ -442,6 +443,7 @@ export interface AdminRequestListRow {
 export interface AdminRequestFilters {
   group?: AdminRequestGroup | undefined;
   status?: BookingRequestStatus | undefined;
+  q?: string | undefined;
   /** The instant read at, so lazy expiry decides which group a row is in. */
   now: Date;
 }
@@ -461,11 +463,21 @@ function requestFilterCondition(filters: AdminRequestFilters): SQL | undefined {
         )
       : undefined,
     filters.status ? readsAs(filters.status, filters.now) : undefined,
+    filters.q
+      ? or(
+          containsInsensitive(
+            sql`concat_ws(' ', ${users.firstName}, ${users.lastName})`,
+            filters.q,
+          ),
+          containsInsensitive(users.email, filters.q),
+          containsInsensitive(vendorProfiles.businessName, filters.q),
+        )
+      : undefined,
   );
 }
 
-/** The two filters the requests table can be narrowed by. */
-export const REQUEST_FILTER_KEYS = ['group', 'status'] as const;
+/** The three filters the requests table can be narrowed by. */
+export const REQUEST_FILTER_KEYS = ['group', 'status', 'q'] as const;
 export type RequestFilterKey = (typeof REQUEST_FILTER_KEYS)[number];
 
 /** One page of every booking request, newest first. */
@@ -499,7 +511,11 @@ export async function findAdminRequests(
     .offset(offset);
 }
 
-/** Both foreign keys cascade, so the count needs no joins to agree with the page. */
+/**
+ * The page's two joins, which the search reads. Both foreign keys are non-null
+ * and cascade, so the inner joins cannot change the count — only let the
+ * predicate name their columns.
+ */
 export async function countAdminRequests(
   db: AppDatabase,
   filters: AdminRequestFilters,
@@ -507,6 +523,8 @@ export async function countAdminRequests(
   const rows = await db
     .select({ total: sql<number>`count(*)::int` })
     .from(bookingRequests)
+    .innerJoin(users, eq(users.id, bookingRequests.customerId))
+    .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookingRequests.vendorId))
     .where(requestFilterCondition(filters));
 
   return rows[0]?.total ?? 0;
@@ -520,7 +538,12 @@ export async function countRequestWidenings(
   return countWidenings<RequestFilterKey>({
     active: REQUEST_FILTER_KEYS.filter((key) => filters[key] !== undefined),
     conditionWithout: (dropped) => requestFilterCondition({ ...filters, [dropped]: undefined }),
-    scan: (selection) => db.select(selection).from(bookingRequests),
+    scan: (selection) =>
+      db
+        .select(selection)
+        .from(bookingRequests)
+        .innerJoin(users, eq(users.id, bookingRequests.customerId))
+        .innerJoin(vendorProfiles, eq(vendorProfiles.id, bookingRequests.vendorId)),
   });
 }
 

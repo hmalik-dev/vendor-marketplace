@@ -305,12 +305,19 @@ test.describe('the console Refine bar', () => {
 });
 
 /*
- * The search box and its chip (VEN-743), one journey per list that has one
+ * The search box and its chip (VEN-743, VEN-749), one journey per list that has one
  * here. A term nothing matches, so the assertion does not depend on which rows
  * the lane happens to hold: the URL carries `q`, the field keeps it, the bar
  * says the view is narrowed, and the chip's × is a real link that lifts it.
  */
-const SEARCHED_LISTS = ['bookings', 'payments', 'cases'] as const;
+const SEARCHED_LISTS = [
+  'bookings',
+  'payments',
+  'cases',
+  'requests',
+  'reviews',
+  'activity',
+] as const;
 const NO_SUCH_TERM = 'zz-no-such-term-743';
 
 for (const list of SEARCHED_LISTS) {

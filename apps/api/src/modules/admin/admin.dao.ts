@@ -1373,9 +1373,32 @@ export interface AdminReviewProjection {
   createdAt: Date;
 }
 
+export interface AdminReviewFilters {
+  type?: ReviewType | undefined;
+  q?: string | undefined;
+}
+
+/** The author's name, the vendor's business name, and what the review says. */
+function reviewFilterCondition(filters: AdminReviewFilters): SQL | undefined {
+  return and(
+    filters.type ? eq(reviews.type, filters.type) : undefined,
+    filters.q
+      ? or(
+          containsInsensitive(
+            sql`concat_ws(' ', ${users.firstName}, ${users.lastName})`,
+            filters.q,
+          ),
+          containsInsensitive(vendorProfiles.businessName, filters.q),
+          containsInsensitive(reviews.title, filters.q),
+          containsInsensitive(reviews.content, filters.q),
+        )
+      : undefined,
+  );
+}
+
 export async function findAdminReviews(
   db: AppDatabase,
-  type: ReviewType | undefined,
+  filters: AdminReviewFilters,
   limit: number,
   offset: number,
 ): Promise<AdminReviewProjection[]> {
@@ -1396,41 +1419,53 @@ export async function findAdminReviews(
     .from(reviews)
     .innerJoin(users, eq(users.id, reviews.reviewerId))
     .innerJoin(vendorProfiles, eq(vendorProfiles.id, reviews.vendorId))
-    .where(type ? eq(reviews.type, type) : undefined)
+    .where(reviewFilterCondition(filters))
     .orderBy(desc(reviews.createdAt))
     .limit(limit)
     .offset(offset);
 }
 
 /**
- * The one filter the reviews table can be narrowed by.
+ * The two filters the reviews table can be narrowed by.
  *
  * `isPublic` is deliberately absent: hiding a review is a moderation *state*
  * the table renders, not a filter the bar offers, so there is nothing to widen.
  */
-export const REVIEW_FILTER_KEYS = ['type'] as const;
+export const REVIEW_FILTER_KEYS = ['type', 'q'] as const;
 export type ReviewFilterKey = (typeof REVIEW_FILTER_KEYS)[number];
 
-/** How many reviews dropping the direction would reveal, in one scan (#454). */
+/**
+ * How many reviews each single widening would reveal, in one scan (#454).
+ *
+ * The page's two joins, because the search reads both. Inner joins on
+ * non-null foreign keys, so they cannot change a count.
+ */
 export async function countReviewWidenings(
   db: AppDatabase,
-  type: ReviewType | undefined,
+  filters: AdminReviewFilters,
 ): Promise<FilterWidening[]> {
   return countWidenings<ReviewFilterKey>({
-    active: type === undefined ? [] : REVIEW_FILTER_KEYS,
-    conditionWithout: () => undefined,
-    scan: (selection) => db.select(selection).from(reviews),
+    active: REVIEW_FILTER_KEYS.filter((key) => filters[key] !== undefined),
+    conditionWithout: (dropped) => reviewFilterCondition({ ...filters, [dropped]: undefined }),
+    scan: (selection) =>
+      db
+        .select(selection)
+        .from(reviews)
+        .innerJoin(users, eq(users.id, reviews.reviewerId))
+        .innerJoin(vendorProfiles, eq(vendorProfiles.id, reviews.vendorId)),
   });
 }
 
 export async function countAdminReviews(
   db: AppDatabase,
-  type: ReviewType | undefined,
+  filters: AdminReviewFilters,
 ): Promise<number> {
   const rows = await db
     .select({ total: sql<number>`count(*)::int` })
     .from(reviews)
-    .where(type ? eq(reviews.type, type) : undefined);
+    .innerJoin(users, eq(users.id, reviews.reviewerId))
+    .innerJoin(vendorProfiles, eq(vendorProfiles.id, reviews.vendorId))
+    .where(reviewFilterCondition(filters));
 
   return rows?.[0]?.total ?? 0;
 }
@@ -1938,6 +1973,7 @@ export interface AdminActionFilters {
   action?: AdminAction | undefined;
   subjectType?: AdminActionSubject | undefined;
   range?: AdminActivityRange | undefined;
+  q?: string | undefined;
 }
 
 /** Each range as a Postgres interval, subtracted from the database's own `now()`. */
@@ -2042,6 +2078,19 @@ function actionFilterCondition(filters: AdminActionFilters): SQL | undefined {
     );
   }
 
+  // The actor is the joined `users` row; the subject id is cast so its start can be pasted.
+  if (filters.q) {
+    const match = or(
+      containsInsensitive(sql`concat_ws(' ', ${users.firstName}, ${users.lastName})`, filters.q),
+      containsInsensitive(users.email, filters.q),
+      containsInsensitive(sql`${adminActions.subjectId}::text`, filters.q),
+    );
+
+    if (match) {
+      conditions.push(match);
+    }
+  }
+
   return conditions.length > 0 ? and(...conditions) : undefined;
 }
 
@@ -2107,21 +2156,29 @@ export async function countAdminActions(
   const rows = await db
     .select({ total: sql<number>`count(*)::int` })
     .from(adminActions)
+    .innerJoin(users, eq(users.id, adminActions.actorId))
     .where(actionFilterCondition(filters));
 
   return rows?.[0]?.total ?? 0;
 }
 
 /** The filters the activity feed can be narrowed by. */
-export const ACTION_FILTER_KEYS = ['actor', 'subject', 'action', 'subjectType', 'range'] as const;
+export const ACTION_FILTER_KEYS = [
+  'actor',
+  'subject',
+  'action',
+  'subjectType',
+  'range',
+  'q',
+] as const;
 export type ActionFilterKey = (typeof ACTION_FILTER_KEYS)[number];
 
 /**
  * How many log rows each single widening would reveal, in one scan (#454).
  *
- * No actor join: `actionFilterCondition` never leaves `admin_actions`, and the
- * join is an inner one on a row that cannot be missing, so it cannot change a
- * count either way.
+ * The actor join is the page's, because the search reads the actor's name and
+ * email. It is an inner one on a row that cannot be missing, so it cannot
+ * change a count either way.
  */
 export async function countActionWidenings(
   db: AppDatabase,
@@ -2130,7 +2187,8 @@ export async function countActionWidenings(
   return countWidenings<ActionFilterKey>({
     active: ACTION_FILTER_KEYS.filter((key) => filters[key] !== undefined),
     conditionWithout: (dropped) => actionFilterCondition({ ...filters, [dropped]: undefined }),
-    scan: (selection) => db.select(selection).from(adminActions),
+    scan: (selection) =>
+      db.select(selection).from(adminActions).innerJoin(users, eq(users.id, adminActions.actorId)),
   });
 }
 
