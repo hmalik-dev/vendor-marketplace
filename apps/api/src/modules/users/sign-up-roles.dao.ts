@@ -41,7 +41,10 @@ export async function findSignUpRole(
   return row?.role === 'customer' || row?.role === 'vendor' ? row.role : null;
 }
 
-/** Spent once the account row exists: the role now lives on `users.role`. */
+/**
+ * Spent once the account row exists (the role now lives on `users.role`), and
+ * forgotten when the identity's password is reset (VEN-663).
+ */
 export async function deleteSignUpRole(db: AppDatabase, authUserId: string): Promise<void> {
   await db.delete(signUpRoles).where(eq(signUpRoles.authUserId, authUserId));
 }

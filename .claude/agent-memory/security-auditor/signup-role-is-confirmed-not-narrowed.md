@@ -30,6 +30,18 @@ Fix offered: drop the record on a successful `email-otp/reset-password`.
 Re-open if the internal route ever takes an id from anything but the provider's
 answer, or if the key reaches a client bundle.
 
+**VEN-663 (audited 2026-09-25):** the proxy's `endEverySession` (after a 2xx
+`email-otp/reset-password` + sign-in with the new password) DELETEs the record
+at `/v1/internal/sign-up-role` (same key guard/bodyLimit/rateLimit-off as the
+POST). Trust boundary clean: the id is the provider's sign-in answer, a reset
+needs the OTP, and better-auth's reset marks the address verified (routes.mjs
+`resetPasswordEmailOTP`), so the sign-in succeeds for a squatted identity. An
+attacker cannot re-record: ids come only from a sign-up answer, which for an
+existing address is 422 or a synthetic id. **Finding raised:** with no record,
+`accept-terms-screen.tsx` shows a support-only dead end ("never a picker"), so
+every pre-Terms reset, legitimate or squatted, is locked out of onboarding,
+though `acceptTerms` already falls back to the body role. Caller decides.
+
 **VEN-678 (audited 2026-09-23, PASS):** `signUpWithEmail` reads the relayed
 sign-up body only to derive `codeSent = token === null` and keeps nothing else.
 The proxy already hands the provider's body to the browser unchanged, so that
