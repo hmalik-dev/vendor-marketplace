@@ -352,18 +352,32 @@ test.describe('paid booking', () => {
     const fiveStars = customerPage.getByRole('radio', { name: /^5 stars/ });
     await customerPage.locator('label').filter({ has: fiveStars }).click();
     await expect(fiveStars).toBeChecked();
-    await customerPage.getByLabel('Review', { exact: true }).fill(review);
+    const reviewField = customerPage.getByLabel('Review', { exact: true });
+    await reviewField.fill(review);
+    /*
+     * The write is awaited, not inferred from the page (VEN-779). React mirrors
+     * a controlled textarea's value into its text, so `getByText(review)` found
+     * the draft in the form and passed before the POST had committed — and the
+     * signed-out read below then raced the write it was meant to observe.
+     */
+    const posted = customerPage.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        response.url().endsWith(`/bookings/${booking.id}/reviews`),
+    );
     await customerPage.getByRole('button', { name: 'Post review' }).click();
+    expect((await posted).status(), 'the review was not created').toBe(201);
+    await expect(reviewField, 'the form stayed open after the review posted').toHaveCount(0);
     await expect(customerPage.getByText(review)).toBeVisible();
 
     /*
      * Public, not merely echoed back to its author: a signed-out visitor reads
-     * it. Asked of the API, not the storefront page (VEN-779). The web shares a
-     * signed-out reader's first reviews page for a minute (VEN-610,
-     * `storefront-cache.ts`), so a page any visitor loaded in the minute before
-     * the post (an earlier journey's check, or this test's own on a retry)
-     * serves the list without this review. The API is where "public" is
-     * decided; the minute's lag is the storefront's documented contract.
+     * it. Asked of the API, not the storefront page. The web shares a signed-out
+     * reader's first reviews page for a minute (VEN-610, `storefront-cache.ts`),
+     * so a page any visitor loaded in the minute before the post (an earlier
+     * journey's check, or this test's own on a retry) serves the list without
+     * this review. The API is where "public" is decided; the minute's lag is the
+     * storefront's documented contract.
      */
     const visitor = await browser.newContext();
     try {
