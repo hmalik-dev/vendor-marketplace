@@ -213,7 +213,7 @@ export async function acceptTerms(
 
   if (input.version !== CURRENT_TERMS_VERSION) {
     throw conflict(
-      `That is not the current version of the Terms — ${CURRENT_TERMS_VERSION} is. Reload and read them before accepting.`,
+      `The current Terms are ${CURRENT_TERMS_VERSION}. Reload and read them before accepting.`,
     );
   }
 

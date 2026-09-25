@@ -288,7 +288,7 @@ export function unmatchedDisputeAlert(input: {
     summary: `Chargeback on ${input.paymentIntentId} matches no booking`,
     details: [
       `A card network opened dispute ${input.disputeId} for ${formatPrice(input.amountCents)} on payment intent ${input.paymentIntentId}, which no booking here owns.`,
-      'No case was opened and no payout was held. Stripe has debited the platform; check the Stripe dashboard before the evidence deadline.',
+      'No case was opened and no payout was held. Stripe has debited the platform. Check the Stripe dashboard before the evidence deadline.',
     ],
     adminPath: null,
   };
@@ -363,7 +363,7 @@ export async function vendorPayoutsDisabledAlert(
     subjectId: vendor.vendorId,
     summary: `${vendor.businessName} can no longer be paid out`,
     details: [
-      `Stripe disabled connected account ${stripeAccountId}; the payout sweep will fail for this vendor until it is fixed.`,
+      `Stripe disabled connected account ${stripeAccountId}. Payouts to this vendor fail until it is fixed.`,
       `Vendor: ${vendor.vendorId}`,
       `Stripe reason: ${vendor.disabledReason ?? 'not given'}`,
     ],
@@ -422,7 +422,7 @@ export function platformBalanceShortAlert(input: {
     details: [
       `Stripe holds ${formatPrice(balanceCents)} (${formatPrice(input.availableCents)} available, ${formatPrice(input.pendingCents)} pending) against ${formatPrice(requiredCents)} still owed.`,
       `Owed: ${formatPrice(input.unreleasedPayoutCents)} in vendor payouts not yet sent, and ${formatPrice(input.refundableExposureCents)} more that bookings could still refund.`,
-      'Confirm the platform payout schedule is manual, then find what left the balance — a payout, a refund or a dispute: docs/runbook-platform-balance.md.',
+      'Confirm the platform payout schedule is manual. Then find what left the balance: a payout, a refund or a dispute. Runbook: docs/runbook-platform-balance.md.',
     ],
     adminPath: '/admin/payments',
   };
@@ -449,8 +449,8 @@ export function refundFailedAlert(input: {
       : `Refund failed on booking ${bookingId}`,
     details: [
       refundId
-        ? `A refund sent during ${during} went out, but the booking row changed underneath it and could not be cancelled. The customer is refunded; check whether the vendor was also paid.`
-        : `A refund attempted during ${during} did not go through; the customer's money has not moved.`,
+        ? `A refund sent during ${during} went out, but the booking changed underneath it and could not be canceled. The customer is refunded. Check whether the vendor was also paid.`
+        : `A refund attempted during ${during} did not go through. The customer's money has not moved.`,
       `Booking: ${bookingId}`,
       ...(refundId ? [`Refund: ${refundId}`] : []),
     ],
@@ -479,8 +479,8 @@ export function externalRefundAlert(input: {
       input.outcome === 'held'
         ? "The vendor's payout is on hold. Rule on it from the booking: uphold the refund or release the payout."
         : input.payoutReleased
-          ? 'The payout had already been released, so nothing was held. Recovering it from the vendor is a decision for you.'
-          : "The booking could not be put on hold in its current state, so the payout was not sent on this run. The next sweep will send it unless you hold the vendor's payouts from their page first.",
+          ? 'The payout was already released, so nothing was held. Decide whether to recover it from the vendor.'
+          : "The booking could not be put on hold, so this run did not send the payout. The next sweep sends it unless you hold the vendor's payouts from their page.",
       `Booking: ${input.bookingId}`,
     ],
     adminPath: `/admin/bookings/${input.bookingId}`,
@@ -507,7 +507,7 @@ export function unmatchedRefundFailedAlert(input: {
     subjectId: `pi:${input.paymentIntentId}`,
     summary: `Refund ${input.refundId} on ${input.paymentIntentId} ${input.status}`,
     details: [
-      `Stripe marked the ${formatPrice(input.amountCents)} refund ${input.status} after accepting it; the customer's money has not moved.`,
+      `Stripe marked the ${formatPrice(input.amountCents)} refund ${input.status} after accepting it. The customer's money has not moved.`,
       `Payment intent: ${input.paymentIntentId}`,
       'No booking owns this payment (a charge on a declined request). Refund it from the Stripe dashboard.',
     ],
@@ -566,7 +566,7 @@ export function paymentRefusedAlert(input: {
       wording.detail(formatPrice(input.amountCents)),
       input.refunded
         ? 'The payment has been refunded in full.'
-        : 'The payment has not been refunded: the refund failed and Stripe will redeliver the event.',
+        : 'The refund failed. Stripe will redeliver the event.',
       `Request: ${input.requestId}`,
       `Payment intent: ${input.paymentIntentId}`,
     ],
@@ -590,8 +590,8 @@ export function expiryPaymentUnsettledAlert(input: {
     subjectId: input.requestId,
     summary: `Request ${input.requestId} expired with a payment intent Stripe would not settle`,
     details: [
-      `The payment window closed and Stripe could not say whether the payment succeeded, or still reported it processing, for ${input.attempts} checks in a row. The request expired and the vendor's date is open again.`,
-      'The payment intent has not been cancelled or refunded. If it succeeds later it is refunded by the usual path; check it in Stripe.',
+      `The payment window closed. For ${input.attempts} checks in a row, Stripe could not confirm the payment or still reported it processing. The request expired and the vendor's date is open again.`,
+      'The payment intent has not been canceled or refunded. If it succeeds later, the usual path refunds it. Check it in Stripe.',
       `Request: ${input.requestId}`,
       `Payment intent: ${input.paymentIntentId}`,
     ],

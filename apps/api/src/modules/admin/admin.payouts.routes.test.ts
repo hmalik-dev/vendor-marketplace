@@ -632,9 +632,7 @@ describe('admin payout health', () => {
       const response = await retry(bookingId);
 
       expect(response.statusCode).toBe(409);
-      expect(response.json().message).toBe(
-        'This payout has already been released, so there is nothing to retry',
-      );
+      expect(response.json().message).toBe('This payout was already released.');
       expect(harness.stripe.transfers).toEqual([]);
     });
 
@@ -651,7 +649,9 @@ describe('admin payout health', () => {
       const response = await retry(await paidBooking({ status: 'cancelled' }));
 
       expect(response.statusCode).toBe(409);
-      expect(response.json().message).toContain('This booking was cancelled');
+      expect(response.json().message).toBe(
+        'This booking was canceled. The scheduled sweep releases anything the vendor is still owed.',
+      );
     });
 
     it('refuses a payout whose window has not closed, and says which', async () => {

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -95,9 +95,18 @@ describe('notification copy never carries a raw ISO date', () => {
 
   it('spells canceled with one l in every sentence a reader sees', () => {
     const modules = join(import.meta.dirname, '..');
-    const files = ['payments/payments.service.ts', 'admin/account-unwind.ts'].map((file) =>
-      readFileSync(join(modules, file), 'utf8'),
-    );
+    const shared = join(import.meta.dirname, '../../../../../packages/shared/src');
+    // VEN-748: every API module, since any of them can refuse a reader.
+    const sources = (dir: string): string[] =>
+      readdirSync(dir, { recursive: true, encoding: 'utf8' })
+        .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
+        .map((file) => join(dir, file));
+    const files = [
+      ...sources(modules),
+      join(import.meta.dirname, '../../lib/errors.ts'),
+      ...sources(join(shared, 'constants')),
+      join(shared, 'schemas/index.ts'),
+    ].map((file) => readFileSync(file, 'utf8'));
 
     const sentences = (source: string): string[] =>
       source
@@ -115,7 +124,8 @@ describe('notification copy never carries a raw ISO date', () => {
 
     const british = [service, ...files]
       .flatMap(sentences)
-      .filter((literal) => /cancell(?:ed|ing)\b/.test(literal));
+      // A quoted `'cancelled'` is the enum value inside SQL, not a sentence.
+      .filter((literal) => /(?<!')cancell(?:ed|ing)\b/i.test(literal));
 
     expect(british).toEqual([]);
   });

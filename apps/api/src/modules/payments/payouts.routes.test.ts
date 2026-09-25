@@ -479,9 +479,7 @@ describe('payouts', () => {
       clockNow = AFTER_RELEASE;
       expect(await sweep()).toEqual({ released: 1, skipped: 0, failed: 0 });
 
-      await expect(retry(paid.id)).rejects.toThrow(
-        'This payout has already been released, so there is nothing to retry',
-      );
+      await expect(retry(paid.id)).rejects.toThrow('This payout was already released.');
     });
 
     it('refuses a payout held by a reported problem, and says so', async () => {
@@ -507,7 +505,9 @@ describe('payouts', () => {
       expect(cancelled.statusCode).toBe(200);
       clockNow = AFTER_RELEASE;
 
-      await expect(retry(paid.id)).rejects.toThrow('This booking was cancelled');
+      await expect(retry(paid.id)).rejects.toThrow(
+        'This booking was canceled. The scheduled sweep releases anything the vendor is still owed.',
+      );
     });
 
     it('refuses a payout whose window has not closed yet, and says so', async () => {

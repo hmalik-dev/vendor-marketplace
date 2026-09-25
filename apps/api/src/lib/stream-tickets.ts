@@ -73,7 +73,7 @@ export class StreamTicketStore {
       .where(and(eq(streamTickets.userId, userId), gt(streamTickets.expiresAt, now)));
 
     if ((held?.n ?? 0) >= MAX_OUTSTANDING_TICKETS) {
-      throw tooManyRequests('Too many live-update tickets are outstanding; try again shortly');
+      throw tooManyRequests('Too many live-update tickets are open. Try again shortly.');
     }
 
     const ticket = randomBytes(TICKET_BYTES).toString('base64url');

@@ -245,7 +245,7 @@ function refusePayoutRetry(subject: BookingRow, dueThroughDate: string): void {
   const payoutStatus = payoutStatusOf(subject);
 
   if (payoutStatus === 'released') {
-    throw conflict('This payout has already been released, so there is nothing to retry');
+    throw conflict('This payout was already released.');
   }
 
   if (payoutStatus === 'held') {
@@ -254,15 +254,12 @@ function refusePayoutRetry(subject: BookingRow, dueThroughDate: string): void {
 
   if (subject.status === 'cancelled') {
     throw conflict(
-      'This booking was cancelled. Any residual the vendor is still owed is released by the ' +
-        'scheduled sweep, not by hand',
+      'This booking was canceled. The scheduled sweep releases anything the vendor is still owed.',
     );
   }
 
   if (subject.payoutModel !== 'separate') {
-    throw conflict(
-      'The vendor was paid as the card succeeded on this booking, so no transfer is owed',
-    );
+    throw conflict('The vendor was paid when the card succeeded. No transfer is owed.');
   }
 
   if (subject.vendorPayoutCents <= 0) {
@@ -271,7 +268,7 @@ function refusePayoutRetry(subject: BookingRow, dueThroughDate: string): void {
 
   if (subject.eventDate > dueThroughDate) {
     throw conflict(
-      `This payout is not due yet — it is released ${PAYOUT_RELEASE_HOURS} hours after the event`,
+      `This payout is not due yet. It is released ${PAYOUT_RELEASE_HOURS} hours after the event.`,
     );
   }
 }
