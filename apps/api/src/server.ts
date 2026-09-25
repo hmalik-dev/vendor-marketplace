@@ -28,6 +28,7 @@ import {
   PAYOUT_SWEEP_INTERVAL_MS,
   PLATFORM_BALANCE_RECONCILE_INTERVAL_MS,
   UPLOAD_SWEEP_INTERVAL_MS,
+  REQUEST_ID_HEADER,
   VISITOR_IP_HEADER,
   WEB_TIER_KEY_HEADER,
 } from '@vendor-marketplace/shared';
@@ -37,6 +38,7 @@ import { allowedOrigins, canonicalWebOrigin, type ApiEnv } from './config/env.js
 import type { AppDatabase } from './lib/database.js';
 import { redactLogRecord, serializeError } from './lib/log-error-serializer.js';
 import { redactQueryValues } from './lib/log-redaction.js';
+import { requestIdFor } from './lib/request-id.js';
 import { createS3Storage, type ObjectStorage } from './lib/storage.js';
 import type { EmailGateway } from './lib/email.js';
 import { stripeKeyMode, type StripeConnectGateway } from './lib/stripe.js';
@@ -371,6 +373,8 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
      * `false` on a laptop, because there is no proxy there: trusting a header
      * that nothing sets would let a local request name its own address.
      */
+    // Fastify's own default is `req-1`, `req-2`…: per process, so it repeats across replicas and restarts.
+    genReqId: (request) => requestIdFor(request.headers, env.WEB_TIER_KEY),
     trustProxy: isDeployedRuntime() ? (_address: string, hop: number) => hop === 0 : false,
     logger: {
       level: env.LOG_LEVEL,
@@ -433,6 +437,11 @@ export async function buildServer(options: BuildServerOptions): Promise<FastifyI
       ...(options.loggerStream ? { stream: options.loggerStream } : {}),
     },
   }).withTypeProvider<ZodTypeProvider>();
+
+  // The id the log line carries, on every response, so a caller can quote it.
+  app.addHook('onSend', async (request, reply) => {
+    reply.header(REQUEST_ID_HEADER, request.id);
+  });
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);

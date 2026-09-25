@@ -1,6 +1,8 @@
 import {
   apiErrorSchema,
   ERROR_CODES,
+  isRequestId,
+  REQUEST_ID_HEADER,
   VISITOR_IP_HEADER,
   WEB_TIER_KEY_HEADER,
   type ErrorCode,
@@ -54,12 +56,20 @@ export const API_REQUEST_TIMEOUT_MS = 8_000;
 export class ApiTimeoutError extends Error {
   readonly path: string;
   readonly timeoutMs: number;
+  /**
+   * The id this call went out under. Named `digest` because Next keeps an
+   * error's own `digest` rather than hashing one, so the error page's
+   * "Reference" is this id. The API logs the request under it only when it
+   * honoured it (the tier key was sent); the `[api-timeout]` line always names it.
+   */
+  readonly digest?: string;
 
-  constructor(path: string, timeoutMs: number) {
+  constructor(path: string, timeoutMs: number, requestId?: string) {
     super(`API request for ${path} timed out after ${timeoutMs}ms`);
     this.name = 'ApiTimeoutError';
     this.path = path;
     this.timeoutMs = timeoutMs;
+    if (requestId) this.digest = requestId;
   }
 }
 
@@ -68,13 +78,22 @@ export class ApiClientError extends Error {
   readonly statusCode: number;
   readonly code: ErrorCode;
   readonly details?: unknown;
+  /** The API's request id for this failure; `digest` for the reason `ApiTimeoutError` gives. */
+  readonly digest?: string;
 
-  constructor(statusCode: number, code: ErrorCode, message: string, details?: unknown) {
+  constructor(
+    statusCode: number,
+    code: ErrorCode,
+    message: string,
+    details?: unknown,
+    requestId?: string,
+  ) {
     super(message);
     this.name = 'ApiClientError';
     this.statusCode = statusCode;
     this.code = code;
     this.details = details;
+    if (requestId) this.digest = requestId;
   }
 }
 
@@ -109,7 +128,7 @@ export interface ApiRequestOptions<T> {
 }
 
 /** Reads the API's structured error body, tolerating a non-JSON failure page. */
-async function toClientError(response: Response): Promise<ApiClientError> {
+async function toClientError(response: Response, requestId?: string): Promise<ApiClientError> {
   let payload: unknown;
   try {
     payload = await response.json();
@@ -124,6 +143,7 @@ async function toClientError(response: Response): Promise<ApiClientError> {
       parsed.data.error,
       parsed.data.message,
       parsed.data.details,
+      requestId,
     );
   }
 
@@ -131,6 +151,8 @@ async function toClientError(response: Response): Promise<ApiClientError> {
     response.status,
     ERROR_CODES.INTERNAL_ERROR,
     `Request failed with status ${response.status}`,
+    undefined,
+    requestId,
   );
 }
 
@@ -235,6 +257,17 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions<T>)
   if (body !== undefined) {
     headers['content-type'] = 'application/json';
   }
+  /*
+    Server side only: a browser call would need the header in the API's CORS
+    allow-list. And never on a cached call: Next keys the Data Cache on the
+    request headers, so a per-call id would make every public read a miss. Its
+    failure carries the id the API answered with instead.
+  */
+  const sentRequestId =
+    typeof window === 'undefined' && revalidate === undefined ? crypto.randomUUID() : undefined;
+  if (sentRequestId) {
+    headers[REQUEST_ID_HEADER] = sentRequestId;
+  }
   const tierKey = typeof window === 'undefined' ? process.env.WEB_TIER_KEY : undefined;
   if (revalidate === undefined && tierKey) {
     Object.assign(headers, await visitorHeaders(tierKey));
@@ -298,9 +331,9 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions<T>)
         // (#215) because a search or filter value can carry what a customer
         // typed, and this line must not reopen that on the web side.
         console.error(
-          `[api-timeout] ${method} ${path.split('?')[0]} did not answer within ${API_REQUEST_TIMEOUT_MS}ms`,
+          `[api-timeout] ${method} ${path.split('?')[0]} did not answer within ${API_REQUEST_TIMEOUT_MS}ms [${sentRequestId}]`,
         );
-        throw new ApiTimeoutError(path, API_REQUEST_TIMEOUT_MS);
+        throw new ApiTimeoutError(path, API_REQUEST_TIMEOUT_MS, sentRequestId);
       }
 
       throw error;
@@ -328,6 +361,11 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions<T>)
     }),
   );
 
+  // What the API answered under is what its log line says, whoever chose it.
+  // Shape-checked: Next reads a `digest` to spot redirects and not-found, so a header some proxy wrote must not become one.
+  const answeredId = response.headers.get(REQUEST_ID_HEADER);
+  const requestId = answeredId !== null && isRequestId(answeredId) ? answeredId : sentRequestId;
+
   if (!response.ok) {
     /*
       The status is already known here, so a deadline that fires while the
@@ -336,7 +374,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions<T>)
       would render the error boundary instead of redirecting to sign-in.
     */
     try {
-      throw await toClientError(response);
+      throw await toClientError(response, requestId);
     } catch (error) {
       if (error instanceof ApiClientError) {
         return retryWithFreshToken(path, options, error);
@@ -346,6 +384,8 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions<T>)
         response.status,
         ERROR_CODES.INTERNAL_ERROR,
         `Request failed with status ${response.status}`,
+        undefined,
+        requestId,
       );
     }
   }
@@ -357,6 +397,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions<T>)
       ERROR_CODES.INTERNAL_ERROR,
       `API response for ${path} did not match its schema`,
       parsed.error.issues,
+      requestId,
     );
   }
 
