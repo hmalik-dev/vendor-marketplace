@@ -259,8 +259,12 @@ export function DataTable<T>({
                   border-box `h-11` rendered the pitch a pixel short. The body
                   step is 13px (`text-action`), not the 13.5px `text-base`
                   default.
+
+                  `min-h-11`, not `h-11`: a fixed height let a cell taller than
+                  44px (a failed payout's clamped reason, VEN-742) hang over the
+                  next row. A row whose cells fit still measures exactly 44px.
                 */
-                  'grid box-content h-11 items-center gap-3 border-b border-stone-150 px-4 text-action text-stone-700 grid-cols-(--admin-table-columns)',
+                  'grid box-content min-h-11 items-center gap-3 border-b border-stone-150 px-4 text-action text-stone-700 grid-cols-(--admin-table-columns)',
                   // Zebra on `stone-25`, the one surface between `stone-0` and `stone-50`.
                   index % 2 === 1 && 'bg-stone-25',
                 )}

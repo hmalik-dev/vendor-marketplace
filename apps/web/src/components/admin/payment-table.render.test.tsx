@@ -1,4 +1,5 @@
 import { cleanup, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { WireAdminPaymentRow, WireAdminPayoutRetryResult } from '@/lib/wire-schemas';
 
@@ -90,10 +91,127 @@ describe('the payments table', () => {
     render(<PaymentTable empty={EMPTY} rows={[FAILING]} />);
 
     expect(screen.getAllByText('Transfer failing').length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/3 attempts · Stripe refused the transfer/).length).toBeGreaterThan(
-      0,
-    );
+    expect(screen.getAllByText('3 attempts').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Stripe refused the transfer').length).toBeGreaterThan(0);
     expect(screen.queryByText('Awaiting release')).toBeNull();
+  });
+
+  /*
+   * The trigger exists only where the two-line clamp actually hides text. jsdom
+   * performs no layout, so the overflow is stated by stubbing the element's
+   * measured heights — the real clamp is checked in a browser.
+   */
+  describe('the reason clamp', () => {
+    const REASON =
+      'The vendor has not accepted the vendor agreement yet, so the transfer could not be made';
+    const LONG = row({ payoutAttempts: 208, payoutFailureReason: REASON, payoutFailing: true });
+
+    function measure(scrollHeight: number): void {
+      vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(scrollHeight);
+      vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(32);
+    }
+
+    afterEach(() => vi.restoreAllMocks());
+
+    it('splits the count from the reason, each on its own', () => {
+      measure(80);
+      render(<PaymentTable empty={EMPTY} rows={[LONG]} />);
+
+      expect(screen.getAllByText('208 attempts').length).toBeGreaterThan(0);
+      expect(screen.getAllByText(REASON).length).toBeGreaterThan(0);
+    });
+
+    it('offers a named trigger when the reason is cut, and opens the whole text in a dialog', async () => {
+      measure(80);
+      const user = userEvent.setup();
+      render(<PaymentTable empty={EMPTY} rows={[LONG]} />);
+
+      const trigger = screen.getAllByRole('button', { name: 'Read full reason' })[0]!;
+      await user.click(trigger);
+
+      const dialog = await screen.findByRole('dialog', { name: 'Full reason' });
+      expect(dialog.textContent).toBe(REASON);
+
+      await user.keyboard('{Escape}');
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(document.activeElement).toBe(trigger);
+    });
+
+    it('opens from the keyboard', async () => {
+      measure(80);
+      const user = userEvent.setup();
+      render(<PaymentTable empty={EMPTY} rows={[LONG]} />);
+
+      screen.getAllByRole('button', { name: 'Read full reason' })[0]!.focus();
+      await user.keyboard('{Enter}');
+
+      const dialog = await screen.findByRole('dialog', { name: 'Full reason' });
+      expect(dialog.textContent).toBe(REASON);
+    });
+
+    it('opens on Space too', async () => {
+      measure(80);
+      const user = userEvent.setup();
+      render(<PaymentTable empty={EMPTY} rows={[LONG]} />);
+
+      screen.getAllByRole('button', { name: 'Read full reason' })[0]!.focus();
+      await user.keyboard(' ');
+
+      expect(await screen.findByRole('dialog', { name: 'Full reason' })).toBeTruthy();
+    });
+
+    it('opens from a touch tap, which has no hover to lean on', async () => {
+      measure(80);
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+      render(<PaymentTable empty={EMPTY} rows={[LONG]} />);
+
+      const trigger = screen.getAllByRole('button', { name: 'Read full reason' })[0]!;
+      await user.pointer({ keys: '[TouchA]', target: trigger });
+
+      expect((await screen.findByRole('dialog', { name: 'Full reason' })).textContent).toBe(REASON);
+    });
+
+    it('peeks on a mouse hover without taking focus, and closes when the mouse leaves', async () => {
+      measure(80);
+      const user = userEvent.setup();
+      render(
+        <>
+          <input aria-label="Search" />
+          <PaymentTable empty={EMPTY} rows={[LONG]} />
+        </>,
+      );
+      const field = screen.getByRole('textbox', { name: 'Search' });
+      field.focus();
+
+      const trigger = screen.getAllByRole('button', { name: 'Read full reason' })[0]!;
+      await user.hover(trigger);
+      expect(await screen.findByRole('dialog', { name: 'Full reason' })).toBeTruthy();
+      expect(document.activeElement).toBe(field);
+
+      await user.unhover(trigger);
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(document.activeElement).toBe(field);
+    });
+
+    it('keeps a clicked panel open when the mouse leaves', async () => {
+      measure(80);
+      const user = userEvent.setup();
+      render(<PaymentTable empty={EMPTY} rows={[LONG]} />);
+
+      const trigger = screen.getAllByRole('button', { name: 'Read full reason' })[0]!;
+      await user.click(trigger);
+      await user.unhover(trigger);
+
+      expect(screen.getByRole('dialog', { name: 'Full reason' })).toBeTruthy();
+    });
+
+    it('draws no trigger for a reason that fits', () => {
+      measure(32);
+      render(<PaymentTable empty={EMPTY} rows={[FAILING]} />);
+
+      expect(screen.queryByRole('button', { name: 'Read full reason' })).toBeNull();
+      expect(screen.getAllByText('Stripe refused the transfer').length).toBeGreaterThan(0);
+    });
   });
 
   it('says stranded, never Awaiting release, for a payout owed to a banned or closed vendor', () => {
@@ -109,7 +227,7 @@ describe('the payments table', () => {
   it('says attempt in the singular for the first failure', () => {
     render(<PaymentTable empty={EMPTY} rows={[row({ ...FAILING, payoutAttempts: 1 })]} />);
 
-    expect(screen.getAllByText(/1 attempt ·/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('1 attempt').length).toBeGreaterThan(0);
   });
 
   /*

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { formatPrice } from '@vendor-marketplace/shared';
+import { ClampedReason } from '@/components/admin/clamped-reason';
 import { ConfirmAction } from '@/components/admin/confirm-action';
 import { DataTable } from '@/components/admin/data-table';
 import { Banner, type BannerStatus } from '@/components/ui/banner';
@@ -249,8 +250,8 @@ export function PaymentTable({
               row.payoutStranded ? (
                 <StatusPill tone="failed">{PAYOUT_STRANDED_LABEL}</StatusPill>
               ) : row.payoutFailing ? (
-                <span className="flex flex-col items-start gap-1">
-                  <span className="flex items-center gap-2">
+                <span className="flex flex-col items-start gap-1 py-1.5">
+                  <span className="flex flex-wrap items-center gap-2">
                     <StatusPill tone="failed">{PAYOUT_FAILING_LABEL}</StatusPill>
                     {canRetryPayout(row) ? (
                       <ConfirmAction
@@ -274,9 +275,11 @@ export function PaymentTable({
                     ) : null}
                   </span>
                   <span className="text-meta text-stone-600">
-                    {row.payoutAttempts} {row.payoutAttempts === 1 ? 'attempt' : 'attempts'}
-                    {row.payoutFailureReason ? ` · ${row.payoutFailureReason}` : ''}
+                    {`${row.payoutAttempts} ${row.payoutAttempts === 1 ? 'attempt' : 'attempts'}`}
                   </span>
+                  {row.payoutFailureReason ? (
+                    <ClampedReason>{row.payoutFailureReason}</ClampedReason>
+                  ) : null}
                 </span>
               ) : (
                 <StatusPill tone={PAYOUT_PRESENTATION[row.payoutStatus].tone}>
