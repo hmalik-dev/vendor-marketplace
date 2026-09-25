@@ -411,7 +411,8 @@ export default async function AdminVendorDetailPage({
 
           <p className="rounded-panel bg-steel-50 px-3.5 py-3 text-helper leading-[1.55] text-steel-600">
             <strong className="font-semibold">Every state change is logged.</strong> Actor, action
-            and this vendor&apos;s id land in Activity.
+            and this vendor&apos;s id land in{' '}
+            <span className="font-mono text-[11px]">/admin/activity</span> before the toast clears.
           </p>
         </>
       }

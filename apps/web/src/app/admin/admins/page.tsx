@@ -6,7 +6,7 @@ import { getAdminAccounts } from '@/lib/admin-data';
  * Admin access (VEN-506): who can sign in to the console, and the grant and
  * revoke controls that replace a database change once the platform is live.
  *
- * Deliberately unframed, like Settings: no frame draws it, so it follows the
+ * Frame `64 Admin access` draws it; like Settings, it follows the
  * console's surface rather than inventing a layout.
  */
 export default async function AdminAccountsPage(): Promise<React.ReactElement> {

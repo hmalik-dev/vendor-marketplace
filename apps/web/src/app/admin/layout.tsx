@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { pageTitle } from '@vendor-marketplace/shared';
 import { AdminHeader } from '@/components/admin/admin-header';
 import { AdminNav } from '@/components/admin/admin-nav';
-import { getAdminCases, getAdminReviews } from '@/lib/admin-data';
+import { getAdminCases, getAdminReviews, getAdminVendorApplications } from '@/lib/admin-data';
 import { requireRole } from '@/lib/current-user';
 
 export const metadata: Metadata = {
@@ -52,11 +52,13 @@ export default async function AdminLayout({
    * ordering above is what makes the bounce deterministic; these two are not in
    * that race, because both are `adminRead`s whose only redirect is `/`, so
    * whichever settles first sends a signed-in non-admin to the same place. #431
-   * added the second one and it costs no round trip.
+   * added the second one and it costs no round trip; VEN-773 the third, whose
+   * `waiting` counts every page, so one row of it is enough.
    */
-  const [reviews, cases] = await Promise.all([
+  const [reviews, cases, applications] = await Promise.all([
     getAdminReviews('?pageSize=1'),
     getAdminCases('?status=open&pageSize=1'),
+    getAdminVendorApplications('?pageSize=1'),
   ]);
 
   return (
@@ -68,7 +70,11 @@ export default async function AdminLayout({
       */}
       <AdminHeader email={user.email} name={user.firstName || user.email} />
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row lg:overflow-hidden">
-        <AdminNav reviewCount={reviews.total} caseCount={cases.total} />
+        <AdminNav
+          reviewCount={reviews.total}
+          caseCount={cases.total}
+          waitingApplications={applications.waiting}
+        />
         <div className="flex min-h-0 flex-1 flex-col lg:overflow-hidden">{children}</div>
       </div>
     </div>

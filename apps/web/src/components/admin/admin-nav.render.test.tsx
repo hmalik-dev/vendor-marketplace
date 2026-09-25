@@ -21,7 +21,7 @@ describe('the admin rail', () => {
     'marks Bookings current on %s',
     (path) => {
       pathname = path;
-      render(<AdminNav reviewCount={0} caseCount={0} />);
+      render(<AdminNav reviewCount={0} caseCount={0} waitingApplications={0} />);
 
       expect(current()).toEqual(['Bookings']);
     },
@@ -29,7 +29,7 @@ describe('the admin rail', () => {
 
   it('does not light Bookings on a route that merely starts with the word', () => {
     pathname = '/admin/requests-archive';
-    render(<AdminNav reviewCount={0} caseCount={0} />);
+    render(<AdminNav reviewCount={0} caseCount={0} waitingApplications={0} />);
 
     expect(current()).toEqual([]);
   });

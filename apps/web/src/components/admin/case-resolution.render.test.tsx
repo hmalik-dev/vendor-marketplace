@@ -150,6 +150,17 @@ describe('the two resolve positions', () => {
   });
 });
 
+/** Frame `43 Admin case detail`'s closing line (VEN-773). */
+describe('the irreversibility note', () => {
+  it('reads as frame 43 draws it', () => {
+    render(<CaseResolution supportCase={CASE} />);
+
+    expect(screen.getByText(/^Neither position/).textContent).toBe(
+      'Neither position can be reversed from this screen. A resolved case reopens only by a new case on the same booking.',
+    );
+  });
+});
+
 describe('the two confirms', () => {
   /**
    * The confirm **restates**, it does not summarise — the difference between a
