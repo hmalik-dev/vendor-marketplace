@@ -19,7 +19,7 @@ import {
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { legalDocument, legalMarkdownSource } from './legal-content';
+import { legalDocument, legalMarkdownSource, vendorAgreementDocument } from './legal-content';
 import { legalDocumentText, parseLegalMarkdown } from './legal-markdown';
 
 describe('legal content', () => {
@@ -59,7 +59,9 @@ describe('legal content', () => {
    */
   it('keeps the staff-message-access clause on the pre-launch review register', () => {
     const privacy = legalMarkdownSource('privacy');
-    const claimsStaffCanRead = /the people who operate the platform can read it/.test(privacy);
+    const claimsStaffCanRead = /when a message thread is reported, an admin can read it/.test(
+      privacy,
+    );
 
     expect(claimsStaffCanRead).toBe(true);
 
@@ -492,5 +494,44 @@ describe('the facts in the copy', () => {
     expect(privacy).toContain('Questions? Contact support.');
     expect(privacy).not.toContain('which reaches a person');
     expect(privacy).toContain('Requests go through Contact support.');
+  });
+});
+
+describe('the legal pages read short (VEN-740)', () => {
+  const TAILS = [
+    'rather than',
+    'which means',
+    'so that',
+    'worth naming',
+    'a claw-back',
+    'fixed window on the calendar',
+    "Stripe's own pace",
+    'That is the whole notice',
+    'a closed report stops being a key',
+    'those are their details, not yours',
+    'the date is a commitment to a customer',
+    'the people who operate the platform',
+  ];
+
+  it.each([
+    ['terms', legalDocumentText(legalDocument('terms'))],
+    ['privacy', legalDocumentText(legalDocument('privacy'))],
+    ['cookies', legalDocumentText(legalDocument('cookies'))],
+    ['vendor agreement', legalDocumentText(vendorAgreementDocument())],
+  ])('keeps no justifying tail in the %s', (_name, body) => {
+    expect(TAILS.filter((tail) => body.includes(tail))).toEqual([]);
+  });
+
+  it('keeps the facts the trimmed sentences carried', () => {
+    const terms = legalDocumentText(legalDocument('terms'));
+    const agreement = legalDocumentText(vendorAgreementDocument());
+
+    expect(terms).toContain('the vendor cannot release it early');
+    expect(terms).toContain(
+      'We will tell you about any change that affects money or cancellation.',
+    );
+    expect(agreement).toContain('Neither you nor the customer can bring that forward.');
+    expect(agreement).toContain('Bookings you have already accepted still stand.');
+    expect(agreement).toContain('There is no monthly fee and no listing fee.');
   });
 });

@@ -1,10 +1,10 @@
 ---
 title: Cookie notice
 lastUpdated: 2026-09-24
-note: The clause on future changes below is an interim, AI-drafted note pending the account holder's own review.
+note: The clause on future changes below is an interim, AI-drafted note pending the account holder's review.
 ---
 
-{{brand}} uses two cookies. Both keep you signed in. That is the whole notice.
+{{brand}} uses two cookies. Both keep you signed in.
 
 | Cookie                             | Set by    | Purpose                                                                                                                                      |
 | ---------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
