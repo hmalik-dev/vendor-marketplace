@@ -326,3 +326,14 @@ building furniture to match them.
 No frame draws this action. Each booking card for a paid, `confirmed`, still-future booking with no payout released carries a ghost `Cancel booking` button under `Mark complete`. It opens a **second step in place, not a dialog**, the same pattern as the customer's cancel on the accepted-request card: a required, labelled `Reason for the customer` textarea, the sentence `The customer is refunded {total} in full and you are not paid for this booking. This cannot be undone.`, then `Yes, cancel and refund {total}` and `Keep the booking`. A refusal from the API is shown under the control in `role="alert"`, and a success turns the card into the `Cancelled` list on refresh.
 
 The customer's side reads `The vendor cancelled this booking on {date}, and you were refunded in full.` from the same settlement narrative as every other cancellation. Nothing here is a frame, so there is nothing for parity to compare; the strings above are the record.
+
+## Resync 2026-09-25
+
+The frames were brought into line with the shipped app. Where this section and older text above disagree, this section wins.
+
+- The sidebar has 7 rows: Dashboard · Bookings · Messages · Availability · Packages · Edit profile · Payments. There is no Requests row; the request badge moves to Bookings.
+- "Median reply time 2h…" is removed.
+- The checklist reads "Publish checklist · N of 6" on every frame. The six items: business name, city and state, category, bio, reply time, a published package.
+- The unpublished pane's cause line: "Customers cannot find you until your profile is published."
+- The gold publish-blocker banner lists what is actually blocking (#371).
+- **Unreconciled:** `PUBLISH_BLOCKERS` in the repo now holds 8 keys (it adds `personalName` and `agreement`), so the app would print "N of 8".

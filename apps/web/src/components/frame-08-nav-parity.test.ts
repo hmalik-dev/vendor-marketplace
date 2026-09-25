@@ -78,7 +78,6 @@ describe('frame 08 — the vendor rail', () => {
   it('reads the frame at all', () => {
     expect(drawn).toEqual([
       'Dashboard',
-      'Requests',
       'Bookings',
       'Messages',
       'Availability',
@@ -101,13 +100,15 @@ describe('frame 08 — the vendor rail', () => {
   });
 
   /*
-   * `Requests` is the one frame row that is not built, and it is a ruling
-   * rather than an omission: there is no `/vendor/requests` route and there
-   * must not be one, because the `Dashboard` row above it *is* the requests
-   * surface. Recorded in `16-vendor-dashboard.md`.
+   * Every frame row is built. The frame used to draw a `Requests` row the app
+   * rules out — there is no `/vendor/requests` route and there must not be one,
+   * because `Dashboard` *is* the requests surface — and the 2026-09-25 resync
+   * redrew the rail without it. Recorded in `16-vendor-dashboard.md`.
    */
-  it('leaves out only Requests, which has nowhere to go', () => {
-    expect(drawn.filter((label) => !built.includes(label))).toEqual(['Requests']);
+  it('builds every row the frame draws, Requests being gone from both', () => {
+    expect(drawn).not.toContain('Requests');
+    expect(built).not.toContain('Requests');
+    expect(drawn.filter((label) => !built.includes(label))).toEqual([]);
   });
 
   /*

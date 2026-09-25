@@ -38,10 +38,10 @@ const frameHtml = readFileSync(
   'utf8',
 );
 
-/** The frame's sort chip: the `Top rated ▾` span in the Refine bar. */
+/** The frame's sort chip: the `Most relevant` span in the Refine bar. */
 const frameSortChip = (() => {
   const frame = frameHtml.slice(frameHtml.indexOf('data-screen-label="02 Search"'));
-  const chip = frame.indexOf('Top rated');
+  const chip = frame.indexOf('Most relevant');
   const open = frame.lastIndexOf('<span', chip);
 
   return frame.slice(open, chip);
@@ -662,7 +662,8 @@ describe('the refine chips', () => {
   it('reads five chips out of the frame, and Style is not one of them', () => {
     expect(frameChips).toHaveLength(5);
     expect(frameChips).not.toContain('Style');
-    expect(frameChips.slice(2)).toEqual(['Languages ▾', 'Cultural ▾', 'Dietary ▾']);
+    // No caret on any of them since the 2026-09-25 resync, which is D25.
+    expect(frameChips.slice(2)).toEqual(['Languages', 'Cultural', 'Dietary']);
   });
 
   /*
