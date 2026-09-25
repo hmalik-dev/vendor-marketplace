@@ -31,8 +31,8 @@ export function prePaymentRefundClause(
   }
 
   if (now.getTime() < closes.getTime()) {
-    return `the full-refund window ended ${format(fullEnds)}, so cancelling before ${format(closes)} refunds part of the total`;
+    return `the full-refund window ended ${format(fullEnds)}, so canceling before ${format(closes)} refunds part of the total`;
   }
 
-  return `online cancellation closed ${format(closes)}, so once paid it can't be cancelled here`;
+  return `online cancellation closed ${format(closes)}, so once paid it can't be canceled here`;
 }

@@ -174,7 +174,7 @@ describe('CheckoutScreen', () => {
 
     await user.click(screen.getByRole('button', { name: /^Pay/ }));
 
-    expect(await screen.findByText('We could not reach Stripe')).toBeDefined();
+    expect(await screen.findByText("We couldn't reach Stripe")).toBeDefined();
     expect(screen.getByRole('button', { name: /^Pay/ })).toHaveProperty('disabled', false);
     // Not a decline: the client cannot say the card was refused or uncharged.
     expect(screen.queryByText(/declined/)).toBeNull();

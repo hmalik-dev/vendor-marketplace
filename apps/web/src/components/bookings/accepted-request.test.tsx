@@ -152,7 +152,7 @@ describe('AcceptedRequest', () => {
 
     expect(
       screen.getByText(
-        /^Cancel until Jun 12, 12:00\sAM UTC and you're refunded in full — \$1,450\. After that, until Jun 13, 12:00\sAM UTC, cancelling refunds \$725\.$/,
+        /^Cancel until Jun 12, 12:00\sAM UTC and you're refunded in full — \$1,450\. After that, until Jun 13, 12:00\sAM UTC, canceling refunds \$725\.$/,
       ),
     ).toBeDefined();
   });
@@ -204,7 +204,7 @@ describe('AcceptedRequest', () => {
 
     expect(
       screen.getByText(
-        /^Cancelling now refunds \$725 of \$1,450\. Online cancellation closes Jan 2, 12:00\sAM UTC\.$/,
+        /^Canceling now refunds \$725 of \$1,450\. Online cancellation closes Jan 2, 12:00\sAM UTC\.$/,
       ),
     ).toBeDefined();
   });
@@ -227,7 +227,7 @@ describe('AcceptedRequest', () => {
       />,
     );
 
-    expect(screen.getByText(/^Cancelling now refunds \$362\.50 of \$1,450\./)).toBeDefined();
+    expect(screen.getByText(/^Canceling now refunds \$362\.50 of \$1,450\./)).toBeDefined();
   });
 
   /*
@@ -247,7 +247,7 @@ describe('AcceptedRequest', () => {
 
     expect(screen.queryByRole('button', { name: 'Cancel booking' })).toBeNull();
     expect(screen.queryByText(/refunded in full|refunds \$/)).toBeNull();
-    expect(screen.getByText(/can no longer be cancelled here/)).toBeDefined();
+    expect(screen.getByText(/can no longer be canceled here/)).toBeDefined();
     expect(screen.getByRole('link', { name: 'View confirmation' })).toBeDefined();
   });
 

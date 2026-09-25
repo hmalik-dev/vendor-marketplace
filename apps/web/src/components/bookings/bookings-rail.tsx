@@ -16,7 +16,7 @@ import { NeedsYouDecline } from './needs-you-decline';
  * we would have to invent.
  */
 const MECHANISM_PROMISES = [
-  { title: 'Real availability.', body: 'Calendars come from the vendor, not a guess.' },
+  { title: 'Real availability.', body: 'Calendars come from the vendor.' },
   { title: 'Payment is held.', body: 'Your money reaches the vendor after the event.' },
   /*
     Both halves of the fee story come from one place — `PLATFORM_FEE_COPY` —
@@ -211,8 +211,7 @@ export function BookingsRail({
               seeds do.
             */
             <p className="text-sm leading-normal text-stone-700">
-              A thread opens the moment you send a booking request, so the whole negotiation stays
-              attached to the booking.
+              A thread opens when you send a booking request.
             </p>
           )}
         </>

@@ -66,8 +66,8 @@ function copyFor(
   if (reason === 'closed') {
     return {
       eyebrow: 'Checkout closed',
-      heading: "This booking isn't open any more",
-      body: "It was cancelled, declined or it expired, so there's nothing left to pay for. Your date isn't being held.",
+      heading: "This booking isn't open anymore",
+      body: "It was canceled, declined or it expired. Your date isn't held.",
       /*
        * Not "No payment was taken." — #400 made this screen reachable by a
        * customer who *did* pay. Cancelling a confirmed booking now settles the
@@ -108,7 +108,7 @@ function copyFor(
     return {
       eyebrow: 'Over the beta limit',
       heading: 'This booking is over our beta limit',
-      body: "During the beta we can only take payment up to a set price, and this booking is above it. Contact support and we'll sort it out with you.",
+      body: "During the beta, payments are capped at a set price, and this booking is over it. Contact support and we'll sort it out.",
       money: 'No payment was taken and your booking is still accepted.',
       action: { label: 'Contact support', href: '/support' },
       secondary: { label: 'Back to this booking', href: booking },
@@ -125,7 +125,7 @@ function copyFor(
     return {
       eyebrow: 'Payment unavailable',
       heading: `${vendor} can't take payment right now`,
-      body: `${vendor} needs to finish a step on their side before they can accept payment. This is temporary and nothing is wrong with your account. Try again a little later.`,
+      body: `${vendor} needs to finish setting up payments. Try again later.`,
       money: 'No payment was taken and your booking is still accepted.',
       action: { label: 'Try this payment again', href: `${booking}/checkout` },
       secondary: { label: 'Back to this booking', href: booking },
@@ -141,7 +141,7 @@ function copyFor(
     return {
       eyebrow: 'Payment unavailable',
       heading: `${vendor} isn't taking bookings right now`,
-      body: `${vendor} is paused at the moment, so this can't be paid yet. This is temporary and nothing is wrong with your account. Try again a little later.${deadline ? ` Your booking ${deadline}.` : ''}`,
+      body: `${vendor} is paused, so this can't be paid yet. Try again later.${deadline ? ` Your booking ${deadline}.` : ''}`,
       money: 'No payment was taken and your booking is still accepted.',
       action: { label: 'Try this payment again', href: `${booking}/checkout` },
       secondary: { label: 'Back to this booking', href: booking },
@@ -156,7 +156,7 @@ function copyFor(
     return {
       eyebrow: 'Payment unavailable',
       heading: `${vendor} is no longer taking bookings`,
-      body: `${vendor} can't accept this booking any more, so it can't be paid for.`,
+      body: `${vendor} can't accept this booking anymore, so it can't be paid.`,
       money: 'Nothing can be paid on this booking.',
       action: { label: 'Back to this booking', href: booking },
       secondary: { label: 'Browse vendors', href: '/search' },
@@ -167,7 +167,7 @@ function copyFor(
     return {
       eyebrow: 'Not payable yet',
       heading: "This request hasn't been accepted yet",
-      body: `${vendor} hasn't accepted your request, so there's nothing to pay for yet. You'll hear from us the moment they answer.`,
+      body: `${vendor} hasn't accepted your request yet. We'll notify you when they answer.`,
       money: 'No payment was taken, and your request is still open with them.',
       action: { label: 'Back to this booking', href: booking },
       secondary: { label: 'Browse vendors', href: '/search' },
@@ -183,7 +183,7 @@ function copyFor(
      * been entered at this point, and 400 here is our own configuration or the
      * amount, never the customer's bank.
      */
-    body: "Something on our side stopped the checkout from opening. It isn't your card — nothing was charged and nothing was entered.",
+    body: 'Something on our side stopped checkout from opening.',
     /*
      * Not "…and your date is still held." — this screen cannot know that.
      * `unavailableScreen` short-circuits to `failed` *without* reading the

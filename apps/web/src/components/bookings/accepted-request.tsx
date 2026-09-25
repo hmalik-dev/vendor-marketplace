@@ -42,7 +42,7 @@ function pulledVendorMessage(request: WireBookingRequest): string | null {
   const deadline = expiryCountdown(request.expiresAt, new Date());
   const deadlineSentence = deadline && deadline !== 'expired' ? ` Your booking ${deadline}.` : '';
 
-  return `${businessName} isn't taking bookings right now. This is temporary — check back a little later.${deadlineSentence}`;
+  return `${businessName} isn't taking bookings right now. Check back later.${deadlineSentence}`;
 }
 
 /** The refund line for a paid, cancellable booking, given today's quote and boundaries. */
@@ -54,13 +54,13 @@ function cancelWindowMessage(
   at: (iso: string) => string,
 ): string {
   if (!quote?.isFullRefund) {
-    return `Cancelling now refunds ${formatPrice(quote?.refundCents ?? 0)} of ${formatPrice(totalAmountCents)}. Online cancellation closes ${at(boundaries.onlineCancellationClosesAt)}.`;
+    return `Canceling now refunds ${formatPrice(quote?.refundCents ?? 0)} of ${formatPrice(totalAmountCents)}. Online cancellation closes ${at(boundaries.onlineCancellationClosesAt)}.`;
   }
 
   const lateNote =
     lateRefundCents === null
       ? ''
-      : ` After that, until ${at(boundaries.onlineCancellationClosesAt)}, cancelling refunds ${formatPrice(lateRefundCents)}.`;
+      : ` After that, until ${at(boundaries.onlineCancellationClosesAt)}, canceling refunds ${formatPrice(lateRefundCents)}.`;
 
   return `Cancel until ${at(boundaries.fullRefundEndsAt)} and you're refunded in full — ${formatPrice(quote.refundCents)}.${lateNote}`;
 }
@@ -197,7 +197,7 @@ export function AcceptedRequest({ request, booking }: AcceptedRequestProps): Rea
 
         {booking && !cancellable ? (
           <p className="text-[12.5px] leading-[1.55] text-stone-600">
-            This booking can no longer be cancelled here. If something went wrong, report a problem
+            This booking can no longer be canceled here. If something went wrong, report a problem
             below.
           </p>
         ) : booking && boundaries ? (
@@ -248,7 +248,7 @@ export function AcceptedRequest({ request, booking }: AcceptedRequestProps): Rea
                     onClick={() => void cancel()}
                   >
                     {busy
-                      ? 'Cancelling…'
+                      ? 'Canceling…'
                       : `Yes, cancel and refund ${formatPrice(quote?.refundCents ?? 0)}`}
                   </Button>
                   <Button

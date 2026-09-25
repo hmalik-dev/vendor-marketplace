@@ -75,7 +75,7 @@ describe('CheckoutPage', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
       'E2E Test Studio is no longer taking bookings',
     );
-    expect(screen.queryByText(/isn't open any more/)).toBeNull();
+    expect(screen.queryByText(/isn't open anymore/)).toBeNull();
     expect(screen.queryByRole('link', { name: 'Try this payment again' })).toBeNull();
   });
 

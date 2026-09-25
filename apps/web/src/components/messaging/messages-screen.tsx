@@ -769,7 +769,7 @@ export function MessagesScreen({
       return (
         <EmptyState
           headline="We could not load your messages"
-          description="The connection did not answer. Your conversations are safe — try again in a moment."
+          description="The connection didn't answer. Try again in a moment."
           action={
             <Button type="button" variant="secondary" onClick={() => router.refresh()}>
               Try again
@@ -784,7 +784,7 @@ export function MessagesScreen({
       return (
         <EmptyState
           headline="We could not find that conversation"
-          description="The link may be out of date, or the thread may belong to another account. Your other conversations are all still here."
+          description="The link may be out of date, or the thread may belong to another account."
           action={
             <Button type="button" variant="secondary" onClick={() => select(null)}>
               Back to messages
@@ -799,13 +799,11 @@ export function MessagesScreen({
       conversations.length === 0
         ? {
             headline: 'No conversations yet',
-            description:
-              'A thread opens the moment you send a booking request, so the whole negotiation stays attached to the booking.',
+            description: 'A thread opens when you send a booking request.',
           }
         : {
             headline: 'Choose a conversation',
-            description:
-              'Open a thread on the left to read it and reply. Every one carries the booking it is about.',
+            description: 'Open a thread on the left to read and reply.',
           };
 
     return <EmptyState {...words} className="flex-1" />;
@@ -1068,7 +1066,7 @@ export function MessagesScreen({
               */}
               {messages.length === 0 && !loadingThread && threadError === null ? (
                 <p className="m-auto max-w-90 text-center text-base leading-prose text-stone-600">
-                  Start the conversation — say what you need and when, and the reply lands here.
+                  Say what you need and when. Replies show up here.
                 </p>
               ) : null}
 
