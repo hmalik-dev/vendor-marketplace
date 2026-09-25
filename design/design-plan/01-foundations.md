@@ -540,3 +540,15 @@ Guard the binding with a token test so a future refactor can't silently unpick i
 | Service radius | `service_radius_km`    | **miles** (US audience)                                      | `kmToMiles` / `milesToKm` |
 | Event date     | Postgres `DATE` string | locale date, never round-tripped through a local-time `Date` | date helpers              |
 | Seeded lists   | `displayOrder` column  | that order always — never alphabetical                       | —                         |
+
+## Resync 2026-09-25
+
+The frames were brought into line with the shipped app. Where this section and older text above disagree, this section wins.
+
+- New tokens:
+  - `--color-stone-25: #FDFAF4`: admin table zebra.
+  - `--color-stone-250: #ECE6DC`: image ground, and the plain 3:2 block for a published vendor with no cover.
+  - `--color-clay-150: #EADCCB`: avatar monogram fallback.
+  - `--color-sage-175: #C4D6A8` and `--color-gold-150: #F9E2BD`: the contrast-tuned sign-up panel (frame 12).
+- Avatar monograms below 16px render Instrument Sans, not the serif (D24).
+- Focus rings come in three kinds: field, segment and unbordered. Unbordered = `ring-2 ring-clay-400/40 ring-offset-2`, per the resync brief. **Unreconciled:** the repo rule (VEN-541, #366) says full-opacity `ring-clay-400`, because `/40` measured 1.72:1 on stone-50. The frames do not draw this ring; decide before building.
