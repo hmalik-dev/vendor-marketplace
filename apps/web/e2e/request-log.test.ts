@@ -70,7 +70,10 @@ describe('recordExchanges', () => {
     const { page, emit } = fakePage();
     const log = recordExchanges(page, () => 0);
 
-    emit('request', fakeRequest('GET', 'http://localhost:3000/_next/static/app.js', 'script'));
+    const script = fakeRequest('GET', 'http://localhost:3000/_next/static/app.js', 'script');
+    emit('request', script);
+    emit('response', { status: () => 200, request: () => script, url: () => script.url() });
+    emit('requestfailed', script);
     emit('framenavigated', { url: () => 'https://js.stripe.com/v3/elements' });
     emit(
       'request',
@@ -78,5 +81,19 @@ describe('recordExchanges', () => {
     );
 
     expect(log).toEqual(['+0ms → GET https://api.stripe.com/v1/payment_intents/pi_1']);
+  });
+
+  it('tells a prefetch apart from a refresh, which both send RSC: 1', () => {
+    const { page, emit } = fakePage();
+    const log = recordExchanges(page, () => 0);
+    const url = 'http://localhost:3000/bookings/7?_rsc=abc';
+
+    emit('request', fakeRequest('GET', url, 'fetch', { rsc: '1', 'next-router-prefetch': '1' }));
+    emit('request', fakeRequest('GET', url, 'fetch', { rsc: '1' }));
+
+    expect(log).toEqual([
+      '+0ms → GET http://localhost:3000/bookings/7 (RSC prefetch)',
+      '+0ms → GET http://localhost:3000/bookings/7 (RSC)',
+    ]);
   });
 });

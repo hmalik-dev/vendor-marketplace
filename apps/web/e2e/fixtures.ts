@@ -5,7 +5,7 @@ import { promisify } from 'node:util';
 
 import { test as base, expect, type Browser, type Page, type TestInfo } from '@playwright/test';
 
-import { recordExchanges } from './request-log.js';
+import { recordExchanges, withoutQuery } from './request-log.js';
 
 /**
  * Walk up to the workspace root rather than counting `../`.
@@ -179,7 +179,7 @@ async function pageForRole(browser: Browser, role: Role): Promise<Page> {
   rateLimited.set(page, []);
   page.on('response', (response) => {
     if (response.status() === 429) {
-      rateLimited.get(page)?.push(response.url());
+      rateLimited.get(page)?.push(withoutQuery(response.url()));
     }
   });
   exchanges.set(page, recordExchanges(page));

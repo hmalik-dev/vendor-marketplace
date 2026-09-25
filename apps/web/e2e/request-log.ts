@@ -11,6 +11,19 @@ export function withoutQuery(url: string): string {
 }
 
 /**
+ * Next sends `RSC: 1` on a prefetch and on a `router.refresh()` alike; only the
+ * prefetch also sends `Next-Router-Prefetch`, and the refresh is what a stalled
+ * page needs told apart.
+ */
+function rscKind(headers: Record<string, string>): string {
+  if (headers['rsc'] !== '1') {
+    return '';
+  }
+
+  return headers['next-router-prefetch'] === '1' ? ' (RSC prefetch)' : ' (RSC)';
+}
+
+/**
  * Records what a page asks the web and the API for, in order, for a failure to
  * attach.
  *
@@ -33,8 +46,7 @@ export function recordExchanges(page: Page, now: () => number = Date.now): strin
 
   page.on('request', (request) => {
     if (LOGGED_RESOURCES.has(request.resourceType())) {
-      const rsc = request.headers()['rsc'] === '1' ? ' (RSC)' : '';
-      note(`→ ${request.method()} ${withoutQuery(request.url())}${rsc}`);
+      note(`→ ${request.method()} ${withoutQuery(request.url())}${rscKind(request.headers())}`);
     }
   });
   page.on('response', (response) => {
