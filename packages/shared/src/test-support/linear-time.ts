@@ -1,74 +1,35 @@
 import { expect } from 'vitest';
 
-const SMALL = 8 * 1024;
-const GROWTH = 8;
-const RUNS = 7;
-/** Each timed sample repeats the call until it lasts about this long, so timer and scheduler noise is small against it. */
-const SAMPLE_MS = 20;
-const MAX_REPEATS = 2_000;
 /**
- * Linear growth reads about 8 and quadratic about 64. Cache and GC pressure
- * cost a linear run 2 to 3 times more on the larger input on a CI runner (a
- * 4x step read 9 there), so the limit sits between the two, at 24.
+ * Long enough that quadratic work, about n²/2 steps, takes seconds: the
+ * `/\/+$/` trim took 3.6 s and the unanchored JWT scrub 1.4 s at half this.
  */
-const MAX_RATIO = 24;
-/** A backstop only: a slow runner passes the ratio and the ceiling, a hang fails both. */
-const CEILING_MS = 2_000;
-
-function timeOnce(run: () => unknown): number {
-  const start = performance.now();
-  run();
-  return performance.now() - start;
-}
-
-/** The fastest of `RUNS` samples of `repeats` calls: noise only ever adds time, so the minimum is the least disturbed. */
-function fastestMs(run: () => unknown, repeats: number): number {
-  let fastest = Infinity;
-
-  for (let sample = 0; sample < RUNS; sample += 1) {
-    fastest = Math.min(
-      fastest,
-      timeOnce(() => {
-        for (let call = 0; call < repeats; call += 1) {
-          run();
-        }
-      }),
-    );
-  }
-
-  return fastest;
-}
+const HOSTILE_SIZE = 200_000;
+/**
+ * The slowest linear caller, the full error scrubber, takes about 27 ms on
+ * `HOSTILE_SIZE` characters and the trims well under one, so this budget is a
+ * margin of over 35 times a loaded runner cannot eat, while quadratic work
+ * misses it several times over. Tightening it narrows that margin: a ratio of
+ * two timings was tighter and flaked a release at 24.0013 against 24 (VEN-758).
+ */
+const BUDGET_MS = 1_000;
 
 /**
- * Asserts `run` takes linear time in its input. It is timed on `SMALL` and on
- * `GROWTH` times that, and the two are compared, so a slow or busy machine slows
- * both sides alike; a fixed millisecond budget would not survive a shared CI
- * runner. Both sides repeat the call the same number of times, chosen so the
- * small side lasts about `SAMPLE_MS`, because a sub-millisecond reading is
- * mostly noise. `input` builds a hostile string of the size it is given.
+ * Asserts `run` is not superlinear in its input: one call on a hostile string
+ * of `HOSTILE_SIZE` characters, built by `input`, finishes inside `BUDGET_MS`.
  */
-export function expectLinearTime(input: (size: number) => string, run: (value: string) => unknown) {
-  const small = input(SMALL);
-  const large = input(SMALL * GROWTH);
+export function expectLinearTime(
+  input: (size: number) => string,
+  run: (value: string) => unknown,
+): void {
+  const hostile = input(HOSTILE_SIZE);
+  const started = performance.now();
 
-  run(small);
-  run(large);
+  run(hostile);
 
-  const singleMs = Math.max(
-    timeOnce(() => run(small)),
-    0.001,
+  const elapsedMs = performance.now() - started;
+
+  expect(elapsedMs, `${elapsedMs.toFixed(1)} ms on ${hostile.length} characters`).toBeLessThan(
+    BUDGET_MS,
   );
-  const repeats = Math.min(MAX_REPEATS, Math.max(1, Math.ceil(SAMPLE_MS / singleMs)));
-  const smallMs = fastestMs(() => run(small), repeats);
-  const largeMs = fastestMs(() => run(large), repeats);
-  const ratio = largeMs / smallMs;
-
-  expect(
-    largeMs / repeats,
-    `${(largeMs / repeats).toFixed(1)} ms per call on the large input`,
-  ).toBeLessThan(CEILING_MS);
-  expect(
-    ratio,
-    `${smallMs.toFixed(2)} ms -> ${largeMs.toFixed(2)} ms over ${repeats} calls`,
-  ).toBeLessThan(MAX_RATIO);
 }
