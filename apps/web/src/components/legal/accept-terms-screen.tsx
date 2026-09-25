@@ -12,6 +12,7 @@ import {
 } from '@vendor-marketplace/shared';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
+import { SignOutButton } from '@/components/auth/sign-out-button';
 import { FirstRunShell } from '@/components/first-run-shell';
 import { Banner } from '@/components/ui/banner';
 import { Button } from '@/components/ui/button';
@@ -66,6 +67,26 @@ const ROLE_LABELS: Record<UserRole, string> = {
 
 /** Frame `40`'s primary: full width, 13px vertical padding, 10px radius. */
 const CONTINUE_CLASS = 'w-full rounded-[10px] py-[13px]';
+
+/**
+ * The welcome's way out (VEN-750). `FirstRunShell` hides the site header, and
+ * with it the only other sign-out, so a person signed in with the wrong account
+ * or unwilling to accept would otherwise be held here by every gated route. The
+ * name step's link, class for class (frame 41).
+ */
+function WelcomeSignOut({ disabled = false }: { disabled?: boolean }): React.ReactElement {
+  return (
+    <SignOutButton>
+      <button
+        type="button"
+        disabled={disabled}
+        className="mx-auto block text-action font-semibold text-clay-500 hover:text-clay-600 hover:underline disabled:opacity-50"
+      >
+        Sign out
+      </button>
+    </SignOutButton>
+  );
+}
 
 export function AcceptTermsScreen({
   status,
@@ -201,9 +222,12 @@ export function AcceptTermsScreen({
         sub={<>You&apos;re joining as {ROLE_LABELS[landedAs]}.</>}
         subTestId="landed-role"
       >
-        <Button variant="primary" className={CONTINUE_CLASS} onClick={continueOn}>
-          Continue
-        </Button>
+        <div className="flex flex-col gap-3.5">
+          <Button variant="primary" className={CONTINUE_CLASS} onClick={continueOn}>
+            Continue
+          </Button>
+          <WelcomeSignOut />
+        </div>
       </FirstRunShell>
     );
   }
@@ -263,6 +287,7 @@ export function AcceptTermsScreen({
             </Button>
             <ContinueNotice className="text-sm leading-[1.6] text-stone-600" />
           </form>
+          <WelcomeSignOut disabled={saving} />
         </div>
       </FirstRunShell>
     );
