@@ -71,12 +71,13 @@ describe('the empty pane says what the frame says', () => {
   });
 
   /*
-   * The 1440 frame's extra sentence is a platform statistic on a screen with
-   * none to read. `.claude/rules/web-design-parity.md` forbids it outright, so
-   * the deviation is deliberate and asserted rather than left to be re-found.
+   * The 1440 frame used to add a platform statistic on a screen with none to
+   * read, which `.claude/rules/web-design-parity.md` forbids; the 2026-09-25
+   * resync took it out of the frame too. Neither may bring it back.
    */
-  it('does not ship the 1440 frame’s invented market claim', () => {
-    expect(frame('20 Vendor dashboard empty')).toContain('within a couple of weeks');
+  it('ships no invented market claim, and neither does the 1440 frame', () => {
+    expect(frame('20 Vendor dashboard empty')).toContain('Nothing has come in');
+    expect(frame('20 Vendor dashboard empty')).not.toContain('within a couple of weeks');
     expect(page).not.toContain('within a couple of weeks');
   });
 

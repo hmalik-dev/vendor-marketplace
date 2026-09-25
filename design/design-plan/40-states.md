@@ -190,3 +190,12 @@ _Inline banners_.
 
 One thing did move toward the frames: the component computed a **14px** radius,
 which is neither frame's number. It is now 12, which is frame `26`'s.
+
+## Resync 2026-09-25
+
+The frames were brought into line with the shipped app. Where this section and older text above disagree, this section wins.
+
+- The labelled hatch is an upload-zone primitive only. A published vendor with no cover gets a plain stone-250 block at 3:2 (see frame 24).
+- Frame 16's money line is the shared bordered Banner: sage-50 / sage-300, radius 12, weight 400.
+- Frame 16's "Browse vendors" goes to /search.
+- Rate-limit copy: "This isn't going through right now."

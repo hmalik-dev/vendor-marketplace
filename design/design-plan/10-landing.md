@@ -211,3 +211,13 @@ The hero's photo cluster and the trust signals carry the proof instead. See
 - The floating vendor chip, once there are real vendors with real ratings to feature
 
 All gated on the condition in `98-post-mvp.md`.
+
+## Resync 2026-09-25
+
+The frames were brought into line with the shipped app. Where this section and older text above disagree, this section wins.
+
+- Frame 01: the hero seeds nothing. The fields read "Any vendor type" · "Anywhere" · "Add a date", all stone-600.
+- Vendor type is a plain select with no typing. It lists every category on open and keeps its ▾ (D43).
+- City is a typeahead over every US city. It opens only after typing (D32).
+- The date field uses Orla's own picker, never a native control.
+- No "Or jump straight to" pill row under the hero search, at any width (VEN-709). The Browse by category cards directly below already do that job.

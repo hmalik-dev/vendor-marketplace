@@ -371,8 +371,20 @@ describe('type scale line-height parity with the design frames', () => {
     expect(THEME_LINE_HEIGHTS.get(step)).toBe('normal');
   });
 
+  /*
+   * Read off the landing frames only. The 2026-09-25 resync merged the legal
+   * frames into the screens file, and `31 Privacy Policy` titles its page at
+   * 40px/1.06 — a document heading, not the hero, so it says nothing about the
+   * hero step.
+   */
   it.each(HERO_STEPS)('--text-%s--line-height is the ratio the frame draws at %spx', (step, px) => {
-    expect([...(INLINE_RATIOS_BY_SIZE.get(px) ?? [])]).toEqual([THEME_LINE_HEIGHTS.get(step)]);
+    const onLanding = new Set(
+      INLINE_TYPE.filter((type) => type.fontSize === px && /Landing/.test(type.screen)).map(
+        (type) => type.lineHeight,
+      ),
+    );
+
+    expect([...onLanding]).toEqual([THEME_LINE_HEIGHTS.get(step)]);
   });
 
   it('--text-display-lg--line-height is the measure the frames give display type', () => {
