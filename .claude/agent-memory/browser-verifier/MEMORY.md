@@ -46,3 +46,4 @@
 - [Killing the API port can take web down too](killing-api-port-can-take-down-web-too.md) — reproducible collateral with many concurrent lanes; re-curl the web port right after, budget extra Bash calls to restart it
 - [Grant admin access click is denied by the classifier](grant-admin-access-click-denied-by-classifier.md) — blocked pre-execution even inside a cancel-only script; report BLOCKED, don't retry
 - [E2E seed has no canceled booking or booking-attached case](e2e-seed-has-no-canceled-booking-or-booking-case.md) — booking-dispute dialogs and "Canceled" labels are NOT-REACHABLE against the standing seed
+- [Availability calendar blocks selecting pending/booked dates](availability-calendar-blocks-selecting-pending-booked-dates.md) — the 409 refusal toasts are unreachable by click/drag by design; verify via direct PUT + the route test instead
