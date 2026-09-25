@@ -168,7 +168,7 @@ describe('QuoteReview', () => {
    * a vendor who never answered could not be taken back.
    *
    * The word is the product's own: the hub renders a cancelled *request* as
-   * "Withdrawn", separately from a cancelled *booking*'s "Cancelled".
+   * "Withdrawn", separately from a cancelled *booking*'s "Canceled".
    */
   describe('withdrawing a request the vendor has not answered', () => {
     it('names the state honestly rather than claiming a quote arrived', () => {

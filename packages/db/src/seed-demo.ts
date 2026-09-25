@@ -113,8 +113,8 @@ const BOOKING_NOTIFICATION_COPY: Record<
   },
   cancelled: {
     type: 'booking_cancelled',
-    title: 'Booking cancelled',
-    body: 'This booking was cancelled.',
+    title: 'Booking canceled',
+    body: 'This booking was canceled.',
   },
   // A dispute is worked in the admin console, not announced by the bell.
   disputed: null,
@@ -1072,7 +1072,7 @@ export async function seedDemoData<
         `request-outcome:${entry.key}`,
         vendorUserId,
         'request_cancelled',
-        'Request cancelled',
+        'Request canceled',
         'The customer withdrew this request.',
         requestData,
         settledAt,

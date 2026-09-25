@@ -14,6 +14,7 @@ import {
 } from '@vendor-marketplace/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { readableDate } from '../../lib/readable-date.js';
 import { bearer, createTestHarness, type TestHarness } from '../../testing/test-server.js';
 import { expireLapsedRequests } from '../booking-requests/booking-requests.service.js';
 import { applyAvailability } from './availability.dao.js';
@@ -296,6 +297,11 @@ describe('/vendor/availability', () => {
 
       expect(response.statusCode).toBe(409);
       expect(response.json().details.pendingDates).toEqual([TOMORROW]);
+      // VEN-753: the toast names the day as a reader writes it, never `YYYY-MM-DD`.
+      expect(response.json().message).toBe(
+        `${readableDate(TOMORROW)} has an open request. Block it once the request is answered or lapses.`,
+      );
+      expect(response.json().message).not.toContain(TOMORROW);
       expect(await calendar()).toEqual([{ date: TOMORROW, status: 'pending' }]);
 
       const declined = await harness.app.inject({
@@ -786,6 +792,10 @@ describe('/vendor/availability', () => {
       expect(response.statusCode).toBe(409);
       expect(response.json().error).toBe('CONFLICT');
       expect(response.json().details.bookedDates).toEqual([TOMORROW]);
+      expect(response.json().message).toBe(
+        `${readableDate(TOMORROW)} is already booked, so it cannot be changed here.`,
+      );
+      expect(response.json().message).not.toContain(TOMORROW);
     });
 
     it('leaves the whole range untouched when one of its dates is booked', async () => {

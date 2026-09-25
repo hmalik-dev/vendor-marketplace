@@ -71,7 +71,7 @@ export function BookingCard({
 
               The pill reads the booking's **status**, not merely its presence
               (#400). Chosen on `booking !== null`, a cancelled booking put a
-              sage `Booked` next to the red `Cancelled` that `CompleteBooking`
+              sage `Booked` next to the red `Canceled` that `CompleteBooking`
               renders below — two contradictory pills on one row, over contact
               details for a date the vendor no longer holds. Settling the parent
               request now keeps such a row off this page entirely, so this is

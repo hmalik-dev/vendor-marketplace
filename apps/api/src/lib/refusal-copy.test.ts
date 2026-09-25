@@ -39,7 +39,7 @@ const PINNED: Record<string, string[]> = {
     '"The sign-in provider has not confirmed this account\'s new address yet."',
   ],
   'availability/availability.service.ts': [
-    '`${pending[0]} has an open request. Block it once the request is answered or lapses.`',
+    '`${readableDate(pending[0]!)} has an open request. Block it once the request is answered or lapses.`',
     '`${pending.length} of those dates have open requests. Block them once the requests are answered or lapse.`',
   ],
   'cases/cases.service.ts': [
