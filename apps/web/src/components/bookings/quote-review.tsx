@@ -13,8 +13,6 @@ import { useId, useRef, useState } from 'react';
 import { AlertDialog } from 'radix-ui';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { FIELD_FOCUS } from '@/lib/focus';
-import { cn } from '@/lib/utils';
 import { REQUEST_DID_NOT_ARRIVE, userFacingError } from '@/lib/user-facing-error';
 import { useApi } from '@/lib/use-api';
 import { prePaymentRefundClause } from '@/lib/refund-deadline';
@@ -309,7 +307,7 @@ export function QuoteReview({ request, conversationId }: QuoteReviewProps): Reac
                       ? '/messages'
                       : `/messages?conversation=${encodeURIComponent(conversationId)}`
                   }
-                  className="ml-2 rounded-xs text-[13px] font-semibold text-clay-600 hover:underline"
+                  className="ml-2 text-[13px] font-semibold text-clay-600 hover:underline"
                 >
                   Message about this request
                 </Link>
@@ -328,11 +326,12 @@ interface DeclineQuoteProps {
   disabled: boolean;
 }
 
-/** Frame `47b`'s field: the `.inp` box on a card ground, 52px tall. */
-const REASON_FIELD = cn(
-  'min-h-13 rounded-[10px] border-stone-300 bg-stone-0 px-3.25 py-2.5 text-[13.5px] text-stone-900',
-  FIELD_FOCUS,
-);
+/**
+ * Frame `47b`'s field: the `.inp` box on a card ground, 52px tall. `Textarea`
+ * owns its focus indicator.
+ */
+const REASON_FIELD =
+  'min-h-13 rounded-[10px] border-stone-300 bg-stone-0 px-3.25 py-2.5 text-[13.5px] text-stone-900';
 
 /**
  * Frame `47b`: Decline asks first, and lets the customer say why (VEN-765).
@@ -417,7 +416,7 @@ function DeclineQuote({ requestId, vendorName, disabled }: DeclineQuoteProps): R
             Decline this quote?
           </AlertDialog.Title>
           <AlertDialog.Description className="mt-2 text-[13px] leading-[1.55] text-stone-700">
-            {vendorName} will be told you’ve declined. The request closes.
+            {vendorName} will be told you&apos;ve declined. The request closes.
           </AlertDialog.Description>
           <label
             htmlFor={reasonId}

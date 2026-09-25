@@ -133,7 +133,7 @@ describe('QuoteReview', () => {
 
       const dialog = screen.getByRole('alertdialog', { name: 'Decline this quote?' });
       expect(dialog.textContent).toContain(
-        'Kessler & Co. will be told you’ve declined. The request closes.',
+        "Kessler & Co. will be told you've declined. The request closes.",
       );
       expect(requestMock).not.toHaveBeenCalled();
     });
