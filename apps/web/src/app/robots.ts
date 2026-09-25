@@ -23,6 +23,12 @@ const PRIVATE_PATHS = [
   '/suspended',
   '/sign-in',
   '/sign-up',
+  '/bookings',
+  '/messages',
+  '/account',
+  // The booking request form is customer-only, and every public profile links
+  // to it. The wildcard keeps `/vendors/<slug>` itself crawlable.
+  '/vendors/*/request',
 ];
 
 export default function robots(): MetadataRoute.Robots {
