@@ -48,3 +48,4 @@
 - [Grant admin access click is denied by the classifier](grant-admin-access-click-denied-by-classifier.md) — blocked pre-execution even inside a cancel-only script; report BLOCKED, don't retry
 - [E2E seed has no canceled booking or booking-attached case](e2e-seed-has-no-canceled-booking-or-booking-case.md) — booking-dispute dialogs and "Canceled" labels are NOT-REACHABLE against the standing seed
 - [Availability calendar blocks selecting pending/booked dates](availability-calendar-blocks-selecting-pending-booked-dates.md) — the 409 refusal toasts are unreachable by click/drag by design; verify via direct PUT + the route test instead
+- [No booking has a Stripe payment intent id; classifier blocks fixing it](no-booking-has-a-stripe-payment-intent-id-and-classifier-blocks-fixing-it.md) — all 919 seed bookings null; a scoped UPDATE to fake one is denied pre-execution

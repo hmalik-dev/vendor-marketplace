@@ -16,6 +16,7 @@ import {
   ScopeChip,
 } from '@/components/admin/admin-detail';
 import { NotificationsCard } from '@/components/admin/notifications-card';
+import { StripeDashboardCard } from '@/components/admin/stripe-dashboard-card';
 import { StatusPill } from '@/components/ui/status-pill';
 import { getAdminBookingDetail } from '@/lib/admin-data';
 import {
@@ -251,6 +252,10 @@ export default async function AdminBookingDetailPage({
               </li>
             </ul>
           </AdminCard>
+
+          {booking.stripePaymentIntentId ? (
+            <StripeDashboardCard paymentIntentId={booking.stripePaymentIntentId} />
+          ) : null}
 
           <p className="rounded-panel bg-steel-50 px-3.5 py-3 text-helper leading-[1.55] text-steel-600">
             <strong className="font-semibold">Nothing here changes money.</strong> A dispute is

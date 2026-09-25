@@ -272,4 +272,33 @@ describe('AdminBookingDetailPage', () => {
       'Fernbank Studio · October 10, 2026',
     );
   });
+
+  it('links the payment out to the Stripe Dashboard, and draws no link without one (VEN-601)', async () => {
+    vi.stubEnv('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', 'pk_test_abc');
+    getAdminBookingDetail.mockResolvedValue(detail());
+    await renderPage();
+
+    const stripe = screen
+      .getByRole('heading', { name: 'Stripe' })
+      .closest('section') as HTMLElement;
+    expect(
+      within(stripe)
+        .getAllByRole('link')
+        .map((link) => [link.textContent, link.getAttribute('href')]),
+    ).toEqual([
+      [
+        'Open the payment in the Stripe Dashboard',
+        'https://dashboard.stripe.com/test/payments/pi_test_money_story',
+      ],
+    ]);
+    expect(stripe.textContent).toContain(
+      'A refund made there shows here and holds the payout. Nothing else made there shows up here.',
+    );
+
+    cleanup();
+    getAdminBookingDetail.mockResolvedValue(detail({ stripePaymentIntentId: null }));
+    await renderPage();
+    expect(screen.queryByRole('heading', { name: 'Stripe' })).toBeNull();
+    vi.unstubAllEnvs();
+  });
 });
