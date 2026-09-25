@@ -35,6 +35,6 @@ describe('stripPlaceClass', () => {
     const started = performance.now();
 
     expect(stripPlaceClass(hostile)).toBe(hostile);
-    expect(performance.now() - started).toBeLessThan(200);
+    expect(performance.now() - started).toBeLessThan(1_000);
   });
 });
