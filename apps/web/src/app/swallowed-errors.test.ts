@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { withoutComments } from '@/testing/source-scan';
 
 /**
  * #368 — a rejection may be hidden from the customer, never from everyone.
@@ -46,11 +47,6 @@ function sourceFiles(directory: string): string[] {
  */
 const SILENT_CATCH =
   /\.catch\(\s*(\(\s*\)\s*=>\s*(\{\s*\}|undefined|null)|function\s*\(\s*\)\s*\{\s*\})\s*\)/;
-
-/** The same stripping as the API's error-message guard. */
-function withoutComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/.*$/gm, '$1');
-}
 
 function swallowsSilently(source: string): boolean {
   return SILENT_CATCH.test(withoutComments(source));
