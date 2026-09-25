@@ -8,10 +8,12 @@ import { perAccountRateLimit } from '../../lib/rate-limit.js';
 import {
   buildObjectKey,
   countOwnedImages,
+  type ObjectStorage,
   STORAGE_PREFIXES,
   STORAGE_PREFIX_ROLES,
   thumbnailKeyFor,
 } from '../../lib/storage.js';
+import { withOwnerUploadLock } from './uploads.dao.js';
 
 const uploadQuerySchema = z.object({
   /** Which namespace the object belongs to; a closed set, never client paths. */
@@ -64,6 +66,19 @@ function isFilesLimitCloseOfLiveRequest(error: unknown, aborted: boolean): boole
   );
 }
 
+/** The count is of images, not objects, so a thumbnail does not spend a slot. */
+async function assertUnderObjectLimit(
+  storage: ObjectStorage,
+  ownerId: string,
+  objectLimit: number,
+): Promise<void> {
+  if ((await countOwnedImages(storage, ownerId, objectLimit)) >= objectLimit) {
+    throw conflict(
+      `You have reached the limit of ${objectLimit} uploaded images. Delete one to upload another.`,
+    );
+  }
+}
+
 export interface UploadRoutesOptions {
   /** Uploads one account may make per minute. */
   rateLimitMax: number;
@@ -112,16 +127,11 @@ export const uploadRoutes: FastifyPluginAsyncZod<UploadRoutesOptions> = async (a
 
       /*
        * The account's storage cap, checked before a byte is read for the same
-       * reason as the role: a refused upload costs no parse and no decode. The
-       * count is of images, not objects, so a thumbnail does not spend a slot.
+       * reason as the role: a refused upload costs no parse and no decode. It
+       * is only the cheap refusal; concurrent uploads all pass it, so the
+       * binding check is the recount under the owner's lock below.
        */
-      const heldImages = await countOwnedImages(app.storage, uploader.id, options.objectLimit);
-
-      if (heldImages >= options.objectLimit) {
-        throw conflict(
-          `You have reached the limit of ${options.objectLimit} uploaded images. Delete one to upload another.`,
-        );
-      }
+      await assertUnderObjectLimit(app.storage, uploader.id, options.objectLimit);
 
       let buffer: Buffer;
       let mimetype: string;
@@ -159,10 +169,19 @@ export const uploadRoutes: FastifyPluginAsyncZod<UploadRoutesOptions> = async (a
       const key = buildObjectKey(request.query.prefix, uploader.id, 'webp');
       const thumbnailKey = thumbnailKeyFor(key);
 
-      const [imageUrl, thumbnailUrl] = await Promise.all([
-        app.storage.put(key, processed.image, WEBP_CONTENT_TYPE),
-        app.storage.put(thumbnailKey, processed.thumbnail, WEBP_CONTENT_TYPE),
-      ]);
+      /*
+       * Count and write as one step per account (VEN-625): without the lock,
+       * parallel uploads each counted before any of them landed and all were
+       * admitted past the cap.
+       */
+      const [imageUrl, thumbnailUrl] = await withOwnerUploadLock(app.db, uploader.id, async () => {
+        await assertUnderObjectLimit(app.storage, uploader.id, options.objectLimit);
+
+        return Promise.all([
+          app.storage.put(key, processed.image, WEBP_CONTENT_TYPE),
+          app.storage.put(thumbnailKey, processed.thumbnail, WEBP_CONTENT_TYPE),
+        ]);
+      });
 
       /*
        * The **keys** are what the caller persists; the URLs come back only so
