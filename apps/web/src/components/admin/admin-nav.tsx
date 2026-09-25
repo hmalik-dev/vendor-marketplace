@@ -14,6 +14,8 @@ export interface AdminNavProps {
    * the `total` — not through `/admin/metrics`.
    */
   caseCount: number;
+  /** Vendor applications still awaiting a decision (VEN-773) — the badge frames 42–64 draw beside `Applications`. */
+  waitingApplications: number;
 }
 
 /**
@@ -62,21 +64,21 @@ const ITEMS = [
   { href: '/admin/reviews', label: 'Reviews' },
   { href: '/admin/tags', label: 'Categories & tags' },
   { href: '/admin/activity', label: 'Activity' },
-  /*
-   * The vendor gate's waitlist and invites (VEN-406). Unframed, like Settings,
-   * and beside it: the gate is switched on there and worked here.
-   */
-  { href: '/admin/vendor-applications', label: 'Vendor applications' },
-  /* Who can sign in to this console (VEN-506). Unframed, and kept beside Settings. */
-  { href: '/admin/admins', label: 'Admins' },
-  /*
-   * The launch switches (VEN-404). Deliberately unframed: the delta draws nine
-   * rows and predates the switches, so this sits last, after the record the
-   * other surfaces leave behind, as the one row that configures rather than
-   * works a queue.
-   */
-  { href: '/admin/settings', label: 'Settings' },
 ] as const;
+
+/**
+ * The `Platform` group every admin frame 42–64 draws below the nine rows
+ * (VEN-773): the pages that configure the console rather than work a queue.
+ * The frames also draw `Data requests` between Applications and Settings; it
+ * gets its row when its route lands, never a link to a 404 before then.
+ */
+const PLATFORM_ITEMS = [
+  { href: '/admin/vendor-applications', label: 'Applications' },
+  { href: '/admin/settings', label: 'Settings' },
+  { href: '/admin/admins', label: 'Admin access' },
+] as const;
+
+type Item = (typeof ITEMS)[number] | (typeof PLATFORM_ITEMS)[number];
 
 /**
  * The console's 210px rail.
@@ -93,8 +95,62 @@ const ITEMS = [
  * `lg`, where the rail is a horizontal touch strip and `04-laws.md`'s target
  * size is the governing constraint rather than a frame nothing draws.
  */
-export function AdminNav({ reviewCount, caseCount }: AdminNavProps): React.ReactElement {
+export function AdminNav({
+  reviewCount,
+  caseCount,
+  waitingApplications,
+}: AdminNavProps): React.ReactElement {
   const pathname = usePathname();
+
+  function renderItem(item: Item): React.ReactElement {
+    /*
+     * Exact match for Overview, prefix for the rest. `/admin` is a prefix
+     * of every other route here, so a prefix test would light Overview up
+     * on all seven screens.
+     */
+    const isActive =
+      item.href === '/admin'
+        ? pathname === '/admin'
+        : [item.href, 'alsoFor' in item ? item.alsoFor : undefined].some(
+            (href) => href !== undefined && (pathname === href || pathname.startsWith(`${href}/`)),
+          );
+
+    /*
+     * One expression rather than a condition per badge. Two adjacent
+     * `label === '…' && count > 0` clauses is how the second one comes to
+     * be pasted with the first one's count still in it.
+     */
+    const badge =
+      item.label === 'Reviews'
+        ? reviewCount
+        : item.label === 'Cases'
+          ? caseCount
+          : item.label === 'Applications'
+            ? waitingApplications
+            : 0;
+
+    return (
+      <li key={item.href} className="shrink-0">
+        <Link
+          href={item.href}
+          aria-current={isActive ? 'page' : undefined}
+          className={cn(
+            'flex min-h-11 items-center gap-2.5 rounded-[9px] px-3 py-2.25 text-base font-medium whitespace-nowrap transition-colors duration-(--duration-fast) lg:min-h-0',
+            isActive
+              ? 'bg-clay-100 font-semibold text-clay-600 shadow-[inset_3px_0_0_var(--color-clay-400)]'
+              : 'text-stone-700 hover:bg-stone-100 hover:text-stone-900',
+          )}
+        >
+          {item.label}
+          {badge > 0 ? (
+            <span className="ml-auto rounded-full bg-clay-400 px-1.75 py-px text-xs font-bold text-stone-0">
+              {badge}
+            </span>
+          ) : null}
+        </Link>
+      </li>
+    );
+  }
 
   return (
     <nav
@@ -111,50 +167,18 @@ export function AdminNav({ reviewCount, caseCount }: AdminNavProps): React.React
         match and the rows read as separate targets rather than one bar.
       */}
       <ul className="flex gap-1 overflow-x-auto lg:flex-col lg:gap-0 lg:overflow-visible">
-        {ITEMS.map((item) => {
-          /*
-           * Exact match for Overview, prefix for the rest. `/admin` is a prefix
-           * of every other route here, so a prefix test would light Overview up
-           * on all seven screens.
-           */
-          const isActive =
-            item.href === '/admin'
-              ? pathname === '/admin'
-              : [item.href, 'alsoFor' in item ? item.alsoFor : undefined].some(
-                  (href) =>
-                    href !== undefined && (pathname === href || pathname.startsWith(`${href}/`)),
-                );
-
-          /*
-           * One expression rather than a condition per badge. Two adjacent
-           * `label === '…' && count > 0` clauses is how the second one comes to
-           * be pasted with the first one's count still in it.
-           */
-          const badge =
-            item.label === 'Reviews' ? reviewCount : item.label === 'Cases' ? caseCount : 0;
-
-          return (
-            <li key={item.href} className="shrink-0">
-              <Link
-                href={item.href}
-                aria-current={isActive ? 'page' : undefined}
-                className={cn(
-                  'flex min-h-11 items-center gap-2.5 rounded-[9px] px-3 py-2.25 text-base font-medium whitespace-nowrap transition-colors duration-(--duration-fast) lg:min-h-0',
-                  isActive
-                    ? 'bg-clay-100 font-semibold text-clay-600 shadow-[inset_3px_0_0_var(--color-clay-400)]'
-                    : 'text-stone-700 hover:bg-stone-100 hover:text-stone-900',
-                )}
-              >
-                {item.label}
-                {badge > 0 ? (
-                  <span className="ml-auto rounded-full bg-clay-400 px-1.75 py-px text-xs font-bold text-stone-0">
-                    {badge}
-                  </span>
-                ) : null}
-              </Link>
-            </li>
-          );
-        })}
+        {ITEMS.map(renderItem)}
+        {/*
+          A group label rather than a row: nothing to click, so it takes no
+          `li` target below `lg`, where the strip has no room for a heading.
+        */}
+        <li
+          aria-hidden
+          className="hidden px-3 pt-4 pb-1.5 text-xs font-semibold tracking-[0.08em] text-stone-500 uppercase lg:block"
+        >
+          Platform
+        </li>
+        {PLATFORM_ITEMS.map(renderItem)}
       </ul>
     </nav>
   );

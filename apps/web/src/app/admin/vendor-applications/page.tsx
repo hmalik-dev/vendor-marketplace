@@ -12,7 +12,8 @@ const PATH = '/admin/vendor-applications';
 /**
  * The vendor gate's waitlist and invites (VEN-406).
  *
- * Deliberately unframed, like `/admin/settings` where the gate is switched: it
+ * Frame `62 Admin vendor applications` draws it, beside `/admin/settings`
+ * where the gate is switched; it
  * follows the console's surface (heading, count line, content pane).
  */
 export default async function AdminVendorApplicationsPage({

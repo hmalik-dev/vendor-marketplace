@@ -6,7 +6,7 @@ import { getAdminPlatformSettings } from '@/lib/admin-data';
  * The launch switches (VEN-404): pause new requests, checkout or automatic
  * payouts, cap booking value, and hold one vendor's payouts — without a deploy.
  *
- * Deliberately unframed. No frame draws this screen, so it follows the console's
+ * Frame `61 Admin settings` draws this screen; it follows the console's
  * surface (heading, count line, content pane) rather than inventing a layout.
  */
 export default async function AdminSettingsPage(): Promise<React.ReactElement> {

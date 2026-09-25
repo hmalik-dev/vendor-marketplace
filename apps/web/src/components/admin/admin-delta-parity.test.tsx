@@ -68,12 +68,12 @@ describe('the rail', () => {
    * order the browser receives.
    */
   function railLabels(): string[] {
-    render(<AdminNav reviewCount={6} caseCount={23} />);
+    render(<AdminNav reviewCount={6} caseCount={23} waitingApplications={12} />);
 
     return screen.getAllByRole('link').map((link) => link.textContent?.replace(/\d+$/, '') ?? '');
   }
 
-  it('renders the nine rows in the order the delta draws them, then the unframed rows', () => {
+  it('renders the nine rows in the order the delta draws them, then the Platform group', () => {
     expect(railLabels()).toEqual([
       'Overview',
       'Vendors',
@@ -84,12 +84,28 @@ describe('the rail', () => {
       'Reviews',
       'Categories & tags',
       'Activity',
-      // VEN-406's vendor waitlist and VEN-404's launch switches: no frame draws
-      // them, so the rows are appended.
-      'Vendor applications',
-      // VEN-506: who can sign in to the console, also unframed.
-      'Admins',
+      // Frames 42–64's `Platform` group (VEN-773). `Data requests` joins it
+      // between Applications and Settings once its route exists.
+      'Applications',
       'Settings',
+      'Admin access',
+    ]);
+  });
+
+  /** Read off the list items, so the group label is placed as well as present. */
+  it('labels the group Platform between Activity and Applications', () => {
+    render(<AdminNav reviewCount={6} caseCount={23} waitingApplications={12} />);
+
+    const items = screen
+      .getAllByRole('listitem', { hidden: true })
+      .map((item) => item.textContent?.replace(/\d+$/, ''));
+
+    expect(items.slice(8)).toEqual([
+      'Activity',
+      'Platform',
+      'Applications',
+      'Settings',
+      'Admin access',
     ]);
   });
 
@@ -124,30 +140,36 @@ describe('the rail', () => {
   /*
    * The count change the delta's stale preamble invites. It argues the rail
    * "needs nine" from a brief of eight; #431 had already given Cases its row,
-   * so a reader who acts on that sentence adds a tenth. The one tenth row is
-   * VEN-404's unframed Settings, and VEN-406's Vendor applications beside it,
-   * both appended after the nine the delta draws.
+   * so a reader who acts on that sentence adds a tenth. Everything past the
+   * nine belongs to the Platform group (VEN-773).
    */
-  it('is the nine drawn rows plus the unframed two, because the move was an order change', () => {
-    const unframed = ['Vendor applications', 'Admins', 'Settings'];
-    expect(railLabels().filter((label) => !unframed.includes(label))).toHaveLength(9);
+  it('is the nine drawn rows plus the Platform group, because the move was an order change', () => {
+    const platform = ['Applications', 'Settings', 'Admin access'];
+    expect(railLabels().filter((label) => !platform.includes(label))).toHaveLength(9);
   });
 
-  /** Badges on Cases and Reviews only — a badge on a row that is never zero is decoration. */
-  it('badges Cases and Reviews and nothing else', () => {
-    render(<AdminNav reviewCount={6} caseCount={23} />);
+  /** The waiting count frames 42–64 draw beside Applications, gone at zero like the others. */
+  it('hides the Applications badge when nothing is waiting', () => {
+    render(<AdminNav reviewCount={6} caseCount={23} waitingApplications={0} />);
+
+    expect(screen.getByRole('link', { name: 'Applications' }).textContent).toBe('Applications');
+  });
+
+  /** Badges on Cases, Reviews and Applications only — a badge on a row that is never zero is decoration. */
+  it('badges Cases, Reviews and Applications and nothing else', () => {
+    render(<AdminNav reviewCount={6} caseCount={23} waitingApplications={12} />);
 
     const badged = screen
       .getAllByRole('link')
       .filter((link) => /\d$/.test(link.textContent ?? ''))
       .map((link) => link.textContent);
 
-    expect(badged).toEqual(['Cases23', 'Reviews6']);
+    expect(badged).toEqual(['Cases23', 'Reviews6', 'Applications12']);
   });
 
   /** `/admin/requests` is a tab of Bookings, not a row (VEN-399). */
   it('gives /admin/requests no row', () => {
-    render(<AdminNav reviewCount={6} caseCount={23} />);
+    render(<AdminNav reviewCount={6} caseCount={23} waitingApplications={12} />);
 
     const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
     expect(hrefs).not.toContain('/admin/requests');
@@ -161,7 +183,7 @@ describe('the rail', () => {
    * already written against the old one.
    */
   it('serves the taxonomy at /admin/tags, and the bundle records why', () => {
-    render(<AdminNav reviewCount={0} caseCount={0} />);
+    render(<AdminNav reviewCount={0} caseCount={0} waitingApplications={0} />);
 
     const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
     expect(hrefs).toContain('/admin/tags');

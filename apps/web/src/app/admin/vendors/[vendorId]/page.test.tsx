@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { cleanup, render, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { interactiveInsideReadOnlyCards } from '@/components/admin/admin-detail.testing';
 import { wireAdminVendorDetailSchema, type WireAdminVendorDetail } from '@/lib/wire-schemas';
@@ -193,6 +193,19 @@ describe('AdminVendorDetailPage', () => {
       'Notifications sent · 3': 0,
       Identity: 0,
     });
+  });
+
+  /** Frame `42 Admin vendor detail`'s logging note, the path in mono (VEN-773). */
+  it('says where state changes are logged in the words frame 42 draws', async () => {
+    await renderPage(detail());
+
+    const note = screen.getByText('Every state change is logged.').parentElement;
+    expect(note?.textContent).toBe(
+      "Every state change is logged. Actor, action and this vendor's id land in /admin/activity before the toast clears.",
+    );
+    expect(within(note as HTMLElement).getByText('/admin/activity').className).toContain(
+      'font-mono',
+    );
   });
 
   it('exposes the email, Stripe account, reply time, radius and payout hold', async () => {

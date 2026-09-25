@@ -298,8 +298,8 @@ export function CaseResolution({ supportCase }: CaseResolutionProps): React.Reac
       </div>
 
       <p className="text-sm text-stone-600 sm:col-span-2">
-        Neither position can be undone here. A resolved case reopens only as a new case on the same
-        booking.
+        Neither position can be reversed from this screen. A resolved case reopens only by a new
+        case on the same booking.
       </p>
     </div>
   );
