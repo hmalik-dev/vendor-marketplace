@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BRAND_NAME } from '@vendor-marketplace/shared';
 import { describe, expect, it } from 'vitest';
+import { escapeRegExp } from '@/testing/source-scan';
 
 /*
  * #169/#304: 1024 is its own breakpoint, and 768 is another.
@@ -135,9 +136,7 @@ describe('the landing gutter is the frames own, at each width they draw', () => 
 
     for (const { name, source } of SOURCES) {
       const found = variants.some((prefix) =>
-        new RegExp(`(?:^|[\\s'\`"])${(prefix + utility).replace(/[[\]]/g, '\\$&')}(?![\\d.])`).test(
-          source,
-        ),
+        new RegExp(`(?:^|[\\s'\`"])${escapeRegExp(prefix + utility)}(?![\\d.])`).test(source),
       );
 
       expect(

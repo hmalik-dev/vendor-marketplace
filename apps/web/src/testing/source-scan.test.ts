@@ -1,5 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import { withoutComments } from './source-scan';
+import { escapeRegExp, USE_CLIENT, withoutComments } from './source-scan';
+
+describe('USE_CLIENT', () => {
+  it('reads a directive behind comments, and only as the first statement', () => {
+    expect(USE_CLIENT.test("/* a */ /** b **/\n// c\n'use client';")).toBe(true);
+    expect(USE_CLIENT.test("import x from 'y';\n'use client';")).toBe(false);
+  });
+
+  it('answers in linear time on a run of adjacent comment closers', () => {
+    const hostile = '/*' + '*//*'.repeat(5000);
+    const started = performance.now();
+
+    expect(USE_CLIENT.test(hostile)).toBe(false);
+    expect(performance.now() - started).toBeLessThan(50);
+  });
+});
+
+describe('escapeRegExp', () => {
+  it('makes every metacharacter literal, so a utility only matches itself', () => {
+    const utility = 'sm:w-[calc(100%-2.5rem)]+/x';
+
+    expect(new RegExp(`^${escapeRegExp(utility)}$`).test(utility)).toBe(true);
+    expect(new RegExp(`^${escapeRegExp('px-1.5')}$`).test('px-1x5')).toBe(false);
+  });
+});
 
 /**
  * The shared comment strip, which every source guard in this tree now reads

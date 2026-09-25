@@ -16,6 +16,8 @@ export interface ErrorContext {
   payment?: boolean;
   /** The route pattern, never the URL: a URL carries ids and query values. */
   route?: string | undefined;
+  /** The request's id: the one the API log line and the web error page carry, so the three join. */
+  requestId?: string | undefined;
 }
 
 /**
@@ -69,6 +71,9 @@ export function sentryErrorReporter(): ErrorReporter {
         }
         if (context.route) {
           scope.setTag('route', context.route);
+        }
+        if (context.requestId) {
+          scope.setTag('request_id', context.requestId);
         }
         if (context.payment === true) {
           scope.setTags(PAYMENT_ERROR_TAGS);

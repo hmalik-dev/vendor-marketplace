@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { withoutComments } from '@/testing/source-scan';
+import { USE_CLIENT, withoutComments } from '@/testing/source-scan';
 
 /**
  * **A function exported from a `'use client'` module may be rendered or passed,
@@ -24,9 +24,6 @@ import { withoutComments } from '@/testing/source-scan';
  * and this polices which files may *call* across the boundary at all.
  */
 const WEB_SOURCE = resolve(import.meta.dirname, '..');
-
-/** `'use client'` or `"use client"`, as the very first statement in the file. */
-const USE_CLIENT = /^\s*(?:\/\*[\s\S]*?\*\/\s*|\/\/[^\n]*\n\s*)*['"]use client['"]/;
 
 /** Helpers only tests import — they never reach a bundle. */
 const TEST_ONLY = 'testing';

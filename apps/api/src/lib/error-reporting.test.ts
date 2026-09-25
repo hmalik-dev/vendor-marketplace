@@ -130,6 +130,7 @@ describe('what the API reports, at the scrubbing hook', () => {
       userId: 'user_2abc',
       payment: true,
       route: '/v1/vendor/stripe/connect',
+      requestId: '5f0c2a52-7d7e-4a52-9f3e-2f6c1f7a9b10',
     });
     await Sentry.flush(2_000);
 
@@ -141,6 +142,7 @@ describe('what the API reports, at the scrubbing hook', () => {
     expect(event!.tags).toMatchObject({
       ...PAYMENT_ERROR_TAGS,
       route: '/v1/vendor/stripe/connect',
+      request_id: '5f0c2a52-7d7e-4a52-9f3e-2f6c1f7a9b10',
     });
     expect(JSON.stringify(event)).not.toContain(EMAIL);
     expect(JSON.stringify(event)).not.toContain(session);
@@ -231,6 +233,7 @@ describe('the error handler reports what the client is not told', () => {
     expect(reporter.captured[0]!.context).toEqual({
       userId: 'user_2abc',
       route: '/v1/customer/bookings/:bookingId/cancel',
+      requestId: 'req-1',
       payment: true,
     });
     await app.close();
@@ -244,7 +247,12 @@ describe('the error handler reports what the client is not told', () => {
     await app.inject({ method: 'GET', url: '/v1/refused' });
 
     expect(reporter.captured.map((entry) => entry.context)).toEqual([
-      { userId: 'user_2abc', route: '/v1/categories', payment: false },
+      {
+        userId: 'user_2abc',
+        route: '/v1/categories',
+        requestId: expect.any(String),
+        payment: false,
+      },
     ]);
     await app.close();
   });
@@ -309,7 +317,12 @@ describe('buildServer marks the money routes', () => {
 
     expect(response.statusCode).toBe(500);
     expect(reporter.captured.map((entry) => entry.context)).toEqual([
-      { userId: 'vendor_err', route: '/v1/vendor/stripe/connect', payment: true },
+      {
+        userId: 'vendor_err',
+        route: '/v1/vendor/stripe/connect',
+        requestId: response.headers['x-request-id'],
+        payment: true,
+      },
     ]);
   });
 });

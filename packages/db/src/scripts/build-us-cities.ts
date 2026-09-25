@@ -42,6 +42,7 @@ import { pipeline } from 'node:stream/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { US_STATE_CODES, normaliseForMatch } from '@vendor-marketplace/shared';
+import { stripPlaceClass } from '../place-class.js';
 
 const run = promisify(execFile);
 
@@ -50,24 +51,6 @@ const GAZETTEER_URL =
 const GEONAMES_URL = 'https://download.geonames.org/export/dump/US.zip';
 
 const STATES = new Set<string>(US_STATE_CODES);
-
-/**
- * The legal or statistical class the Gazetteer appends to every name —
- * `Abbeville city`, `Abanda CDP`, `Sitka city and borough`. It is a
- * classification, not part of what anyone calls the place, so it comes off.
- *
- * The `+` matters: several stack, so `Athens-Clarke County unified government
- * (balance)` has to shed `government` and then `balance` in one pass.
- */
-const PLACE_CLASS_SUFFIX =
-  /(?:\s+(?:city|town|village|borough|municipality|CDP|comunidad|zona urbana|consolidated government|metro government|metropolitan government|unified government|corporation|plantation|charter township|township|city and borough|and borough|balance))+$/i;
-
-function stripPlaceClass(raw: string): string {
-  return raw
-    .replace(/\s*\((?:balance|part)\)\s*$/i, '')
-    .replace(PLACE_CLASS_SUFFIX, '')
-    .trim();
-}
 
 interface Place {
   name: string;

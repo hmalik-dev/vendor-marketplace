@@ -52,6 +52,23 @@ async function walk(dir: string, extensions: readonly string[]): Promise<string[
 }
 
 /**
+ * `'use client'` or `"use client"`, as the very first statement in a file,
+ * after any leading comments.
+ *
+ * The block-comment body is `(?:[^*]|\*(?!\/))*` rather than a lazy `[\s\S]*?`:
+ * the lazy form and the `\s*` after it can split a run of adjacent comments in
+ * exponentially many ways, so a hostile file made the scan hang. This form has
+ * exactly one way to read any input.
+ */
+export const USE_CLIENT =
+  /^\s*(?:\/\*(?:[^*]|\*(?!\/))*\*\/\s*|\/\/[^\n]*\n\s*)*['"]use client['"]/;
+
+/** `value` as a pattern that matches only itself. */
+export function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
  * A URL's own slashes, a block comment, or a line comment — in that order,
  * because the order is the whole guard.
  *

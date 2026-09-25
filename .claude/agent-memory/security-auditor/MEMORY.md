@@ -116,6 +116,7 @@
 - [Operator alert dedupe is attacker-armable](operator-alert-dedupe-is-attacker-armable.md) — a shed 429 costs a DB write
 - [The daily send cap's closure is sticky](email-send-cap-closure-is-sticky.md) — blocks step-up codes till midnight; VEN-688 recorded cap + refusal marker clean; [VEN-680 codes](self-closure-step-up-codes-are-essential-mail.md)
 - [Auth proxy parser differential](auth-proxy-parser-differential.md) — body-derived key fails closed; VEN-630/718 per-caller budgets are IP-rotatable to a 10x ceiling
+- [Next's fetch cache key includes headers](next-fetch-cache-key-includes-headers.md) — a per-call header on a `revalidate` read defeats the Data Cache; VEN-690 request id
 
 ## Data layer, seeds and tooling
 
