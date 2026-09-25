@@ -225,33 +225,40 @@ counts and deletes nothing; `--dry-run` does the same and exits 0. A new table
 fails the suite until it is added to a list in `packages/db/src/scripts/reset.ts`.
 
 `<database>` is the connected database's name (`neondb` on a Neon branch
-unless renamed). Staging, with the staging environment's
-`DATABASE_URL_UNPOOLED` exported:
+unless renamed). The reset reads `DATABASE_URL_UNPOOLED`; the seeds read
+`DATABASE_URL` and `NEON_BRANCH`, so export all three for the tier, from the
+CLI rather than pasted, and unset them when done. Staging:
 
 ```bash
+export DATABASE_URL_UNPOOLED="$(neon connection-string staging)"
+export DATABASE_URL="$DATABASE_URL_UNPOOLED" NEON_BRANCH=staging
 pnpm db:reset --tier staging --confirm <database> --dry-run  # read the counts
 pnpm db:reset --tier staging --confirm <database> --yes --auth
 pnpm db:seed       # reference data: already kept, and idempotent
 pnpm db:seed:demo  # staging carries the demo seed
+unset DATABASE_URL DATABASE_URL_UNPOOLED NEON_BRANCH
 ```
 
-Production, with the production environment's `DATABASE_URL_UNPOOLED` exported:
+Production:
 
 ```bash
+export DATABASE_URL_UNPOOLED="$(neon connection-string production)"
 pnpm db:reset --tier production --confirm <database> --dry-run
 pnpm db:reset --tier production --confirm <database> --yes --auth
+unset DATABASE_URL_UNPOOLED
 ```
 
 Production gets no demo or E2E seed; the next release's migrate step runs the
-reference seed on its own. Pause checkout in `/admin` first, so no payment
-lands mid-reset, and resume it after: `platform_settings` is kept, switches
-included.
+reference seed on its own. The reset locks every table it counts, so the live
+API's writes wait (up to the 5-second lock timeout) until it commits. Pause
+checkout in `/admin` first, so no payment lands mid-reset, and resume it
+after: `platform_settings` is kept, switches included.
 
 What the reset does not touch:
 
 - **Neon Auth identities**, unless `--auth` is passed. With it, every identity
   in the branch's `neon_auth` schema goes except the admins' (sessions and
-  accounts cascade). Without it, a former user who signs in has an identity
+  accounts cascade), and so does every one-time code not addressed to an admin. Without it, a former user who signs in has an identity
   and no app row, so the app treats them as a newcomer: they pick a role and
   accept the Terms again. `--auth` is refused on local, whose identities live
   on the shared `dev` branch.

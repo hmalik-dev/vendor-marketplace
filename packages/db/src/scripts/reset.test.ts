@@ -91,6 +91,38 @@ describe('assertTierMatchesHost', () => {
     expect(() => assertTierMatchesHost(tier, url)).toThrow(message);
   });
 
+  it('returns the host it checked, for the driver to dial', () => {
+    expect(assertTierMatchesHost('production', PRODUCTION_URL)).toEqual({
+      host: `${TIER_ENDPOINTS.production}-pooler.us-east-2.aws.neon.tech`,
+      port: 5432,
+    });
+    expect(assertTierMatchesHost('local', LOCAL_URL)).toEqual({ host: 'localhost', port: 5432 });
+  });
+
+  /*
+   * postgres.js dials a comma-separated list after the first `@`; `URL` reads
+   * one host after the last. Each of these reads as the tier's host to one and
+   * as another host to the other.
+   */
+  const userinfo = ['owner', 'fake-pw'].join(':');
+  it.each([
+    [
+      'a second host after a comma',
+      `postgresql://${userinfo}@${TIER_ENDPOINTS.production}.us-east-2.aws.neon.tech,x@localhost/neondb`,
+    ],
+    [
+      'an encoded comma',
+      `postgresql://${userinfo}@${TIER_ENDPOINTS.staging}.us-east-2.aws.neon.tech%2C${TIER_ENDPOINTS.production}.us-east-2.aws.neon.tech/neondb`,
+    ],
+    [
+      'two at-signs',
+      `postgresql://${userinfo}@${TIER_ENDPOINTS.production}.aws.neon.tech@localhost/db`,
+    ],
+  ])('refuses %s', (_case, url) => {
+    expect(() => assertTierMatchesHost('local', url)).toThrow(/must name exactly one host/);
+    expect(() => assertTierMatchesHost('staging', url)).toThrow(/must name exactly one host/);
+  });
+
   it('names the host in a refusal but never the password', () => {
     let message = '';
     try {

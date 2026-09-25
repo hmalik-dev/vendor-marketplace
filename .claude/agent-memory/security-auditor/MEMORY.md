@@ -130,4 +130,5 @@
 - [Admin vendor detail is a gated aggregate](admin-vendor-detail-is-a-gated-aggregate.md) — notification `body` bypasses the case grant
 - [The staging probe spec's guard is the URL, not DEPLOY_ENV](staging-probe-spec-guard.md) — required `STAGING_WEB_URL`
 - [Admin category writes](admin-category-writes.md) — PASS; toggle can double-write audit
-- [RLS is enabled, never forced](rls-is-enabled-not-forced-owner-bypasses.md) — owner bypasses; a non-owner role reads zero rows
+- [RLS is enabled, never forced](rls-is-enabled-not-forced-owner-bypasses.md) — owner bypasses; a non-owner role reads zero rows (VEN-751 says `messages` now forces it)
+- [`db:reset` host guard vs postgres.js multi-host](db-reset-host-guard-parser-differential.md) — guard and driver parse different hosts; `neondb` on both tiers (Low)

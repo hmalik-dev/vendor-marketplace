@@ -242,6 +242,39 @@ describe('pnpm db:reset leaves a database untouched when it does not delete', ()
     }
   });
 
+  it('holds off other writers until it ends', async () => {
+    const writer = postgres(database.url, { max: 1, onnotice: () => {} });
+    let blocked: unknown;
+
+    try {
+      const code = await runResetCli(
+        ['--tier', 'local', '--confirm', database.name, '--yes'],
+        env,
+        capture().io,
+        async (_table, index) => {
+          if (index === 0) {
+            blocked = await writer
+              .begin(async (tx) => {
+                await tx`SET LOCAL lock_timeout = '200ms'`;
+                await tx`INSERT INTO throttle_hits (bucket) VALUES ('mid-reset')`;
+              })
+              .then(
+                () => 'written',
+                (error: Error) => error.message,
+              );
+            throw new Error('stop after the probe');
+          }
+        },
+      );
+      expect(code).toBe(1);
+    } finally {
+      await writer.end();
+    }
+
+    expect(blocked).toMatch(/lock timeout/);
+    expect(await countEverything(sql)).toEqual(before);
+  });
+
   it('--auth refuses a database with no neon_auth schema', async () => {
     await expect(
       resetDatabase(sql, {
@@ -363,6 +396,12 @@ describe('resetDatabase --auth', () => {
       CREATE SCHEMA neon_auth;
       CREATE TABLE neon_auth."user" (id uuid PRIMARY KEY, name text NOT NULL, email text NOT NULL);
       CREATE TABLE neon_auth.session (id text PRIMARY KEY, "userId" uuid NOT NULL REFERENCES neon_auth."user"(id) ON DELETE CASCADE);
+      CREATE TABLE neon_auth.verification (id text PRIMARY KEY, identifier text NOT NULL, value text NOT NULL);
+      INSERT INTO neon_auth.verification VALUES
+        ('admin-code', 'email-verification-otp-reset-admin@example.test', 'x'),
+        ('admin-plain', 'reset-admin@example.test', 'x'),
+        ('customer-code', 'email-verification-otp-customer@example.test', 'y'),
+        ('lookalike-code', 'email-verification-otp-xreset-admin@example.test', 'z');
     `);
     const customerAuthId = randomUUID();
     await sql`INSERT INTO neon_auth."user" VALUES
@@ -376,7 +415,7 @@ describe('resetDatabase --auth', () => {
     await database.close();
   });
 
-  it('removes every identity but the admins, with their sessions', async () => {
+  it("removes every identity but the admins, with their sessions and other people's codes", async () => {
     const lines: string[] = [];
 
     const result = await resetDatabase(sql, {
@@ -396,5 +435,15 @@ describe('resetDatabase --auth', () => {
     });
     expect(await sql`SELECT id FROM neon_auth."user"`).toEqual([{ id: ADMIN_AUTH_ID }]);
     expect(await sql`SELECT id FROM neon_auth.session`).toEqual([{ id: 'admin' }]);
+    expect(result.plan.find((row) => row.table === 'neon_auth.verification')).toEqual({
+      table: 'neon_auth.verification',
+      total: 4,
+      keep: 2,
+      delete: 2,
+    });
+    expect(await sql`SELECT id FROM neon_auth.verification ORDER BY id`).toEqual([
+      { id: 'admin-code' },
+      { id: 'admin-plain' },
+    ]);
   });
 });

@@ -151,20 +151,37 @@ export function parseResetArgs(argv: readonly string[]): ResetArgs {
   return { tier: tier as ResetTier, confirm, yes, dryRun, auth };
 }
 
-/** Refuses a connection whose host is not the tier's own. Never echoes the URL. */
-export function assertTierMatchesHost(tier: ResetTier, connectionString: string): void {
-  let host: string;
+export interface CheckedHost {
+  host: string;
+  port: number;
+}
+
+/**
+ * Refuses a connection whose host is not the tier's own, and returns the host
+ * it checked so the driver dials exactly that one. postgres.js reads a
+ * comma-separated host list after the first `@`, where `URL` reads one host
+ * after the last, so a string the two could disagree about is refused.
+ * Never echoes the URL.
+ */
+export function assertTierMatchesHost(tier: ResetTier, connectionString: string): CheckedHost {
+  let url: URL;
   try {
-    host = new URL(connectionString).hostname.toLowerCase();
+    url = new URL(connectionString);
   } catch {
     throw new ResetRefusal('The database connection string is not parseable.');
   }
+  const authority = connectionString.split('://')[1]?.split('/')[0] ?? '';
+  if (authority.split('@').length > 2 || /[,%]/.test(url.host)) {
+    throw new ResetRefusal('The database connection string must name exactly one host.');
+  }
+  const host = url.hostname.toLowerCase();
+  const checked = { host, port: Number(url.port) || 5432 };
 
   if (tier === 'local') {
     if (!LOCAL_HOSTS.has(host)) {
       throw new ResetRefusal(`--tier local needs a local database; the connection is to ${host}.`);
     }
-    return;
+    return checked;
   }
 
   const endpoint = host.endsWith('.neon.tech')
@@ -175,6 +192,7 @@ export function assertTierMatchesHost(tier: ResetTier, connectionString: string)
       `--tier ${tier} needs the ${TIER_ENDPOINTS[tier]} endpoint; the connection is to ${host}.`,
     );
   }
+  return checked;
 }
 
 export interface SchemaTable {
@@ -269,18 +287,37 @@ export interface ResetResult {
 }
 
 const NEON_AUTH_USERS = 'neon_auth."user"';
+const NEON_AUTH_CODES = 'neon_auth.verification';
 const ADMIN_AUTH_IDS = `SELECT auth_user_id FROM public.users WHERE role = 'admin'`;
+
+/**
+ * What `--auth` keeps of the identity store: the admins' identities, and the
+ * one-time codes addressed to them (the whole address, or a `<flow>-` prefix
+ * on it, as `neon-auth-directory.ts` matches them). Every other code names a
+ * person the reset removed.
+ */
+const NEON_AUTH_KEEP: Readonly<Record<string, string>> = {
+  [NEON_AUTH_USERS]: `id::text IN (${ADMIN_AUTH_IDS})`,
+  [NEON_AUTH_CODES]: `EXISTS (SELECT 1 FROM neon_auth."user" kept
+     WHERE kept.id::text IN (${ADMIN_AUTH_IDS})
+       AND (lower(identifier) = lower(kept.email)
+         OR right(lower(identifier), length(kept.email) + 1) = '-' || lower(kept.email)))`,
+};
 
 function keepPredicate(table: string): string {
   if (table in KEPT_TABLES) {
     return 'true';
   }
-  return PARTIAL_TABLES[table] ?? 'false';
+  return PARTIAL_TABLES[table] ?? NEON_AUTH_KEEP[table] ?? 'false';
+}
+
+function quoted(table: string): string {
+  return table in NEON_AUTH_KEEP ? table : `"${table}"`;
 }
 
 async function countRows(tx: postgres.TransactionSql, table: string): Promise<PlanRow> {
-  const from = table === NEON_AUTH_USERS ? NEON_AUTH_USERS : `"${table}"`;
-  const keep = table === NEON_AUTH_USERS ? `id::text IN (${ADMIN_AUTH_IDS})` : keepPredicate(table);
+  const from = quoted(table);
+  const keep = keepPredicate(table);
   const [row] = await tx.unsafe<{ total: string; keep: string }[]>(
     `SELECT count(*) AS total, count(*) FILTER (WHERE coalesce((${keep}), false)) AS keep FROM ${from}`,
   );
@@ -360,13 +397,16 @@ async function resetInTransaction(
     );
   }
 
+  const authTables: string[] = [];
   if (options.auth) {
-    const [{ present } = { present: false }] = await tx.unsafe<{ present: boolean }[]>(
-      `SELECT to_regclass('neon_auth."user"') IS NOT NULL AS present`,
+    const [found] = await tx.unsafe<{ users: boolean; codes: boolean }[]>(
+      `SELECT to_regclass('neon_auth."user"') IS NOT NULL AS users,
+              to_regclass('neon_auth.verification') IS NOT NULL AS codes`,
     );
-    if (!present) {
+    if (!found?.users) {
       throw new ResetRefusal('--auth needs the neon_auth schema, and this database has none.');
     }
+    authTables.push(NEON_AUTH_USERS, ...(found.codes ? [NEON_AUTH_CODES] : []));
   }
 
   /*
@@ -376,6 +416,15 @@ async function resetInTransaction(
    * like the append-only triggers, so no other session ever sees either off.
    */
   const order = deletionOrder(tables);
+  const planned = [...Object.keys(KEPT_TABLES), ...order, ...authTables];
+
+  /*
+   * Writers wait until commit, bounded by the session's lock timeout: a row
+   * the live API wrote between a table's delete and the recount would fail
+   * the run, and one written after the recount would survive it.
+   */
+  await tx.unsafe(`LOCK TABLE ${planned.map(quoted).join(', ')} IN EXCLUSIVE MODE`);
+
   const forced = live.filter((row) => row.forced).map((row) => row.name);
   for (const name of forced) {
     await tx.unsafe(`ALTER TABLE "${name}" NO FORCE ROW LEVEL SECURITY`);
@@ -384,10 +433,6 @@ async function resetInTransaction(
     await tx.unsafe(`ALTER TABLE "${table}" DISABLE TRIGGER "${trigger}"`);
   }
 
-  const planned = [...Object.keys(KEPT_TABLES), ...order];
-  if (options.auth) {
-    planned.push(NEON_AUTH_USERS);
-  }
   const plan: PlanRow[] = [];
   for (const table of planned) {
     plan.push(await countRows(tx, table));
@@ -414,8 +459,8 @@ async function resetInTransaction(
         : `DELETE FROM "${table}"`,
     );
   }
-  if (options.auth) {
-    await tx.unsafe(`DELETE FROM ${NEON_AUTH_USERS} WHERE id::text NOT IN (${ADMIN_AUTH_IDS})`);
+  for (const table of authTables) {
+    await tx.unsafe(`DELETE FROM ${table} WHERE NOT coalesce((${NEON_AUTH_KEEP[table]}), false)`);
   }
 
   for (const expected of plan) {
@@ -471,9 +516,11 @@ export async function runResetCli(
   try {
     const args = parseResetArgs(argv);
     connectionString = resolveMigrationUrl(env);
-    assertTierMatchesHost(args.tier, connectionString);
+    const { host, port } = assertTierMatchesHost(args.tier, connectionString);
 
     const sql = postgres(connectionString, {
+      host: host.replace(/^\[|\]$/g, ''),
+      port,
       max: 1,
       connection: MIGRATION_SESSION_SETTINGS,
       onnotice: () => {},
