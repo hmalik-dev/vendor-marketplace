@@ -107,7 +107,7 @@ export function AcceptTermsScreen({
      * while the account row could not be read, and a client navigation keeps
      * it as drawn. `router.refresh()` straight after the replace is no answer —
      * the refresh supersedes the navigation, which never commits, and the
-     * screen stays on "Recording…" (seen on a lane, VEN-678).
+     * screen stays on "Saving…" (seen on a lane, VEN-678).
      */
     window.location.replace(
       returnTo ? `/after-sign-in?returnTo=${encodeURIComponent(returnTo)}` : '/after-sign-in',
@@ -188,8 +188,8 @@ export function AcceptTermsScreen({
       setSaving(false);
       setFailed(
         error instanceof ApiClientError && error.statusCode === 409
-          ? 'The Terms were updated while this page was open. Reload and read them before accepting.'
-          : 'Nothing has been recorded — try again.',
+          ? 'The Terms changed while this page was open. Reload to read them.'
+          : 'Nothing was saved. Try again.',
       );
     }
   }
@@ -230,15 +230,14 @@ export function AcceptTermsScreen({
               picker and never a default.
             */
             <Banner status="failed" title="We couldn't find how you're joining">
-              The choice you made at sign-up wasn&apos;t saved with this account, so it can&apos;t
-              be set up from here.{' '}
+              Your sign-up choice wasn&apos;t saved.{' '}
               <a
                 href={SUPPORT_PATH}
                 className="font-semibold text-clay-600 underline underline-offset-4"
               >
                 Contact support
               </a>{' '}
-              and we&apos;ll finish it for you.
+              and we&apos;ll finish setting you up.
             </Banner>
           ) : null}
 
@@ -260,7 +259,7 @@ export function AcceptTermsScreen({
               loading={saving}
               className={`${CONTINUE_CLASS} disabled:bg-clay-300 disabled:opacity-100`}
             >
-              {saving ? 'Recording…' : 'Continue'}
+              {saving ? 'Saving…' : 'Continue'}
             </Button>
             <ContinueNotice className="text-sm leading-[1.6] text-stone-600" />
           </form>
@@ -302,7 +301,7 @@ export function AcceptTermsScreen({
           </>
         }
         collapseLabel="Collapse the Terms"
-        helper="Opens here — you don't lose your place."
+        helper="Opens on this page."
       />
 
       <form onSubmit={accept} noValidate className="mt-6">
@@ -336,7 +335,7 @@ export function AcceptTermsScreen({
             loading={saving}
             className="disabled:bg-clay-300 disabled:opacity-100"
           >
-            {saving ? 'Recording…' : 'Accept and continue'}
+            {saving ? 'Saving…' : 'Accept and continue'}
           </Button>
           <p className="mt-2 text-helper text-stone-600">
             We save the version and time you accept.

@@ -133,9 +133,7 @@ describe('ResetPasswordForm', () => {
     await user.click(screen.getByRole('button', { name: 'Set new password' }));
 
     expect(
-      screen.getByText(
-        'That code did not work, or it has expired. Check it, or ask for a new one.',
-      ),
+      screen.getByText('That code did not work or has expired. Check it or send a new one.'),
     ).toBeDefined();
     expect(screen.queryByText('Your password is changed. Sign in with the new one.')).toBeNull();
   });
@@ -152,9 +150,7 @@ describe('ResetPasswordForm', () => {
       screen.getByText("This isn't going through right now. Wait a few minutes and try again."),
     ).toBeDefined();
     expect(
-      screen.queryByText(
-        'That code did not work, or it has expired. Check it, or ask for a new one.',
-      ),
+      screen.queryByText('That code did not work or has expired. Check it or send a new one.'),
     ).toBeNull();
   });
 

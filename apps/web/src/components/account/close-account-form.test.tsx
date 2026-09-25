@@ -53,6 +53,9 @@ describe('CloseAccountForm (VEN-680)', () => {
     // A list inside the banner's paragraph is invalid HTML and a hydration error in the browser.
     expect(container.querySelector('p p, p ul')).toBeNull();
     expect(screen.getByText('Cancel your upcoming booking first')).toBeDefined();
+    expect(container.textContent).toContain(
+      'Cancel it from your bookings. The usual refund rules apply.',
+    );
     expect(screen.getByText(/with Sunlit Studio/).textContent).toContain('2099');
     expect(screen.getByRole('link', { name: 'your bookings' }).getAttribute('href')).toBe(
       '/bookings',
@@ -71,13 +74,25 @@ describe('CloseAccountForm (VEN-680)', () => {
 
   it('says what is kept and what goes, and adds the storefront and refunds for a vendor', () => {
     const { unmount } = render(<CloseAccountForm role="customer" email={EMAIL} blockers={[]} />);
-    expect(screen.getByText(/Payment and booking records stay/)).toBeDefined();
-    expect(screen.queryByText(/storefront/)).toBeNull();
+    expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      'You are signed out everywhere and cannot sign in again.',
+      'Your name, contact details and photo are removed.',
+      'Payment and booking records are kept.',
+      'Your record of accepting our legal documents is kept.',
+    ]);
     unmount();
 
     render(<CloseAccountForm role="vendor" email={EMAIL} blockers={[]} />);
-    expect(screen.getByText(/storefront comes off the marketplace/)).toBeDefined();
-    expect(screen.getByText(/refunded in full/)).toBeDefined();
+    expect(
+      screen
+        .getAllByRole('listitem')
+        .slice(4)
+        .map((item) => item.textContent),
+    ).toEqual([
+      'Your storefront comes off the marketplace right away.',
+      'Your open requests are declined.',
+      'Customers with upcoming bookings get a full refund. You are not paid for those bookings.',
+    ]);
   });
 
   it('asks for the code first, and shows the address it went to', async () => {
@@ -108,7 +123,7 @@ describe('CloseAccountForm (VEN-680)', () => {
     const user = await reachTheConfirmation();
     const button = screen.getByRole<HTMLButtonElement>('button', { name: 'Close my account' });
 
-    await user.type(screen.getByLabelText('Type your email address to confirm'), EMAIL);
+    await user.type(screen.getByLabelText('Type your email to confirm'), EMAIL);
     await user.type(screen.getByLabelText('Code from the email'), '12345');
     expect(button.disabled).toBe(true);
 
@@ -119,7 +134,7 @@ describe('CloseAccountForm (VEN-680)', () => {
 
   it('closes with the address and code, then ends the browser session and says goodbye', async () => {
     const user = await reachTheConfirmation();
-    await user.type(screen.getByLabelText('Type your email address to confirm'), ` ${EMAIL} `);
+    await user.type(screen.getByLabelText('Type your email to confirm'), ` ${EMAIL} `);
     await user.type(screen.getByLabelText('Code from the email'), '123456');
     await user.click(screen.getByRole('button', { name: 'Close my account' }));
 
@@ -136,7 +151,7 @@ describe('CloseAccountForm (VEN-680)', () => {
     const failure = new Error('Could not sign out');
     signOut.mockRejectedValue(failure);
     const user = await reachTheConfirmation();
-    await user.type(screen.getByLabelText('Type your email address to confirm'), EMAIL);
+    await user.type(screen.getByLabelText('Type your email to confirm'), EMAIL);
     await user.type(screen.getByLabelText('Code from the email'), '123456');
     await user.click(screen.getByRole('button', { name: 'Close my account' }));
 
@@ -169,7 +184,7 @@ describe('CloseAccountForm (VEN-680)', () => {
         'That code is wrong or has expired. Request a new one.',
       ),
     );
-    await user.type(screen.getByLabelText('Type your email address to confirm'), EMAIL);
+    await user.type(screen.getByLabelText('Type your email to confirm'), EMAIL);
     await user.type(screen.getByLabelText('Code from the email'), '000000');
     await user.click(screen.getByRole('button', { name: 'Close my account' }));
 

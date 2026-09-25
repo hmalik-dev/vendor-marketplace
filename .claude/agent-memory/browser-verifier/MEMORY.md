@@ -42,3 +42,4 @@
 - [Multi-device pass needs pacing; second web instance has no CORS](multi-device-pass-needs-pacing-and-second-instance-cors.md) — unpaced 3-context run 429s the API then 500s renders; port-3012 client fetches always CORS-blocked
 - [Neon drops reset mail within ~60s of a burst](neon-suppresses-reset-mail-within-a-minute-of-a-burst.md) — allowed owner request 15-40s after a stranger's 5 sends got no mail; wait 70s+; Mailosaur lists lag; URL() in run_code listeners resets the page
 - [Failed-payout fixture needs paid_at; Retry button is clipped by the cell](failed-payout-fixture-needs-paid-at-and-cell-clips-retry.md) — only 1 paid booking seeded; hit-test Retry at 1024 (fully clipped there)
+- [Neon Auth codes bypass the lane mailbox](neon-auth-codes-bypass-lane-mailbox.md) — sign-up/reset codes come from Neon Auth directly; use real Mailosaur + `pnpm e2e:mail-code`, not `/__lane/mailbox/latest`

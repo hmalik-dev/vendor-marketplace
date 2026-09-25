@@ -25,19 +25,20 @@ const BOOKINGS_PATH = '/bookings';
 
 const NO_CODE_SENT = 'We could not send the code. Try again in a moment.';
 const NOT_CLOSED =
-  'We could not confirm the closure. Check the address and the code, or reload to see whether it went through.';
+  'We could not confirm your account closed. Check the email and code, or reload to see if it went through.';
 
 /** What stays and what goes, from the privacy policy's "Your rights" and "How long we keep it". */
 const KEPT_AND_REMOVED: readonly string[] = [
-  'Your account is retired and you are signed out everywhere. Signing in again will not work.',
-  'Your name, contact details and photo are removed from your account.',
-  'Payment and booking records stay, because the law and the other side of each booking require them.',
-  'Your record of accepting our legal documents stays, and is not removable.',
+  'You are signed out everywhere and cannot sign in again.',
+  'Your name, contact details and photo are removed.',
+  'Payment and booking records are kept.',
+  'Your record of accepting our legal documents is kept.',
 ];
 
 const VENDOR_ADDITIONS: readonly string[] = [
-  'Your storefront comes off the marketplace immediately and the requests still open against you are declined.',
-  'Customers holding upcoming bookings with you are refunded in full, and you are paid nothing for them.',
+  'Your storefront comes off the marketplace right away.',
+  'Your open requests are declined.',
+  'Customers with upcoming bookings get a full refund. You are not paid for those bookings.',
 ];
 
 export interface CloseAccountFormProps {
@@ -76,12 +77,11 @@ export function CloseAccountForm({
           status="pending"
           title={`Cancel your upcoming ${blockers.length === 1 ? 'booking' : 'bookings'} first`}
         >
-          Closing your account never prices a cancellation for you. Cancel{' '}
-          {blockers.length === 1 ? 'this booking' : 'these bookings'} from{' '}
+          Cancel {blockers.length === 1 ? 'it' : 'them'} from{' '}
           <Link href={BOOKINGS_PATH} className="font-semibold underline">
             your bookings
           </Link>
-          , where the refund is priced the way every cancellation is.
+          . The usual refund rules apply.
         </Banner>
         <ul className="list-disc pl-5 text-sm text-stone-700">
           {blockers.map((blocker) => (
@@ -169,7 +169,7 @@ export function CloseAccountForm({
             We emailed a {CODE_LENGTH}-digit code to {email}.
           </Banner>
           <AuthField
-            label="Type your email address to confirm"
+            label="Type your email to confirm"
             type="email"
             name="confirm-email"
             autoComplete="off"
