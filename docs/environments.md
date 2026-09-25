@@ -258,10 +258,12 @@ What the reset does not touch:
 
 - **Neon Auth identities**, unless `--auth` is passed. With it, every identity
   in the branch's `neon_auth` schema goes except the admins' (sessions and
-  accounts cascade), and so does every one-time code not addressed to an admin. Without it, a former user who signs in has an identity
-  and no app row, so the app treats them as a newcomer: they pick a role and
-  accept the Terms again. `--auth` is refused on local, whose identities live
-  on the shared `dev` branch.
+  accounts cascade), and so does every one-time code not addressed to an
+  admin. Without it, a former user keeps an identity with no app row: an open
+  session reads as signed out (protected pages redirect to `/sign-in`), and
+  signing in again takes the newcomer path, where they pick a role and accept
+  the Terms. `--auth` is refused on local, whose identities live on the shared
+  `dev` branch.
 - **Stored images.** Nothing references them after a reset, and the API's
   upload sweep (VEN-485) deletes unreferenced objects older than 24 hours, so
   the bucket empties itself within a day.
