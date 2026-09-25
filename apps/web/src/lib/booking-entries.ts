@@ -56,7 +56,7 @@ export interface BookingEntry {
  *
  * Exported because the request detail screen shows the same statuses and must
  * use the same words — a cancelled request is "Withdrawn" here and a cancelled
- * *booking* is "Cancelled", and a second table of labels is how those two come
+ * *booking* is "Canceled", and a second table of labels is how those two come
  * to disagree.
  */
 export const REQUEST_PRESENTATION: Record<

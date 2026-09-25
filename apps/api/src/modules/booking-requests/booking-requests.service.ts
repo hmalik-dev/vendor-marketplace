@@ -42,6 +42,7 @@ import type { EventHub } from '../../lib/event-stream.js';
 import { insertNotification } from '../messaging/messaging.dao.js';
 import { notificationHref } from '../messaging/messaging.service.js';
 import { AppError, conflict, forbidden, notFound, validationFailed } from '../../lib/errors.js';
+import { readableDate } from '../../lib/readable-date.js';
 import type { AuthenticatedUser } from '../../plugins/neon-auth.js';
 import { requireCustomerName } from '../users/customer-name.js';
 import { isBookingReviewable, reviewDeadline } from '../reviews/reviews.dao.js';
@@ -92,22 +93,6 @@ export function invalidTransition(from: BookingRequestStatus, to: BookingRequest
 
 /** What an accept is told when another request holds the vendor's date. */
 const DATE_BOOKED_MESSAGE = 'That date was booked while this request was open';
-
-const NOTIFICATION_DATE = new Intl.DateTimeFormat('en-US', {
-  month: 'long',
-  day: 'numeric',
-  timeZone: 'UTC',
-});
-
-/**
- * "December 19", not `2026-12-19`.
- *
- * A notification body is read by a person, and an ISO date in it is a stored
- * value leaking into copy — the same class of defect as rendering a row id.
- */
-function readableDate(date: string): string {
-  return NOTIFICATION_DATE.format(new Date(`${date}T00:00:00Z`));
-}
 
 /**
  * The last calendar day that is **wholly** before the deadline.
