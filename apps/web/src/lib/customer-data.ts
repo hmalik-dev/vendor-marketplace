@@ -1,7 +1,7 @@
 import 'server-only';
 import { getServerSession } from './auth/server';
 import { redirect } from 'next/navigation';
-import { ERROR_CODES } from '@vendor-marketplace/shared';
+import { ERROR_CODES, openedConversationSchema } from '@vendor-marketplace/shared';
 import { ApiClientError, ApiTimeoutError, apiRequest } from './api-client';
 import { isNavigationSignal } from './navigation-signal';
 import { signInPathReturningHere } from './requested-path';
@@ -292,6 +292,33 @@ export async function getBookingForRequest(requestId: string): Promise<WireBooki
     }
 
     throw error;
+  }
+}
+
+/**
+ * The thread a request is negotiated in (VEN-765), for `Message about this
+ * request`. `null` when it cannot be read: the link then opens the inbox, which
+ * is a smaller loss than failing the quote it sits beside.
+ */
+export async function getRequestConversationId(requestId: string): Promise<string | null> {
+  const token = await customerToken();
+
+  try {
+    const thread = await apiRequest(`/booking-requests/${requestId}/conversation`, {
+      schema: openedConversationSchema,
+      token,
+    });
+
+    return thread.id;
+  } catch (error) {
+    if (isNavigationSignal(error)) {
+      throw error;
+    }
+    if (error instanceof ApiClientError && error.statusCode === 401) {
+      redirect(await signInPathReturningHere());
+    }
+
+    return null;
   }
 }
 

@@ -15,6 +15,7 @@ import {
   BOOKING_PAYMENT_WINDOW_DAYS,
   BOOKING_REQUEST_EXPIRY_DAYS,
   CURRENT_VENDOR_AGREEMENT_VERSION,
+  DECLINE_REASON_MAX_LENGTH,
   ERROR_CODES,
   MAX_PACKAGE_PRICE_CENTS,
   MIN_BOOKING_AMOUNT_CENTS,
@@ -54,6 +55,7 @@ interface RequestBody {
   status: string;
   finalPriceCents: number | null;
   quotedPriceCents: number | null;
+  declineReason: string | null;
   eventType: string | null;
   eventLocation: string | null;
   eventStartTime: string | null;
@@ -1775,6 +1777,145 @@ describe('/v1/booking-requests', () => {
 
       expect(response.statusCode).toBe(200);
       expect((response.json() as RequestBody).status).toBe('declined');
+    });
+
+    /*
+     * VEN-765. Frame `47b` lets the customer say why they are turning a quote
+     * down; the reason is stored on the request, read back by the vendor, and
+     * carried in the vendor's notification.
+     */
+    describe('a customer decline reason', () => {
+      async function quotedRequest(): Promise<string> {
+        const { vendorId } = await createVendor(VENDOR, 'Sunlit Studio');
+        const created = await createRequest(vendorId, {
+          customDetails: 'Two hours of engagement portraits at Zilker at sunset.',
+        });
+        const requestId: string = created.json().id;
+        await post(VENDOR, `/v1/booking-requests/${requestId}/quote`, { quotedPriceCents: 90_000 });
+        return requestId;
+      }
+
+      async function read(actor: string, requestId: string): Promise<RequestBody> {
+        const response = await harness.app.inject({
+          method: 'GET',
+          url: `/v1/booking-requests/${requestId}`,
+          headers: bearer(actor),
+        });
+        expect(response.statusCode).toBe(200);
+        return response.json() as RequestBody;
+      }
+
+      async function declinedBodies(): Promise<(string | null)[]> {
+        const rows = await harness.database.db
+          .select({ body: notifications.body })
+          .from(notifications)
+          .where(eq(notifications.type, 'request_declined'));
+        return rows.map((row) => row.body);
+      }
+
+      it('stores the reason and shows it to the vendor', async () => {
+        const requestId = await quotedRequest();
+
+        const response = await post(CUSTOMER, `/v1/booking-requests/${requestId}/decline`, {
+          declineReason: '  We found a photographer closer to the venue.  ',
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect((response.json() as RequestBody).status).toBe('declined');
+        expect((await read(VENDOR, requestId)).declineReason).toBe(
+          'We found a photographer closer to the venue.',
+        );
+        expect(await declinedBodies()).toEqual([
+          `The customer turned down your quote for ${readable(EVENT_DATE)}. They said: "We found a photographer closer to the venue."`,
+        ]);
+      });
+
+      it('declines with a blank reason as with none', async () => {
+        const requestId = await quotedRequest();
+
+        const response = await post(CUSTOMER, `/v1/booking-requests/${requestId}/decline`, {
+          declineReason: '   ',
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect((response.json() as RequestBody).declineReason).toBeNull();
+        expect(await declinedBodies()).toEqual([
+          `The customer turned down your quote for ${readable(EVENT_DATE)}.`,
+        ]);
+      });
+
+      it('refuses a reason longer than the cap and leaves the quote standing', async () => {
+        const requestId = await quotedRequest();
+
+        const response = await post(CUSTOMER, `/v1/booking-requests/${requestId}/decline`, {
+          declineReason: 'x'.repeat(DECLINE_REASON_MAX_LENGTH + 1),
+        });
+
+        expect(response.statusCode).toBe(400);
+        expect((await read(CUSTOMER, requestId)).status).toBe('quoted');
+      });
+
+      it('refuses a reason on the vendor decline, which is not the customer speaking', async () => {
+        const requestId = await quotedRequest();
+
+        const response = await post(VENDOR, `/v1/booking-requests/${requestId}/decline`, {
+          declineReason: 'Double-booked.',
+        });
+
+        expect(response.statusCode).toBe(403);
+        expect((await read(VENDOR, requestId)).status).toBe('quoted');
+      });
+
+      it('declines once: of two presses one answers 409 and the first reason stands', async () => {
+        const requestId = await quotedRequest();
+
+        const [first, second] = await Promise.all([
+          post(CUSTOMER, `/v1/booking-requests/${requestId}/decline`, { declineReason: 'First.' }),
+          post(CUSTOMER, `/v1/booking-requests/${requestId}/decline`, { declineReason: 'Second.' }),
+        ]);
+
+        expect([first.statusCode, second.statusCode].sort((a, b) => a - b)).toEqual([200, 409]);
+        const winner = (first.statusCode === 200 ? first : second).json() as RequestBody;
+        expect((await read(VENDOR, requestId)).declineReason).toBe(winner.declineReason);
+        expect(await declinedBodies()).toHaveLength(1);
+      });
+    });
+
+    describe('the request conversation', () => {
+      it('answers the thread the request opened, to both parties', async () => {
+        const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+        const created = await createRequest(vendorId, { packageId });
+        const requestId: string = created.json().id;
+
+        const threads = await harness.database.db
+          .select({ id: conversations.id })
+          .from(conversations)
+          .where(eq(conversations.bookingRequestId, requestId));
+        expect(threads).toHaveLength(1);
+
+        for (const actor of [CUSTOMER, VENDOR]) {
+          const response = await harness.app.inject({
+            method: 'GET',
+            url: `/v1/booking-requests/${requestId}/conversation`,
+            headers: bearer(actor),
+          });
+          expect(response.statusCode).toBe(200);
+          expect(response.json()).toEqual({ id: threads[0]!.id });
+        }
+      });
+
+      it('answers 404 to anyone outside the request', async () => {
+        const { vendorId, packageId } = await createVendor(VENDOR, 'Sunlit Studio');
+        const created = await createRequest(vendorId, { packageId });
+
+        const response = await harness.app.inject({
+          method: 'GET',
+          url: `/v1/booking-requests/${created.json().id}/conversation`,
+          headers: bearer(OTHER_CUSTOMER),
+        });
+
+        expect(response.statusCode).toBe(404);
+      });
     });
 
     /*

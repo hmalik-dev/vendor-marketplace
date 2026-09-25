@@ -2,7 +2,9 @@ import {
   bookingRequestDetailSchema,
   bookingRequestListQuerySchema,
   createBookingRequestSchema,
+  declineBookingRequestSchema,
   historyPageQuerySchema,
+  openedConversationSchema,
   ownBookingSchema,
   quoteBookingRequestSchema,
   uuidSchema,
@@ -19,6 +21,7 @@ import type { NotificationEmailDeps } from '../notifications/notification-email.
 import {
   createBookingRequest,
   getBookingRequest,
+  getRequestConversation,
   listBookingRequests,
   listBookings,
   transitionRequest,
@@ -180,7 +183,7 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
    * request, the customer accepts a quote. The service decides which of them
    * is legal from the status it is in, so the route only requires a session.
    */
-  for (const action of ['accept', 'decline', 'cancel'] as const) {
+  for (const action of ['accept', 'cancel'] as const) {
     app.post(
       `${REQUESTS_PATH}/:requestId/${action}`,
       {
@@ -197,6 +200,43 @@ export const bookingRequestRoutes: FastifyPluginAsyncZod<BookingRequestRoutesOpt
         }),
     );
   }
+
+  /*
+   * Decline carries an optional body: the customer turning a quote down may
+   * say why (VEN-765). The body as a whole is `nullish`: the vendor's decline
+   * and a customer who gives no reason send none, which Fastify hands the
+   * validator as `null`.
+   */
+  app.post(
+    `${REQUESTS_PATH}/:requestId/decline`,
+    {
+      onRequest: requireAuthBeforeValidation,
+      schema: {
+        params: requestParamsSchema,
+        body: declineBookingRequestSchema.nullish(),
+        response: { 200: bookingRequestDetailSchema },
+      },
+    },
+    async (request) =>
+      transitionRequest(app.db, request.params.requestId, 'decline', authenticated(request.auth), {
+        now: app.clock(),
+        declineReason: request.body?.declineReason,
+        hub: app.events,
+        mail: mailFor(request.log),
+        guard: guardFor(request.log),
+        platformFeeRate: options.platformFeeRate,
+      }),
+  );
+
+  app.get(
+    `${REQUESTS_PATH}/:requestId/conversation`,
+    {
+      onRequest: requireAuthBeforeValidation,
+      schema: { params: requestParamsSchema, response: { 200: openedConversationSchema } },
+    },
+    async (request) =>
+      getRequestConversation(app.db, authenticated(request.auth), request.params.requestId),
+  );
 
   app.get(
     '/bookings',

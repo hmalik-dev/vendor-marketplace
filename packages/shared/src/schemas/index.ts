@@ -59,6 +59,7 @@ import {
   MAX_TITLE_LENGTH,
   MAX_URL_LENGTH,
   MESSAGE_MAX_LENGTH,
+  DECLINE_REASON_MAX_LENGTH,
   MESSAGE_PAGE_SIZE,
   REPORTED_THREAD_WINDOW_BASES,
   MIN_BOOKING_AMOUNT_CENTS,
@@ -959,6 +960,8 @@ export const bookingRequestSchema = z.object({
   status: bookingRequestStatusSchema,
   quotedPriceCents: z.int().nullable(),
   quoteNote: z.string().nullable(),
+  /** What the customer said when turning the quote down, if anything (VEN-765). */
+  declineReason: z.string().nullable(),
   finalPriceCents: z.int().nullable(),
   expiresAt: z.date().nullable(),
   createdAt: z.date(),
@@ -1168,6 +1171,16 @@ export const quoteBookingRequestSchema = z.object({
   quoteNote: freeText().max(5_000).optional(),
 });
 export type QuoteBookingRequestInput = z.infer<typeof quoteBookingRequestSchema>;
+
+/**
+ * The body of a decline, which is optional as a whole: the vendor's decline and
+ * a customer who gives no reason send none. Only the customer turning down a
+ * quote may give a reason — it is theirs to tell the vendor (VEN-765).
+ */
+export const declineBookingRequestSchema = z.object({
+  declineReason: freeText().max(DECLINE_REASON_MAX_LENGTH).optional(),
+});
+export type DeclineBookingRequestInput = z.infer<typeof declineBookingRequestSchema>;
 
 export const cancelBookingSchema = z.object({
   reason: freeText().max(1_000).optional(),

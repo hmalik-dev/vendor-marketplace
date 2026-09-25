@@ -774,6 +774,20 @@ export async function ensureConversation(
     .onConflictDoNothing({ target: conversations.bookingRequestId });
 }
 
+/** The id of the thread `ensureConversation` opened for this request, if any. */
+export async function findRequestConversationId(
+  db: AppDatabase,
+  bookingRequestId: string,
+): Promise<string | null> {
+  const rows = await db
+    .select({ id: conversations.id })
+    .from(conversations)
+    .where(eq(conversations.bookingRequestId, bookingRequestId))
+    .limit(1);
+
+  return rows?.[0]?.id ?? null;
+}
+
 /** The `users.id` behind a vendor profile — notifications address people. */
 export async function findVendorUserId(db: AppDatabase, vendorId: string): Promise<string | null> {
   const rows = await db

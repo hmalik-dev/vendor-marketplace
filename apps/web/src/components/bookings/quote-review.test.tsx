@@ -1,5 +1,5 @@
-import { BRAND_NAME } from '@vendor-marketplace/shared';
-import { cleanup, render, screen } from '@testing-library/react';
+import { BRAND_NAME, DECLINE_REASON_MAX_LENGTH } from '@vendor-marketplace/shared';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QuoteReview } from './quote-review';
@@ -63,7 +63,7 @@ afterEach(cleanup);
  */
 describe('QuoteReview', () => {
   it('names the vendor and shows the quoted price', () => {
-    render(<QuoteReview request={quotedRequest()} />);
+    render(<QuoteReview conversationId={null} request={quotedRequest()} />);
 
     expect(
       screen.getByRole('heading', { level: 1, name: 'Kessler & Co. sent a quote' }),
@@ -79,16 +79,16 @@ describe('QuoteReview', () => {
    * the hub all wrote the same date out.
    */
   it('writes the event date out rather than printing the ISO string', () => {
-    render(<QuoteReview request={quotedRequest()} />);
+    render(<QuoteReview conversationId={null} request={quotedRequest()} />);
 
     expect(screen.getByText('Wedding · June 14, 2026 · Barr Mansion, Austin, TX')).toBeDefined();
     expect(screen.queryByText(/2026-06-14/)).toBeNull();
   });
 
   it('accepts the quote through the API and re-reads from the server', async () => {
-    render(<QuoteReview request={quotedRequest()} />);
+    render(<QuoteReview conversationId={null} request={quotedRequest()} />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Accept quote' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Accept quote/ }));
 
     expect(requestMock).toHaveBeenCalledWith(
       '/booking-requests/req-1/accept',
@@ -97,15 +97,137 @@ describe('QuoteReview', () => {
     expect(refreshMock).toHaveBeenCalled();
   });
 
-  it('declines through the API', async () => {
-    render(<QuoteReview request={quotedRequest()} />);
+  /* Frame `47`: what accepting costs is on the button itself (VEN-765). */
+  it('names the quoted amount on Accept', () => {
+    render(<QuoteReview conversationId={null} request={quotedRequest()} />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Decline' }));
+    expect(screen.getByRole('button', { name: 'Accept quote — $3,840' })).toBeDefined();
+  });
 
-    expect(requestMock).toHaveBeenCalledWith(
-      '/booking-requests/req-1/decline',
-      expect.objectContaining({ method: 'POST' }),
-    );
+  describe('Message about this request', () => {
+    it("opens this request's thread", () => {
+      render(<QuoteReview conversationId="conv-9" request={quotedRequest()} />);
+
+      const link = screen.getByRole('link', { name: 'Message about this request' });
+      expect(link.getAttribute('href')).toBe('/messages?conversation=conv-9');
+    });
+
+    it('falls back to the inbox when the thread could not be read', () => {
+      render(<QuoteReview conversationId={null} request={quotedRequest()} />);
+
+      const link = screen.getByRole('link', { name: 'Message about this request' });
+      expect(link.getAttribute('href')).toBe('/messages');
+    });
+  });
+
+  /*
+   * Frame `47b` (VEN-765). Decline used to fire on the first press; it is the
+   * one control here that cannot be taken back, so it asks first and lets the
+   * customer say why.
+   */
+  describe('declining', () => {
+    it('asks before declining, naming the vendor', async () => {
+      render(<QuoteReview conversationId={null} request={quotedRequest()} />);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Decline' }));
+
+      const dialog = screen.getByRole('alertdialog', { name: 'Decline this quote?' });
+      expect(dialog.textContent).toContain(
+        'Kessler & Co. will be told you’ve declined. The request closes.',
+      );
+      expect(requestMock).not.toHaveBeenCalled();
+    });
+
+    it('leaves the request quoted on Keep the quote', async () => {
+      render(<QuoteReview conversationId={null} request={quotedRequest()} />);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Decline' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Keep the quote' }));
+
+      expect(screen.queryByRole('alertdialog')).toBeNull();
+      expect(requestMock).not.toHaveBeenCalled();
+      expect(refreshMock).not.toHaveBeenCalled();
+    });
+
+    it('declines with no body when no reason is given', async () => {
+      render(<QuoteReview conversationId={null} request={quotedRequest()} />);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Decline' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Decline quote' }));
+
+      expect(requestMock).toHaveBeenCalledTimes(1);
+      const [path, init] = requestMock.mock.calls[0]!;
+      expect(path).toBe('/booking-requests/req-1/decline');
+      expect(init.method).toBe('POST');
+      expect(init.body).toBeUndefined();
+      expect(refreshMock).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('alertdialog')).toBeNull();
+    });
+
+    it('sends the reason, trimmed, when one is given', async () => {
+      render(<QuoteReview conversationId={null} request={quotedRequest()} />);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Decline' }));
+      await userEvent.type(
+        screen.getByLabelText(/Tell them why/),
+        '  We went with a photographer closer to the venue.  ',
+      );
+      await userEvent.click(screen.getByRole('button', { name: 'Decline quote' }));
+
+      expect(requestMock).toHaveBeenCalledWith(
+        '/booking-requests/req-1/decline',
+        expect.objectContaining({
+          method: 'POST',
+          body: { declineReason: 'We went with a photographer closer to the venue.' },
+        }),
+      );
+    });
+
+    it('caps the reason at the API limit', async () => {
+      render(<QuoteReview conversationId={null} request={quotedRequest()} />);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Decline' }));
+
+      expect(screen.getByLabelText(/Tell them why/).getAttribute('maxlength')).toBe(
+        String(DECLINE_REASON_MAX_LENGTH),
+      );
+    });
+
+    it('declines once however fast the button is pressed', async () => {
+      let answer: (value: unknown) => void = () => undefined;
+      requestMock.mockReturnValue(
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+      );
+      render(<QuoteReview conversationId={null} request={quotedRequest()} />);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Decline' }));
+      const confirm = screen.getByRole('button', { name: 'Decline quote' });
+      fireEvent.click(confirm);
+      fireEvent.click(confirm);
+
+      expect(requestMock).toHaveBeenCalledTimes(1);
+      answer({});
+      await waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1));
+    });
+
+    it('keeps the dialog open with the failure in it', async () => {
+      const { ApiClientError } = await import('@/lib/api-client');
+      requestMock.mockRejectedValue(
+        new ApiClientError(409, 'CONFLICT', 'This quote is no longer open'),
+      );
+      render(<QuoteReview conversationId={null} request={quotedRequest()} />);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Decline' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Decline quote' }));
+
+      const dialog = screen.getByRole('alertdialog');
+      expect((await within(dialog).findByRole('alert')).textContent).toBe(
+        'This quote is no longer open',
+      );
+      expect(refreshMock).not.toHaveBeenCalled();
+    });
   });
 
   /*
@@ -114,7 +236,9 @@ describe('QuoteReview', () => {
    * viewer's offset, and the accepted card beside it now names the instant.
    */
   it('states the full-refund deadline before the action, as an instant', () => {
-    render(<QuoteReview request={quotedRequest({ eventDate: '2099-06-14' })} />);
+    render(
+      <QuoteReview conversationId={null} request={quotedRequest({ eventDate: '2099-06-14' })} />,
+    );
 
     expect(
       screen.getByText(
@@ -126,7 +250,7 @@ describe('QuoteReview', () => {
 
   /* Nothing on this surface charges anything — paying is #10's. */
   it('offers no checkout', () => {
-    render(<QuoteReview request={quotedRequest()} />);
+    render(<QuoteReview conversationId={null} request={quotedRequest()} />);
 
     expect(screen.queryByRole('button', { name: /pay/i })).toBeNull();
     expect(screen.queryByRole('link', { name: /pay/i })).toBeNull();
@@ -153,11 +277,12 @@ describe('QuoteReview', () => {
   it('offers nothing to accept before the vendor has quoted', () => {
     render(
       <QuoteReview
+        conversationId={null}
         request={quotedRequest({ status: 'pending', quotedPriceCents: null, quoteNote: null })}
       />,
     );
 
-    expect(screen.queryByRole('button', { name: 'Accept quote' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Accept quote/ })).toBeNull();
     expect(screen.queryByText('No price yet')).toBeNull();
     expect(screen.queryByText('Quoted price')).toBeNull();
   });
@@ -173,7 +298,10 @@ describe('QuoteReview', () => {
   describe('withdrawing a request the vendor has not answered', () => {
     it('names the state honestly rather than claiming a quote arrived', () => {
       render(
-        <QuoteReview request={quotedRequest({ status: 'pending', quotedPriceCents: null })} />,
+        <QuoteReview
+          conversationId={null}
+          request={quotedRequest({ status: 'pending', quotedPriceCents: null })}
+        />,
       );
 
       expect(screen.getByRole('heading', { name: /Waiting on/ })).toBeDefined();
@@ -183,7 +311,10 @@ describe('QuoteReview', () => {
     /* Destructive, so it takes a deliberate second press rather than one. */
     it('asks twice before withdrawing', async () => {
       render(
-        <QuoteReview request={quotedRequest({ status: 'pending', quotedPriceCents: null })} />,
+        <QuoteReview
+          conversationId={null}
+          request={quotedRequest({ status: 'pending', quotedPriceCents: null })}
+        />,
       );
 
       await userEvent.click(screen.getByRole('button', { name: 'Withdraw request' }));
@@ -194,7 +325,10 @@ describe('QuoteReview', () => {
 
     it('withdraws through the API on the second press', async () => {
       render(
-        <QuoteReview request={quotedRequest({ status: 'pending', quotedPriceCents: null })} />,
+        <QuoteReview
+          conversationId={null}
+          request={quotedRequest({ status: 'pending', quotedPriceCents: null })}
+        />,
       );
 
       await userEvent.click(screen.getByRole('button', { name: 'Withdraw request' }));
@@ -208,7 +342,10 @@ describe('QuoteReview', () => {
 
     it('lets the customer back out of withdrawing', async () => {
       render(
-        <QuoteReview request={quotedRequest({ status: 'pending', quotedPriceCents: null })} />,
+        <QuoteReview
+          conversationId={null}
+          request={quotedRequest({ status: 'pending', quotedPriceCents: null })}
+        />,
       );
 
       await userEvent.click(screen.getByRole('button', { name: 'Withdraw request' }));
@@ -224,7 +361,7 @@ describe('QuoteReview', () => {
      * the request would be two names for one thing.
      */
     it('is absent once a quote is on the table', () => {
-      render(<QuoteReview request={quotedRequest({ status: 'quoted' })} />);
+      render(<QuoteReview conversationId={null} request={quotedRequest({ status: 'quoted' })} />);
 
       expect(screen.queryByRole('button', { name: 'Withdraw request' })).toBeNull();
       expect(screen.getByRole('button', { name: 'Decline' })).toBeDefined();
@@ -236,9 +373,9 @@ describe('QuoteReview', () => {
     requestMock.mockRejectedValue(
       new ApiClientError(409, 'CONFLICT', 'That date was booked while this quote was open'),
     );
-    render(<QuoteReview request={quotedRequest()} />);
+    render(<QuoteReview conversationId={null} request={quotedRequest()} />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Accept quote' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Accept quote/ }));
 
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toBe('That date was booked while this quote was open');
@@ -259,15 +396,15 @@ describe('QuoteReview', () => {
     const settled = ['declined', 'cancelled', 'expired'] as const;
 
     it.each(settled)('offers no decision on a %s request', (status) => {
-      render(<QuoteReview request={quotedRequest({ status })} />);
+      render(<QuoteReview conversationId={null} request={quotedRequest({ status })} />);
 
-      expect(screen.queryByRole('button', { name: 'Accept quote' })).toBeNull();
+      expect(screen.queryByRole('button', { name: /^Accept quote/ })).toBeNull();
       expect(screen.queryByRole('button', { name: 'Decline' })).toBeNull();
       expect(screen.queryByRole('button', { name: 'Withdraw request' })).toBeNull();
     });
 
     it.each(settled)('does not claim a quote is waiting on a %s request', (status) => {
-      render(<QuoteReview request={quotedRequest({ status })} />);
+      render(<QuoteReview conversationId={null} request={quotedRequest({ status })} />);
 
       expect(screen.queryByText(/sent a quote/)).toBeNull();
       expect(screen.queryByText(/full refund applies/)).toBeNull();
@@ -287,7 +424,12 @@ describe('QuoteReview', () => {
      * ended it.
      */
     it('names the withdrawal when no booking was ever made', () => {
-      render(<QuoteReview request={quotedRequest({ status: 'cancelled', settlement: null })} />);
+      render(
+        <QuoteReview
+          conversationId={null}
+          request={quotedRequest({ status: 'cancelled', settlement: null })}
+        />,
+      );
 
       expect(screen.getByText('You withdrew this request before it was accepted.')).toBeDefined();
       expect(screen.queryByText(/refunded/i)).toBeNull();
@@ -298,7 +440,7 @@ describe('QuoteReview', () => {
      * and cancelled said nothing about the amount or the refund.
      */
     it('names what was paid and what came back on a booking the customer cancelled', () => {
-      render(<QuoteReview request={cancelledBooking()} />);
+      render(<QuoteReview conversationId={null} request={cancelledBooking()} />);
 
       expect(screen.getByText('You canceled this booking on June 1, 2026.')).toBeDefined();
       expect(
@@ -310,7 +452,12 @@ describe('QuoteReview', () => {
     });
 
     it('says a partial refund was partial rather than calling it the whole amount', () => {
-      render(<QuoteReview request={cancelledBooking({ refundAmountCents: 72_500 })} />);
+      render(
+        <QuoteReview
+          conversationId={null}
+          request={cancelledBooking({ refundAmountCents: 72_500 })}
+        />,
+      );
 
       expect(
         screen.getByText('You paid $1,450, and $725 was refunded to your original payment method.'),
@@ -323,7 +470,9 @@ describe('QuoteReview', () => {
      * did.
      */
     it('says an admin unwound it, and does not blame the customer', () => {
-      render(<QuoteReview request={cancelledBooking({ cancelledBy: 'admin' })} />);
+      render(
+        <QuoteReview conversationId={null} request={cancelledBooking({ cancelledBy: 'admin' })} />,
+      );
 
       expect(
         screen.getByText(
@@ -338,7 +487,9 @@ describe('QuoteReview', () => {
      * know who acted, and the fix for this screen was never to start guessing.
      */
     it('names no actor on a row that does not record one', () => {
-      render(<QuoteReview request={cancelledBooking({ cancelledBy: null })} />);
+      render(
+        <QuoteReview conversationId={null} request={cancelledBooking({ cancelledBy: null })} />,
+      );
 
       expect(screen.getByText('This booking was canceled on June 1, 2026.')).toBeDefined();
       expect(screen.queryByText(/you canceled/i)).toBeNull();
@@ -346,7 +497,12 @@ describe('QuoteReview', () => {
     });
 
     it('does not claim a refund on a booking that has none on record', () => {
-      render(<QuoteReview request={cancelledBooking({ refundAmountCents: null })} />);
+      render(
+        <QuoteReview
+          conversationId={null}
+          request={cancelledBooking({ refundAmountCents: null })}
+        />,
+      );
 
       expect(
         screen.getByText('You paid $1,450. This booking has no refund on record.'),
@@ -355,7 +511,7 @@ describe('QuoteReview', () => {
     });
 
     it('stays impersonal about a decline, which either party can make', () => {
-      render(<QuoteReview request={quotedRequest({ status: 'declined' })} />);
+      render(<QuoteReview conversationId={null} request={quotedRequest({ status: 'declined' })} />);
 
       expect(screen.getByText('This request was declined.')).toBeDefined();
     });
@@ -369,7 +525,12 @@ describe('QuoteReview', () => {
       // A `Date`, not an ISO string — `expiresAt` is parsed by Zod before it
       // reaches the component, and a string here throws inside the helper.
       const future = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
-      render(<QuoteReview request={quotedRequest({ status: 'declined', expiresAt: future })} />);
+      render(
+        <QuoteReview
+          conversationId={null}
+          request={quotedRequest({ status: 'declined', expiresAt: future })}
+        />,
+      );
 
       expect(screen.queryByText(/expires/)).toBeNull();
     });
@@ -377,7 +538,12 @@ describe('QuoteReview', () => {
     /* Live requests keep it, so the guard above cannot be silently over-broad. */
     it('still counts down on a quote that is still open', () => {
       const future = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
-      render(<QuoteReview request={quotedRequest({ status: 'quoted', expiresAt: future })} />);
+      render(
+        <QuoteReview
+          conversationId={null}
+          request={quotedRequest({ status: 'quoted', expiresAt: future })}
+        />,
+      );
 
       expect(screen.getByText(/This quote expires/)).toBeDefined();
     });

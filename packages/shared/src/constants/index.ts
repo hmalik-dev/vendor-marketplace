@@ -1613,6 +1613,9 @@ export const MAX_EVENT_DATE_MONTHS_AHEAD = AVAILABILITY_MONTHS_AHEAD * 2;
 
 export const MESSAGE_MAX_LENGTH = 5_000;
 
+/** The optional reason a customer gives when declining a quote (VEN-765). */
+export const DECLINE_REASON_MAX_LENGTH = 500;
+
 /**
  * A thread page. Larger than the default list page: a conversation is read in
  * bulk rather than skimmed.

@@ -50,6 +50,7 @@ import {
   applyExpiry,
   applyTransition,
   ensureConversation,
+  findRequestConversationId,
   findActivePackage,
   findAvailabilityOn,
   findBookings,
@@ -971,6 +972,8 @@ export async function listBookingRequests(
 
 interface TransitionOptions {
   quote?: QuoteBookingRequestInput;
+  /** The customer's optional reason for turning a quote down (VEN-765). */
+  declineReason?: string;
   now?: Date;
   /** Present when the caller can reach open streams; absent in a plain read. */
   hub?: EventHub;
@@ -986,6 +989,32 @@ interface TransitionOptions {
  * The state machine. Every legal edge is in `BOOKING_REQUEST_TRANSITIONS`;
  * this adds who may walk it and what else has to be true when they do.
  */
+/**
+ * The thread this request is negotiated in, for either party — what the
+ * customer's `Message about this request` opens (VEN-765).
+ */
+export async function getRequestConversation(
+  db: AppDatabase,
+  user: AuthenticatedUser,
+  requestId: string,
+): Promise<{ id: string }> {
+  const row = await findRequestById(db, requestId);
+
+  if (!row) {
+    throw notFound('That request does not exist');
+  }
+
+  await requireParticipant(db, user, row);
+
+  const id = await findRequestConversationId(db, row.id);
+
+  if (id === null) {
+    throw notFound('That request has no conversation');
+  }
+
+  return { id };
+}
+
 export async function transitionRequest(
   db: AppDatabase,
   requestId: string,
@@ -1131,7 +1160,19 @@ async function prepareTransition({
     if (party === 'customer' && row.status !== 'quoted') {
       throw forbidden('You can only decline a request once the vendor has sent a quote');
     }
-    return {};
+
+    // Trimmed by the schema, so an all-blank reason arrives empty: no reason.
+    const reason = options.declineReason || null;
+
+    /*
+     * The reason is the customer's word to the vendor. A vendor declining has
+     * the thread for that, and a reason stored on their own decline would be
+     * shown back to them as if the customer had said it.
+     */
+    if (reason !== null && party !== 'customer') {
+      throw forbidden('Only the customer can give a reason for declining');
+    }
+    return { declineReason: reason };
   }
 
   if (action === 'quote') {
@@ -1366,7 +1407,7 @@ async function announce(
             'request_declined',
             {
               title: 'Quote declined',
-              body: `The customer turned down your quote for ${readableDate(row.eventDate)}.`,
+              body: declinedQuoteBody(row),
             },
             hub,
             mail,
@@ -1398,6 +1439,13 @@ async function announce(
         mail,
       );
   }
+}
+
+/** What the vendor is told when the customer turns their quote down, reason included. */
+function declinedQuoteBody(row: BookingRequestRow): string {
+  const told = `The customer turned down your quote for ${readableDate(row.eventDate)}.`;
+
+  return row.declineReason === null ? told : `${told} They said: "${row.declineReason}"`;
 }
 
 /**

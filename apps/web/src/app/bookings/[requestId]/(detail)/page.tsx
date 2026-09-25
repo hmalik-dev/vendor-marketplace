@@ -5,6 +5,7 @@ import { AcceptedRequest } from '@/components/bookings/accepted-request';
 import { QuoteReview } from '@/components/bookings/quote-review';
 import { ReportProblem } from '@/components/bookings/report-problem';
 import { gateBookingRequest, readBookingForRequest } from '@/lib/booking-route';
+import { getRequestConversationId } from '@/lib/customer-data';
 
 export const metadata: Metadata = {
   title: pageTitle('Your request'),
@@ -49,6 +50,12 @@ export default async function BookingRequestPage({
    * one place that fetches.
    */
   const booking = request.status === 'accepted' ? await readBookingForRequest(requestId) : null;
+  /*
+   * The thread `Message about this request` opens (frame `47`), read only while
+   * there is a quote to talk about — the one state that draws the link.
+   */
+  const conversationId =
+    request.status === 'quoted' ? await getRequestConversationId(requestId) : null;
 
   return (
     /*
@@ -63,7 +70,7 @@ export default async function BookingRequestPage({
         href="/bookings"
         className="mb-5 inline-block rounded-xs text-sm font-semibold text-clay-500 hover:underline"
       >
-        ← Your bookings
+        ← My bookings
       </Link>
 
       {/*
@@ -74,7 +81,7 @@ export default async function BookingRequestPage({
       {request.status === 'accepted' ? (
         <AcceptedRequest request={request} booking={booking} />
       ) : (
-        <QuoteReview request={request} />
+        <QuoteReview request={request} conversationId={conversationId} />
       )}
 
       {/*
