@@ -44,7 +44,30 @@ export function MessagesLink({ gated = false }: MessagesLinkProps): React.ReactE
   return <UnreadMessagesLink />;
 }
 
+/**
+ * The unread source with no link: a customer's header draws `My bookings`
+ * instead of `Messages` (VEN-760), but the sidebar's dot still needs someone
+ * to publish the state, and the bell's stream still announces changes here.
+ */
+export function UnreadMessagesSource({
+  gated = false,
+}: MessagesLinkProps): React.ReactElement | null {
+  const pathname = usePathname();
+
+  return isHeaderReadSuppressed(pathname, gated) ? null : <UnreadMessagesReader />;
+}
+
+function UnreadMessagesReader(): null {
+  useUnreadMessages();
+
+  return null;
+}
+
 function UnreadMessagesLink(): React.ReactElement {
+  return <MessagesAnchor unread={useUnreadMessages()} />;
+}
+
+function useUnreadMessages(): boolean {
   const call = useApi();
   const pathname = usePathname();
   const [unread, setUnread] = useState(false);
@@ -91,7 +114,7 @@ function UnreadMessagesLink(): React.ReactElement {
     return () => window.removeEventListener(CONVERSATIONS_CHANGED_EVENT, refresh);
   }, [refresh]);
 
-  return <MessagesAnchor unread={unread} />;
+  return unread;
 }
 
 function MessagesAnchor({ unread }: { unread: boolean }): React.ReactElement {
