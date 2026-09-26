@@ -3,7 +3,11 @@ import { getServerSession } from './auth/server';
 import * as Sentry from '@sentry/nextjs';
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
-import type { UserRole } from '@vendor-marketplace/shared';
+import {
+  accountSuspendedDetailsSchema,
+  ERROR_CODES,
+  type UserRole,
+} from '@vendor-marketplace/shared';
 import { ApiClientError, apiRequest } from './api-client';
 import { redirectIfNameRequired } from './name-gate';
 import { isNavigationSignal } from './navigation-signal';
@@ -350,6 +354,29 @@ export async function readIdentityForSupport(): Promise<WireUser | null> {
      * point rather than an oversight.
      */
     return null;
+  }
+}
+
+/**
+ * The role of a suspended account, for `/suspended` alone (VEN-763).
+ *
+ * The API refuses a banned account every read, `/users/me` included, and
+ * names the account's role on that refusal. The page needs it for one
+ * sentence: a vendor's confirmed bookings were refunded by the suspension, a
+ * customer's were not. Null for everything else — signed out, not suspended,
+ * or unreadable — which the page reads as "say nothing about refunds". Never a
+ * redirect: the reader is already where a suspension sends them.
+ */
+export async function readSuspendedRole(): Promise<UserRole | null> {
+  try {
+    await getCurrentUser();
+    return null;
+  } catch (error) {
+    if (!(error instanceof ApiClientError) || error.code !== ERROR_CODES.ACCOUNT_SUSPENDED) {
+      return null;
+    }
+
+    return accountSuspendedDetailsSchema.safeParse(error.details).data?.role ?? null;
   }
 }
 

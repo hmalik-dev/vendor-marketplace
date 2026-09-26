@@ -2617,6 +2617,15 @@ export const apiErrorSchema = z.object({
 export type ApiError = z.infer<typeof apiErrorSchema>;
 
 /**
+ * The `details` of an `ACCOUNT_SUSPENDED` refusal (VEN-763). A banned account
+ * is refused every read, `/users/me` included, so this is the only way
+ * `/suspended` learns whether it is telling a vendor — whose confirmed bookings
+ * the suspension refunded — or a customer, whose were not.
+ */
+export const accountSuspendedDetailsSchema = z.object({ role: userRoleSchema });
+export type AccountSuspendedDetails = z.infer<typeof accountSuspendedDetailsSchema>;
+
+/**
  * The `details` a validation failure carries when the refusal belongs to one
  * named field, keyed by the **payload** key rather than a control id — the API
  * knows what it rejected, not how a client lays it out.

@@ -149,6 +149,7 @@ describe('prose that wraps carries its own measure', () => {
   it('gives the suspended-account paragraph an explicit leading', () => {
     const paragraph = suspended.match(/<p className="([^"]*)"/)?.[1] ?? '';
 
-    expect(paragraph).toContain('leading-prose');
+    // Frame 53 draws it at 1.65, the first-run screens' measure (VEN-763).
+    expect(paragraph.split(/\s+/)).toContain('leading-[1.65]');
   });
 });

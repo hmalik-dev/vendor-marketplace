@@ -1,43 +1,75 @@
 import type { Metadata } from 'next';
 import { pageTitle, SUPPORT_PATH } from '@vendor-marketplace/shared';
 import Link from 'next/link';
-import { SignOutLink } from '@/components/sign-out-link';
+import { SignOutButton } from '@/components/auth/sign-out-button';
+import { Logo, LOGO_SIZES } from '@/components/brand/logo';
 import { Button } from '@/components/ui/button';
+import { readSuspendedRole } from '@/lib/current-user';
 
 export const metadata: Metadata = { title: pageTitle('Account suspended') };
 
 /**
  * Where a suspended account lands. The API answers every request from a banned
  * user with 403, and without somewhere to send them each protected page threw
- * that error straight into the render and produced a raw 500. #15 owns
- * the admin tooling behind suspensions and can enrich this page then.
+ * that error straight into the render and produced a raw 500.
+ *
+ * Frame 53. `data-auth-screen` takes the site header and footer off, and the
+ * page draws the frame's own header: the mark and `Sign out`, nothing that
+ * suggests another route works. `/support` is exempt from the suspension
+ * redirect, so `Contact support` is a real way out.
+ *
+ * The refund sentence is for vendors only (VEN-763): suspension refunds a
+ * vendor's confirmed bookings, and telling a customer the same would be false.
+ * The role comes from the API's suspension refusal, since `/users/me` answers
+ * a banned account with that refusal and nothing else.
  */
-export default function SuspendedPage(): React.ReactElement {
+export default async function SuspendedPage(): Promise<React.ReactElement> {
+  const role = await readSuspendedRole();
+
   return (
-    <div className="mx-auto flex min-h-[60vh] w-full max-w-xl flex-col items-center justify-center px-4 text-center">
-      <h1 className="font-display text-3xl font-semibold text-stone-800">
-        Your account is suspended
-      </h1>
-      {/*
-        `leading-prose` because this is the one wrapped paragraph in the product
-        that was relying on the inherited default. #235 narrowed that from 1.5 to
-        `normal`, which is right for the frames' single-line labels and too tight
-        for three lines of prose — so it asks for its measure explicitly rather
-        than the default being widened back for everything.
-      */}
-      <p className="mt-4 leading-prose text-stone-600">
-        You can&apos;t book, message or take bookings while it&apos;s suspended.
-      </p>
-      {/*
-        Frame 53's way out. `/support` is exempt from the suspension redirect,
-        so the primary works; `Back to home` would only bounce here again.
-      */}
-      <Button variant="primary" className="mt-8" asChild>
-        <Link href={SUPPORT_PATH}>Contact support</Link>
-      </Button>
-      <div className="mt-4">
-        <SignOutLink />
-      </div>
+    <div data-auth-screen className="flex min-h-dvh flex-col bg-stone-50">
+      <header className="flex h-(--header-height) flex-none items-center justify-between border-b border-stone-300 bg-stone-0 px-8">
+        {/* Not a link: every route but `/support` would bounce straight back here. */}
+        <Logo size={LOGO_SIZES.desktopHeader} />
+        <SignOutButton>
+          <button
+            type="button"
+            className="text-[13.5px] font-semibold text-clay-500 hover:text-clay-600 hover:underline"
+          >
+            Sign out
+          </button>
+        </SignOutButton>
+      </header>
+
+      <section
+        aria-labelledby="suspended-heading"
+        className="flex flex-1 flex-col items-center justify-center px-10 text-center"
+      >
+        <div
+          aria-hidden="true"
+          className="mb-5.5 flex size-11.5 items-center justify-center rounded-full bg-stone-200"
+        >
+          <div className="size-4 rounded-full border-2 border-stone-600" />
+        </div>
+        <h1
+          id="suspended-heading"
+          className="display-heading mb-3 text-display-error text-stone-900"
+        >
+          Your account is suspended
+        </h1>
+        <p className="mb-6 max-w-[480px] text-sm leading-[1.65] text-stone-700">
+          You can’t book, message or take bookings while it’s suspended.
+          {role === 'vendor' ? ' Confirmed bookings were refunded to customers in full.' : null}
+        </p>
+        <div data-testid="suspended-actions" className="flex gap-3">
+          <Button variant="primary" asChild>
+            <Link href={SUPPORT_PATH}>Contact support</Link>
+          </Button>
+          <SignOutButton>
+            <Button variant="secondary">Sign out</Button>
+          </SignOutButton>
+        </div>
+      </section>
     </div>
   );
 }

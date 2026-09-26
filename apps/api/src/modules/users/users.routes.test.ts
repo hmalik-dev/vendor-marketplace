@@ -244,6 +244,32 @@ describe('/users/me', () => {
 
       expect(response.statusCode).toBe(403);
       expect(response.json().error).toBe('ACCOUNT_SUSPENDED');
+      // VEN-763: `/suspended` tells a vendor its confirmed bookings were refunded.
+      expect(response.json().details).toEqual({ role: 'vendor' });
+    });
+
+    it('names a suspended customer as a customer', async () => {
+      await harness.app.inject({
+        method: 'GET',
+        url: '/v1/users/me',
+        headers: bearer(CUSTOMER_AUTH_ID),
+      });
+      await harness.database.db
+        .update(users)
+        .set({ isBanned: true })
+        .where(eq(users.authUserId, CUSTOMER_AUTH_ID));
+
+      const response = await harness.app.inject({
+        method: 'GET',
+        url: '/v1/users/me',
+        headers: bearer(CUSTOMER_AUTH_ID),
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toMatchObject({
+        error: 'ACCOUNT_SUSPENDED',
+        details: { role: 'customer' },
+      });
     });
   });
 
