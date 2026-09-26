@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { expect, type Page } from '@playwright/test';
+import { expect, type APIRequestContext, type Page } from '@playwright/test';
 import { parse } from 'dotenv';
 
 import { API_VERSION_PREFIX } from '@vendor-marketplace/shared';
@@ -129,6 +129,22 @@ export async function seededPackage(page: Page): Promise<{ vendorId: string; pac
   }
 
   return { vendorId: vendor.id, packageId: servicePackage.id };
+}
+
+/**
+ * The seeded vendor's first page of reviews as a signed-out visitor gets it
+ * from the API: no session, so no `viewer` block of anyone's in it.
+ */
+export async function publicReviewContents(request: APIRequestContext): Promise<string[]> {
+  const response = await request.get(`${API_URL}/vendors/${E2E_VENDOR_SLUG}/reviews`);
+  expect(
+    response.ok(),
+    `GET /vendors/${E2E_VENDOR_SLUG}/reviews answered ${response.status()}`,
+  ).toBe(true);
+
+  const reviews = (await response.json()) as { items: { content: string }[] };
+
+  return reviews.items.map((review) => review.content);
 }
 
 /** The customer's own request that names this venue. */
