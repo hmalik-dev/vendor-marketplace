@@ -58,7 +58,7 @@ export default async function SuspendedPage(): Promise<React.ReactElement> {
           Your account is suspended
         </h1>
         <p className="mb-6 max-w-[480px] text-cta leading-[1.65] text-stone-700">
-          You can’t book, message or take bookings while it’s suspended.
+          You can&apos;t book, message or take bookings while it&apos;s suspended.
           {role === 'vendor' ? ' Confirmed bookings were refunded to customers in full.' : null}
         </p>
         <div data-testid="suspended-actions" className="flex gap-3">

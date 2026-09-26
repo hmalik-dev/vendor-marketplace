@@ -47,13 +47,13 @@ describe('/suspended', () => {
   });
 
   /* Parity with frame 53: 14px copy (`text-cta`) and the error headline's -.015em. */
-  it('sets the heading and copy in the frame’s type', async () => {
+  it("sets the heading and copy in the frame's type", async () => {
     await renderAs('customer');
 
     const heading = screen.getByRole('heading', { level: 1 }).className.split(/\s+/);
     expect(heading).toEqual(expect.arrayContaining(['text-display-error', 'tracking-[-.015em]']));
     const copy = screen
-      .getByText('You can’t book, message or take bookings while it’s suspended.')
+      .getByText("You can't book, message or take bookings while it's suspended.")
       .className.split(/\s+/);
     expect(copy).toEqual(expect.arrayContaining(['text-cta', 'leading-[1.65]']));
     expect(copy).not.toContain('text-sm');
@@ -76,7 +76,7 @@ describe('/suspended', () => {
 
     expect(screen.queryByText(/refunded/)).toBeNull();
     expect(
-      screen.getByText('You can’t book, message or take bookings while it’s suspended.'),
+      screen.getByText("You can't book, message or take bookings while it's suspended."),
     ).not.toBeNull();
   });
 });
