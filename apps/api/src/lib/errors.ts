@@ -1,4 +1,8 @@
-import { ERROR_CODES, type ErrorCode } from '@vendor-marketplace/shared';
+import {
+  ERROR_CODES,
+  type AccountSuspendedDetails,
+  type ErrorCode,
+} from '@vendor-marketplace/shared';
 
 /**
  * The only error class the API throws deliberately. The error handler plugin
@@ -24,9 +28,16 @@ export function unauthorized(message = 'Authentication required'): AppError {
   return new AppError(401, ERROR_CODES.UNAUTHORIZED, message);
 }
 
-/** The account is banned: a 403 the browser recognises as terminal. */
-export function accountSuspended(message = 'This account has been suspended'): AppError {
-  return new AppError(403, ERROR_CODES.ACCOUNT_SUSPENDED, message);
+/**
+ * The account is banned: a 403 the browser recognises as terminal. The auth
+ * plugin names the account's role in `details`, which `/suspended` reads to
+ * say what happened to its bookings (VEN-763).
+ */
+export function accountSuspended(
+  message = 'This account has been suspended',
+  details?: AccountSuspendedDetails,
+): AppError {
+  return new AppError(403, ERROR_CODES.ACCOUNT_SUSPENDED, message, details);
 }
 
 export function forbidden(message = 'You do not have access to this resource'): AppError {

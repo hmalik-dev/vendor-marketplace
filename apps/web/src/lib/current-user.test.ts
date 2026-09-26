@@ -54,6 +54,7 @@ const {
   isTermsGatedForChrome,
   readIdentityForSupport,
   readRoleForChrome,
+  readSuspendedRole,
   readUserForChrome,
   redirectIfSignedIn,
   redirectVendorToDashboard,
@@ -769,6 +770,64 @@ describe('readIdentityForSupport', () => {
     getToken.mockResolvedValue(null);
 
     expect(await readIdentityForSupport()).toBeNull();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * VEN-763. `/suspended` tells a vendor its confirmed bookings were refunded and
+ * must not tell a customer that, so it reads the role the API names on the
+ * suspension refusal. Never a redirect: the reader is already on `/suspended`.
+ */
+describe('readSuspendedRole', () => {
+  beforeEach(() => {
+    getToken.mockReset();
+    apiRequest.mockReset();
+    redirect.mockClear();
+    getToken.mockResolvedValue('token');
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns the role named on the suspension refusal', async () => {
+    apiRequest.mockRejectedValue(
+      new ApiClientError(403, 'ACCOUNT_SUSPENDED', 'This account has been suspended', {
+        role: 'vendor',
+      }),
+    );
+
+    expect(await readSuspendedRole()).toBe('vendor');
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it('returns null for a refusal that names no role', async () => {
+    apiRequest.mockRejectedValue(
+      new ApiClientError(403, 'ACCOUNT_SUSPENDED', 'This account has been suspended'),
+    );
+
+    expect(await readSuspendedRole()).toBeNull();
+  });
+
+  it('returns null for a 403 that is not a suspension, whatever it carries', async () => {
+    apiRequest.mockRejectedValue(
+      new ApiClientError(403, 'FORBIDDEN', 'No access', { role: 'vendor' }),
+    );
+
+    expect(await readSuspendedRole()).toBeNull();
+  });
+
+  it('returns null for an account that is not suspended', async () => {
+    apiRequest.mockResolvedValue(VENDOR);
+
+    expect(await readSuspendedRole()).toBeNull();
+  });
+
+  it('returns null when the API cannot be reached', async () => {
+    apiRequest.mockRejectedValue(new Error('fetch failed'));
+
+    expect(await readSuspendedRole()).toBeNull();
     expect(redirect).not.toHaveBeenCalled();
   });
 });

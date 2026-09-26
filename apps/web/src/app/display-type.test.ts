@@ -63,9 +63,6 @@ const SIZE_TOKENS = new Map<string, number>([
       Number.parseFloat(match[2] as string) * (match[3] === 'rem' ? 16 : 1),
     ],
   ),
-  // `/suspended` still reaches for a stock Tailwind step rather than a project
-  // token; moving it onto the shared scale is the type scale's own work.
-  ['text-3xl', 30],
 ]);
 
 /**
