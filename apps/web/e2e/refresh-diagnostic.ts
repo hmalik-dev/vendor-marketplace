@@ -6,7 +6,7 @@ import { waitForHydration } from './hydration.js';
 
 /* VEN-779 DIAGNOSTIC — removed before merge. Does router.refresh() commit on each route? */
 
-const ROUNDS = 25;
+const ROUNDS = 12;
 
 async function refreshOnce(page: Page): Promise<string> {
   const events: string[] = [];
@@ -42,15 +42,51 @@ async function refreshOnce(page: Page): Promise<string> {
   return had ? events.join('+') || 'nothing' : 'no-router';
 }
 
-for (const path of [
-  `/vendors/${E2E_VENDOR_SLUG}?tab=reviews`,
-  `/vendors/${E2E_VENDOR_SLUG}`,
-  '/bookings',
-  '/messages',
-  '/customer/profile',
-]) {
-  test(`router.refresh() commits on ${path}`, async ({ customerPage }) => {
+async function firstBookingPath(page: Page): Promise<string> {
+  await page.goto('/bookings');
+  const href = await page
+    .locator('main a[href^="/bookings/"]:not([href$="/checkout"])')
+    .first()
+    .getAttribute('href');
+  return href ?? '/bookings';
+}
+
+const CASES: { label: string; path: (page: Page) => Promise<string>; blockPrefetch: boolean }[] =
+  [];
+for (const blockPrefetch of [false, true]) {
+  CASES.push(
+    {
+      label: 'vendor profile (group)',
+      path: async () => `/vendors/${E2E_VENDOR_SLUG}`,
+      blockPrefetch,
+    },
+    { label: 'bookings hub (group)', path: async () => '/bookings', blockPrefetch },
+    { label: 'booking detail (group)', path: firstBookingPath, blockPrefetch },
+    { label: 'messages (plain)', path: async () => '/messages', blockPrefetch },
+  );
+}
+CASES.push(
+  { label: 'search (plain)', path: async () => '/search', blockPrefetch: false },
+  {
+    label: 'request form (plain)',
+    path: async () => `/vendors/${E2E_VENDOR_SLUG}/request`,
+    blockPrefetch: false,
+  },
+);
+
+test.describe.configure({ retries: 0 });
+
+for (const { label, path: resolvePath, blockPrefetch } of CASES) {
+  test(`router.refresh() commits on ${label}${blockPrefetch ? ' without prefetch' : ''}`, async ({
+    customerPage,
+  }) => {
     test.setTimeout(ROUNDS * 7_000 + 30_000);
+    const path = await resolvePath(customerPage);
+    if (blockPrefetch) {
+      await customerPage.route('**/*', (route) =>
+        route.request().headers()['next-router-prefetch'] ? route.abort() : route.continue(),
+      );
+    }
     await customerPage.goto(path);
     await waitForHydration(customerPage, 'main');
     const outcomes: string[] = [];
