@@ -1097,7 +1097,7 @@ function unwindSentence(paidOut: boolean): string {
 }
 
 /** The two sides of a booking, and which one this caller is. */
-async function participantIn(
+export async function participantIn(
   context: BookingContext,
   user: AuthenticatedUser,
   bookingId: string,

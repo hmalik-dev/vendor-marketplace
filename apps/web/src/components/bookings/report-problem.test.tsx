@@ -2,7 +2,10 @@ import { payoutReleaseAt, SUPPORT_PATH } from '@vendor-marketplace/shared';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { BookingStatus } from '@vendor-marketplace/shared';
-import { ReportProblem } from './report-problem';
+
+vi.mock('@/lib/use-api', () => ({ useApi: () => vi.fn() }));
+
+const { ReportProblem } = await import('./report-problem');
 
 const EVENT_DATE = '2026-06-15';
 const BEFORE = new Date('2026-06-13T12:00:00Z');
@@ -30,11 +33,12 @@ describe('ReportProblem', () => {
     vi.useRealTimers();
   });
 
-  it('offers the report, pointed at the booking, inside the window', () => {
+  /* VEN-770: the control opens frame `51b`'s dialog in place, not the `/support` form. */
+  it('offers the report as an in-place dialog inside the window', () => {
     at(INSIDE, 'confirmed');
 
-    const link = screen.getByRole('link', { name: 'Report a problem' });
-    expect(link.getAttribute('href')).toBe(`${SUPPORT_PATH}?booking=booking-1`);
+    screen.getByRole('button', { name: 'Report a problem' });
+    expect(screen.queryByRole('link', { name: 'Report a problem' })).toBeNull();
     // The consequence is stated before the click, not after it.
     expect(
       screen.getByText(
@@ -77,14 +81,14 @@ describe('ReportProblem', () => {
   it('says what to do instead before the event, and offers no control', () => {
     at(BEFORE, 'confirmed');
 
-    expect(screen.queryByRole('link', { name: 'Report a problem' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Report a problem' })).toBeNull();
     expect(screen.getByText(/You can report a problem after the event/)).toBeDefined();
   });
 
   it('sends the customer to a person once the payout has actually gone out', () => {
     at(INSIDE, 'confirmed', RELEASE_AT);
 
-    expect(screen.queryByRole('link', { name: 'Report a problem' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Report a problem' })).toBeNull();
     expect(screen.getByRole('link', { name: 'Contact support' }).getAttribute('href')).toBe(
       SUPPORT_PATH,
     );
@@ -108,13 +112,13 @@ describe('ReportProblem', () => {
   it('keeps offering the report after the release date while the money is still held', () => {
     at(new Date(RELEASE_AT.getTime() + 60_000), 'confirmed');
 
-    expect(screen.getByRole('link', { name: 'Report a problem' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Report a problem' })).toBeDefined();
   });
 
   it('says a report is open rather than offering a second one', () => {
     at(INSIDE, 'disputed');
 
-    expect(screen.queryByRole('link', { name: 'Report a problem' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Report a problem' })).toBeNull();
     expect(screen.getByText(/payment is on hold while we look into it/)).toBeDefined();
   });
 

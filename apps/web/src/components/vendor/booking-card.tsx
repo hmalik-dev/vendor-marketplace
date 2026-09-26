@@ -1,4 +1,5 @@
 import { EVENT_TYPE_LABELS, formatPrice, type EventType } from '@vendor-marketplace/shared';
+import { BookingReportDialog } from '@/components/bookings/booking-report-dialog';
 import { Avatar } from '@/components/ui/avatar';
 import { StatusPill } from '@/components/ui/status-pill';
 import { CancelBooking } from '@/components/vendor/cancel-booking';
@@ -119,6 +120,17 @@ export function BookingCard({
               </div>
             ) : null}
           </dl>
+
+          {/* Frame `51b Report a problem — vendor` (VEN-770): only a paid, live booking. */}
+          {booking && booking.status !== 'cancelled' ? (
+            <BookingReportDialog
+              bookingId={booking.id}
+              side="vendor"
+              counterpartName={displayName}
+              eventDate={request.eventDate}
+              className="mt-1"
+            />
+          ) : null}
         </div>
 
         <div className="flex flex-col items-end gap-2">

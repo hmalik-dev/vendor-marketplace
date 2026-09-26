@@ -1156,11 +1156,13 @@ describe('payouts', () => {
       );
     });
 
-    it('refuses the vendor reporting a problem with their own booking', async () => {
+    /* VEN-770: the vendor may report a problem, and it never freezes their own payout. */
+    it('takes a report from the vendor on the booking without holding the payout', async () => {
       const paid = await paidBooking();
       clockNow = JUST_AFTER_EVENT;
 
-      expect((await report(paid.id, VENDOR)).statusCode).toBe(403);
+      expect((await report(paid.id, VENDOR)).statusCode).toBe(200);
+      expect((await currentBooking()).status).toBe('confirmed');
     });
 
     /* A stranger walking ids learns nothing about which of them exist. */
@@ -1582,32 +1584,118 @@ describe('payouts', () => {
     });
 
     /**
-     * Acceptance 1 and 6, one case per role.
+     * Acceptance 1 and 6, for everybody who is not a party to the booking.
      *
-     * A vendor is refused on the booking they are the vendor on — 403, because
-     * `participantIn` already placed them on it and pretending otherwise would
-     * be a lie they can disprove. Everybody else gets 404: whether a booking
-     * exists is not something a stranger learns by walking ids. **None of them
-     * puts an email in the inbox**, which is the half a status code alone would
-     * not catch.
+     * 404: whether a booking exists is not something a stranger learns by
+     * walking ids. **None of them puts an email in the inbox**, which is the
+     * half a status code alone would not catch.
      */
     it.each([
-      ['the vendor on the booking', () => VENDOR, 403],
-      ['another customer', () => OUTSIDER, 404],
-      ['an admin', () => ADMIN, 404],
-    ])('refuses a report from %s', async (_who, actor, expected) => {
+      ['another customer', () => OUTSIDER],
+      ['an admin', () => ADMIN],
+    ])('refuses a report from %s', async (_who, actor) => {
       const paid = await paidBooking();
       clockNow = JUST_AFTER_EVENT;
-      if (expected === 404 && actor() === ADMIN) {
+      if (actor() === ADMIN) {
         await signInAsAdmin();
       }
 
       const response = await report(paid.id, actor());
       await harness.flushEmail();
 
-      expect(response.statusCode).toBe(expected);
+      expect(response.statusCode).toBe(404);
       expect((await currentBooking()).status).toBe('confirmed');
       expect(reportEmail()).toBeUndefined();
+    });
+
+    /** Frame `51b`'s dialog: a category from the sender's own side's list (VEN-770). */
+    describe('with a problem category', () => {
+      async function categorised(
+        bookingId: string,
+        actor: string,
+        bookingCategory: string,
+        message = REPORT,
+      ): Promise<Awaited<ReturnType<TestHarness['app']['inject']>>> {
+        return inject('POST', '/v1/support/messages', actor, {
+          topic: 'booking-or-payment',
+          message,
+          bookingId,
+          bookingCategory,
+        });
+      }
+
+      function supportEmails(): EmailMessage[] {
+        return harness.email.sent.filter((message) => message.to === TEST_ENV.SUPPORT_EMAIL_TO);
+      }
+
+      it('sends one support email naming the booking, the category and the detail', async () => {
+        const paid = await paidBooking();
+        clockNow = JUST_AFTER_EVENT;
+
+        const response = await categorised(paid.id, CUSTOMER, 'vendor-no-show');
+        await harness.flushEmail();
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json().reference).toMatch(SUPPORT_REFERENCE_PATTERN);
+        expect((await currentBooking()).status).toBe('disputed');
+
+        const sent = supportEmails();
+        expect(sent).toHaveLength(1);
+        expect(sent[0]!.text).toContain(paid.id);
+        expect(sent[0]!.text).toContain('Reported by the customer · The vendor didn’t show up');
+        expect(sent[0]!.text).toContain('Payout held on this booking');
+        expect(sent[0]!.text).toContain(REPORT);
+      });
+
+      it('takes a vendor category from the vendor, holds nothing and tells nobody', async () => {
+        const paid = await paidBooking();
+        clockNow = JUST_AFTER_EVENT;
+
+        const response = await categorised(paid.id, VENDOR, 'venue-access-or-safety');
+        await harness.flushEmail();
+
+        expect(response.statusCode).toBe(200);
+        expect((await currentBooking()).status).toBe('confirmed');
+        expect(await reportNotices()).toEqual([]);
+
+        const sent = supportEmails();
+        expect(sent).toHaveLength(1);
+        expect(sent[0]!.text).toContain(paid.id);
+        expect(sent[0]!.text).toContain('Reported by the vendor · Venue access or safety');
+        expect(sent[0]!.text).not.toContain('Payout held on this booking');
+      });
+
+      it.each([
+        ['the vendor', () => VENDOR, 'vendor-no-show'],
+        ['the customer', () => CUSTOMER, 'venue-access-or-safety'],
+      ])(
+        'refuses %s a category from the other side, sending and holding nothing',
+        async (_who, actor, category) => {
+          const paid = await paidBooking();
+          clockNow = JUST_AFTER_EVENT;
+
+          const response = await categorised(paid.id, actor(), category);
+          await harness.flushEmail();
+
+          expect(response.statusCode).toBe(400);
+          expect(response.json().message).toBe(
+            'Choose one of the problems listed for your side of the booking',
+          );
+          expect((await currentBooking()).status).toBe('confirmed');
+          expect(supportEmails()).toEqual([]);
+        },
+      );
+
+      it('refuses a category with no booking', async () => {
+        const response = await inject('POST', '/v1/support/messages', CUSTOMER, {
+          topic: 'booking-or-payment',
+          message: REPORT,
+          bookingCategory: 'payment',
+        });
+
+        expect(response.statusCode).toBe(400);
+        expect(supportEmails()).toEqual([]);
+      });
     });
 
     /**

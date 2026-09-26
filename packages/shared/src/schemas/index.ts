@@ -88,6 +88,7 @@ import {
 import { LEGAL_ACCEPTANCE_DOCUMENTS, LEGAL_ACCEPTANCE_METHODS } from '../constants/legal.js';
 import { LEGAL_DOCUMENT_SHA256_LENGTH } from '../constants/legal-manifest.js';
 import {
+  BOOKING_REPORT_CATEGORIES,
   MAX_REPORT_DETAIL_LENGTH,
   MAX_SUPPORT_ERROR_DIGEST_LENGTH,
   MAX_SUPPORT_ERROR_ROUTE_LENGTH,
@@ -2538,6 +2539,12 @@ export const supportMessageSchema = z.object({
    * this caller may report the booking in the first place.
    */
   bookingId: uuidSchema.optional(),
+  /**
+   * What went wrong, from frame `51b`'s list (VEN-770). Only with a
+   * `bookingId`, and only a member of the sender's own side's list — the API
+   * decides the side from the booking row, never from the request.
+   */
+  bookingCategory: z.enum(BOOKING_REPORT_CATEGORIES).optional(),
 });
 export type SupportMessageInput = z.infer<typeof supportMessageSchema>;
 

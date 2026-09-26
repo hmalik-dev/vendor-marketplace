@@ -1,6 +1,9 @@
 import {
+  BOOKING_REPORT_CATEGORY_LABELS,
   BRAND_NAME,
   formatPrice,
+  type BookingReportCategory,
+  type BookingSide,
   SUPPORT_TOPIC_LABELS,
   type SupportErrorContext,
   type SupportTopic,
@@ -36,6 +39,8 @@ export interface SupportEmailFields {
    * it was.
    */
   booking?: SupportBookingFields;
+  /** What went wrong, from frame `51b`'s list (VEN-770). */
+  bookingCategory?: BookingReportCategory;
   /** Whether the sender proved who they are, which changes how we read it. */
   signedIn: boolean;
 }
@@ -46,6 +51,10 @@ export interface SupportBookingFields {
   eventDate: string;
   totalAmountCents: number;
   vendorBusinessName: string | null;
+  /** Whether this report froze the payout — only a customer's does. */
+  held: boolean;
+  /** Which party to the booking sent it. */
+  reportedBy: BookingSide;
 }
 
 export interface RenderedEmail {
@@ -137,6 +146,26 @@ function errorMeta(context: SupportErrorContext): string {
 }
 
 const HELD_LABEL = 'Payout held on this booking';
+const BOOKING_LABEL = 'Booking';
+
+function bookingLabel(booking: SupportBookingFields): string {
+  return booking.held ? HELD_LABEL : BOOKING_LABEL;
+}
+
+/** "Reported by the vendor · Venue access or safety" — who, then what. */
+function reportLine(fields: SupportEmailFields): string | null {
+  if (!fields.booking) {
+    return null;
+  }
+
+  const parts = [`Reported by the ${fields.booking.reportedBy}`];
+
+  if (fields.bookingCategory) {
+    parts.push(BOOKING_REPORT_CATEGORY_LABELS[fields.bookingCategory]);
+  }
+
+  return parts.join(' · ');
+}
 const ATTACHED_LABEL = 'Attached automatically';
 
 /**
@@ -151,6 +180,7 @@ export function renderSupportReport(fields: SupportEmailFields): RenderedEmail {
   const identity = fields.signedIn
     ? `${fields.replyTo} — signed in`
     : `${fields.replyTo} — signed out, address not verified`;
+  const reported = reportLine(fields);
 
   const html = [
     WRAPPER_OPEN,
@@ -158,8 +188,13 @@ export function renderSupportReport(fields: SupportEmailFields): RenderedEmail {
     `<h1 style="margin:0 0 12px;font-size:20px;line-height:1.3;color:#23201C;">${escapeHtml(SUPPORT_TOPIC_LABELS[fields.topic])}</h1>`,
     referenceBlock(fields.reference),
     `<p style="margin:0 0 16px;font-size:13px;color:#6B6459;">From ${escapeHtml(identity)}</p>`,
+    reported === null
+      ? ''
+      : `<p style="margin:0 0 16px;font-size:13px;font-weight:600;color:#23201C;">${escapeHtml(reported)}</p>`,
     paragraphs(fields.message),
-    fields.booking ? attachedBlock(HELD_LABEL, fields.booking.id, bookingMeta(fields.booking)) : '',
+    fields.booking
+      ? attachedBlock(bookingLabel(fields.booking), fields.booking.id, bookingMeta(fields.booking))
+      : '',
     fields.errorContext
       ? attachedBlock(ATTACHED_LABEL, fields.errorContext.digest, errorMeta(fields.errorContext))
       : '',
@@ -171,11 +206,12 @@ export function renderSupportReport(fields: SupportEmailFields): RenderedEmail {
     SUPPORT_TOPIC_LABELS[fields.topic],
     `Reference ${fields.reference}`,
     `From ${identity}`,
+    ...(reported === null ? [] : [reported]),
     '',
     fields.message,
     '',
     ...(fields.booking
-      ? attachedLines(HELD_LABEL, fields.booking.id, bookingMeta(fields.booking))
+      ? attachedLines(bookingLabel(fields.booking), fields.booking.id, bookingMeta(fields.booking))
       : []),
     ...(fields.errorContext
       ? attachedLines(ATTACHED_LABEL, fields.errorContext.digest, errorMeta(fields.errorContext))
@@ -223,7 +259,7 @@ export function renderSupportConfirmation(fields: SupportEmailFields): RenderedE
    * the release window is stated, and a sentence in an email repeating it as a
    * number is the copy that goes stale the day the constant moves (D16).
    */
-  const held = fields.booking
+  const held = fields.booking?.held
     ? "We've put the vendor's payout for this booking on hold while we look into it."
     : null;
 
