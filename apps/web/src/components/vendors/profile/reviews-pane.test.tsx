@@ -306,15 +306,13 @@ describe('ReviewsPane — writing one', () => {
 
   /*
    * The header's rating line and the rail's "N reviews from verified bookings"
-   * are server-rendered from the same numbers this pane shows. Updating only
-   * what this component can reach put three counts on one screen, two of them
-   * wrong — observed in the browser, so the whole route is refreshed instead.
+   * are server-rendered from the same numbers this pane shows, so the whole
+   * route is still refreshed. But the pane does not wait on that refresh to
+   * show the author their review: CI saw `router.refresh()` answer and never
+   * commit (VEN-779, VEN-781), leaving the tab without the review it had just
+   * posted. The pane re-reads its own first page, as `showMore` reads the next.
    */
-  it('refreshes the whole route once the review is filed', async () => {
-    const user = userEvent.setup();
-    requestMock.mockResolvedValue({ id: 'rev-new' });
-
-    render(<ReviewsPane {...BASE} reviewCount={2} initial={payload({ viewer: eligible })} />);
+  async function postReview(user: ReturnType<typeof userEvent.setup>): Promise<void> {
     await user.click(screen.getByRole('button', { name: 'Write a review' }));
 
     const form = screen.getByRole('form', { name: 'How was your experience?' });
@@ -324,12 +322,52 @@ describe('ReviewsPane — writing one', () => {
       'They were unhurried and the pictures show it.',
     );
     await user.click(within(form).getByRole('button', { name: 'Post review' }));
+  }
 
-    await waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1));
-    // The form closed, and nothing was re-fetched from here: the refresh is
-    // what brings the new numbers back, as a fresh `initial`.
+  it('shows the filed review from its own re-read, and refreshes the route', async () => {
+    const user = userEvent.setup();
+    requestMock.mockImplementation((_path: string, init?: { method?: string }) =>
+      Promise.resolve(
+        init?.method === 'POST'
+          ? { id: 'rev-new' }
+          : payload({
+              items: [review({ id: 'rev-new', reviewerName: 'You', title: 'Superb' })],
+              summary: { avgRating: 5, reviewCount: 3, distribution: [0, 0, 0, 0, 3] },
+              viewer: { canReview: false, bookingId: null },
+            }),
+      ),
+    );
+
+    render(<ReviewsPane {...BASE} reviewCount={2} initial={payload({ viewer: eligible })} />);
+    expect(screen.getByText('2 reviews')).toBeDefined();
+    await postReview(user);
+
+    // `initial` never changed: the refresh is mocked and commits nothing.
+    expect(await screen.findByText('Superb')).toBeDefined();
+    expect(screen.getByText('3 reviews')).toBeDefined();
     expect(screen.queryByRole('form')).toBeNull();
-    expect(requestMock).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Write a review' })).toBeNull();
+    expect(refreshMock).toHaveBeenCalledTimes(1);
+    expect(requestMock).toHaveBeenCalledTimes(2);
+    expect(requestMock.mock.calls[1]?.[0]).toBe('/vendors/june-harlow/reviews');
+  });
+
+  it('closes the form without an error when the re-read fails', async () => {
+    const user = userEvent.setup();
+    requestMock.mockImplementation((_path: string, init?: { method?: string }) =>
+      init?.method === 'POST'
+        ? Promise.resolve({ id: 'rev-new' })
+        : Promise.reject(new TypeError('Failed to fetch')),
+    );
+
+    render(<ReviewsPane {...BASE} reviewCount={2} initial={payload({ viewer: eligible })} />);
+    await postReview(user);
+
+    await waitFor(() => expect(requestMock).toHaveBeenCalledTimes(2));
+    expect(refreshMock).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('form')).toBeNull();
+    expect(screen.getByText('2 reviews')).toBeDefined();
+    expect(screen.queryByRole('status')).toBeNull();
   });
 
   /* What the refresh above delivers: a new `initial`, which must land. */
