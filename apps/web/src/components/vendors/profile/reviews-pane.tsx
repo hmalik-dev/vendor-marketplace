@@ -7,7 +7,7 @@ import {
   REVIEW_RATING_MIN,
   type EventType,
 } from '@vendor-marketplace/shared';
-import { useRouter } from 'next/navigation';
+import { useRereadRoute } from '@/lib/use-reread-route';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -109,7 +109,7 @@ export function ReviewsPane({
   signedIn,
 }: ReviewsPaneProps): React.ReactElement {
   const request = useApi();
-  const router = useRouter();
+  const rereadRoute = useRereadRoute();
   const [page, setPage] = useState<WireVendorReviewsPage | null>(initial);
   const [items, setItems] = useState(initial?.items ?? []);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -122,7 +122,7 @@ export function ReviewsPane({
    * The alternative — patching the list here after a write — left the tab
    * saying "128 reviews" beside a header still saying 127 and a rail still
    * saying 127, because those two are server-rendered and this is not. One
-   * `router.refresh()` moves all three, and this is what carries it into the
+   * route re-read (`useRereadRoute`) moves all three, and this is what carries it into the
    * appended list. Adjusting state during render is React's own documented way
    * to do this; the alternative is an effect that renders the stale value once
    * first.
@@ -174,11 +174,11 @@ export function ReviewsPane({
 
   /*
    * The author's own review, read back by this pane rather than waited for
-   * through `router.refresh()`. CI saw that refresh answer and never commit
+   * through the route re-read. CI saw `router.refresh()` answer and never commit
    * (VEN-779, VEN-781), leaving the tab without the review just posted and
-   * the form's offer still up. The refresh still runs for the server-rendered
+   * the form's offer still up. The re-read still runs for the server-rendered
    * counts; whichever lands, both are the same fresh read. A failure here
-   * leaves the refresh to deliver it: the review itself was filed.
+   * leaves the route re-read to deliver it: the review itself was filed.
    */
   async function rereadFirstPage(): Promise<void> {
     try {
@@ -208,7 +208,7 @@ export function ReviewsPane({
            * on the server from the same numbers, and updating only what is in
            * reach here put three different counts on one screen.
            */
-          router.refresh();
+          rereadRoute();
           void rereadFirstPage();
         }}
       />
