@@ -39,3 +39,11 @@ export function formatPayoutDate(releaseAt: Date, today: string): string {
 
   return format.format(releaseAt);
 }
+
+/**
+ * `Jun 17, 2026` — always with the year, as the payments table and its cards
+ * write every date (frame `49`). UTC for the same reason as above.
+ */
+export function formatPayoutDay(instant: Date): string {
+  return OTHER_YEAR.format(instant);
+}
