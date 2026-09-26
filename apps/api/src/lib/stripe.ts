@@ -1,4 +1,4 @@
-import type { TaxIdState } from '@vendor-marketplace/shared';
+import type { PayoutAccount, TaxIdState } from '@vendor-marketplace/shared';
 import Stripe from 'stripe';
 
 /**
@@ -38,11 +38,15 @@ export interface StripeConnectGateway {
   createOnboardingLink(input: CreateOnboardingLinkInput): Promise<{ url: string }>;
 
   /**
-   * A single-use link into the vendor's Stripe Express dashboard, where their
-   * payouts and tax forms live (VEN-725). Minted per click, never stored. The
-   * Express login-link endpoint is v1; Stripe accepts a v2 account id there.
+   * A single-use link where the vendor manages their payout account, minted
+   * per click and never stored. An account with the Express Dashboard gets a
+   * login link into it, where their payouts and tax forms live (VEN-725); the
+   * endpoint is v1, and Stripe accepts a v2 account id there. An account with
+   * no Stripe-hosted dashboard cannot have a login link, so it gets a hosted
+   * `account_update` form instead (VEN-782). Throws
+   * `DashboardLinkUnavailableError` when Stripe refuses both.
    */
-  createDashboardLink(accountId: string): Promise<{ url: string }>;
+  createDashboardLink(input: CreateOnboardingLinkInput): Promise<{ url: string }>;
 
   /** The authoritative capability state, read from Stripe rather than cached. */
   readAccountStatus(accountId: string): Promise<StripeAccountStatus>;
@@ -57,6 +61,9 @@ export interface StripeConnectGateway {
 
   /** Where the vendor's tax ID stands at Stripe, in Stripe's vocabulary. Never the number. */
   readTaxIdState(accountId: string): Promise<TaxIdState>;
+
+  /** The bank (or card) the account pays out to, last four only; `null` when none is on file (VEN-768). */
+  readPayoutAccount(accountId: string): Promise<PayoutAccount | null>;
 
   /**
    * Verifies a webhook signature over the exact bytes Stripe sent and names
@@ -780,6 +787,12 @@ export function assertUsableRefund(refundId: string, status: string | null | und
 export class RecipientAccountRefusedError extends Error {}
 
 /**
+ * Stripe refused to mint a link for managing this account (VEN-782). A 400 is
+ * a decision about the account, not a blip, so retrying cannot change it.
+ */
+export class DashboardLinkUnavailableError extends Error {}
+
+/**
  * Whether Stripe executed and refused an account creation, which it will replay
  * under the same key. `StripeInvalidRequestError` covers both spellings: v1
  * bodies carry `type: invalid_request_error`, while a v2 field refusal carries
@@ -1052,6 +1065,32 @@ export async function ensureTaxReportingCapability(
 /** The requirement names that concern the tax ID, whichever entity type the vendor is. */
 const TAX_ID_REQUIREMENT = /(^|\.)(tax_id|id_number|ssn_last_4)$/;
 
+/** The payments page falls back to "Managed in Stripe" rather than wait longer (VEN-768). */
+const PAYOUT_ACCOUNT_TIMEOUT_MS = 3_000;
+
+/**
+ * The payout destination named from an account's external accounts: the one
+ * Stripe pays out to by default, else the first. A bank gives its bank name, a
+ * debit card its brand. Exported so a test can hand it real payload shapes.
+ */
+export function payoutAccountFrom(
+  externalAccounts: Stripe.ExternalAccount[],
+): PayoutAccount | null {
+  const destination =
+    externalAccounts.find((external) => external.default_for_currency === true) ??
+    externalAccounts[0];
+
+  if (!destination) {
+    return null;
+  }
+
+  return {
+    bankName:
+      (destination.object === 'bank_account' ? destination.bank_name : destination.brand) ?? null,
+    last4: destination.last4,
+  };
+}
+
 /**
  * Stripe's tax-ID state read off the v1 view of an account: `id_number_provided`
  * for an individual, `tax_id_provided` for a company, the 1099 capability's
@@ -1272,6 +1311,17 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
       return taxIdStateFrom(await stripe.accounts.retrieve(accountId));
     },
 
+    async readPayoutAccount(accountId) {
+      // Read on every payments-page render, so a degraded Stripe costs seconds, not twenty.
+      const list = await stripe.accounts.listExternalAccounts(
+        accountId,
+        { limit: 10 },
+        { timeout: PAYOUT_ACCOUNT_TIMEOUT_MS, maxNetworkRetries: 0 },
+      );
+
+      return payoutAccountFrom(list.data);
+    },
+
     async createOnboardingLink(input) {
       const link = await stripe.v2.core.accountLinks.create({
         account: input.accountId,
@@ -1288,10 +1338,34 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
       return { url: link.url };
     },
 
-    async createDashboardLink(accountId) {
-      const link = await stripe.accounts.createLoginLink(accountId);
+    async createDashboardLink(input) {
+      const account = await stripe.v2.core.accounts.retrieve(input.accountId);
 
-      return { url: link.url };
+      try {
+        if (account.dashboard === 'express') {
+          return { url: (await stripe.accounts.createLoginLink(input.accountId)).url };
+        }
+
+        const link = await stripe.v2.core.accountLinks.create({
+          account: input.accountId,
+          use_case: {
+            type: 'account_update',
+            account_update: {
+              configurations: ['recipient'],
+              return_url: input.returnUrl,
+              refresh_url: input.refreshUrl,
+            },
+          },
+        });
+
+        return { url: link.url };
+      } catch (error) {
+        if (error instanceof Stripe.errors.StripeError && error.statusCode === 400) {
+          throw new DashboardLinkUnavailableError(error.message, { cause: error });
+        }
+
+        throw error;
+      }
     },
 
     async readAccountStatus(accountId) {

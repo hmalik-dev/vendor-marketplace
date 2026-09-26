@@ -1746,6 +1746,59 @@ export const vendorDashboardSchema = z.object({
 });
 export type VendorDashboard = z.infer<typeof vendorDashboardSchema>;
 
+/**
+ * One booking's payout on the vendor's payments page (VEN-768, frame `49`).
+ *
+ * `payoutStatus` is `payoutStatusOf`'s answer, so the page never reads the
+ * booking status to decide whether money is held. `cents` is what is still
+ * owed on an unreleased row and what was actually sent on a released one —
+ * `vendor_payout_cents` less the debt netted and the backup withholding.
+ */
+export const vendorPayoutRowSchema = z.object({
+  bookingId: uuidSchema,
+  /**
+   * The customer's last name, or their first when there is none. Unbounded on
+   * the way out: `varchar(100)` counts characters and zod counts UTF-16 units,
+   * so a cap here would 500 the page on a customer's emoji name.
+   */
+  customerName: z.string(),
+  eventType: eventTypeSchema.nullable(),
+  eventDate: calendarDateSchema,
+  cents: z.int().min(0),
+  payoutStatus: payoutStatusSchema,
+  /** `payoutReleaseAt`; `null` while a dispute holds it, since no date exists. */
+  releaseAt: z.date().nullable(),
+  /** When the sweep sent it; `null` until then. */
+  paidAt: z.date().nullable(),
+});
+export type VendorPayoutRow = z.infer<typeof vendorPayoutRowSchema>;
+
+/**
+ * The bank a connected account pays out to, as Stripe reports it — the last
+ * four digits only, never the account number.
+ */
+export const payoutAccountSchema = z.object({
+  bankName: z.string().max(200).nullable(),
+  last4: z.string().max(4),
+});
+export type PayoutAccount = z.infer<typeof payoutAccountSchema>;
+
+/**
+ * `GET /vendor/payouts`: the dashboard's payout summary, the booking the next
+ * payout belongs to, the payout account and every owed payout plus the most
+ * recent paid ones, newest event first.
+ *
+ * `account` is `null` when Stripe reports no bank, or could not be reached —
+ * the page then says the account is managed in Stripe.
+ */
+export const vendorPayoutsSchema = z.object({
+  summary: vendorPayoutSummarySchema,
+  nextBookingId: uuidSchema.nullable(),
+  account: payoutAccountSchema.nullable(),
+  rows: z.array(vendorPayoutRowSchema),
+});
+export type VendorPayouts = z.infer<typeof vendorPayoutsSchema>;
+
 // --- Messaging -------------------------------------------------------------
 
 export const conversationSchema = z.object({

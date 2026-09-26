@@ -12,7 +12,7 @@ import {
 } from '@vendor-marketplace/shared';
 import type { RefundBoundaries } from '@vendor-marketplace/shared';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRereadRoute } from '@/lib/use-reread-route';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { REQUEST_DID_NOT_ARRIVE, userFacingError } from '@/lib/user-facing-error';
@@ -76,7 +76,7 @@ function cancelWindowMessage(
  * standing — and that is a sentence, not a policy link.
  */
 export function AcceptedRequest({ request, booking }: AcceptedRequestProps): React.ReactElement {
-  const router = useRouter();
+  const rereadRoute = useRereadRoute();
   const call = useApi();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -152,7 +152,7 @@ export function AcceptedRequest({ request, booking }: AcceptedRequestProps): Rea
        * re-reading left the customer looking at a live booking and a `Cancel`
        * button for something that no longer exists.
        */
-      router.refresh();
+      rereadRoute();
       setBusy(false);
       setConfirming(false);
     }

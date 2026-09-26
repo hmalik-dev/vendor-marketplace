@@ -18,6 +18,8 @@ import {
   vendorDashboardSchema,
   termsAcceptanceStatusSchema,
   vendorAgreementStatusSchema,
+  vendorPayoutRowSchema,
+  vendorPayoutsSchema,
   vendorPayoutStatusSchema,
   portfolioItemSchema,
   nearbyAvailabilityResultSchema,
@@ -350,6 +352,22 @@ export const wireVendorDashboardSchema = vendorDashboardSchema.extend({
   }),
 });
 export type WireVendorDashboard = z.infer<typeof wireVendorDashboardSchema>;
+
+/**
+ * The payments page's payouts (VEN-768), with every date coerced back from
+ * JSON: the next payout's `releaseAt` as on the dashboard, and each row's
+ * release and paid instants.
+ */
+export const wireVendorPayoutsSchema = vendorPayoutsSchema.extend({
+  summary: wireVendorDashboardSchema.shape.payouts,
+  rows: z.array(
+    vendorPayoutRowSchema.extend({
+      releaseAt: z.coerce.date().nullable(),
+      paidAt: z.coerce.date().nullable(),
+    }),
+  ),
+});
+export type WireVendorPayouts = z.infer<typeof wireVendorPayoutsSchema>;
 
 /** The vendor's payout state — plain JSON, so the shared schema stands as-is. */
 export const wireVendorPayoutStatusSchema = vendorPayoutStatusSchema;

@@ -1,5 +1,9 @@
 import { CURRENT_VENDOR_AGREEMENT_VERSION, PAYOUT_RELEASE_HOURS } from '@vendor-marketplace/shared';
-import type { WireVendorAgreementStatus, WireVendorPayoutStatus } from '@/lib/wire-schemas';
+import type {
+  WireVendorAgreementStatus,
+  WireVendorPayouts,
+  WireVendorPayoutStatus,
+} from '@/lib/wire-schemas';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -7,6 +11,7 @@ const requireRole = vi.fn<() => Promise<void>>();
 const getPayoutStatus = vi.fn<() => Promise<WireVendorPayoutStatus | null>>();
 const getAgreementStatus = vi.fn<() => Promise<WireVendorAgreementStatus | null>>();
 const getTaxStatementYears = vi.fn<() => Promise<number[]>>();
+const getVendorPayouts = vi.fn<() => Promise<WireVendorPayouts>>();
 const redirect = vi.fn((path: string) => {
   throw new Error(`REDIRECT:${path}`);
 });
@@ -16,9 +21,12 @@ vi.mock('@/lib/vendor-data', () => ({
   getPayoutStatus: () => getPayoutStatus(),
   getAgreementStatus: () => getAgreementStatus(),
   getTaxStatementYears: () => getTaxStatementYears(),
+  getVendorPayouts: () => getVendorPayouts(),
 }));
 vi.mock('@/components/vendor/stripe-dashboard-link', () => ({
-  StripeDashboardLink: () => <button type="button">Open your Stripe dashboard</button>,
+  StripeDashboardLink: ({ label = 'Open your Stripe dashboard' }: { label?: string }) => (
+    <button type="button">{label}</button>
+  ),
 }));
 vi.mock('@/components/vendor/tax-statement-downloads', () => ({
   // The real component's root is a `div`, which is what a paragraph must never hold.
@@ -38,6 +46,23 @@ vi.mock('@/components/vendor/connect-payouts-form', () => ({
 }));
 
 const { default: VendorPaymentsPage } = await import('./page');
+
+/** A connected vendor owed nothing yet: the shape `GET /vendor/payouts` answers. */
+const NO_PAYOUTS: WireVendorPayouts = {
+  summary: {
+    pendingCents: 0,
+    pendingCount: 0,
+    next: null,
+    heldCents: 0,
+    heldCount: 0,
+    debtOutstandingCents: 0,
+    debtRecoveredCents: 0,
+    backupWithholding: false,
+  },
+  nextBookingId: null,
+  account: null,
+  rows: [],
+};
 
 /** A vendor holding the current agreement — step 3 done, so step 4 renders. */
 function accepted(isCurrent = true): WireVendorAgreementStatus {
@@ -72,6 +97,8 @@ describe('VendorPaymentsPage', () => {
     getAgreementStatus.mockResolvedValue(accepted());
     getTaxStatementYears.mockReset();
     getTaxStatementYears.mockResolvedValue([]);
+    getVendorPayouts.mockReset();
+    getVendorPayouts.mockResolvedValue(NO_PAYOUTS);
     redirect.mockClear();
   });
 
@@ -145,29 +172,33 @@ describe('VendorPaymentsPage', () => {
     expect(banners[0]!.className).toContain('steel');
   });
 
-  it('shows no gate and no setup button once payouts are connected', async () => {
+  it('shows the payouts page, not the gate, once payouts are connected (VEN-768)', async () => {
     await renderPage({ stripeAccountId: 'acct_1', stripeOnboarded: true });
 
     expect(screen.queryByText(/You can't take payment/)).toBeNull();
     expect(screen.queryByText('Set up payouts')).toBeNull();
     expect(screen.queryByText('Continue setup')).toBeNull();
-    expect(screen.getByRole('status').className).toContain('sage');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Payments');
+    expect(screen.getByRole('heading', { name: 'Next payout' })).toBeTruthy();
     expect(screen.getByRole('status').textContent).toContain(
-      `pays it out to you ${PAYOUT_RELEASE_HOURS} hours after the event date.`,
+      `until ${PAYOUT_RELEASE_HOURS} hours after the event`,
     );
-    expect(document.body.textContent).not.toContain('until the event is complete');
+    expect(getVendorPayouts).toHaveBeenCalledTimes(1);
   });
 
-  it('opens the Stripe dashboard from the connected banner and lists a statement per year (VEN-725)', async () => {
+  it('opens the Stripe dashboard from the account card and lists a statement per year (VEN-725)', async () => {
     getTaxStatementYears.mockResolvedValue([2027, 2026]);
     await renderPage({ stripeAccountId: 'acct_1', stripeOnboarded: true });
 
-    expect(screen.getByRole('button', { name: 'Open your Stripe dashboard' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Manage in Stripe' })).toBeTruthy();
     expect(screen.getByRole('button', { name: '2027 statement (CSV)' })).toBeTruthy();
     expect(screen.getByRole('button', { name: '2026 statement (CSV)' })).toBeTruthy();
-    expect(document.body.textContent).not.toContain(
-      ['There is nothing', 'else to do here.'].join(' '),
-    );
+  });
+
+  it('does not read payouts before the vendor is connected', async () => {
+    await renderPage({ stripeAccountId: 'acct_1', stripeOnboarded: false });
+
+    expect(getVendorPayouts).not.toHaveBeenCalled();
   });
 
   /*

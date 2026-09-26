@@ -1,5 +1,6 @@
 import type { NewVendorProfileRow } from '@vendor-marketplace/db/schema';
 import {
+  VENDOR_PAYMENTS_PATH,
   VENDOR_PAYMENTS_RESUME_PATH,
   VENDOR_PAYMENTS_RETURN_PATH,
   type VendorPayoutStatus,
@@ -8,6 +9,7 @@ import { z } from 'zod';
 import type { AppDatabase } from '../../lib/database.js';
 import { conflict, notFound } from '../../lib/errors.js';
 import {
+  DashboardLinkUnavailableError,
   isMissingPayoutsOnly,
   isOnboarded,
   RecipientAccountRefusedError,
@@ -169,14 +171,19 @@ const DASHBOARD_LINK_HOSTS: ReadonlySet<string> = new Set([
   'express.stripe.com',
 ]);
 
+/** What the vendor reads when Stripe will not open their account; retrying cannot change it (VEN-782). */
+export const DASHBOARD_LINK_UNAVAILABLE_MESSAGE =
+  'Stripe cannot open this payout account. Contact support to change your payout details.';
+
 /**
- * A single-use link into the vendor's own Stripe Express dashboard (VEN-725).
- * The account is read from the caller's profile, never from the request. The
- * URL is checked to be on a Stripe host before it is handed to a browser that
- * will navigate to it.
+ * A single-use link where the vendor manages their own payout account: the
+ * Express dashboard (VEN-725), or Stripe's hosted update form for an account
+ * without one (VEN-782). The account is read from the caller's profile, never
+ * from the request. The URL is checked to be on a Stripe host before it is
+ * handed to a browser that will navigate to it.
  */
 export async function createDashboardLink(
-  deps: StripeConnectDeps,
+  deps: StripeOnboardingDeps,
   userId: string,
 ): Promise<{ url: string }> {
   const vendor = await findVendorProfileByUserId(deps.db, userId);
@@ -185,7 +192,24 @@ export async function createDashboardLink(
     throw notFound('Payouts are not connected yet');
   }
 
-  const link = await deps.stripe.createDashboardLink(vendor.stripeAccountId);
+  const paymentsUrl = `${deps.returnOrigin}${VENDOR_PAYMENTS_PATH}`;
+  const link = await deps.stripe
+    .createDashboardLink({
+      accountId: vendor.stripeAccountId,
+      returnUrl: paymentsUrl,
+      refreshUrl: paymentsUrl,
+    })
+    .catch((error: unknown) => {
+      if (error instanceof DashboardLinkUnavailableError) {
+        deps.log?.warn(
+          { vendorId: vendor.id, stripeMessage: error.message },
+          'Stripe refused a dashboard link for this account',
+        );
+        throw conflict(DASHBOARD_LINK_UNAVAILABLE_MESSAGE);
+      }
+
+      throw error;
+    });
   const { protocol, hostname } = new URL(link.url);
 
   if (protocol !== 'https:' || !DASHBOARD_LINK_HOSTS.has(hostname)) {

@@ -5,6 +5,7 @@ import {
   CURRENT_TERMS_VERSION,
   CURRENT_VENDOR_AGREEMENT_VERSION,
   legalDocumentSha256,
+  type PayoutAccount,
   type TaxIdState,
 } from '@vendor-marketplace/shared';
 import { users } from '@vendor-marketplace/db/schema';
@@ -466,6 +467,8 @@ export interface FakeStripe extends StripeConnectGateway {
   taxCapabilityAccounts: Set<string>;
   /** Where each account's tax ID stands; absent means `missing`. */
   taxIdStates: Map<string, TaxIdState>;
+  /** The payout destination `readPayoutAccount` answers per account; absent reads `null`. */
+  payoutAccounts: Map<string, PayoutAccount | Error>;
   /** Makes requesting the 1099-K capability fail, as Stripe would refuse it. */
   refuseTaxCapability: boolean;
   /** Signatures the fake verifier accepts; anything else is rejected. */
@@ -619,6 +622,7 @@ function createFakeStripe(deployEnv: string): FakeStripe {
   const accountStatuses = new Map<string, FakeAccountStatus>();
   const taxCapabilityAccounts = new Set<string>();
   const taxIdStates = new Map<string, TaxIdState>();
+  const payoutAccounts = new Map<string, PayoutAccount | Error>();
   const validSignatures = new Set<string>(['valid-signature']);
   const paymentIntents = new Map<string, PaymentIntentSnapshot>();
   /** What each refund request carried; absent for a refund made outside the platform. */
@@ -663,6 +667,7 @@ function createFakeStripe(deployEnv: string): FakeStripe {
     accountStatuses,
     taxCapabilityAccounts,
     taxIdStates,
+    payoutAccounts,
     refuseTaxCapability: false,
     validSignatures,
     paymentIntents,
@@ -767,12 +772,22 @@ function createFakeStripe(deployEnv: string): FakeStripe {
 
     readTaxIdState: async (accountId) => taxIdStates.get(accountId) ?? 'missing',
 
+    readPayoutAccount: async (accountId) => {
+      const account = payoutAccounts.get(accountId);
+
+      if (account instanceof Error) {
+        throw account;
+      }
+
+      return account ?? null;
+    },
+
     createOnboardingLink: async (input) => {
       createdLinks.push(input);
       return { url: `https://connect.stripe.test/setup/${input.accountId}/${createdLinks.length}` };
     },
 
-    createDashboardLink: async (accountId) => ({
+    createDashboardLink: async ({ accountId }) => ({
       url: `https://connect.stripe.com/express/test/${accountId}`,
     }),
 

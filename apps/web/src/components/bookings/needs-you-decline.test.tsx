@@ -5,15 +5,15 @@ import { NeedsYouDecline } from './needs-you-decline';
 import { REQUEST_DID_NOT_ARRIVE } from '@/lib/user-facing-error';
 
 const requestMock = vi.fn();
-const refreshMock = vi.fn();
+const rereadMock = vi.fn();
 
 vi.mock('@/lib/use-api', () => ({ useApi: () => requestMock }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: refreshMock }) }));
+vi.mock('@/lib/use-reread-route', () => ({ useRereadRoute: () => rereadMock }));
 
 beforeEach(() => {
   requestMock.mockReset();
   requestMock.mockResolvedValue({});
-  refreshMock.mockReset();
+  rereadMock.mockReset();
 });
 
 afterEach(cleanup);
@@ -56,7 +56,7 @@ describe('NeedsYouDecline', () => {
       '/booking-requests/req-1/decline',
       expect.objectContaining({ method: 'POST' }),
     );
-    expect(refreshMock).toHaveBeenCalledTimes(1);
+    expect(rereadMock).toHaveBeenCalledTimes(1);
     // The panel leaves on the refresh; until then a second press cannot post again.
     expect(
       (screen.getByRole('button', { name: 'Confirm decline' }) as HTMLButtonElement).disabled,
@@ -72,6 +72,6 @@ describe('NeedsYouDecline', () => {
 
     expect(screen.getByRole('alert').textContent).toBe(REQUEST_DID_NOT_ARRIVE);
     expect(screen.getByRole('button', { name: 'Decline' })).toBeDefined();
-    expect(refreshMock).not.toHaveBeenCalled();
+    expect(rereadMock).not.toHaveBeenCalled();
   });
 });

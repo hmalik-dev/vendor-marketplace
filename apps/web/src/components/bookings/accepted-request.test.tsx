@@ -7,10 +7,10 @@ import { ApiClientError } from '@/lib/api-client';
 import type { WireBooking, WireBookingRequest } from '@/lib/wire-schemas';
 
 const requestMock = vi.fn();
-const refreshMock = vi.fn();
+const rereadMock = vi.fn();
 
 vi.mock('@/lib/use-api', () => ({ useApi: () => requestMock }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: refreshMock }) }));
+vi.mock('@/lib/use-reread-route', () => ({ useRereadRoute: () => rereadMock }));
 
 /** Far enough out that a cancellation is outside the 48-hour cutoff. */
 const FAR_EVENT = '2027-06-14';
@@ -56,7 +56,7 @@ beforeEach(() => {
   vi.setSystemTime(NOW);
   requestMock.mockReset();
   requestMock.mockResolvedValue({});
-  refreshMock.mockReset();
+  rereadMock.mockReset();
 });
 
 afterEach(() => {
@@ -268,7 +268,7 @@ describe('AcceptedRequest', () => {
         schema: expect.anything(),
       });
     });
-    expect(refreshMock).toHaveBeenCalledOnce();
+    expect(rereadMock).toHaveBeenCalledOnce();
   });
 
   it('backs out of the confirmation without cancelling', async () => {
@@ -329,6 +329,6 @@ describe('AcceptedRequest', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Cancel booking' }));
     await userEvent.click(screen.getByRole('button', { name: /^Yes, cancel/ }));
 
-    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    await waitFor(() => expect(rereadMock).toHaveBeenCalled());
   });
 });
