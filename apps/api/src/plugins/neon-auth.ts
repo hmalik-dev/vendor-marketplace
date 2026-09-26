@@ -305,7 +305,7 @@ export const neonAuthPlugin = fp<NeonAuthPluginOptions>(
           return;
         }
 
-        throw accountSuspended();
+        throw accountSuspended(undefined, { role: user.role });
       }
 
       if (!subject.holdsDocument) {

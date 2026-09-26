@@ -23,6 +23,13 @@ gate's; `forbidden()` carries `FORBIDDEN` at ~25 ordinary tenancy/state refusals
 read (RSC) can receive it before it reaches `terminalRefusal`. Only writes are
 gated by `NAME_REQUIRED`, so no server read hits it today.
 
+**VEN-763 (2026-09-25, PASS):** `/suspended` is now dynamic and reads
+`details.role` off the auth plugin's `ACCOUNT_SUSPENDED` for one refund sentence.
+The refusal fires only after token verify, the deleted-row 401 and the
+`sessions_invalidated_at` 401, so only the token's own account sees its own role
+(admin included) — not a leak. Other throwers (stream, vendor publish) carry no
+details and the page falls back to no refund claim. Do not re-raise.
+
 Related: [[terms-gate-is-a-five-state-session]],
 [[role-bounce-self-loop-admin-bookings]],
 [[validate-before-normalize-return-path]].

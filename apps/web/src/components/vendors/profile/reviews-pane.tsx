@@ -172,6 +172,27 @@ export function ReviewsPane({
     }
   }
 
+  /*
+   * The author's own review, read back by this pane rather than waited for
+   * through `router.refresh()`. CI saw that refresh answer and never commit
+   * (VEN-779, VEN-781), leaving the tab without the review just posted and
+   * the form's offer still up. The refresh still runs for the server-rendered
+   * counts; whichever lands, both are the same fresh read. A failure here
+   * leaves the refresh to deliver it: the review itself was filed.
+   */
+  async function rereadFirstPage(): Promise<void> {
+    try {
+      const first = await request(`/vendors/${encodeURIComponent(slug)}/reviews`, {
+        schema: wireVendorReviewsPageSchema,
+      });
+
+      setPage(first);
+      setItems(first.items);
+    } catch {
+      // The refresh above is the fallback.
+    }
+  }
+
   const bookingId = page?.viewer.canReview ? page.viewer.bookingId : null;
   const form =
     writing && bookingId ? (
@@ -188,6 +209,7 @@ export function ReviewsPane({
            * reach here put three different counts on one screen.
            */
           router.refresh();
+          void rereadFirstPage();
         }}
       />
     ) : null;

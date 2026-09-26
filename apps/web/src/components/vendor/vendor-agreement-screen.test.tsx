@@ -307,4 +307,19 @@ describe('the accepted record', () => {
     const link = screen.getByRole('link', { name: 'View agreement' });
     expect(link.getAttribute('href')).toBe('/legal/vendor-agreement');
   });
+
+  /* VEN-763 parity: frame 32 fills the live pill `#EDF0E9`, which is `sage-50`. */
+  it('fills the Payouts live pill sage-50', () => {
+    render(
+      <VendorAgreementScreen
+        status={status({ accepted: ACCEPTED, isCurrent: true, history: [ACCEPTED] })}
+        agreement={AGREEMENT}
+        payoutsLive
+      />,
+    );
+
+    const classes = screen.getByText('Payouts live').className.split(/\s+/);
+    expect(classes).toContain('bg-sage-50');
+    expect(classes).not.toContain('bg-sage-100');
+  });
 });

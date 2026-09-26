@@ -325,7 +325,7 @@ function AcceptedRecord({
       <div className="mt-3.5 flex flex-wrap items-center gap-3 rounded-panel bg-stone-150 px-4.5 py-3.5">
         <span
           className={`rounded-full px-2.5 py-1.25 text-pill font-bold tracking-[.07em] uppercase ${
-            payoutsLive ? 'bg-sage-100 text-sage-600' : 'bg-stone-200 text-stone-600'
+            payoutsLive ? 'bg-sage-50 text-sage-600' : 'bg-stone-200 text-stone-600'
           }`}
         >
           {payoutsLive ? 'Payouts live' : 'Payouts not connected'}
