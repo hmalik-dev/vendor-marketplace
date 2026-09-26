@@ -17,6 +17,7 @@ import {
   signInAs,
   type TestHarness,
 } from '../../testing/test-server.js';
+import { DashboardLinkUnavailableError } from '../../lib/stripe.js';
 import { foldTaxYearFigures, render1099kCsv, TAX_1099K_HEADER } from './tax-reporting.service.js';
 
 const ADMIN = 'user_tax_admin';
@@ -623,6 +624,55 @@ describe('GET /admin/tax/1099-k.csv', () => {
 
         expect(response.statusCode).toBe(500);
         expect(response.body).not.toContain('evil.example');
+      } finally {
+        harness.stripe.createDashboardLink = real;
+      }
+    });
+
+    it('asks Stripe to send the vendor back to the payments page', async () => {
+      await vendorProfile(VENDOR, 'acct_tax_link');
+      const real = harness.stripe.createDashboardLink;
+      const asked: Parameters<typeof real>[0][] = [];
+      harness.stripe.createDashboardLink = async (input) => {
+        asked.push(input);
+        return real(input);
+      };
+
+      try {
+        expect((await open(VENDOR)).statusCode).toBe(200);
+        expect(asked).toEqual([
+          {
+            accountId: 'acct_tax_link',
+            returnUrl: 'http://localhost:3000/vendor/payments',
+            refreshUrl: 'http://localhost:3000/vendor/payments',
+          },
+        ]);
+      } finally {
+        harness.stripe.createDashboardLink = real;
+      }
+    });
+
+    /** VEN-782: Stripe's 400 for an account it will not open is permanent, so it is a 409 that says so. */
+    it('answers a stable 409 when Stripe refuses the account a link', async () => {
+      await vendorProfile(VENDOR, 'acct_tax_link');
+      const real = harness.stripe.createDashboardLink;
+      harness.stripe.createDashboardLink = async () => {
+        throw new DashboardLinkUnavailableError(
+          'Cannot create an edit link for the account acct_tax_link, which does not have access to the Express Dashboard.',
+        );
+      };
+
+      try {
+        const response = await open(VENDOR);
+
+        expect(response.statusCode).toBe(409);
+        expect(response.json()).toEqual({
+          statusCode: 409,
+          error: ERROR_CODES.CONFLICT,
+          message:
+            'Stripe cannot open this payout account. Contact support to change your payout details.',
+        });
+        expect(response.body).not.toContain('acct_tax_link');
       } finally {
         harness.stripe.createDashboardLink = real;
       }
