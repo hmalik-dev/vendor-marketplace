@@ -47,12 +47,12 @@
   },
   "devDependencies": {
     "@neon/config": "^1.7.2",
-    "playwright": "1.62.1",
-    "prettier": "3.9.6",
-    "tsx": "4.23.12",
-    "turbo": "2.10.12",
+    "playwright": "1.63.0",
+    "prettier": "3.9.8",
+    "tsx": "4.23.15",
+    "turbo": "2.11.3",
     "typescript": "5.9.3",
-    "yaml": "2.9.0"
+    "yaml": "2.9.1"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
