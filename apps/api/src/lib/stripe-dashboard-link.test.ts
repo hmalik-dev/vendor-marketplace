@@ -1,3 +1,4 @@
+import type * as StripeModule from 'stripe';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 interface Calls {
@@ -15,7 +16,7 @@ const calls = vi.hoisted<Calls>(() => ({
 }));
 
 vi.mock('stripe', async () => {
-  const actual = await vi.importActual<typeof import('stripe')>('stripe');
+  const actual = await vi.importActual<typeof StripeModule>('stripe');
 
   class FakeStripe {
     static API_VERSION = actual.default.API_VERSION;
@@ -54,7 +55,7 @@ vi.mock('stripe', async () => {
   return { default: FakeStripe };
 });
 
-const { default: RealStripe } = await vi.importActual<typeof import('stripe')>('stripe');
+const { default: RealStripe } = await vi.importActual<typeof StripeModule>('stripe');
 const { createStripeConnectGateway, DashboardLinkUnavailableError } = await import('./stripe.js');
 
 const INPUT = {
