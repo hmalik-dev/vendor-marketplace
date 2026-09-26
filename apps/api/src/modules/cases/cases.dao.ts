@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNotNull, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
   bookings,
@@ -584,6 +584,12 @@ export interface CaseResolutionState {
   payoutReleasedAt: Date | null;
   vendorPayoutCents: number | null;
   payoutModel: (typeof bookings.$inferSelect)['payoutModel'] | null;
+  /**
+   * Whether the case is the booking's dispute — the customer's report or a
+   * chargeback — rather than the vendor's own report beside it (VEN-770),
+   * which holds nothing.
+   */
+  isDispute: boolean;
 }
 
 /**
@@ -615,6 +621,7 @@ export async function findCaseResolutionState(
       payoutReleasedAt: bookings.payoutReleasedAt,
       vendorPayoutCents: bookings.vendorPayoutCents,
       payoutModel: bookings.payoutModel,
+      isDispute: sql<boolean>`coalesce(${supportCases.origin} = 'chargeback' or ${supportCases.senderUserId} = ${bookings.customerId}, false)`,
     })
     .from(supportCases)
     .leftJoin(bookings, eq(bookings.id, supportCases.bookingId))
@@ -656,6 +663,9 @@ export async function markCaseResolved(
  * second one, and a chargeback can arrive on a booking that already carries a
  * report. One ruling settles all of them — the money has moved one way or the
  * other and there is nothing left for a second case to decide.
+ *
+ * A vendor's own report on the booking (VEN-770) is not one of them: it holds
+ * nothing, and the ruling does not answer it.
  */
 export async function resolveCasesForBooking(
   db: AppDatabase,
@@ -666,6 +676,18 @@ export async function resolveCasesForBooking(
   return db
     .update(supportCases)
     .set({ status: 'resolved', resolvedBy, resolvedAt: now, updatedAt: now })
-    .where(and(eq(supportCases.bookingId, bookingId), eq(supportCases.status, 'open')))
+    .where(
+      and(
+        eq(supportCases.bookingId, bookingId),
+        eq(supportCases.status, 'open'),
+        or(
+          eq(supportCases.origin, 'chargeback'),
+          inArray(
+            supportCases.senderUserId,
+            db.select({ id: bookings.customerId }).from(bookings).where(eq(bookings.id, bookingId)),
+          ),
+        ),
+      ),
+    )
     .returning();
 }

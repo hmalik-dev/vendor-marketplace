@@ -271,3 +271,46 @@ export const REPORT_RATE_LIMIT = { max: 6, timeWindow: '1 hour' } as const;
  * together, which is the point of one queue.
  */
 export const REPORT_CASE_TOPIC: SupportTopic = 'trust-and-safety';
+
+// --- Report a problem from a booking (VEN-770) ------------------------------
+
+/** The two parties to a booking — the only people who may report one. */
+export const BOOKING_SIDES = ['customer', 'vendor'] as const;
+export type BookingSide = (typeof BOOKING_SIDES)[number];
+
+/**
+ * What went wrong, per side of the booking — frames `51b Report a problem —
+ * customer` and `— vendor`, in the order they draw them.
+ *
+ * One enum rather than two so the schema names one field; which members a
+ * sender may pick is decided by their side of the booking, on the server.
+ */
+export const BOOKING_REPORT_CATEGORIES = [
+  'vendor-no-show',
+  'service-not-as-agreed',
+  'payment',
+  'canceled-outside-app',
+  'venue-access-or-safety',
+  'something-else',
+] as const;
+export type BookingReportCategory = (typeof BOOKING_REPORT_CATEGORIES)[number];
+
+export const BOOKING_REPORT_CATEGORIES_BY_SIDE: Record<
+  BookingSide,
+  readonly BookingReportCategory[]
+> = {
+  customer: ['vendor-no-show', 'service-not-as-agreed', 'payment', 'something-else'],
+  vendor: ['canceled-outside-app', 'venue-access-or-safety', 'something-else'],
+};
+
+export const BOOKING_REPORT_CATEGORY_LABELS: Record<BookingReportCategory, string> = {
+  'vendor-no-show': "The vendor didn't show up",
+  'service-not-as-agreed': "The service wasn't what was agreed",
+  payment: 'Something about payment',
+  'canceled-outside-app': 'The customer canceled outside the app',
+  'venue-access-or-safety': 'Venue access or safety',
+  'something-else': 'Something else',
+};
+
+/** The one category whose detail is required: its label says nothing on its own. */
+export const BOOKING_REPORT_CATEGORY_NEEDS_DETAIL: BookingReportCategory = 'something-else';

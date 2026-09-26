@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { payoutReleaseAt, SUPPORT_PATH, toDateString } from '@vendor-marketplace/shared';
+import { BookingReportDialog } from '@/components/bookings/booking-report-dialog';
 import { reportWindowFor, type ReportSubject, type ReportWindow } from '@/lib/booking-report';
 import { formatPayoutDate } from '@/lib/payout-date';
-import { supportBookingLink } from '@/lib/support-link';
 
 export interface ReportProblemProps {
   booking: ReportSubject & { id: string };
@@ -10,10 +10,14 @@ export interface ReportProblemProps {
   vendorName: string;
 }
 
-/** What each window says, and what it offers. `null` renders nothing at all. */
+/**
+ * What each window says, and what it offers. `null` renders nothing at all.
+ * `report` opens frame `51b`'s dialog; `action` is a plain link.
+ */
 interface ReportState {
   body: string;
   action?: { label: string; href: string };
+  report?: true;
 }
 
 /**
@@ -50,8 +54,22 @@ export function ReportProblem({
     return null;
   }
 
+  if (state.report) {
+    return (
+      <BookingReportDialog
+        bookingId={booking.id}
+        side="customer"
+        counterpartName={vendorName}
+        eventDate={booking.eventDate}
+        className={BOX}
+      >
+        <p className="text-[12.5px] leading-[1.55] text-stone-700">{state.body}</p>
+      </BookingReportDialog>
+    );
+  }
+
   return (
-    <div className="rounded-[10px] bg-stone-50 px-3.5 py-3">
+    <div className={BOX}>
       <p className="text-[12.5px] leading-[1.55] text-stone-700">{state.body}</p>
       {state.action ? (
         <Link
@@ -64,6 +82,8 @@ export function ReportProblem({
     </div>
   );
 }
+
+const BOX = 'rounded-[10px] bg-stone-50 px-3.5 py-3';
 
 function stateFor(
   window: ReportWindow,
@@ -79,7 +99,7 @@ function stateFor(
           closes === null
             ? `Something go wrong on the day? Report it and we'll hold ${vendorName}'s payment while we look into it.`
             : `Something go wrong on the day? Report it before ${formatPayoutDate(closes, toDateString(new Date()))}, when ${vendorName}'s payment goes out, and we'll hold it while we look into it.`,
-        action: { label: 'Report a problem', href: supportBookingLink(booking.id) },
+        report: true,
       };
     }
 

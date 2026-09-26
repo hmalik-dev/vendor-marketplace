@@ -84,7 +84,7 @@
 - [An unwind spares a request with a booking behind it](unwind-decline-spares-requests-with-a-booking.md) — closes a post-unban double-book
 - [`cancelled_by` names the actor, not the suspended side](cancelled-by-does-not-say-which-side.md) — copy false to an unbanned customer
 - [The acceptance record is undeletable PII](legal-acceptance-record-is-undeletable-pii.md) — soft delete never fires the trigger
-- [The support form is a public route that moves money](support-report-is-a-public-route-that-moves-money.md) — anonymous `bookingId` freezes a payout
+- [The support form is a public route that moves money](support-report-is-a-public-route-that-moves-money.md) — anonymous `bookingId` freezes a payout; VEN-770 vendor side clean
 - [A public endpoint mails the caller's own text anywhere](public-mail-endpoint-echoes-to-any-address.md) — echo gated on `signedIn`
 - [User text in notification bodies](user-text-in-notification-bodies.md) — VEN-765 decline reason is the first; escaped, spoofing Low
 - [`support_cases` is the first durable copy of a complaint](support-cases-is-the-first-durable-copy-of-a-complaint.md) — refund gate is a deny-list on `dispute.status`

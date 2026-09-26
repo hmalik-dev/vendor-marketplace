@@ -55,6 +55,8 @@ describe('support receipt', () => {
         eventDate: '2026-12-19',
         totalAmountCents: 145_000,
         vendorBusinessName: 'Hopper Florals',
+        held: true,
+        reportedBy: 'customer',
       },
     });
 
@@ -63,6 +65,24 @@ describe('support receipt', () => {
       '',
       "We've put the vendor's payout for this booking on hold while we look into it.",
     ]);
+  });
+
+  /* VEN-770: a vendor's own report freezes nothing, so the receipt must not say it did. */
+  it('claims no hold on a vendor report', () => {
+    const mail = renderSupportConfirmation({
+      ...SUPPORT,
+      booking: {
+        id: 'b-1',
+        eventDate: '2026-12-19',
+        totalAmountCents: 145_000,
+        vendorBusinessName: 'Hopper Florals',
+        held: false,
+        reportedBy: 'vendor',
+      },
+    });
+
+    expect(mail.text).not.toContain('on hold');
+    expect(mail.html).not.toContain('on hold');
   });
 });
 

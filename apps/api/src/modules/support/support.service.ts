@@ -1,6 +1,8 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import {
+  BOOKING_REPORT_CATEGORIES_BY_SIDE,
   ERROR_CODES,
+  type BookingSide,
   SUPPORT_REFERENCE_ALPHABET,
   SUPPORT_REFERENCE_PREFIX,
   SUPPORT_TOPIC_FEATURE_REQUEST,
@@ -24,6 +26,7 @@ import {
   announceDisputeHold,
   disputeHoldAudience,
   liftDisputeHold,
+  participantIn,
   placeDisputeHold,
   type BookingContext,
   type DisputeHoldAudience,
@@ -126,27 +129,45 @@ async function resolveReplyTo(
   return { replyTo: account.email, signedIn: true };
 }
 
+/**
+ * The booking a report is about, which side of it the sender is on, and
+ * whether this request froze its payout.
+ *
+ * Only a customer's report holds: a vendor reporting a problem (VEN-770) is
+ * asking for help, and freezing their own payout would punish them for it.
+ */
+interface ReportedBooking {
+  row: BookingRow;
+  side: BookingSide;
+  held: boolean;
+}
+
 /** The booking as the report email quotes it — the row's columns, not the sender's. */
-function bookingFields(held: BookingRow, audience: DisputeHoldAudience): SupportBookingFields {
+function bookingFields(
+  reported: ReportedBooking,
+  audience: DisputeHoldAudience,
+): SupportBookingFields {
   return {
-    id: held.id,
-    eventDate: held.eventDate,
-    totalAmountCents: held.totalAmountCents,
+    id: reported.row.id,
+    eventDate: reported.row.eventDate,
+    totalAmountCents: reported.row.totalAmountCents,
     vendorBusinessName: audience.vendorBusinessName,
+    held: reported.held,
+    reportedBy: reported.side,
   };
 }
 
 /**
- * Freezes the payout on the booking this report is about, or answers `null`
- * when the report is not about one.
+ * The booking this report is about — its payout frozen when the customer sent
+ * it — or `null` when the report is not about one.
  *
- * **Authorisation is not decided here.** `placeDisputeHold` answers 404 for a
- * booking that is not this caller's, 403 for the vendor on it, and 409 for one
- * outside the window a hold can still change anything in — the same refusals
- * the dispute route gets, because it is the same function. What this adds is
- * the one refusal that route cannot need: a booking report from a caller with
- * no session at all. `/support/messages` is deliberately public, so that case
- * is reachable here and nowhere else.
+ * A caller on neither side of the booking gets 404. The vendor on it is let
+ * through with no hold (VEN-770). The customer meets `placeDisputeHold`'s own
+ * refusals — 409 outside the window a hold can still change anything in — the
+ * same ones the dispute route gets, because it is the same function. What this
+ * adds is the refusal that route cannot need: a booking report from a caller
+ * with no session at all. `/support/messages` is deliberately public, so that
+ * case is reachable here and nowhere else.
  *
  * The quoted fields are read from the row the hold returned, never from the
  * request. The vendor's name is looked up separately and is allowed to be
@@ -159,8 +180,14 @@ async function placeReportHold(
   auth: AuthenticatedUser | null,
   gated: boolean,
   now: Date,
-): Promise<BookingRow | null> {
+): Promise<ReportedBooking | null> {
   if (input.bookingId === undefined) {
+    if (input.bookingCategory !== undefined) {
+      throw validationFailed('A problem category needs the booking it is about', {
+        field: 'bookingCategory',
+      });
+    }
+
     return null;
   }
 
@@ -176,8 +203,28 @@ async function placeReportHold(
     throw gated ? termsRequiredError() : unauthorized('Sign in to report a problem with a booking');
   }
 
+  /*
+   * The side is read off the booking row, never the request, and a caller on
+   * neither side gets `participantIn`'s 404 — a stranger walking ids learns
+   * nothing about which of them exist.
+   */
+  const { booking, side } = await participantIn(deps.bookings, auth, input.bookingId);
+
+  if (
+    input.bookingCategory !== undefined &&
+    !BOOKING_REPORT_CATEGORIES_BY_SIDE[side].includes(input.bookingCategory)
+  ) {
+    throw validationFailed('Choose one of the problems listed for your side of the booking', {
+      field: 'bookingCategory',
+    });
+  }
+
+  if (side === 'vendor') {
+    return { row: booking, side, held: false };
+  }
+
   try {
-    return await placeDisputeHold(
+    const held = await placeDisputeHold(
       deps.bookings,
       auth,
       input.bookingId,
@@ -185,6 +232,8 @@ async function placeReportHold(
       now,
       'customer',
     );
+
+    return { row: held, side, held: true };
   } catch (error) {
     /*
      * **The booking is already held — and only one kind of hold lets this send
@@ -229,17 +278,19 @@ async function placeReportHold(
  */
 async function readAudience(
   deps: SupportDeps,
-  held: BookingRow | null,
+  reported: ReportedBooking | null,
   reference: string,
 ): Promise<DisputeHoldAudience | null> {
-  if (held === null) {
+  if (reported === null) {
     return null;
   }
 
   try {
-    return await disputeHoldAudience(deps.bookings, held);
+    return await disputeHoldAudience(deps.bookings, reported.row);
   } catch (error) {
-    await unwindReportHold(deps, held, reference);
+    if (reported.held) {
+      await unwindReportHold(deps, reported.row, reference);
+    }
 
     throw error;
   }
@@ -331,9 +382,9 @@ export async function sendSupportMessage(
    * anything that fails after it is unwound by `unwindReportHold` below, so
    * neither half can stand alone. #405's two-writes-with-no-rollback shape, on money.
    */
-  const held = await placeReportHold(deps, input, auth, gated, now);
+  const reported = await placeReportHold(deps, input, auth, gated, now);
 
-  const audience = await readAudience(deps, held, reference);
+  const audience = await readAudience(deps, reported, reference);
 
   /*
    * **The row goes in here**, after every refusal that can still turn this send
@@ -367,7 +418,10 @@ export async function sendSupportMessage(
     replyTo,
     signedIn,
     ...(input.errorContext === undefined ? {} : { errorContext: input.errorContext }),
-    ...(held === null || audience === null ? {} : { booking: bookingFields(held, audience) }),
+    ...(input.bookingCategory === undefined ? {} : { bookingCategory: input.bookingCategory }),
+    ...(reported === null || audience === null
+      ? {}
+      : { booking: bookingFields(reported, audience) }),
   };
 
   const report = renderSupportReport(fields);
@@ -389,8 +443,8 @@ export async function sendSupportMessage(
      */
     deps.log.error({ reference, topic: input.topic, err: error }, 'Support message failed to send');
 
-    if (held) {
-      await unwindReportHold(deps, held, reference);
+    if (reported?.held) {
+      await unwindReportHold(deps, reported.row, reference);
     }
 
     /*
@@ -432,7 +486,7 @@ export async function sendSupportMessage(
    * on the other, and sequencing them only lengthened the request.
    */
   await Promise.all([
-    audience === null
+    audience === null || !reported?.held
       ? Promise.resolve()
       : announceDisputeHold(deps.bookings, audience, 'customer'),
     deps.email
