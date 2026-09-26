@@ -307,7 +307,7 @@ export function QuoteReview({ request, conversationId }: QuoteReviewProps): Reac
                       ? '/messages'
                       : `/messages?conversation=${encodeURIComponent(conversationId)}`
                   }
-                  className="ml-2 text-[13px] font-semibold text-clay-600 hover:underline"
+                  className="ml-2 text-[13px] font-semibold text-clay-500 hover:underline"
                 >
                   Message about this request
                 </Link>
@@ -410,7 +410,7 @@ function DeclineQuote({ requestId, vendorName, disabled }: DeclineQuoteProps): R
               event.preventDefault();
             }
           }}
-          className="fixed top-1/2 left-1/2 z-50 w-[min(26.25rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-stone-0 px-6 py-5.5 shadow-[0_18px_50px_rgba(35,32,28,.25)]"
+          className="fixed top-1/2 left-1/2 z-50 w-[min(26.25rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-[16px] bg-stone-0 px-6 py-5.5 shadow-[0_18px_50px_rgba(35,32,28,.25)]"
         >
           <AlertDialog.Title className="font-display text-[21px] font-normal text-stone-900">
             Decline this quote?
