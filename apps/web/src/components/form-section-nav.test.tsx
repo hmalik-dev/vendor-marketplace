@@ -41,14 +41,15 @@ describe('FormSectionNav', () => {
   });
 
   /*
-   * The rail carries the legend the dots are read against, not a second count —
-   * the submit bar already says how many things are left, and two numbers that
-   * can disagree is worse than one.
+   * Frame `09` no longer draws a legend under the rail (RESYNC-2026-09-25 §B):
+   * the dots read on their own, and the submit bar already says how many
+   * things are left. Neither of the two sentences it used to switch between.
    */
-  it('explains what the gold dots mean while any are showing', () => {
+  it('draws no legend under the sections', () => {
     render(<FormSectionNav sections={SECTIONS} />);
 
-    expect(screen.getByText("Gold dots mark what's unfinished")).toBeDefined();
+    expect(screen.queryByText("Gold dots mark what's unfinished")).toBeNull();
+    expect(screen.getByRole('navigation').querySelectorAll('p')).toHaveLength(0);
   });
 
   it('marks every blocking section and no others', () => {
@@ -58,12 +59,12 @@ describe('FormSectionNav', () => {
     expect(screen.getAllByLabelText('Still to do')).toHaveLength(blocking.length);
   });
 
-  it('says so when nothing is blocking', () => {
+  it('draws no dot and no legend when nothing is blocking', () => {
     render(
       <FormSectionNav sections={SECTIONS.map((section) => ({ ...section, blocks: false }))} />,
     );
 
-    expect(screen.getByText('Everything needed to publish is filled in.')).toBeDefined();
+    expect(screen.queryByText('Everything needed to publish is filled in.')).toBeNull();
     expect(screen.queryByLabelText('Still to do')).toBeNull();
   });
 

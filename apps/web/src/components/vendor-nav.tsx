@@ -83,7 +83,15 @@ const ITEMS: readonly VendorNavItem[] = [
  * horizontally scrollable strip rather than stacking five full-width rows and
  * spending a third of a small screen before the page begins.
  */
-export function VendorNav(): React.ReactElement | null {
+export function VendorNav({
+  pendingRequests,
+  payoutsConnected,
+}: {
+  /** Requests waiting on the vendor — the dashboard title's number. */
+  pendingRequests: number;
+  /** False draws the gold dot on Payments. */
+  payoutsConnected: boolean;
+}): React.ReactElement | null {
   const pathname = usePathname();
 
   /*
@@ -128,12 +136,28 @@ export function VendorNav(): React.ReactElement | null {
           // Prefix matching, so a nested route keeps its section highlighted.
           const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
           const Icon = item.icon;
+          /*
+           * What needs the vendor, drawn on the row that fixes it (frames `08`,
+           * `11`, `27`): the waiting-request count moves to Bookings now the
+           * rail has no Requests row, and Payments carries the editor's gold
+           * dot until payouts connect. Each row's accessible name says so,
+           * because a bare "3" read after "Bookings" means nothing.
+           */
+          const count = item.href === '/vendor/bookings' ? pendingRequests : 0;
+          const unfinished = item.href === '/vendor/payments' && !payoutsConnected;
+          let ariaLabel: string | undefined;
+          if (count > 0) {
+            ariaLabel = `${item.label}, ${count} waiting`;
+          } else if (unfinished) {
+            ariaLabel = `${item.label}, payouts not connected`;
+          }
 
           return (
             <li key={item.href} className="shrink-0">
               <Link
                 href={item.href}
                 aria-current={isActive ? 'page' : undefined}
+                aria-label={ariaLabel}
                 className={cn(
                   /*
                     44px tall below `lg`, where the input is a finger. Above it
@@ -151,6 +175,19 @@ export function VendorNav(): React.ReactElement | null {
               >
                 <Icon aria-hidden="true" className="size-4 shrink-0" />
                 {item.label}
+                {count > 0 ? (
+                  // Frame `08`'s urgent pill: clay, white, 11px bold; 10px in frame `27`'s 1024 rail.
+                  <span className="ml-auto rounded-full bg-clay-400 px-1.75 py-px text-[11px] leading-normal font-bold text-stone-0 lg:text-[10px] min-[90rem]:text-[11px]">
+                    {count}
+                  </span>
+                ) : null}
+                {unfinished ? (
+                  <span
+                    aria-hidden="true"
+                    data-slot="nav-dot"
+                    className="ml-auto size-1.75 shrink-0 rounded-full bg-gold-400"
+                  />
+                ) : null}
               </Link>
             </li>
           );
