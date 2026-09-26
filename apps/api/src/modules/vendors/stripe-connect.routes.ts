@@ -45,7 +45,10 @@ export const stripeConnectRoutes: FastifyPluginAsyncZod<StripeConnectRoutesOptio
       ),
   );
 
-  /** A single-use Express dashboard link for the vendor's own account; 404 before one exists (VEN-725). */
+  /**
+   * A single-use link to manage the vendor's own account; 404 before one
+   * exists (VEN-725), 409 when Stripe will not open it (VEN-782).
+   */
   app.post(
     '/vendor/stripe/dashboard-link',
     {
@@ -54,7 +57,7 @@ export const stripeConnectRoutes: FastifyPluginAsyncZod<StripeConnectRoutesOptio
     },
     async (request) =>
       createDashboardLink(
-        { db: app.db, stripe: app.stripe, log: request.log },
+        { db: app.db, stripe: app.stripe, log: request.log, returnOrigin: options.returnOrigin },
         assertRole(request.auth, ['vendor']).id,
       ),
   );

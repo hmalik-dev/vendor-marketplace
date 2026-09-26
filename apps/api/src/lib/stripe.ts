@@ -38,11 +38,15 @@ export interface StripeConnectGateway {
   createOnboardingLink(input: CreateOnboardingLinkInput): Promise<{ url: string }>;
 
   /**
-   * A single-use link into the vendor's Stripe Express dashboard, where their
-   * payouts and tax forms live (VEN-725). Minted per click, never stored. The
-   * Express login-link endpoint is v1; Stripe accepts a v2 account id there.
+   * A single-use link where the vendor manages their payout account, minted
+   * per click and never stored. An account with the Express Dashboard gets a
+   * login link into it, where their payouts and tax forms live (VEN-725); the
+   * endpoint is v1, and Stripe accepts a v2 account id there. An account with
+   * no Stripe-hosted dashboard cannot have a login link, so it gets a hosted
+   * `account_update` form instead (VEN-782). Throws
+   * `DashboardLinkUnavailableError` when Stripe refuses both.
    */
-  createDashboardLink(accountId: string): Promise<{ url: string }>;
+  createDashboardLink(input: CreateOnboardingLinkInput): Promise<{ url: string }>;
 
   /** The authoritative capability state, read from Stripe rather than cached. */
   readAccountStatus(accountId: string): Promise<StripeAccountStatus>;
@@ -783,6 +787,12 @@ export function assertUsableRefund(refundId: string, status: string | null | und
 export class RecipientAccountRefusedError extends Error {}
 
 /**
+ * Stripe refused to mint a link for managing this account (VEN-782). A 400 is
+ * a decision about the account, not a blip, so retrying cannot change it.
+ */
+export class DashboardLinkUnavailableError extends Error {}
+
+/**
  * Whether Stripe executed and refused an account creation, which it will replay
  * under the same key. `StripeInvalidRequestError` covers both spellings: v1
  * bodies carry `type: invalid_request_error`, while a v2 field refusal carries
@@ -1328,10 +1338,34 @@ export function createStripeConnectGateway(credentials: StripeCredentials): Stri
       return { url: link.url };
     },
 
-    async createDashboardLink(accountId) {
-      const link = await stripe.accounts.createLoginLink(accountId);
+    async createDashboardLink(input) {
+      const account = await stripe.v2.core.accounts.retrieve(input.accountId);
 
-      return { url: link.url };
+      try {
+        if (account.dashboard === 'express') {
+          return { url: (await stripe.accounts.createLoginLink(input.accountId)).url };
+        }
+
+        const link = await stripe.v2.core.accountLinks.create({
+          account: input.accountId,
+          use_case: {
+            type: 'account_update',
+            account_update: {
+              configurations: ['recipient'],
+              return_url: input.returnUrl,
+              refresh_url: input.refreshUrl,
+            },
+          },
+        });
+
+        return { url: link.url };
+      } catch (error) {
+        if (error instanceof Stripe.errors.StripeError && error.statusCode === 400) {
+          throw new DashboardLinkUnavailableError(error.message, { cause: error });
+        }
+
+        throw error;
+      }
     },
 
     async readAccountStatus(accountId) {
