@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useRereadRoute } from '@/lib/use-reread-route';
 import { useState } from 'react';
 import { REQUEST_DID_NOT_ARRIVE, userFacingError } from '@/lib/user-facing-error';
 import { useApi } from '@/lib/use-api';
@@ -19,7 +19,7 @@ const TEXT_ACTION =
  */
 export function NeedsYouDecline({ requestId }: { requestId: string }): React.ReactElement {
   const call = useApi();
-  const router = useRouter();
+  const rereadRoute = useRereadRoute();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +35,7 @@ export function NeedsYouDecline({ requestId }: { requestId: string }): React.Rea
       });
       // Still busy until the refresh removes the panel: a second press would
       // decline a request that is already declined, and show its 403.
-      router.refresh();
+      rereadRoute();
     } catch (failure) {
       setError(userFacingError(failure, REQUEST_DID_NOT_ARRIVE));
       setConfirming(false);

@@ -8,7 +8,7 @@ import {
   formatPrice,
 } from '@vendor-marketplace/shared';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRereadRoute } from '@/lib/use-reread-route';
 import { useId, useRef, useState } from 'react';
 import { AlertDialog } from 'radix-ui';
 import { Button } from '@/components/ui/button';
@@ -71,7 +71,7 @@ export interface QuoteReviewProps {
  * `Accepted → Pay now` is the state this hands over to.
  */
 export function QuoteReview({ request, conversationId }: QuoteReviewProps): React.ReactElement {
-  const router = useRouter();
+  const rereadRoute = useRereadRoute();
   const call = useApi();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -140,7 +140,7 @@ export function QuoteReview({ request, conversationId }: QuoteReviewProps): Reac
       });
       // Re-read from the server rather than patching locally: the vendor may
       // have withdrawn, or the request may have expired, while this was open.
-      router.refresh();
+      rereadRoute();
     } catch (failure) {
       setError(userFacingError(failure, REQUEST_DID_NOT_ARRIVE));
     } finally {
@@ -341,7 +341,7 @@ const REASON_FIELD =
  * dismiss-by-click-outside, and it is announced as the confirmation it is.
  */
 function DeclineQuote({ requestId, vendorName, disabled }: DeclineQuoteProps): React.ReactElement {
-  const router = useRouter();
+  const rereadRoute = useRereadRoute();
   const call = useApi();
   const reasonId = useId();
   const [open, setOpen] = useState(false);
@@ -373,7 +373,7 @@ function DeclineQuote({ requestId, vendorName, disabled }: DeclineQuoteProps): R
         ...(declineReason === '' ? {} : { body: { declineReason } }),
       });
       setOpen(false);
-      router.refresh();
+      rereadRoute();
     } catch (failure) {
       // The dialog stays: closing it would leave an unchanged quote and no word why.
       setError(userFacingError(failure, REQUEST_DID_NOT_ARRIVE));
