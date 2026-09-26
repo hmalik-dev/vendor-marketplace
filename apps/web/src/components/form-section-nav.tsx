@@ -77,8 +77,6 @@ export function FormSectionNav({ sections, className }: FormSectionNavProps): Re
     // would tear the observer down mid-scroll.
   }, [anchorIds]);
 
-  const hasBlockers = sections.some((section) => section.blocks);
-
   return (
     <nav aria-label="Storefront sections" className={cn('flex flex-col gap-1 p-3 pt-4', className)}>
       {sections.map((section) => {
@@ -117,18 +115,6 @@ export function FormSectionNav({ sections, className }: FormSectionNavProps): Re
           </a>
         );
       })}
-
-      {/* The legend the dots are read against, kept at the foot of the rail. */}
-      <p className="mt-auto flex items-center gap-1.5 px-3 pt-4 pb-1 text-xs leading-normal text-stone-600">
-        {hasBlockers ? (
-          <>
-            <span aria-hidden="true" className="size-1.75 shrink-0 rounded-full bg-gold-400" />
-            Gold dots mark what&apos;s unfinished
-          </>
-        ) : (
-          'Everything needed to publish is filled in.'
-        )}
-      </p>
     </nav>
   );
 }
