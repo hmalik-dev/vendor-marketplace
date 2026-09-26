@@ -29,7 +29,12 @@ omission the default rather than the exception.
 which the export enumerates the same way), check `exportUserData`'s literal and
 `adminUserExportSchema` alongside the console read. Also check closure —
 `retireUserById` writes only `deleted_at`, so every one of these columns
-survives a closed account. Related:
+survives a closed account.
+
+`booking_requests` is enumerated the same way in `data-rights.dao.ts` (≈ line
+124): customer-authored `customDetails` is listed, vendor-authored `quoteNote`
+is not. VEN-765 added customer-authored `decline_reason` without listing it
+(Low). On a new customer-authored request column, check that select. Related:
 [[legal-acceptance-record-is-undeletable-pii]],
 [[closed-account-address-is-released]],
 [[response-schemas-are-a-second-write-boundary]].

@@ -1,5 +1,6 @@
 import {
   CURRENT_REFUND_TERMS,
+  DECLINE_REASON_MAX_LENGTH,
   DEFAULT_CURRENCY,
   type EventType,
   type PackageSnapshot,
@@ -72,6 +73,8 @@ export const bookingRequests = pgTable(
     status: bookingRequestStatusEnum('status').notNull().default('pending'),
     quotedPriceCents: integer('quoted_price_cents'),
     quoteNote: text('quote_note'),
+    /** The customer's optional reason for declining a quote (VEN-765). */
+    declineReason: text('decline_reason'),
     /** Locked price: package price at request time, or the accepted quote. */
     finalPriceCents: integer('final_price_cents'),
     /**
@@ -152,6 +155,10 @@ export const bookingRequests = pgTable(
     check(
       'booking_requests_final_price_cents_non_negative',
       sql`${table.finalPriceCents} IS NULL OR ${table.finalPriceCents} >= 0`,
+    ),
+    check(
+      'booking_requests_decline_reason_length',
+      sql`${table.declineReason} IS NULL OR char_length(${table.declineReason}) <= ${sql.raw(String(DECLINE_REASON_MAX_LENGTH))}`,
     ),
     check(
       'booking_requests_guest_count_non_negative',

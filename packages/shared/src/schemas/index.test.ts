@@ -564,6 +564,7 @@ describe('bookingRequestSchema', () => {
       vendorId: UUID,
       packageId: null,
       eventDate: '2026-09-01',
+      eventStartTime: null,
       eventType: null,
       eventLocation: null,
       guestCount: null,
@@ -571,12 +572,15 @@ describe('bookingRequestSchema', () => {
       status: 'refunded',
       quotedPriceCents: null,
       quoteNote: null,
+      declineReason: null,
       finalPriceCents: null,
       expiresAt: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
     expect(result.success).toBe(false);
+    // The status alone, so a fixture missing a new field cannot pass this for it.
+    expect(result.error?.issues.map((issue) => issue.path.join('.'))).toEqual(['status']);
   });
 });
 

@@ -1,0 +1,2 @@
+ALTER TABLE "booking_requests" ADD COLUMN "decline_reason" text;--> statement-breakpoint
+ALTER TABLE "booking_requests" ADD CONSTRAINT "booking_requests_decline_reason_length" CHECK ("booking_requests"."decline_reason" IS NULL OR char_length("booking_requests"."decline_reason") <= 500);

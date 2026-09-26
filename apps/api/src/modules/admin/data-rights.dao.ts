@@ -102,6 +102,7 @@ export interface ExportRequestRow {
   eventLocation: string | null;
   guestCount: number | null;
   customDetails: string | null;
+  declineReason: string | null;
   status: string;
   quotedPriceCents: number | null;
   finalPriceCents: number | null;
@@ -129,6 +130,7 @@ export async function findExportBookingRequests(
       eventLocation: bookingRequests.eventLocation,
       guestCount: bookingRequests.guestCount,
       customDetails: bookingRequests.customDetails,
+      declineReason: bookingRequests.declineReason,
       status: bookingRequests.status,
       quotedPriceCents: bookingRequests.quotedPriceCents,
       finalPriceCents: bookingRequests.finalPriceCents,

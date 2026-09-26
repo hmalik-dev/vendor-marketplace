@@ -1,14 +1,18 @@
 'use client';
 
 import {
+  DECLINE_REASON_MAX_LENGTH,
   EVENT_TYPE_LABELS,
   LIVE_BOOKING_REQUEST_STATUSES,
   expiryCountdown,
   formatPrice,
 } from '@vendor-marketplace/shared';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useId, useRef, useState } from 'react';
+import { AlertDialog } from 'radix-ui';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { REQUEST_DID_NOT_ARRIVE, userFacingError } from '@/lib/user-facing-error';
 import { useApi } from '@/lib/use-api';
 import { prePaymentRefundClause } from '@/lib/refund-deadline';
@@ -42,6 +46,12 @@ const SETTLED_SENTENCE: Record<string, string> = {
 
 export interface QuoteReviewProps {
   request: WireBookingRequest;
+  /**
+   * The thread this request is negotiated in, which `Message about this
+   * request` opens (frame `47`). `null` when it could not be read: the link
+   * then opens the inbox.
+   */
+  conversationId: string | null;
 }
 
 /**
@@ -60,7 +70,7 @@ export interface QuoteReviewProps {
  * Review quote + Decline". It carries **no checkout**: paying is #10's, and
  * `Accepted → Pay now` is the state this hands over to.
  */
-export function QuoteReview({ request }: QuoteReviewProps): React.ReactElement {
+export function QuoteReview({ request, conversationId }: QuoteReviewProps): React.ReactElement {
   const router = useRouter();
   const call = useApi();
   const [busy, setBusy] = useState(false);
@@ -239,7 +249,7 @@ export function QuoteReview({ request }: QuoteReviewProps): React.ReactElement {
           correction is to have no control, not an invisible one.
         */}
         {settled ? null : (
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
             {awaiting ? (
               /*
               One action, and it is destructive, so it takes a second press
@@ -279,21 +289,178 @@ export function QuoteReview({ request }: QuoteReviewProps): React.ReactElement {
                   disabled={busy || price === null}
                   onClick={() => void act('accept')}
                 >
-                  Accept quote
+                  {/* Frame `47`: what accepting costs, on the button itself. */}
+                  {price === null ? 'Accept quote' : `Accept quote — ${formatPrice(price)}`}
                 </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
+                <DeclineQuote
+                  requestId={request.id}
+                  vendorName={request.vendor.businessName}
                   disabled={busy}
-                  onClick={() => void act('decline')}
+                />
+                {/*
+                  Scoped to this request's thread, not the vendor's inbox
+                  (frame `47`'s "Message stays scoped").
+                */}
+                <Link
+                  href={
+                    conversationId === null
+                      ? '/messages'
+                      : `/messages?conversation=${encodeURIComponent(conversationId)}`
+                  }
+                  className="ml-2 text-[13px] font-semibold text-clay-500 hover:underline"
                 >
-                  Decline
-                </Button>
+                  Message about this request
+                </Link>
               </>
             )}
           </div>
         )}
       </div>
     </section>
+  );
+}
+
+interface DeclineQuoteProps {
+  requestId: string;
+  vendorName: string;
+  disabled: boolean;
+}
+
+/**
+ * Frame `47b`'s field: the `.inp` box on a card ground, 52px tall. `Textarea`
+ * owns its focus indicator.
+ */
+const REASON_FIELD =
+  'min-h-13 rounded-[10px] border-stone-300 bg-stone-0 px-3.25 py-2.5 text-[13.5px] text-stone-900';
+
+/**
+ * Frame `47b`: Decline asks first, and lets the customer say why (VEN-765).
+ *
+ * It used to decline on the first press, and a declined quote cannot be taken
+ * back. `AlertDialog` rather than `Dialog`, as `ConfirmAction` is: no
+ * dismiss-by-click-outside, and it is announced as the confirmation it is.
+ */
+function DeclineQuote({ requestId, vendorName, disabled }: DeclineQuoteProps): React.ReactElement {
+  const router = useRouter();
+  const call = useApi();
+  const reasonId = useId();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  /*
+   * `busy` disables the button only after the next render, so a second press
+   * in the same tick still reaches `decline`. The ref closes that window, as it
+   * does in `ConfirmAction` (VEN-682).
+   */
+  const inFlight = useRef(false);
+
+  async function decline(): Promise<void> {
+    if (inFlight.current) {
+      return;
+    }
+
+    inFlight.current = true;
+    setBusy(true);
+    setError(null);
+
+    const declineReason = reason.trim();
+
+    try {
+      await call(`/booking-requests/${requestId}/decline`, {
+        schema: wireBookingRequestSchema,
+        method: 'POST',
+        ...(declineReason === '' ? {} : { body: { declineReason } }),
+      });
+      setOpen(false);
+      router.refresh();
+    } catch (failure) {
+      // The dialog stays: closing it would leave an unchanged quote and no word why.
+      setError(userFacingError(failure, REQUEST_DID_NOT_ARRIVE));
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
+  }
+
+  return (
+    <AlertDialog.Root
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) {
+          setError(null);
+        }
+      }}
+    >
+      <AlertDialog.Trigger asChild>
+        <Button type="button" variant="secondary" disabled={disabled}>
+          Decline
+        </Button>
+      </AlertDialog.Trigger>
+      <AlertDialog.Portal>
+        <AlertDialog.Overlay className="fixed inset-0 z-50 bg-stone-900/35" />
+        <AlertDialog.Content
+          /*
+            Not while the decline is in flight: closing then would drop its
+            answer, and a failure would land in a dialog nobody can see.
+          */
+          onEscapeKeyDown={(event) => {
+            if (busy) {
+              event.preventDefault();
+            }
+          }}
+          className="fixed top-1/2 left-1/2 z-50 w-[min(26.25rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-[16px] bg-stone-0 px-6 py-5.5 shadow-[0_18px_50px_rgba(35,32,28,.25)]"
+        >
+          <AlertDialog.Title className="font-display text-[21px] font-normal text-stone-900">
+            Decline this quote?
+          </AlertDialog.Title>
+          <AlertDialog.Description className="mt-2 text-[13px] leading-[1.55] text-stone-700">
+            {vendorName} will be told you&apos;ve declined. The request closes.
+          </AlertDialog.Description>
+          <label
+            htmlFor={reasonId}
+            className="mb-1.5 block text-label font-semibold tracking-label text-stone-600 uppercase"
+          >
+            Tell them why{' '}
+            <span className="font-medium tracking-normal normal-case">(optional)</span>
+          </label>
+          <Textarea
+            id={reasonId}
+            value={reason}
+            maxLength={DECLINE_REASON_MAX_LENGTH}
+            disabled={busy}
+            onChange={(event) => setReason(event.target.value)}
+            className={REASON_FIELD}
+          />
+          {error ? (
+            <p role="alert" className="mt-3 text-xs text-error-500">
+              {error}
+            </p>
+          ) : null}
+          <div className="mt-4 flex justify-end gap-2.5">
+            <AlertDialog.Cancel asChild>
+              <Button type="button" variant="secondary" disabled={busy}>
+                Keep the quote
+              </Button>
+            </AlertDialog.Cancel>
+            {/*
+              Not `AlertDialog.Action`: that closes on click, before the request
+              answers, and would take a failure message with it. Drawn as the
+              frame's red outline rather than the `destructive` fill.
+            */}
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={busy}
+              onClick={() => void decline()}
+              className="border-error-200 text-error-500 hover:bg-error-50"
+            >
+              {busy ? 'Declining…' : 'Decline quote'}
+            </Button>
+          </div>
+        </AlertDialog.Content>
+      </AlertDialog.Portal>
+    </AlertDialog.Root>
   );
 }
