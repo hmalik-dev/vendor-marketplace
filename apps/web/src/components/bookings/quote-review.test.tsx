@@ -6,10 +6,10 @@ import { QuoteReview } from './quote-review';
 import type { WireBookingRequest } from '@/lib/wire-schemas';
 
 const requestMock = vi.fn();
-const refreshMock = vi.fn();
+const rereadMock = vi.fn();
 
 vi.mock('@/lib/use-api', () => ({ useApi: () => requestMock }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: refreshMock }) }));
+vi.mock('@/lib/use-reread-route', () => ({ useRereadRoute: () => rereadMock }));
 
 function quotedRequest(overrides: Partial<WireBookingRequest> = {}): WireBookingRequest {
   return {
@@ -50,7 +50,7 @@ function cancelledBooking(
 beforeEach(() => {
   requestMock.mockReset();
   requestMock.mockResolvedValue({});
-  refreshMock.mockReset();
+  rereadMock.mockReset();
 });
 
 afterEach(cleanup);
@@ -94,7 +94,7 @@ describe('QuoteReview', () => {
       '/booking-requests/req-1/accept',
       expect.objectContaining({ method: 'POST' }),
     );
-    expect(refreshMock).toHaveBeenCalled();
+    expect(rereadMock).toHaveBeenCalled();
   });
 
   /* Frame `47`: what accepting costs is on the button itself (VEN-765). */
@@ -146,7 +146,7 @@ describe('QuoteReview', () => {
 
       expect(screen.queryByRole('alertdialog')).toBeNull();
       expect(requestMock).not.toHaveBeenCalled();
-      expect(refreshMock).not.toHaveBeenCalled();
+      expect(rereadMock).not.toHaveBeenCalled();
     });
 
     it('declines with no body when no reason is given', async () => {
@@ -160,7 +160,7 @@ describe('QuoteReview', () => {
       expect(path).toBe('/booking-requests/req-1/decline');
       expect(init.method).toBe('POST');
       expect(init.body).toBeUndefined();
-      expect(refreshMock).toHaveBeenCalledTimes(1);
+      expect(rereadMock).toHaveBeenCalledTimes(1);
       expect(screen.queryByRole('alertdialog')).toBeNull();
     });
 
@@ -209,7 +209,7 @@ describe('QuoteReview', () => {
 
       expect(requestMock).toHaveBeenCalledTimes(1);
       answer({});
-      await waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(rereadMock).toHaveBeenCalledTimes(1));
     });
 
     it('keeps the dialog open with the failure in it', async () => {
@@ -226,7 +226,7 @@ describe('QuoteReview', () => {
       expect((await within(dialog).findByRole('alert')).textContent).toBe(
         'This quote is no longer open',
       );
-      expect(refreshMock).not.toHaveBeenCalled();
+      expect(rereadMock).not.toHaveBeenCalled();
     });
   });
 

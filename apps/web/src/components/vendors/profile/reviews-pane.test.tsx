@@ -13,10 +13,10 @@ const originalTz = vi.hoisted(() => {
 });
 
 const requestMock = vi.fn();
-const refreshMock = vi.fn();
+const rereadMock = vi.fn();
 
 vi.mock('@/lib/use-api', () => ({ useApi: () => requestMock }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: refreshMock }) }));
+vi.mock('@/lib/use-reread-route', () => ({ useRereadRoute: () => rereadMock }));
 
 afterAll(() => {
   if (originalTz === undefined) delete process.env.TZ;
@@ -25,7 +25,7 @@ afterAll(() => {
 afterEach(cleanup);
 beforeEach(() => {
   requestMock.mockReset();
-  refreshMock.mockReset();
+  rereadMock.mockReset();
 });
 
 function review(overrides: Partial<WirePublicReview> = {}): WirePublicReview {
@@ -347,7 +347,7 @@ describe('ReviewsPane — writing one', () => {
     expect(screen.getByText('3 reviews')).toBeDefined();
     expect(screen.queryByRole('form')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Write a review' })).toBeNull();
-    expect(refreshMock).toHaveBeenCalledTimes(1);
+    expect(rereadMock).toHaveBeenCalledTimes(1);
     expect(requestMock).toHaveBeenCalledTimes(2);
     expect(requestMock.mock.calls[1]?.[0]).toBe('/vendors/june-harlow/reviews');
   });
@@ -364,7 +364,7 @@ describe('ReviewsPane — writing one', () => {
     await postReview(user);
 
     await waitFor(() => expect(requestMock).toHaveBeenCalledTimes(2));
-    expect(refreshMock).toHaveBeenCalledTimes(1);
+    expect(rereadMock).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('form')).toBeNull();
     expect(screen.getByText('2 reviews')).toBeDefined();
     expect(screen.queryByRole('status')).toBeNull();
