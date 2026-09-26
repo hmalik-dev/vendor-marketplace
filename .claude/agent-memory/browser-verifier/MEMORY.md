@@ -53,3 +53,4 @@
 - [browser_tabs new shares the default cookie jar](mcp-tabs-new-shares-the-default-cookie-jar.md) — concurrent sessions collide in one jar; an untargeted snapshot leaked a real password once. Use browser.newContext() from action one
 - [Pending Terms version needs a hand-built fixture](pending-terms-version-needs-a-hand-built-fixture.md) — no real flow or seed ever leaves a user without the current version; insert a disposable users+legal_acceptances row yourself
 - [/sign-up/vendor-details is reachable before accept-terms](vendor-details-reachable-before-accept-terms.md) — right after verification, before ever touching Continue; no need to flip the invite gate
+- [Seed booking's payout drifts to released over real time](seed-booking-payout-drifts-released-over-time.md) — the one paid E2E booking's payout_released_at auto-fires via the real sweep; check it before trusting a ticket's "move event_date" note alone

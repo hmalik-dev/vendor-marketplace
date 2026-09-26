@@ -47,8 +47,8 @@ describe('BookingReportDialog (VEN-770)', () => {
     await openDialog();
 
     expect(categories()).toEqual([
-      'The vendor didn’t show up',
-      'The service wasn’t what was agreed',
+      "The vendor didn't show up",
+      "The service wasn't what was agreed",
       'Something about payment',
       'Something else',
     ]);

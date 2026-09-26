@@ -304,8 +304,8 @@ export const BOOKING_REPORT_CATEGORIES_BY_SIDE: Record<
 };
 
 export const BOOKING_REPORT_CATEGORY_LABELS: Record<BookingReportCategory, string> = {
-  'vendor-no-show': 'The vendor didn’t show up',
-  'service-not-as-agreed': 'The service wasn’t what was agreed',
+  'vendor-no-show': "The vendor didn't show up",
+  'service-not-as-agreed': "The service wasn't what was agreed",
   payment: 'Something about payment',
   'canceled-outside-app': 'The customer canceled outside the app',
   'venue-access-or-safety': 'Venue access or safety',

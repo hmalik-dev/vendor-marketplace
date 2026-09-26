@@ -23,7 +23,6 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { FIELD_FOCUS } from '@/lib/focus';
 import { useApi } from '@/lib/use-api';
 import { userFacingError } from '@/lib/user-facing-error';
 import { cn } from '@/lib/utils';
@@ -136,10 +135,9 @@ function describe(side: BookingSide, counterpartName: string, eventDate: string)
 
 type Phase = 'editing' | 'sending';
 
-const FIELD = cn(
-  'h-auto w-full rounded-[10px] border border-input bg-stone-0 px-3.25 py-2.5 text-base text-stone-900',
-  FIELD_FOCUS,
-);
+// `Textarea` already owns its focus indicator (`FIELD_FOCUS`, `data-focus-own`).
+const FIELD =
+  'h-auto w-full rounded-[10px] border border-input bg-stone-0 px-3.25 py-2.5 text-base text-stone-900';
 
 function BookingReportForm({
   bookingId,
@@ -210,7 +208,8 @@ function BookingReportForm({
 
   return (
     <DialogContent
-      className="sm:max-w-[480px]"
+      // Frame 51b's card: 16px radius, 22/24 padding, the soft 50px elevation.
+      className="rounded-2xl bg-stone-0 px-6 py-5.5 shadow-[0_18px_50px_rgba(35,32,28,.25)] sm:max-w-[480px]"
       onCloseAutoFocus={onCloseAutoFocus}
       /*
        * No way out mid-send. Closing unmounts the form with the request still
@@ -226,9 +225,13 @@ function BookingReportForm({
         noValidate
         onSubmit={(event) => void submit(event)}
       >
-        <DialogHeader>
-          <DialogTitle>Report a problem</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
+        <DialogHeader className="gap-0">
+          <DialogTitle className="font-display text-[21px] font-normal text-stone-900">
+            Report a problem
+          </DialogTitle>
+          <DialogDescription className="mt-1.5 text-[13px] leading-[1.55] text-stone-700">
+            {description}
+          </DialogDescription>
         </DialogHeader>
 
         <fieldset className="mt-4 flex flex-col gap-2">
@@ -237,8 +240,8 @@ function BookingReportForm({
             <label
               key={option}
               className={cn(
-                'flex cursor-pointer items-center gap-2.5 rounded-[10px] border bg-stone-0 px-3 py-2.5 text-[13px] text-stone-900 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-clay-500',
-                category === option ? 'border-[1.5px] border-clay-500' : 'border-stone-200',
+                'flex cursor-pointer items-center gap-2.5 rounded-[10px] border bg-stone-0 px-3 py-2.5 text-[13px] text-stone-900',
+                category === option ? 'border-[1.5px] border-clay-500' : 'border-stone-300',
               )}
             >
               <input
@@ -285,8 +288,13 @@ function BookingReportForm({
           </p>
         )}
 
-        <DialogFooter className="mt-4">
-          <Button type="button" variant="ghost" disabled={phase === 'sending'} onClick={onCancel}>
+        <DialogFooter className="mx-0 mt-4 mb-0 rounded-none border-t-0 bg-transparent p-0">
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={phase === 'sending'}
+            onClick={onCancel}
+          >
             Cancel
           </Button>
           <Button type="submit" disabled={category === null || phase === 'sending'}>

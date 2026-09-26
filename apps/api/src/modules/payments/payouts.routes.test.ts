@@ -1642,7 +1642,7 @@ describe('payouts', () => {
         const sent = supportEmails();
         expect(sent).toHaveLength(1);
         expect(sent[0]!.text).toContain(paid.id);
-        expect(sent[0]!.text).toContain('Reported by the customer · The vendor didn’t show up');
+        expect(sent[0]!.text).toContain("Reported by the customer · The vendor didn't show up");
         expect(sent[0]!.text).toContain('Payout held on this booking');
         expect(sent[0]!.text).toContain(REPORT);
       });
