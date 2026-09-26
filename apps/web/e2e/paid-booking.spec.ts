@@ -359,11 +359,14 @@ test.describe('paid booking', () => {
      * a controlled textarea's value into its text, so `getByText(review)` found
      * the draft in the form and passed before the POST had committed — and the
      * signed-out read below then raced the write it was meant to observe.
+     * Any booking's review POST: the page offers the oldest unreviewed one,
+     * which after a failed try is that try's booking, not this one. The review
+     * text below is what proves which review landed.
      */
     const posted = customerPage.waitForResponse(
       (response) =>
         response.request().method() === 'POST' &&
-        response.url().endsWith(`/bookings/${booking.id}/reviews`),
+        /\/bookings\/[^/]+\/reviews$/.test(new URL(response.url()).pathname),
     );
     await customerPage.getByRole('button', { name: 'Post review' }).click();
     expect((await posted).status(), 'the review was not created').toBe(201);
