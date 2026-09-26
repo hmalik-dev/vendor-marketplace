@@ -23,6 +23,10 @@ async function refreshOnce(page: Page): Promise<string> {
       events.push('finished');
     }
   };
+  const onConsole = (message: { text(): string }): void => {
+    events.push(`console:${message.text().slice(0, 60)}`);
+  };
+  page.on('console', onConsole);
   page.on('framenavigated', onNav);
   page.on('requestfailed', onFailed);
   page.on('requestfinished', onFinished);
@@ -36,6 +40,7 @@ async function refreshOnce(page: Page): Promise<string> {
   while (Date.now() < deadline && !events.includes('commit')) {
     await page.waitForTimeout(100);
   }
+  page.off('console', onConsole);
   page.off('framenavigated', onNav);
   page.off('requestfailed', onFailed);
   page.off('requestfinished', onFinished);
@@ -53,7 +58,7 @@ async function firstBookingPath(page: Page): Promise<string> {
 
 const CASES: { label: string; path: (page: Page) => Promise<string>; blockPrefetch: boolean }[] =
   [];
-for (const blockPrefetch of [false, true]) {
+for (const blockPrefetch of [false]) {
   CASES.push(
     {
       label: 'vendor profile (group)',
