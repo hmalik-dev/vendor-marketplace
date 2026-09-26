@@ -818,7 +818,7 @@ export async function resolveCase(
     throw notFound('That case does not exist');
   }
 
-  if (state.bookingStatus === 'disputed') {
+  if (state.bookingStatus === 'disputed' && state.isDispute) {
     throw conflict('This case holds a payout. Resolve it for the vendor or the customer instead.');
   }
 

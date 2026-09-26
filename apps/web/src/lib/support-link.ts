@@ -99,18 +99,3 @@ export function supportLink(context?: SupportLinkContext): string {
 
   return `${SUPPORT_PATH}?${query.toString()}`;
 }
-
-/**
- * `/support`, carrying the booking a customer is reporting a problem with.
- *
- * Built here rather than interpolated at the call site for the reason the
- * header gives: the writer and the reader are in different halves of the app,
- * and a rename that touched one would leave the form looking exactly as it does
- * for a visitor arriving from the footer — a report that quietly stopped
- * holding the payout.
- */
-export function supportBookingLink(bookingId: string): string {
-  const query = new URLSearchParams({ [SUPPORT_BOOKING_PARAM]: bookingId });
-
-  return `${SUPPORT_PATH}?${query.toString()}`;
-}

@@ -1696,6 +1696,67 @@ describe('payouts', () => {
         expect(response.statusCode).toBe(400);
         expect(supportEmails()).toEqual([]);
       });
+
+      /*
+       * The vendor's case sits beside the customer's dispute and holds nothing,
+       * so the admin queue must treat it as its own work in both directions.
+       */
+      describe("the vendor's case beside a dispute", () => {
+        async function vendorCaseBesideDispute(bookingId: string): Promise<string> {
+          expect((await categorised(bookingId, VENDOR, 'venue-access-or-safety')).statusCode).toBe(
+            200,
+          );
+          const [vendorCase] = await harness.database.db
+            .select({ id: supportCases.id })
+            .from(supportCases)
+            .where(eq(supportCases.bookingId, bookingId));
+          expect((await report(bookingId, CUSTOMER)).statusCode).toBe(200);
+          expect((await currentBooking()).status).toBe('disputed');
+          await signInAsAdmin();
+
+          return vendorCase!.id;
+        }
+
+        async function caseStatus(id: string): Promise<string | undefined> {
+          const [row] = await harness.database.db
+            .select({ status: supportCases.status })
+            .from(supportCases)
+            .where(eq(supportCases.id, id));
+
+          return row?.status;
+        }
+
+        it('lets an admin close it while the dispute is still open', async () => {
+          const paid = await paidBooking();
+          clockNow = JUST_AFTER_EVENT;
+          const vendorCase = await vendorCaseBesideDispute(paid.id);
+
+          const response = await inject('PUT', `/v1/admin/cases/${vendorCase}/resolve`, ADMIN);
+
+          expect(response.statusCode).toBe(200);
+          expect(await caseStatus(vendorCase)).toBe('resolved');
+          expect((await currentBooking()).status).toBe('disputed');
+        });
+
+        it('leaves it open when the dispute is ruled on', async () => {
+          const paid = await paidBooking();
+          clockNow = JUST_AFTER_EVENT;
+          const vendorCase = await vendorCaseBesideDispute(paid.id);
+          clockNow = AFTER_RELEASE;
+
+          const ruled = await inject('PUT', `/v1/admin/bookings/${paid.id}/dispute`, ADMIN, {
+            outcome: 'customer',
+          });
+
+          expect(ruled.statusCode).toBe(200);
+          expect(await caseStatus(vendorCase)).toBe('open');
+          const open = await harness.database.db
+            .select({ id: supportCases.id })
+            .from(supportCases)
+            .where(eq(supportCases.status, 'open'));
+          expect(open.map((row) => row.id)).toEqual([vendorCase]);
+        });
+      });
     });
 
     /**

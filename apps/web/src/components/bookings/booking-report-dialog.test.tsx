@@ -131,6 +131,12 @@ describe('BookingReportDialog (VEN-770)', () => {
     await user.click(sending);
     expect(request).toHaveBeenCalledTimes(1);
 
+    // Nor closed and reopened mid-send: Escape is held, Cancel and the X are gone.
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('dialog')).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Cancel' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+
     resolve(RECEIPT);
     await screen.findByText('Report sent');
   });

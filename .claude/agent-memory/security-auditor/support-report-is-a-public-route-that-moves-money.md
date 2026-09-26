@@ -46,6 +46,15 @@ email quotes `booking` only from `held`, so an anonymous id reaches nothing. The
 enum `ADD VALUE` is additive. Reopen if the renderer ever reads
 `input.bookingId`, or a topic check moves after `placeReportHold`.
 
+**VEN-770 vendor-side reports (audited PASS 2026-09-25).** `placeReportHold`
+now calls `participantIn` itself (404 to strangers and admins), lets the vendor
+through with `held:false` and no status check, and only the customer reaches
+`placeDisputeHold`. `bookingCategory` is checked against the row-derived side;
+`reportedBy` and the label are server constants, escaped. The vendor's case row
+carries `bookingId`, which is inert for money: `payoutResidualHeld` and the
+liabilities read filter `origin='chargeback'`, and `resolveCase` 409s on a
+`disputed` booking. Reopen if any money predicate reads a non-chargeback case.
+
 **How to apply:** treat `bookingId` on this body as the trust boundary, and read
 `placeDisputeHold` rather than the route options. Related:
 [[payout-sweep-is-a-second-money-mover]],

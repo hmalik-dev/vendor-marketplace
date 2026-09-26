@@ -209,7 +209,18 @@ function BookingReportForm({
   }
 
   return (
-    <DialogContent className="sm:max-w-[480px]" onCloseAutoFocus={onCloseAutoFocus}>
+    <DialogContent
+      className="sm:max-w-[480px]"
+      onCloseAutoFocus={onCloseAutoFocus}
+      /*
+       * No way out mid-send. Closing unmounts the form with the request still
+       * running, so a reopen could send a second report and a failure would
+       * land on nothing.
+       */
+      showCloseButton={phase !== 'sending'}
+      onEscapeKeyDown={(event) => phase === 'sending' && event.preventDefault()}
+      onInteractOutside={(event) => phase === 'sending' && event.preventDefault()}
+    >
       <form
         // This form owns its validation (#388).
         noValidate
@@ -275,7 +286,7 @@ function BookingReportForm({
         )}
 
         <DialogFooter className="mt-4">
-          <Button type="button" variant="ghost" onClick={onCancel}>
+          <Button type="button" variant="ghost" disabled={phase === 'sending'} onClick={onCancel}>
             Cancel
           </Button>
           <Button type="submit" disabled={category === null || phase === 'sending'}>
